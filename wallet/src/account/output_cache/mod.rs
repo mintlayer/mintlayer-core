@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::chain::{
-    tokens::{token_id_from_input0, TokenId},
+    tokens::{token_id, TokenId},
     TxInput, TxOutput, UtxoOutPoint,
 };
 use wallet_types::{AccountWalletTxId, WalletTx};
@@ -102,8 +102,11 @@ impl OutputCache {
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
                 if self.valid_utxo(&outpoint) {
-                    let token_id = if output.is_token_or_nft_issuence() {
-                        tx.inputs().first().map(token_id_from_input0)
+                    let token_id = if output.is_token_or_nft_issuance() {
+                        match tx {
+                            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+                            WalletTx::Block(_) => None,
+                        }
                     } else {
                         None
                     };

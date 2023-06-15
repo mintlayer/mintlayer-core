@@ -16,6 +16,7 @@
 mod output_cache;
 mod utxo_selector;
 
+use common::Uint256;
 pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -31,7 +32,8 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -116,11 +118,11 @@ impl Account {
         Ok(account)
     }
 
-    pub fn process_send_request(
+    fn select_inputs_for_send_request(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
         mut request: SendRequest,
-    ) -> WalletResult<SignedTransaction> {
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
 
@@ -131,6 +133,7 @@ impl Account {
                 *grouped = grouped.add(new_amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
             },
+            Amount::ZERO,
         )?;
 
         // TODO: get current_fee_rate and long_term_fee_rate
@@ -148,10 +151,11 @@ impl Account {
                 Ok(())
             },
             |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
+            vec![],
         )?;
 
         let amount_to_be_paied_in_currency_with_fees =
-            output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or_default();
+            output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or(Amount::ZERO);
 
         let mut total_fees_not_payed = network_fee;
 
@@ -231,8 +235,15 @@ impl Account {
         }
         let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
 
-        request = request.with_inputs(selected_inputs);
+        Ok(request.with_inputs(selected_inputs))
+    }
 
+    pub fn process_send_request(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        request: SendRequest,
+    ) -> WalletResult<SignedTransaction> {
+        let request = self.select_inputs_for_send_request(request, db_tx)?;
         // TODO: Randomize inputs and outputs
 
         let tx = self.sign_transaction(request, db_tx)?;
@@ -263,18 +274,6 @@ impl Account {
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
-        // process_send_request can fill UTXOs, but the first UTXO is needed in advance to calculate pool_id
-
-        // TODO: Add support for LockThenTransfer
-        let utxos = self
-            .get_utxos(UtxoType::Transfer.into())
-            .into_iter()
-            .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
-            .collect::<Vec<(UtxoOutPoint, TxOutput)>>();
-
-        let input0 = utxos.get(0).ok_or(WalletError::NoUtxos)?;
-        let pool_id = pos_accounting::make_pool_id(&input0.0);
-
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
         let decommission_key = match decomission_key {
@@ -283,8 +282,11 @@ impl Account {
         };
         let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
 
-        let stake_output = make_stake_output(
-            pool_id,
+        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
+        // and then replace it with when we can calculate the pool_id
+        let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
+        let dummy_stake_output = make_stake_output(
+            dummy_pool_id,
             amount,
             staker.into_public_key(),
             decommission_key,
@@ -292,10 +294,38 @@ impl Account {
             PerThousand::new(1000).expect("must not fail"),
             Amount::ZERO,
         )?;
+        let request = SendRequest::new().with_outputs([dummy_stake_output]);
+        let mut request = self.select_inputs_for_send_request(request, db_tx)?;
 
-        let request = SendRequest::new().with_outputs([stake_output]);
+        let new_pool_id = match request
+            .inputs()
+            .first()
+            .expect("selector must have selected something or returned an error")
+        {
+            TxInput::Utxo(input0_outpoint) => Some(pos_accounting::make_pool_id(input0_outpoint)),
+            TxInput::Account(_) => None,
+        }
+        .ok_or(WalletError::NoUtxos)?;
 
-        self.process_send_request(db_tx, request)
+        // update the dummy_pool_id with the new pool_id
+        let old_pool_id = request
+            .get_outputs_mut()
+            .iter_mut()
+            .find_map(|out| match out {
+                TxOutput::CreateStakePool(pool_id, _) if *pool_id == dummy_pool_id => Some(pool_id),
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _) => None,
+            })
+            .expect("find output with dummy_pool_id");
+        *old_pool_id = new_pool_id;
+
+        let tx = self.sign_transaction(request, db_tx)?;
+        Ok(tx)
     }
 
     pub fn get_pos_gen_block_data(
@@ -493,6 +523,7 @@ impl Account {
                 Ok(())
             },
             |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
+            Amount::ZERO,
         )?;
         Ok(amounts_by_currency)
     }
@@ -623,12 +654,13 @@ pub enum Currency {
     Token(TokenId),
 }
 
-fn group_outputs<T, Grouped: Default>(
+fn group_outputs<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
+    init: Grouped,
 ) -> WalletResult<BTreeMap<Currency, Grouped>> {
-    let mut coin_grouped = Grouped::default();
+    let mut coin_grouped = init.clone();
     let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
 
     // Iterate over all outputs and group them up by currency
@@ -658,7 +690,7 @@ fn group_outputs<T, Grouped: Default>(
                     TokenData::TokenTransfer(token_transfer) => {
                         let total_token_amount = tokens_grouped
                             .entry(Currency::Token(token_transfer.token_id))
-                            .or_default();
+                            .or_insert_with(|| init.clone());
 
                         combiner(total_token_amount, &output, token_transfer.amount)?;
                     }
@@ -672,13 +704,14 @@ fn group_outputs<T, Grouped: Default>(
     Ok(tokens_grouped)
 }
 
-fn group_utxos_for_input<T, Grouped: Default>(
+fn group_utxos_for_input<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,
     get_token_id: impl Fn(&T) -> WalletResult<TokenId>,
+    init: Grouped,
 ) -> WalletResult<BTreeMap<Currency, Grouped>> {
-    let mut coin_grouped = Grouped::default();
+    let mut coin_grouped = init.clone();
     let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
 
     // Iterate over all outputs and group them up by currency
@@ -707,21 +740,23 @@ fn group_utxos_for_input<T, Grouped: Default>(
                     TokenData::TokenTransfer(token_transfer) => {
                         let total_token_amount = tokens_grouped
                             .entry(Currency::Token(token_transfer.token_id))
-                            .or_default();
+                            .or_insert_with(|| init.clone());
 
                         combiner(total_token_amount, &output, token_transfer.amount)?;
                     }
                     TokenData::TokenIssuance(token_issuance) => {
                         let token_id = get_token_id(&output)?;
-                        let total_token_amount =
-                            tokens_grouped.entry(Currency::Token(token_id)).or_default();
+                        let total_token_amount = tokens_grouped
+                            .entry(Currency::Token(token_id))
+                            .or_insert_with(|| init.clone());
 
                         combiner(total_token_amount, &output, token_issuance.amount_to_issue)?;
                     }
                     TokenData::NftIssuance(_) => {
                         let token_id = get_token_id(&output)?;
-                        let total_token_amount =
-                            tokens_grouped.entry(Currency::Token(token_id)).or_default();
+                        let total_token_amount = tokens_grouped
+                            .entry(Currency::Token(token_id))
+                            .or_insert_with(|| init.clone());
 
                         combiner(total_token_amount, &output, Amount::from_atoms(1))?;
                     }

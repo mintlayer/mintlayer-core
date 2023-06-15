@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Destination, GenBlock, OutPointSourceId},
+    chain::{tokens::OutputValue, Destination, GenBlock, OutPointSourceId},
     primitives::Id,
     Uint256,
 };

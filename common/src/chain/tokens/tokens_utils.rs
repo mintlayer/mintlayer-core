@@ -15,7 +15,7 @@
 
 use super::TokenId;
 use crate::{
-    chain::{Transaction, TxInput, TxOutput},
+    chain::{Transaction, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -23,10 +23,6 @@ pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(hash_encoded(tx.inputs().get(0)?))
 }
 
-pub fn token_id_from_input0(input0: &TxInput) -> TokenId {
-    hash_encoded(input0)
-}
-
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
-    outputs.iter().filter(|&output| output.is_token_or_nft_issuence()).count()
+    outputs.iter().filter(|&output| output.is_token_or_nft_issuance()).count()
 }

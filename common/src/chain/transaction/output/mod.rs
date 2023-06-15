@@ -78,7 +78,7 @@ impl TxOutput {
         }
     }
 
-    pub fn is_token_or_nft_issuence(&self) -> bool {
+    pub fn is_token_or_nft_issuance(&self) -> bool {
         match self {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 match v {

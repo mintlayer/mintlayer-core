@@ -87,7 +87,7 @@ fn verify_wallet_balance(
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, expected_balance);
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
@@ -101,7 +101,7 @@ fn verify_wallet_balance(
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     // Check that the loaded wallet has the same balance
     assert_eq!(coin_balance, expected_balance);
 }
@@ -227,7 +227,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, genesis_amount);
 
     let password = gen_random_password(&mut rng);
@@ -242,7 +242,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, genesis_amount);
 }
 
@@ -262,7 +262,7 @@ fn wallet_balance_block_reward() {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
 
     assert_eq!(coin_balance, Amount::ZERO);
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
@@ -544,7 +544,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
@@ -579,7 +579,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
     let new_output = TxOutput::Transfer(
@@ -637,7 +637,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
@@ -673,7 +673,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .unwrap()
         .get(&Currency::Coin)
         .copied()
-        .unwrap_or_default();
+        .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -718,7 +718,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         )
         .unwrap();
     assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or_default(),
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         ((block1_amount * 2).unwrap() - Amount::from_atoms(NETWORK_FEE)).unwrap()
     );
     let token_balances = currency_balances
@@ -765,7 +765,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         )
         .unwrap();
     assert_eq!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or_default(),
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         ((block1_amount * 3).unwrap() - Amount::from_atoms(NETWORK_FEE * 2)).unwrap()
     );
     let token_balances = currency_balances

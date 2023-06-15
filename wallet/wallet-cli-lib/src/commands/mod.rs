@@ -491,7 +491,7 @@ pub async fn handle_wallet_command(
                 .map_err(WalletCliError::Controller)?
                 .get(&Currency::Coin)
                 .copied()
-                .unwrap_or_default();
+                .unwrap_or(Amount::ZERO);
             Ok(ConsoleCommand::Print(print_coin_amount(
                 chain_config,
                 coin_balance,

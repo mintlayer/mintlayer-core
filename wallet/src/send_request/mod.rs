@@ -128,10 +128,7 @@ impl SendRequest {
         utxos: impl IntoIterator<Item = (UtxoOutPoint, TxOutput)>,
     ) -> Self {
         for (outpoint, txo) in utxos {
-            self.inputs.push(TxInput::from_utxo(
-                outpoint.tx_id(),
-                outpoint.output_index(),
-            ));
+            self.inputs.push(outpoint.into());
             self.utxos.push(txo);
         }
         self
@@ -140,6 +137,10 @@ impl SendRequest {
     pub fn with_outputs(mut self, outputs: impl IntoIterator<Item = TxOutput>) -> Self {
         self.outputs.extend(outputs);
         self
+    }
+
+    pub fn get_outputs_mut(&mut self) -> &mut Vec<TxOutput> {
+        &mut self.outputs
     }
 
     pub fn into_transaction_and_utxos(

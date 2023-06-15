@@ -143,12 +143,6 @@ impl Amount {
     }
 }
 
-impl Default for Amount {
-    fn default() -> Self {
-        Self::ZERO
-    }
-}
-
 impl std::ops::Add for Amount {
     type Output = Option<Self>;
 
