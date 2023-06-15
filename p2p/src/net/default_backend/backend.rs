@@ -25,12 +25,11 @@ use std::{
     },
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
-use void::Void;
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -261,7 +260,7 @@ where
     }
 
     /// Runs the backend events loop.
-    pub async fn run(&mut self) -> crate::Result<Void> {
+    pub async fn run(&mut self) -> crate::Result<Never> {
         loop {
             tokio::select! {
                 // Select from the channels in the specified order

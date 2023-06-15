@@ -17,6 +17,7 @@ storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
 utils = { path = '../utils' }
 
+futures = { workspace = true }
 tokio = { workspace = true, default-features = false }
 
 trust-dns-client.workspace = true
@@ -24,7 +25,6 @@ trust-dns-server.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 parity-scale-codec.workspace = true
-void.workspace = true
 clap = { workspace = true, features = ["derive"] }
 directories.workspace = true
 

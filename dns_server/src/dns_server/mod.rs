@@ -25,6 +25,7 @@ use std::{
 };
 
 use crypto::random::{make_pseudo_rng, SliceRandom};
+use futures::never::Never;
 use tokio::{net::UdpSocket, sync::mpsc};
 use trust_dns_client::rr::{rdata::SOA, LowerName, Name, RData, RecordSet, RecordType, RrKey};
 use trust_dns_server::{
@@ -107,7 +108,7 @@ impl DnsServer {
         })
     }
 
-    pub async fn run(self) -> Result<void::Void, DnsServerError> {
+    pub async fn run(self) -> Result<Never, DnsServerError> {
         let DnsServer {
             auth,
             server,

@@ -26,6 +26,7 @@ use std::{
 
 use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
+use futures::never::Never;
 use logging::log;
 use p2p::{
     message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
@@ -326,7 +327,7 @@ where
         );
     }
 
-    pub async fn run(&mut self) -> Result<void::Void, DnsServerError> {
+    pub async fn run(&mut self) -> Result<Never, DnsServerError> {
         let mut heartbeat_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
 
         loop {
