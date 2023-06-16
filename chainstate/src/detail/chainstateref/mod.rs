@@ -283,6 +283,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    fn last_common_ancestor_in_main_chain(
+        &self,
+        block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        let best_block_index =
+            self.get_best_block_index()?.ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
+        self.last_common_ancestor(block_index, &best_block_index)
+    }
+
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id().log_err()?)
     }
@@ -428,6 +437,32 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn check_block_height_vs_max_reorg_depth(
+        &self,
+        header: &SignedBlockHeader,
+    ) -> Result<(), CheckBlockError> {
+        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
+            PropertyQueryError::PrevBlockIndexNotFound(*header.prev_block_id()),
+        )?;
+        let common_ancestor_height =
+            self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
+
+        let tip_block_height =
+            self.get_best_block_index()?.expect("Best block to exist").block_height();
+
+        let min_allowed_height = self.chain_config.min_height_with_allowed_reorg(tip_block_height);
+
+        if common_ancestor_height < min_allowed_height {
+            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
+                common_ancestor_height,
+                tip_block_height,
+                min_allowed_height,
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn check_block_header(
         &self,
         header: &SignedBlockHeader,
@@ -435,6 +470,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
+        self.check_block_height_vs_max_reorg_depth(header)?;
 
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
@@ -701,8 +737,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 CheckBlockError::MerkleRootMismatch
             );
         }
-        // Witness merkle root
         {
+            // Witness merkle root
             let witness_merkle_root = block.witness_merkle_root();
             ensure!(
                 witness_merkle_root == merkle_proxy.witness_merkle_tree().root(),

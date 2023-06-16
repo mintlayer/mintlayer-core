@@ -203,7 +203,14 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let common_height = rng.gen_range(100..10_000);
 
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .max_depth_for_reorg(BlockDistance::new(5000))
+                    .build(),
+            )
+            .build();
         let common_block_id =
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();
 
@@ -214,6 +221,76 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let headers = tf.chainstate.get_headers(locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
         assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_reorg_past_limit(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .max_depth_for_reorg(BlockDistance::new(1))
+                    .build(),
+            )
+            .build();
+        let common_block_id = tf.best_block_id();
+
+        tf.create_chain(&common_block_id, 2, &mut rng).unwrap();
+        let res = tf.create_chain(&common_block_id, 1, &mut rng).unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
+                    BlockHeight::new(0),
+                    BlockHeight::new(2),
+                    BlockHeight::new(1)
+                )
+            ))
+        )
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn otry_reorg_past_limit_in_fork(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .max_depth_for_reorg(BlockDistance::new(2))
+                    .build(),
+            )
+            .build();
+        let common_block_id = tf.best_block_id();
+
+        let tip_id = tf.create_chain(&common_block_id, 2, &mut rng).unwrap();
+        let fork_tip_id = tf.create_chain(&common_block_id, 1, &mut rng).unwrap();
+
+        // advance the mainchain
+        tf.create_chain(&tip_id, 1, &mut rng).unwrap();
+
+        // try add block in fork
+        let res = tf.create_chain(&fork_tip_id, 1, &mut rng).unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
+                    BlockHeight::new(0),
+                    BlockHeight::new(3),
+                    BlockHeight::new(1)
+                )
+            ))
+        )
     });
 }
 
