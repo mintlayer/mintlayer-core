@@ -37,36 +37,6 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let block = tf.make_block_builder().build();
-
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(chain_config)
-        .with_chainstate(tf.into_chainstate())
-        .build()
-        .await;
-
-    let peer = PeerId::new();
-
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-    );
-
-    handle.resume_panic().await;
-}
-
 // The header list request is sent if the parent of the announced block is unknown.
 #[rstest::rstest]
 #[trace]
@@ -91,10 +61,12 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![block_2.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![block_2.header().clone()])),
+        )
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
@@ -124,10 +96,12 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -171,10 +145,12 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -241,10 +217,12 @@ async fn unconnected_headers(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     // First announcement: the peer score shouldn't be changed.
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
+        )
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
@@ -252,10 +230,12 @@ async fn unconnected_headers(#[case] seed: Seed) {
     handle.assert_no_peer_manager_event().await;
 
     // Second announcement: misbehavior.
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -290,10 +270,12 @@ async fn valid_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.broadcast_message(
-        peer,
-        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-    );
+    handle
+        .broadcast_message(
+            peer,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);

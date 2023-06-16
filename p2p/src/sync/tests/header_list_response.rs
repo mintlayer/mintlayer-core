@@ -31,18 +31,6 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer() {
-    let mut handle = SyncManagerHandle::start().await;
-
-    let peer = PeerId::new();
-
-    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())));
-
-    handle.resume_panic().await;
-}
-
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -70,7 +58,9 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let headers = iter::repeat(block.header().clone())
         .take(*p2p_config.msg_header_count_limit + 1)
         .collect();
-    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
+    handle
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -111,7 +101,9 @@ async fn unordered_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
+    handle
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -150,7 +142,9 @@ async fn disconnected_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
+    handle
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -186,7 +180,9 @@ async fn valid_headers(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
+    handle
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);

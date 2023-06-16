@@ -25,7 +25,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{Receiver, UnboundedSender},
     time::MissedTickBehavior,
 };
 
@@ -73,7 +73,7 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
-    message_receiver: UnboundedReceiver<SyncMessage>,
+    sync_rx: Receiver<SyncMessage>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -112,8 +112,8 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
-        message_receiver: UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
@@ -128,7 +128,7 @@ where
             mempool_handle,
             peer_manager_sender,
             messaging_handle,
-            message_receiver,
+            sync_rx,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
@@ -165,7 +165,7 @@ where
 
         loop {
             tokio::select! {
-                message = self.message_receiver.recv() => {
+                message = self.sync_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }

@@ -28,20 +28,6 @@ use crate::{
     P2pError,
 };
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer() {
-    let mut handle = SyncManagerHandle::start().await;
-
-    let peer = PeerId::new();
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(Vec::new()))),
-    );
-
-    handle.resume_panic().await;
-}
-
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -65,10 +51,12 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = iter::repeat(block.get_id().into()).take(102).collect();
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -108,10 +96,12 @@ async fn valid_request(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+        )
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
