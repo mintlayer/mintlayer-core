@@ -17,6 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -68,10 +69,10 @@ async fn ping_timeout() {
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
 
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
+    let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -80,10 +81,11 @@ async fn ping_timeout() {
     );
 
     let mut peer_manager = PeerManager::new(
-        Arc::clone(&chain_config),
-        Arc::clone(&p2p_config),
+        chain_config.clone(),
+        p2p_config.clone(),
         connectivity_handle,
         peer_rx,
+        shutdown_rx,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )

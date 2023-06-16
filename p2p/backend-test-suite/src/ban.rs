@@ -69,11 +69,13 @@ where
     .await
     .unwrap();
 
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let mut sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         messaging_handle,
         sync_event_receiver,
+        shutdown_receiver,
         chainstate,
         mempool,
         tx_peer_manager,

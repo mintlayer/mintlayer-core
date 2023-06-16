@@ -25,7 +25,11 @@ use std::{
 
 use itertools::Itertools;
 use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    task::JoinHandle,
     time::MissedTickBehavior,
 };
 
@@ -61,6 +65,12 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
+pub struct PeerContext {
+    pub tx: UnboundedSender<SyncMessage>,
+    pub shutdown_tx: oneshot::Sender<()>,
+    pub handle: JoinHandle<()>,
+}
+
 // TODO: Take into account the chain work when syncing.
 /// A peer context.
 ///
@@ -74,6 +84,7 @@ pub struct Peer<T: NetworkingService> {
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
     message_receiver: UnboundedReceiver<SyncMessage>,
+    shutdown_receiver: oneshot::Receiver<()>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -114,6 +125,7 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         messaging_handle: T::MessagingHandle,
         message_receiver: UnboundedReceiver<SyncMessage>,
+        shutdown_receiver: oneshot::Receiver<()>,
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
@@ -129,6 +141,7 @@ where
             peer_manager_sender,
             messaging_handle,
             message_receiver,
+            shutdown_receiver,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
@@ -148,8 +161,7 @@ where
 
     pub async fn run(&mut self) {
         match self.main_loop().await {
-            // The unexpected "channel closed" error will be handled by the sync manager.
-            Ok(()) | Err(P2pError::ChannelClosed) => {}
+            Ok(()) | Err(P2pError::Cancelled) => {}
             Err(e) => panic!("{} peer task failed: {e:?}", self.id()),
         }
     }
@@ -175,6 +187,11 @@ where
                 }
 
                 _ = stalling_interval.tick(), if self.last_activity.is_some() => {}
+
+                _ = &mut self.shutdown_receiver => {
+                    log::info!("Cancelling sync manager peer");
+                    return Err(P2pError::Cancelled);
+                }
             }
 
             // Run on each loop iteration, so it's easier to test
@@ -614,7 +631,8 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)
+            | P2pError::Cancelled) => Err(e),
         }
     }
 

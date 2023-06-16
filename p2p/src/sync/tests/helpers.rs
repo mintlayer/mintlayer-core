@@ -117,12 +117,14 @@ impl SyncManagerHandle {
         let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
         };
+        let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         let mut sync = BlockSyncManager::new(
             chain_config,
             p2p_config,
             messaging_handle,
             sync_event_receiver,
+            shutdown_receiver,
             chainstate_handle.clone(),
             mempool_handle,
             peer_manager_sender,
@@ -266,6 +268,7 @@ impl SyncManagerHandle {
     }
 
     pub async fn join_subsystem_manager(self) {
+        // TODO: Use cancellation token.
         // Shutdown sync manager first
         drop(self.sync_event_sender);
         let _ = self.sync_manager_handle.await;

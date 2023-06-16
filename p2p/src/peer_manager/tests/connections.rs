@@ -614,20 +614,22 @@ async fn connection_timeout_rpc_notified<T>(
     let (conn, _, _, _) = T::start(
         transport,
         vec![addr1],
-        Arc::clone(&config),
-        Arc::clone(&p2p_config),
+        config.clone(),
+        p2p_config.clone(),
         shutdown_receiver,
         subscribers_receiver,
     )
     .await
     .unwrap();
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::unbounded_channel();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
 
     let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
-        Arc::clone(&config),
-        Arc::clone(&p2p_config),
+        config.clone(),
+        p2p_config.clone(),
         conn,
         rx,
+        shutdown_rx,
         Default::default(),
         peerdb_inmemory_store(),
     )
@@ -910,7 +912,7 @@ where
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
-        Arc::clone(&chain_config),
+        chain_config.clone(),
         p2p_config_3,
         time_getter.get_time_getter(),
     )

@@ -82,6 +82,8 @@ struct P2p<T: NetworkingService> {
     messaging_handle: T::MessagingHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
+    peer_manager_shutdown_sender: oneshot::Sender<()>,
+    sync_manager_shutdown_sender: oneshot::Sender<()>,
 
     backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<()>,
@@ -133,53 +135,49 @@ where
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
+        let (peer_manager_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
+            chain_config.clone(),
+            p2p_config.clone(),
             conn,
             rx_peer_manager,
+            shutdown_receiver,
             time_getter.clone(),
             peerdb_storage,
         )?;
         let peer_manager_task = tokio::spawn(async move {
             match peer_manager.run().await {
                 Ok(_) => unreachable!(),
-                // The channel can be closed during the shutdown process.
+                Err(P2pError::Cancelled) => {}
                 Err(e) => {
                     log::error!("Peer manager failed: {e:?}");
                 }
             }
         });
 
-        let sync_manager_task = {
-            let chainstate_handle = chainstate_handle.clone();
-            let tx_peer_manager = tx_peer_manager.clone();
-            let chain_config = Arc::clone(&chain_config);
-            let mempool_handle_ = mempool_handle.clone();
-            let messaging_handle_ = messaging_handle.clone();
+        let (sync_manager_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
-            tokio::spawn(async move {
-                match sync::BlockSyncManager::<T>::new(
-                    chain_config,
-                    p2p_config,
-                    messaging_handle_,
-                    sync_event_receiver,
-                    chainstate_handle,
-                    mempool_handle_,
-                    tx_peer_manager,
-                    time_getter,
-                )
-                .run()
-                .await
-                {
-                    Ok(_) => unreachable!(),
-                    Err(e) => {
-                        log::error!("Sync manager failed: {e:?}");
-                    }
+        let mut sync_manager = sync::BlockSyncManager::<T>::new(
+            chain_config,
+            p2p_config,
+            messaging_handle.clone(),
+            sync_event_receiver,
+            shutdown_receiver,
+            chainstate_handle,
+            mempool_handle.clone(),
+            tx_peer_manager.clone(),
+            time_getter,
+        );
+        let sync_manager_task = tokio::spawn(async move {
+            match sync_manager.run().await {
+                Ok(_) => unreachable!(),
+                Err(P2pError::Cancelled) => {}
+                Err(e) => {
+                    log::error!("Sync manager failed: {e:?}");
                 }
-            })
-        };
+            }
+        });
 
         Ok(Self {
             tx_peer_manager,
@@ -187,7 +185,9 @@ where
             messaging_handle,
             backend_shutdown_sender,
             backend_task,
+            peer_manager_shutdown_sender,
             peer_manager_task,
+            sync_manager_shutdown_sender,
             sync_manager_task,
             subscribers_sender,
         })
@@ -207,13 +207,14 @@ where
     }
 
     async fn shutdown(self) {
-        let _ = self.backend_shutdown_sender.send(());
+        // Shut down peer manager and sync manager first.
+        let _ = self.peer_manager_shutdown_sender.send(());
+        let _ = self.sync_manager_shutdown_sender.send(());
+        futures::future::join_all([self.peer_manager_task, self.sync_manager_task]).await;
 
-        // Wait for the tasks to shut dow.
-        futures::future::join_all(
-            [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),
-        )
-        .await;
+        // Shut down networking backend last.
+        let _ = self.backend_shutdown_sender.send(());
+        let _ = self.backend_task.await;
     }
 }
 

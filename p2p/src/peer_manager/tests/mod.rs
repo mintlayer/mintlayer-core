@@ -30,6 +30,7 @@ use tokio::{
 };
 
 use crate::{
+    error::P2pError,
     expect_recv,
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
@@ -76,12 +77,14 @@ where
     .await
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
 
     let peer_manager = PeerManager::<T, _>::new(
         chain_config,
         p2p_config,
         conn,
         rx,
+        shutdown_rx,
         time_getter,
         peerdb_inmemory_store(),
     )
@@ -133,7 +136,10 @@ where
     let (mut peer_manager, tx, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     tokio::spawn(async move {
-        peer_manager.run().await.unwrap();
+        match peer_manager.run().await {
+            Ok(_) | Err(P2pError::Cancelled) => {}
+            Err(e) => panic!("Peer manager errored unexpectedly: {e:?}"),
+        }
     });
     (tx, shutdown_sender, subscribers_sender)
 }

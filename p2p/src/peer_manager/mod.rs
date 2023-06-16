@@ -28,7 +28,7 @@ use std::{
 };
 
 use futures::never::Never;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -127,6 +127,8 @@ where
     /// RX channel for receiving control events
     rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
+    rx_shutdown: oneshot::Receiver<()>,
+
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
         HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
@@ -157,12 +159,12 @@ where
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+        rx_shutdown: oneshot::Receiver<()>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
-        let peerdb =
-            peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
+        let peerdb = peerdb::PeerDb::new(p2p_config.clone(), time_getter.clone(), peerdb_storage)?;
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
         Ok(PeerManager {
@@ -171,6 +173,7 @@ where
             time_getter,
             peer_connectivity_handle: handle,
             rx_peer_manager,
+            rx_shutdown,
             pending_outbound_connects: HashMap::new(),
             pending_disconnects: HashMap::new(),
             peers: BTreeMap::new(),
@@ -1165,6 +1168,11 @@ where
                 },
 
                 _ = periodic_interval.tick() => {}
+
+                _ = &mut self.rx_shutdown => {
+                    log::info!("Cancelling peer manager");
+                    return Err(P2pError::Cancelled);
+                }
             }
 
             // Update the peer manager state as needed

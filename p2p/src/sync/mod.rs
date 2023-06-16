@@ -27,7 +27,13 @@ use std::{
 };
 
 use futures::never::Never;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::{
+    sync::{
+        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    task::JoinHandle,
+};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
@@ -47,7 +53,7 @@ use crate::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    sync::peer::Peer,
+    sync::peer::{Peer, PeerContext},
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
@@ -63,6 +69,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     messaging_handle: T::MessagingHandle,
     sync_event_receiver: T::SyncingEventReceiver,
+    shutdown_receiver: oneshot::Receiver<()>,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -74,7 +81,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AtomicBool>,
 
     /// A mapping from a peer identifier to the channel.
-    peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
+    peers: HashMap<PeerId, PeerContext>,
 
     time_getter: TimeGetter,
 }
@@ -93,6 +100,7 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::MessagingHandle,
         sync_event_receiver: T::SyncingEventReceiver,
+        shutdown_receiver: oneshot::Receiver<()>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -103,6 +111,7 @@ where
             p2p_config,
             messaging_handle,
             sync_event_receiver,
+            shutdown_receiver,
             peer_manager_sender,
             chainstate_handle,
             mempool_handle,
@@ -114,7 +123,7 @@ where
 
     /// Runs the sync manager event loop.
     pub async fn run(&mut self) -> Result<Never> {
-        log::info!("Starting SyncManager");
+        log::info!("Starting sync manager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
         self.is_initial_block_download.store(
@@ -136,8 +145,18 @@ where
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
-                    self.handle_peer_event(event?)?;
+                    self.handle_peer_event(event?).await?;
                 },
+
+                _ = &mut self.shutdown_receiver => {
+                    log::info!("Cancelling sync manager");
+                    let to_cancel: Vec<_> = self.peers.keys().cloned().collect();
+                    // Wait for the peers to shut down.
+                    futures::future::join_all(
+                        to_cancel.into_iter().map(|peer_id| self.unregister_peer(peer_id))
+                    ).await;
+                    return Err(P2pError::Cancelled);
+                }
             }
         }
     }
@@ -146,21 +165,22 @@ where
     pub fn register_peer(&mut self, peer: PeerId, remote_services: Services) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 
-        let (sender, receiver) = mpsc::unbounded_channel();
-        self.peers
-            .insert(peer, sender)
+        if self.peers.contains_key(&peer) {
             // This should never happen because a peer can only connect once.
-            .map(|_| Err::<(), _>(P2pError::PeerError(PeerError::PeerAlreadyExists)))
-            .transpose()?;
+            return Err(P2pError::PeerError(PeerError::PeerAlreadyExists));
+        }
+
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         let messaging_handle = self.messaging_handle.clone();
         let peer_manager_sender = self.peer_manager_sender.clone();
         let chainstate_handle = self.chainstate_handle.clone();
         let mempool_handle = self.mempool_handle.clone();
-        let p2p_config = Arc::clone(&self.p2p_config);
-        let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
+        let p2p_config = self.p2p_config.clone();
+        let is_initial_block_download = self.is_initial_block_download.clone();
         let time_getter = self.time_getter.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             Peer::<T>::new(
                 peer,
                 remote_services,
@@ -170,6 +190,7 @@ where
                 peer_manager_sender,
                 messaging_handle,
                 receiver,
+                shutdown_receiver,
                 is_initial_block_download,
                 time_getter,
             )
@@ -177,15 +198,27 @@ where
             .await;
         });
 
+        self.peers.insert(
+            peer,
+            PeerContext {
+                tx: sender,
+                shutdown_tx: shutdown_sender,
+                handle,
+            },
+        );
+
         Ok(())
     }
 
     /// Stops the task of the given peer by closing the corresponding channel.
-    fn unregister_peer(&mut self, peer: PeerId) {
+    fn unregister_peer(&mut self, peer: PeerId) -> JoinHandle<()> {
         log::debug!("Unregister peer {peer} from sync manager");
-        self.peers
+        let peer_ctx = self
+            .peers
             .remove(&peer)
             .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer}"));
+        let _ = peer_ctx.shutdown_tx.send(());
+        peer_ctx.handle
     }
 
     /// Announces the header of a new block to peers.
@@ -215,14 +248,15 @@ where
     }
 
     /// Sends an event to the corresponding peer.
-    fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
+    async fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
         let (peer, message) = match event {
             SyncingEvent::Connected { peer_id, services } => {
                 self.register_peer(peer_id, services)?;
                 return Ok(());
             }
             SyncingEvent::Disconnected { peer_id } => {
-                self.unregister_peer(peer_id);
+                let handle = self.unregister_peer(peer_id);
+                let _ = handle.await;
                 return Ok(());
             }
             SyncingEvent::Message { peer, message } => (peer, message),
@@ -232,7 +266,7 @@ where
             panic!("Received a message from unknown peer ({peer}): {message:?}")
         });
 
-        peer_channel.send(message).map_err(Into::into)
+        Ok(peer_channel.tx.send(message)?)
     }
 }
 

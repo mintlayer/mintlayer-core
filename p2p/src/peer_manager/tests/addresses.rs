@@ -17,6 +17,7 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     config::NodeType,
@@ -118,10 +119,10 @@ fn test_addr_list_handling_inbound() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -130,10 +131,11 @@ fn test_addr_list_handling_inbound() {
     );
 
     let mut pm = PeerManager::new(
-        Arc::clone(&chain_config),
-        Arc::clone(&p2p_config),
+        chain_config.clone(),
+        p2p_config,
         connectivity_handle,
         peer_rx,
+        shutdown_rx,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -202,10 +204,10 @@ fn test_addr_list_handling_outbound() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -214,10 +216,11 @@ fn test_addr_list_handling_outbound() {
     );
 
     let mut pm = PeerManager::new(
-        Arc::clone(&chain_config),
-        Arc::clone(&p2p_config),
+        chain_config.clone(),
+        p2p_config,
         connectivity_handle,
         peer_rx,
+        shutdown_rx,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
@@ -301,10 +304,10 @@ async fn resend_own_addresses() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_shutdown_tx, shutdown_rx) = oneshot::channel();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         listening_addresses.clone(),
@@ -313,10 +316,11 @@ async fn resend_own_addresses() {
     );
 
     let mut pm = PeerManager::new(
-        Arc::clone(&chain_config),
-        Arc::clone(&p2p_config),
+        chain_config.clone(),
+        p2p_config.clone(),
         connectivity_handle,
         peer_rx,
+        shutdown_rx,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
     )
