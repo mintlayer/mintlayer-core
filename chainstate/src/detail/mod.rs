@@ -322,6 +322,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let block = self.check_legitimate_orphan(block_source, block).log_err()?;
         let block_id = block.get_id();
 
+        // Ensure that the block being submitted is new to us.
         let block_index = {
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
             let existing_block_index = chainstate_ref
@@ -357,6 +358,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // FIXME: should we recheck only the fields with Unknown status?
         let mut block_status = BlockStatus::new_unknown();
 
+        // Do the regular check_block, persist_block and activate_best_chain
         let reorg_occurred = self.with_rw_tx_for_block_id(
             |chainstate_ref| {
                 block_status = BlockStatus::new_unknown();
@@ -390,6 +392,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             "block validation",
         );
 
+        // Update block index status
         let mut block_index = block_index;
         block_index.set_status(block_status);
 
