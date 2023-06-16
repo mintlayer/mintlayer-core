@@ -121,7 +121,7 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
         MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
     }
 
-    /// Get key-value map immutably (key-to-single-value only for now)
+    /// Get key-value map mutably (key-to-single-value only for now)
     pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,

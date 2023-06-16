@@ -407,6 +407,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
+name = "bit_field"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
+
+[[package]]
 name = "bitcoin-bech32"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -763,12 +769,16 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
+ "enum-iterator",
  "generic-array",
  "logging",
+ "num-derive",
+ "num-traits",
  "parity-scale-codec",
  "serialization",
  "storage",
  "thiserror",
+ "utils",
 ]
 
 [[package]]
@@ -1639,6 +1649,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "enum-iterator"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7add3873b5dd076766ee79c8e406ad1a472c385476b9e38849f8eec24f1be689"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eecf8589574ce9b895052fa12d69af7a233f99e6107f5cb8dd1044f2a17bfdcb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -6297,11 +6327,14 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "atomic-traits",
+ "bit_field",
  "criterion",
  "crypto",
  "directories",
+ "enum-iterator",
  "logging",
  "loom",
+ "num-derive",
  "num-traits",
  "parity-scale-codec",
  "probabilistic-collections",

@@ -19,8 +19,8 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
-    GenBlockIndex, GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, BlockStatus,
+    EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -376,15 +376,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         result.reverse();
         debug_assert!(!result.is_empty()); // there has to always be at least one new block
         Ok(result)
-    }
-
-    fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
-        // BlockIndex is already known or block exists
-        if self.db_tx.get_block_index(block_index.block_id()).log_err()?.is_some() {
-            return Err(BlockError::BlockAlreadyExists(*block_index.block_id()));
-        }
-        // TODO: Will be expanded
-        Ok(())
     }
 
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
@@ -762,6 +753,55 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .collect();
         Ok(result)
     }
+
+    /// Given a new block, obtain its previous block's block index.
+    // Note: the only thing that is specific to new blocks here is the error type PrevBlockNotFound
+    // (which is expected to be produced only for new blocks obtained from peers).
+    // FIXME: is the above note correct?
+    pub fn get_previous_block_index_for_new_block(
+        &self,
+        block: &WithId<Block>,
+    ) -> Result<GenBlockIndex, BlockError> {
+        self.get_gen_block_index(&block.prev_block_id())
+            .map_err(BlockError::PropertyQueryError)?
+            .ok_or(BlockError::PrevBlockNotFound)
+    }
+
+    pub fn new_block_index(
+        &self,
+        block: &WithId<Block>,
+        block_status: BlockStatus,
+    ) -> Result<BlockIndex, BlockError> {
+        let prev_block_index = self.get_previous_block_index_for_new_block(&block).log_err()?;
+
+        // Set the block height
+        let height = prev_block_index.block_height().next_height();
+
+        let some_ancestor = {
+            let skip_ht = get_skip_height(height);
+            let err = |_| panic!("Ancestor retrieval failed for block: {}", block.get_id());
+            self.get_ancestor(&prev_block_index, skip_ht).unwrap_or_else(err).block_id()
+        };
+
+        // Set Time Max
+        let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
+
+        let current_block_proof =
+            self.get_block_proof(prev_block_index.block_timestamp(), block).log_err()?;
+
+        // Set Chain Trust
+        let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
+        let chain_trust = prev_block_chaintrust + current_block_proof;
+        let block_index = BlockIndex::new(
+            block,
+            chain_trust,
+            some_ancestor,
+            height,
+            time_max,
+            block_status,
+        );
+        Ok(block_index)
+    }
 }
 
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
@@ -918,6 +958,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     ) -> Result<GenBlockIndex, BlockError> {
         let best_block_id = self
             .get_best_block_id()
+            // FIXME: here we actually "expect" on a db error, not on the absence of the best block
+            // (which is checked inside get_best_block_id).
             .expect("Best block not initialized")
             .classify(self.chain_config)
             .chain_block_id()
@@ -930,6 +972,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         let block_index = self
             .get_block_index(&best_block_id)
+            // FIXME: again, why expect on db errors? In other places they seem to be handled normally.
             .expect("Database error on retrieving current best block index")
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
@@ -945,75 +988,37 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(prev_block_index)
     }
 
+    // Returns true if a reorg has occurred.
     pub fn activate_best_chain(
         &mut self,
-        new_block_index: BlockIndex,
-        best_block_id: Id<GenBlock>,
-    ) -> Result<Option<BlockIndex>, BlockError> {
+        new_block_index: &BlockIndex,
+        best_block_id: &Id<GenBlock>,
+    ) -> Result<bool, BlockError> {
         // Chain trust is higher than the best block
         let current_best_block_index = self
-            .get_gen_block_index(&best_block_id)
+            .get_gen_block_index(best_block_id)
             .map_err(BlockError::BestBlockLoadError)
             .log_err()?
             .expect("Inconsistent DB");
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
-            self.reorganize(&best_block_id, &new_block_index).log_err()?;
-            return Ok(Some(new_block_index));
+            self.reorganize(best_block_id, new_block_index).log_err()?;
+            return Ok(true);
         }
 
-        Ok(None)
+        Ok(false)
     }
 
-    fn add_to_block_index(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
-        if let Some(bi) = self
-            .db_tx
-            .get_block_index(&block.get_id())
-            .map_err(BlockError::from)
-            .log_err()?
-        {
-            return Ok(bi);
-        }
-
-        let prev_block_index = self
-            .get_gen_block_index(&block.prev_block_id())
-            .map_err(BlockError::BestBlockLoadError)
-            .log_err()?
-            .ok_or(BlockError::PrevBlockNotFound)
-            .log_err()?;
-
-        // Set the block height
-        let height = prev_block_index.block_height().next_height();
-
-        let some_ancestor = {
-            let skip_ht = get_skip_height(height);
-            let err = |_| panic!("Ancestor retrieval failed for block: {}", block.get_id());
-            self.get_ancestor(&prev_block_index, skip_ht).unwrap_or_else(err).block_id()
-        };
-
-        // Set Time Max
-        let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
-
-        let current_block_proof =
-            self.get_block_proof(prev_block_index.block_timestamp(), block).log_err()?;
-
-        // Set Chain Trust
-        let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
-        let chain_trust = prev_block_chaintrust + current_block_proof;
-        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
-        Ok(block_index)
-    }
-
-    pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
-        let block_index = self.add_to_block_index(block).log_err()?;
+    pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
         if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from).log_err()?).is_some() {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
-        self.check_block_index(&block_index).log_err()?;
-        self.db_tx.set_block_index(&block_index).map_err(BlockError::from).log_err()?;
-        self.db_tx.add_block(block).map_err(BlockError::from).log_err()?;
-        Ok(block_index)
+        self.db_tx.add_block(block).map_err(BlockError::from).log_err()
+    }
+
+    pub fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        self.db_tx.set_block_index(block_index).map_err(BlockError::from).log_err()
     }
 
     fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {

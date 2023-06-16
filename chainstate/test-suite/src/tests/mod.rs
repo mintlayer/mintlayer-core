@@ -26,6 +26,7 @@ use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
+mod block_status;
 mod bootstrap;
 mod chainstate_accounting_storage_tests;
 mod chainstate_storage_tests;

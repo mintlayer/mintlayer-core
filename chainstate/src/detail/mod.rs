@@ -49,7 +49,10 @@ use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
     TipStorageTag, TransactionRw, Transactional,
 };
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochData, PropertyQueryError};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockStatusField, EpochData,
+    PropertyQueryError, Status,
+};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
@@ -271,42 +274,36 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    fn attempt_to_process_block(
+    /// Create a read-write transaction and call the specified functor on it.
+    /// The `block_id` and `comment` parameters specify the context in which the function is
+    /// executed and are used to form a proper error message.
+    fn with_rw_tx_for_block_id<F, T>(
         &mut self,
-        block: WithId<Block>,
-        block_source: BlockSource,
-    ) -> Result<Option<BlockIndex>, BlockError> {
-        let block = self.check_legitimate_orphan(block_source, block).log_err()?;
-
-        let block_id = block.get_id();
+        mut func: F,
+        block_id: &Id<Block>,
+        comment: &str,
+    ) -> Result<T, BlockError>
+    where
+        F: FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<T, BlockError>,
+    {
         let mut attempt_number = 0;
         loop {
-            log::info!("Processing block: {}", block_id);
+            log::info!("Processing block ({}), block id = {}", comment, block_id);
 
             let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
 
-            let best_block_id = chainstate_ref
-                .get_best_block_id()
-                .map_err(BlockError::BestBlockLoadError)
-                .log_err()?;
+            let result = func(&mut chainstate_ref).log_err()?;
 
-            chainstate_ref
-                .check_block(&block, false)
-                .map_err(BlockError::CheckBlockFailed)
-                .log_err()?;
-
-            let block_index = chainstate_ref.persist_block(&block).log_err()?;
-            let result =
-                chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
             let db_commit_result = chainstate_ref.commit_db_tx().log_err();
             match db_commit_result {
-                Ok(_) => {}
+                Ok(_) => return Ok(result),
                 Err(err) => {
                     if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
                         return Err(BlockError::DatabaseCommitError(
-                            block.get_id(),
+                            block_id.clone(),
                             *self.chainstate_config.max_db_commit_attempts,
                             err,
+                            comment.into(),
                         ));
                     } else {
                         attempt_number += 1;
@@ -314,9 +311,104 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     }
                 }
             }
-
-            return Ok(result);
         }
+    }
+
+    fn attempt_to_process_block(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let block = self.check_legitimate_orphan(block_source, block).log_err()?;
+        let block_id = block.get_id();
+
+        let block_index = {
+            let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
+            let existing_block_index = chainstate_ref
+                .get_block_index(&block_id)
+                .map_err(BlockError::PropertyQueryError)
+                .log_err()?;
+
+            if let Some(block_index) = existing_block_index {
+                // FIXME: can/should we also bail out if "all good" is "Good"?
+                if block_index.status().all_good() == Status::Bad {
+                    return Err(BlockError::InvalidBlockAlreadySeen(block_id));
+                }
+
+                block_index
+            } else {
+                let block_index =
+                    chainstate_ref.new_block_index(&block, BlockStatus::new_unknown()).log_err()?;
+                drop(chainstate_ref);
+
+                self.with_rw_tx_for_block_id(
+                    |chainstate_ref| chainstate_ref.set_block_index(&block_index).log_err(),
+                    &block_id,
+                    "initial block index saving",
+                )
+                .log_err()?;
+
+                block_index
+            }
+        };
+
+        // Note: technically, if we have loaded an existing block_index, some fields in its status may already be Good.
+        // But we re-check them anyway.
+        // FIXME: should we recheck only the fields with Unknown status?
+        let mut block_status = BlockStatus::new_unknown();
+
+        let reorg_occurred = self.with_rw_tx_for_block_id(
+            |chainstate_ref| {
+                block_status = BlockStatus::new_unknown();
+
+                let parent_block_index =
+                    chainstate_ref.get_previous_block_index_for_new_block(&block)?;
+                let parent_block_status = parent_block_index.status().all_good();
+                block_status.set(BlockStatusField::Ancestors, parent_block_status);
+                if parent_block_status != Status::Good {
+                    return Err(BlockError::InvalidParent(block_id));
+                }
+
+                block_status
+                    .update_from_result(
+                        BlockStatusField::CheckBlock,
+                        chainstate_ref.check_block(&block, false),
+                    )
+                    .map_err(BlockError::CheckBlockFailed)?;
+
+                chainstate_ref.persist_block(&block)?;
+
+                let best_block_id =
+                    chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+
+                block_status.update_from_result(
+                    BlockStatusField::BestChainActivation,
+                    chainstate_ref.activate_best_chain(&block_index, &best_block_id),
+                )
+            },
+            &block_id,
+            "block validation",
+        );
+
+        let mut block_index = block_index;
+        block_index.set_status(block_status);
+
+        let status_update_result = self.with_rw_tx_for_block_id(
+            |chainstate_ref| chainstate_ref.set_block_index(&block_index),
+            &block_id,
+            "block index update",
+        );
+
+        // If both block validation and block index update failed, we want to return the first
+        // error, so we check it first.
+        let result = if reorg_occurred? {
+            Some(block_index)
+        } else {
+            None
+        };
+        status_update_result?;
+
+        Ok(result)
     }
 
     /// process orphan blocks that depend on the given block, recursively

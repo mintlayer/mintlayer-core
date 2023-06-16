@@ -47,14 +47,14 @@ impl BanScore for BlockError {
             BlockError::CheckBlockFailed(err) => err.ban_score(),
             BlockError::StateUpdateFailed(err) => err.ban_score(),
             BlockError::BestBlockLoadError(_) => 0,
-            BlockError::BlockLoadError(_) => 0,
+            BlockError::PropertyQueryError(_) => 0,
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
             BlockError::PrevBlockNotFound => 100,
             BlockError::BlockAtHeightNotFound(_) => 0,
             BlockError::BlockAlreadyExists(_) => 0,
-            BlockError::DatabaseCommitError(_, _, _) => 0,
+            BlockError::DatabaseCommitError(_, _, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
@@ -64,6 +64,8 @@ impl BanScore for BlockError {
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
             BlockError::SpendStakeError(_) => 100,
             BlockError::PoolDataNotFound(_) => 0,
+            BlockError::InvalidBlockAlreadySeen(_) => 100,
+            BlockError::InvalidParent(_) => 100,
         }
     }
 }

@@ -21,7 +21,7 @@ use common::{
     Uint256,
 };
 
-use crate::block_index::BlockIndex;
+use crate::{BlockIndex, BlockStatus};
 
 /// Generalized block index
 #[derive(Clone, Debug)]
@@ -71,6 +71,13 @@ impl GenBlockIndex {
         match self {
             GenBlockIndex::Block(b) => Some(*b.prev_block_id()),
             GenBlockIndex::Genesis(..) => None,
+        }
+    }
+
+    pub fn status(&self) -> &BlockStatus {
+        match self {
+            GenBlockIndex::Block(b) => b.status(),
+            GenBlockIndex::Genesis(..) => &crate::block_status::BLOCK_STATUS_ALL_GOOD,
         }
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,24 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod status;
-pub mod tap_error_log;
+use enum_iterator::Sequence;
+use num_derive::ToPrimitive;
+use utils::status::Statuses;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+pub use utils::status::Status;
+
+#[derive(Copy, Clone, Debug, Sequence, ToPrimitive)]
+pub enum BlockStatusField {
+    Ancestors,
+    CheckBlock,
+    BestChainActivation,
+}
+
+pub type BlockStatus = Statuses<1, BlockStatusField>;
+
+pub const BLOCK_STATUS_ALL_GOOD: BlockStatus = BlockStatus::new_good();

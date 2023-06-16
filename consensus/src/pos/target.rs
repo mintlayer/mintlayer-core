@@ -207,7 +207,9 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError, PropertyQueryError};
+    use chainstate_types::{
+        BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    };
     use common::{
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
@@ -281,6 +283,7 @@ mod tests {
                         best_block,
                         height.into(),
                         timestamp,
+                        BlockStatus::new_unknown(),
                     );
                     best_block = block.get_id().into();
                     (height.into(), block_index)
@@ -569,6 +572,7 @@ mod tests {
             random_block_id.into(),
             BlockHeight::new(1),
             timestamp,
+            BlockStatus::new_unknown(),
         );
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {

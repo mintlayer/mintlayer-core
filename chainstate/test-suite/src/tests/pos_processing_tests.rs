@@ -523,12 +523,29 @@ fn pos_block_signature(#[case] seed: Seed) {
     );
 
     // bad block signature
+    // Note: this tx is not strictly needed for the test, but without it the block id here
+    // may become equal to the id of the previous test block, in which case process_block
+    // would return a different error from what is expected here (namely, it would return
+    // InvalidBlockAlreadySeen).
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                0,
+            ),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
+            100_000,
+        ))))
+        .build();
     let block = tf
         .make_block_builder()
         .with_block_signing_key(PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).0)
         .with_consensus_data(consensus_data)
         .with_reward(vec![reward_output])
         .with_timestamp(block_timestamp)
+        .with_transactions(vec![tx])
         .build();
     let block_id = block.get_id();
     assert_eq!(
