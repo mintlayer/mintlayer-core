@@ -103,6 +103,10 @@ impl TxData {
     pub fn new(tx: WithId<Transaction>, state: TxState) -> Self {
         Self { tx, state }
     }
+
+    pub fn get_transaction(&self) -> &Transaction {
+        WithId::get(&self.tx)
+    }
 }
 
 impl BlockData {

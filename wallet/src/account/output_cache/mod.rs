@@ -15,7 +15,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::chain::{TxInput, TxOutput, UtxoOutPoint};
+use common::chain::{
+    tokens::{token_id, TokenId},
+    TxInput, TxOutput, UtxoOutPoint,
+};
 use wallet_types::{AccountWalletTxId, WalletTx};
 
 /// A helper structure for the UTXO search.
@@ -92,14 +95,22 @@ impl OutputCache {
         !self.consumed.contains(outpoint)
     }
 
-    pub fn utxos(&self) -> BTreeMap<UtxoOutPoint, &TxOutput> {
+    pub fn utxos_with_token_ids(&self) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let mut utxos = BTreeMap::new();
 
         for tx in self.txs.values() {
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
                 if self.valid_utxo(&outpoint) {
-                    utxos.insert(outpoint, output);
+                    let token_id = if output.is_token_or_nft_issuance() {
+                        match tx {
+                            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+                            WalletTx::Block(_) => None,
+                        }
+                    } else {
+                        None
+                    };
+                    utxos.insert(outpoint, (output, token_id));
                 }
             }
         }

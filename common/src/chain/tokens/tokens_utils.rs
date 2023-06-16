@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{OutputValue, TokenData, TokenId};
+use super::TokenId;
 use crate::{
     chain::{Transaction, TxOutput},
     primitives::id::hash_encoded,
@@ -23,27 +23,6 @@ pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(hash_encoded(tx.inputs().get(0)?))
 }
 
-pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
-    match output_value {
-        OutputValue::Coin(_) => false,
-        OutputValue::Token(token_data) => match **token_data {
-            TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
-            TokenData::TokenTransfer(_) => false,
-        },
-    }
-}
-
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
-    outputs
-        .iter()
-        .filter(|&output| match output {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-                is_tokens_issuance(v)
-            }
-            TxOutput::CreateStakePool(_, _)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => false,
-        })
-        .count()
+    outputs.iter().filter(|&output| output.is_token_or_nft_issuance()).count()
 }
