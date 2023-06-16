@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
@@ -283,6 +283,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    fn last_common_ancestor_in_main_chain(
+        &self,
+        block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        let best_block_index =
+            self.get_best_block_index()?.ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
+        self.last_common_ancestor(block_index, &best_block_index)
+    }
+
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id().log_err()?)
     }
@@ -432,24 +441,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        // TODO: this solution works assuming that the block always attaches to main-chain, which is not true.
-        //       An esoteric case is when the block added is higher than the seal, but attaches to a fork.
-        //       To solve this, we should write a function, similar to get_common_ancestor, but gets the common ancestor
-        //       in the main-chain. Let's call it get_common_ancestor_in_main_chain().
-        let current_block_height = self
-            .get_gen_block_index(header.prev_block_id())?
-            .expect("Previous block to exist")
-            .block_height()
-            .next_height();
+        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
+            PropertyQueryError::PrevBlockIndexNotFound(*header.prev_block_id()),
+        )?;
+        let common_ancestor_height =
+            self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
 
         let tip_block_height =
             self.get_best_block_index()?.expect("Best block to exist").block_height();
 
         let min_allowed_height = self.chain_config.min_height_with_allowed_reorg(tip_block_height);
 
-        if current_block_height < min_allowed_height {
+        if common_ancestor_height < min_allowed_height {
             return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
-                current_block_height,
+                common_ancestor_height,
                 tip_block_height,
                 min_allowed_height,
             ));
@@ -471,7 +476,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
-        let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
         consensus::validate_consensus(
             self.chain_config,
             header,
