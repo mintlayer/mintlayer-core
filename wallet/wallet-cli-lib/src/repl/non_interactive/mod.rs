@@ -48,6 +48,7 @@ fn process_line(
 
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
+        ConsoleCommand::SetStatus { status: _, print } => Ok(LineOutput::Print(print)),
         ConsoleCommand::ClearScreen
         | ConsoleCommand::PrintHistory
         | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(

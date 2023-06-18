@@ -39,6 +39,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageWriteLocked,
 };
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::utxo_types::UtxoTypes;
 use wallet_types::{AccountId, KeyPurpose};
 
@@ -102,6 +103,7 @@ pub struct Wallet<B: storage::Backend> {
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
+    selected_account: U31,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -135,13 +137,18 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.commit()?;
 
         let latest_median_time = chain_config.genesis_block().timestamp();
-        Ok(Wallet {
+        let mut wallet = Wallet {
             chain_config,
             db,
             key_chain,
             accounts: BTreeMap::new(),
             latest_median_time,
-        })
+            selected_account: U31::ZERO,
+        };
+
+        wallet.create_account()?;
+
+        Ok(wallet)
     }
 
     pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
@@ -179,6 +186,7 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts,
             latest_median_time,
+            selected_account: DEFAULT_ACCOUNT_INDEX,
         })
     }
 
@@ -232,6 +240,15 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(next_account_index)
     }
 
+    pub fn select_account(&mut self, account_index: U31) -> WalletResult<()> {
+        if self.accounts.contains_key(&account_index) {
+            self.selected_account = account_index;
+            Ok(())
+        } else {
+            Err(WalletError::NoAccountFoundWithIndex(account_index))
+        }
+    }
+
     pub fn database(&self) -> &Store<B> {
         &self.db
     }
@@ -271,26 +288,21 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(value)
     }
 
-    pub fn get_balance(
-        &self,
-        account_index: U31,
-        utxo_types: UtxoTypes,
-    ) -> WalletResult<BTreeMap<Currency, Amount>> {
+    pub fn get_balance(&self, utxo_types: UtxoTypes) -> WalletResult<BTreeMap<Currency, Amount>> {
         self.accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get(&self.selected_account)
+            .expect("selected account was checked when selected")
             .get_balance(utxo_types, self.latest_median_time)
     }
 
     pub fn get_utxos(
         &self,
-        account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self
             .accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+            .get(&self.selected_account)
+            .expect("selected account was checked when selected");
         let utxos = account.get_utxos(utxo_types, self.latest_median_time);
         let utxos = utxos
             .into_iter()
@@ -299,59 +311,54 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(utxos)
     }
 
-    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
-        self.for_account_rw(account_index, |account, db_tx| {
+    pub fn get_new_address(&mut self) -> WalletResult<Address> {
+        self.for_account_rw(self.selected_account, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
     }
 
-    pub fn get_new_public_key(&mut self, account_index: U31) -> WalletResult<PublicKey> {
-        self.for_account_rw(account_index, |account, db_tx| {
+    pub fn get_new_public_key(&mut self) -> WalletResult<PublicKey> {
+        self.for_account_rw(self.selected_account, |account, db_tx| {
             account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
         })
     }
 
-    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
+    pub fn get_vrf_public_key(&mut self) -> WalletResult<VRFPublicKey> {
         let db_tx = self.db.transaction_ro_unlocked()?;
         self.accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get(&self.selected_account)
+            .expect("selected account was checked when selected")
             .get_vrf_public_key(&db_tx)
     }
 
     pub fn create_transaction_to_addresses(
         &mut self,
-        account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(self.selected_account, |account, db_tx| {
             account.process_send_request(db_tx, request, latest_median_time)
         })
     }
 
     pub fn create_stake_pool_tx(
         &mut self,
-        account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(self.selected_account, |account, db_tx| {
             account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)
         })
     }
 
-    pub fn get_pos_gen_block_data(
-        &mut self,
-        account_index: U31,
-    ) -> WalletResult<PoSGenerateBlockInputData> {
+    pub fn get_pos_gen_block_data(&mut self) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
         let account = self
             .accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+            .get(&self.selected_account)
+            .expect("selected account was checked when selected");
         account.get_pos_gen_block_data(&db_tx, self.latest_median_time)
     }
 

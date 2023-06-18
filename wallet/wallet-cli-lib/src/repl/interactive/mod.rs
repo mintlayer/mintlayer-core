@@ -145,7 +145,7 @@ pub fn run(
         vi_mode,
     )?;
 
-    let prompt = wallet_prompt::WalletPrompt::new();
+    let mut prompt = wallet_prompt::WalletPrompt::new();
 
     loop {
         logger.set_print_directly(false);
@@ -157,6 +157,10 @@ pub fn run(
         match res {
             Ok(Some(ConsoleCommand::Print(text))) => {
                 console.print_line(&text);
+            }
+            Ok(Some(ConsoleCommand::SetStatus { status, print })) => {
+                prompt.set_status(status);
+                console.print_line(&print);
             }
             Ok(Some(ConsoleCommand::ClearScreen)) => {
                 line_editor.clear_scrollback().expect("Should not fail normally");
