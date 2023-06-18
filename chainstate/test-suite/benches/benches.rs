@@ -19,6 +19,7 @@ use test_utils::random::make_seedable_rng;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
+// TODO: rework for PoS
 pub fn reorg(c: &mut Criterion) {
     let mut rng = make_seedable_rng(1111.into());
     let mut tf = TestFramework::builder(&mut rng).build();

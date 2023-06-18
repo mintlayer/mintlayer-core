@@ -19,9 +19,8 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
-    ConsumedEpochDataCache, EpochData, EpochDataCache, GenBlockIndex, GetAncestorError,
-    PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
+    EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -41,9 +40,7 @@ use common::{
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
-};
+use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosView};
 
@@ -61,6 +58,7 @@ use super::{
 
 mod epoch_seal;
 pub use epoch_seal::EpochSealError;
+mod in_memory_reorg;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, V> {
@@ -470,29 +468,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
 
-        let best_block_id = self.get_best_block_id()?;
-        let (utxos_cache, pos_delta, epoch_data_cache) = if best_block_id == *header.prev_block_id()
-        {
-            let utxos_cache = UtxosCache::new(&utxos_db).expect("should not fail");
-            let pos_delta = PoSAccountingDelta::new(&pos_db);
-            let epoch_data_cache = EpochDataCache::new(&self.db_tx);
-            (utxos_cache, pos_delta, epoch_data_cache)
-        } else {
-            // If block header is not a child of the tip then perform an in memory reorg
-            // to get utxo set and accounting data up to that point in fork
-            let (
-                TransactionVerifierDelta {
-                    utxo_cache: consumed_utxos,
-                    accounting_delta: consumed_deltas,
-                    ..
-                },
-                consumed_epoch_data,
-            ) = self.reorganize_in_memory(header, best_block_id)?;
+        let is_pos = match header.consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => false,
+            ConsensusData::PoS(_) => true,
+        };
+        let (utxos_cache, pos_delta, epoch_data_cache) = if is_pos {
+            // Validating PoS blocks in branches requires utxo set, accounting info and epoch data
+            // that should be updated by doing a reorg beforehand.
+            // It will be a no-op for attaching a block to the tip.
+            let best_block_id = self.get_best_block_id()?;
+            let (verifier_delta, consumed_epoch_data) =
+                self.reorganize_in_memory(header.header(), best_block_id)?;
+            let (consumed_utxos, consumed_deltas) = verifier_delta.consume();
 
             let utxos_cache =
                 UtxosCache::from_data(&utxos_db, consumed_utxos).expect("should not fail");
             let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
             let epoch_data_cache = EpochDataCache::from_data(&self.db_tx, consumed_epoch_data);
+            (utxos_cache, pos_delta, epoch_data_cache)
+        } else {
+            let utxos_cache = UtxosCache::new(&utxos_db).expect("should not fail");
+            let pos_delta = PoSAccountingDelta::new(&pos_db);
+            let epoch_data_cache = EpochDataCache::new(&self.db_tx);
             (utxos_cache, pos_delta, epoch_data_cache)
         };
 
@@ -813,131 +810,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
         Ok(result)
-    }
-
-    // Disconnect all blocks from the mainchain up until common ancestor of provided block
-    // and then connect all block in the new branch.
-    // All these operations are performed via `TransactionVerifier` without db modifications
-    // and the resulting delta is returned.
-    pub fn reorganize_in_memory(
-        &self,
-        new_block_header: &SignedBlockHeader,
-        best_block_id: Id<GenBlock>,
-    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
-        let prev_block_id = new_block_header.prev_block_id();
-        let new_chain = match self
-            .get_gen_block_index(prev_block_id)
-            .log_err()?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?
-        {
-            GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
-            GenBlockIndex::Genesis(_) => Vec::new(),
-        };
-
-        let common_ancestor_id = match new_chain.first() {
-            Some(block_index) => block_index.prev_block_id(),
-            None => prev_block_id,
-        };
-
-        let mut tx_verifier = TransactionVerifier::new(
-            self,
-            self.chain_config,
-            TransactionVerifierConfig::new(false),
-        );
-
-        // during reorg epoch seal can change so it needs to be tracked as well
-        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
-
-        // Disconnect the current chain if it is not a genesis
-        if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            let mainchain_tip = self
-                .get_block_index(&best_block_id)
-                .map_err(|_| CheckBlockError::BlockNotFound(best_block_id.into()))
-                .log_err()?
-                .expect("Can't get block index. Inconsistent DB");
-
-            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip);
-            while to_disconnect.block_id() != *common_ancestor_id {
-                let to_disconnect_block = match to_disconnect {
-                    GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
-                    GenBlockIndex::Block(block_index) => block_index,
-                };
-
-                let block = self
-                    .get_block_from_index(&to_disconnect_block)
-                    .log_err()?
-                    .expect("Inconsistent DB");
-
-                // Disconnect transactions
-                let cached_inputs = self
-                    .tx_verification_strategy
-                    .disconnect_block(
-                        TransactionVerifier::new,
-                        &tx_verifier,
-                        self.chain_config,
-                        TransactionVerifierConfig::new(false),
-                        &block.into(),
-                    )?
-                    .consume()?;
-
-                flush_to_storage(&mut tx_verifier, cached_inputs)?;
-
-                to_disconnect = self
-                    .get_previous_block_index(&to_disconnect_block)
-                    .expect("Previous block index retrieval failed");
-
-                epoch_seal::update_epoch_data(
-                    &mut epoch_data_cache,
-                    &tx_verifier,
-                    self.chain_config,
-                    epoch_seal::BlockStateEventWithIndex::Disconnect(to_disconnect.block_height()),
-                )?;
-            }
-        }
-
-        // Connect the new chain
-        for new_tip_block_index in new_chain {
-            let new_tip: WithId<Block> = self
-                .get_block_from_index(&new_tip_block_index)
-                .log_err()?
-                .ok_or(CheckBlockError::BlockNotFound(
-                    (*new_tip_block_index.block_id()).into(),
-                ))?
-                .into();
-
-            // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
-            let median_time_past = calculate_median_time_past(self, &new_tip.prev_block_id());
-
-            let connected_txs = self
-                .tx_verification_strategy
-                .connect_block(
-                    TransactionVerifier::new,
-                    &tx_verifier,
-                    self.chain_config,
-                    TransactionVerifierConfig::new(false),
-                    &new_tip_block_index,
-                    &new_tip,
-                    median_time_past,
-                )
-                .log_err()?
-                .consume()?;
-
-            flush_to_storage(&mut tx_verifier, connected_txs)?;
-
-            epoch_seal::update_epoch_data(
-                &mut epoch_data_cache,
-                &tx_verifier,
-                self.chain_config,
-                epoch_seal::BlockStateEventWithIndex::Connect(
-                    new_tip_block_index.block_height(),
-                    &new_tip,
-                ),
-            )?;
-        }
-
-        let consumed_verifier = tx_verifier.consume()?;
-        let consumed_epoch_data = epoch_data_cache.consume();
-        Ok((consumed_verifier, consumed_epoch_data))
     }
 }
 

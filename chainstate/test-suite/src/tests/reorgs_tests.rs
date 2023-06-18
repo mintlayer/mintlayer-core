@@ -137,10 +137,8 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     // Cause reorg on a failed block
     assert_eq!(
         tf.create_chain(&(*tf.index_at(12).block_id()).into(), 1, rng).unwrap_err(),
-        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-            chainstate::CheckBlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
-            )
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
         ))
     );
 }
@@ -176,10 +174,8 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     // Cause reorg on a failed block
     assert_eq!(
         tf.create_chain(&block_id.into(), 10, rng).unwrap_err(),
-        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-            chainstate::CheckBlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
-            )
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
         ))
     );
 }
@@ -205,10 +201,8 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
             .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
             .build_and_process()
             .unwrap_err(),
-        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-            chainstate::CheckBlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
-            )
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
         ))
     );
 }

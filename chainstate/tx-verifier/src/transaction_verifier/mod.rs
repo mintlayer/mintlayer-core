@@ -91,13 +91,19 @@ pub struct Subsidy(pub Amount);
 #[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
-    pub utxo_cache: ConsumedUtxoCache,
+    utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
-    pub accounting_delta: PoSAccountingDeltaData,
+    accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
+}
+
+impl TransactionVerifierDelta {
+    pub fn consume(self) -> (ConsumedUtxoCache, PoSAccountingDeltaData) {
+        (self.utxo_cache, self.accounting_delta)
+    }
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
