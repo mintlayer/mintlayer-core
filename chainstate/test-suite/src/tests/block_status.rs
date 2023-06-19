@@ -17,7 +17,7 @@ use chainstate::{BlockError, BlockSource, ChainstateError};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
-use chainstate_types::{BlockStatus, BlockStatusField, Status};
+use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{
     chain::{tokens::OutputValue, Block, OutPointSourceId, TxInput, TxOutput},
     primitives::{Amount, Id, Idable},
@@ -28,12 +28,11 @@ use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
 fn get_block_status(tf: &TestFramework, block_id: &Id<Block>) -> BlockStatus {
-    tf.chainstate
-        .get_block_index(&block_id)
+    *tf.chainstate
+        .get_block_index(block_id)
         .unwrap()
         .expect("block index must be present")
         .status()
-        .clone()
 }
 
 fn some_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
@@ -58,14 +57,11 @@ fn check_good_block(#[case] seed: Seed) {
         // The first block will trigger a trivial reorg, and because of this "process_block" will
         // return a BlockIndex. We need to check that it also has the correct status.
         assert!(block_index_returned.is_some());
-        assert_eq!(
-            block_index_returned.unwrap().status().all_good(),
-            Status::Good
-        );
+        assert!(block_index_returned.unwrap().status().is_valid());
 
         // Now check the status that is stored in the db.
         let block_status = get_block_status(&tf, &block_id);
-        assert_eq!(block_status.all_good(), Status::Good);
+        assert!(block_status.is_valid());
     });
 }
 
@@ -87,9 +83,10 @@ fn check_block_failure(#[case] seed: Seed) {
         tf.process_block(block, BlockSource::Local).unwrap_err();
 
         let block_status = get_block_status(&tf, &block_id);
-        assert!(block_status.get(BlockStatusField::Ancestors) == Status::Good);
-        assert!(block_status.get(BlockStatusField::CheckBlock) == Status::Bad);
-        assert!(block_status.get(BlockStatusField::BestChainActivation) == Status::Unknown);
+        assert_eq!(
+            block_status.last_valid_stage(),
+            BlockValidationStage::ParentOk
+        );
     });
 }
 
@@ -118,7 +115,7 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
         tf.process_block(block1, BlockSource::Local).unwrap();
 
         let block1_status = get_block_status(&tf, &block1_id);
-        assert!(block1_status.all_good() == Status::Good);
+        assert!(block1_status.is_valid());
 
         // In the second block, create a tx that tries to spend burnt coins.
         let tx2 = TransactionBuilder::new()
@@ -138,9 +135,10 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
         tf.process_block(block2, BlockSource::Local).unwrap_err();
 
         let block2_status = get_block_status(&tf, &block2_id);
-        assert!(block2_status.get(BlockStatusField::Ancestors) == Status::Good);
-        assert!(block2_status.get(BlockStatusField::CheckBlock) == Status::Good);
-        assert!(block2_status.get(BlockStatusField::BestChainActivation) == Status::Bad);
+        assert_eq!(
+            block2_status.last_valid_stage(),
+            BlockValidationStage::CheckBlockOk
+        );
     });
 }
 
@@ -162,7 +160,7 @@ fn bad_parent(#[case] seed: Seed) {
         tf.process_block(block1, BlockSource::Local).unwrap_err();
 
         let block1_status = get_block_status(&tf, &block1_id);
-        assert!(block1_status.all_good() == Status::Bad);
+        assert!(!block1_status.is_valid());
 
         // Now create a block with a legit tx, but using block1 as the parent.
         let tx2 = TransactionBuilder::new()
@@ -188,9 +186,10 @@ fn bad_parent(#[case] seed: Seed) {
         );
 
         let block2_status = get_block_status(&tf, &block2_id);
-        assert!(block2_status.get(BlockStatusField::Ancestors) == Status::Bad);
-        assert!(block2_status.get(BlockStatusField::CheckBlock) == Status::Unknown);
-        assert!(block2_status.get(BlockStatusField::BestChainActivation) == Status::Unknown);
+        assert_eq!(
+            block2_status.last_valid_stage(),
+            BlockValidationStage::Initial
+        );
     });
 }
 
@@ -213,13 +212,13 @@ fn bad_block_processed_again(#[case] seed: Seed) {
         tf.process_block(block1.clone(), BlockSource::Local).unwrap_err();
 
         let block1_status = get_block_status(&tf, &block1_id);
-        assert!(block1_status.all_good() == Status::Bad);
+        assert!(!block1_status.is_valid());
 
         // Process it again
         let error = tf.process_block(block1, BlockSource::Local).unwrap_err();
         assert_eq!(
             error,
-            ChainstateError::ProcessBlockError(BlockError::InvalidBlockAlreadySeen(block1_id))
+            ChainstateError::ProcessBlockError(BlockError::InvalidBlockAlreadyProcessed(block1_id))
         );
     });
 }

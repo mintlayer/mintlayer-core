@@ -391,7 +391,6 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     tf.chainstate.subscribe_to_events(subscribe_func);
 }
 
-// FIXME: rename this because "block_status" now means a more specific thing.
 fn check_block_status(
     tf: &TestFramework,
     block_id: &Id<Block>,

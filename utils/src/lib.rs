@@ -29,7 +29,6 @@ pub mod once_destructor;
 pub mod qrcode;
 pub mod set_flag;
 pub mod shallow_clone;
-pub mod status;
 pub mod tap_error_log;
 
 mod concurrency_impl;

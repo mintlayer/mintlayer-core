@@ -14,18 +14,45 @@
 // limitations under the License.
 
 use enum_iterator::Sequence;
-use num_derive::ToPrimitive;
-use utils::status::Statuses;
+use serialization::{Decode, Encode};
 
-pub use utils::status::Status;
-
-#[derive(Copy, Clone, Debug, Sequence, ToPrimitive)]
-pub enum BlockStatusField {
-    Ancestors,
-    CheckBlock,
-    BestChainActivation,
+/// Block validation steps are always performed in the same order, which is represented by this enum.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Sequence, Decode, Encode)]
+pub enum BlockValidationStage {
+    Initial,
+    ParentOk,
+    CheckBlockOk,
+    FullyChecked,
 }
 
-pub type BlockStatus = Statuses<1, BlockStatusField>;
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Decode, Encode)]
+pub struct BlockStatus {
+    last_successfull_validation_stage: BlockValidationStage,
+}
 
-pub const BLOCK_STATUS_ALL_GOOD: BlockStatus = BlockStatus::new_good();
+impl BlockStatus {
+    pub const FULLY_CHECKED: BlockStatus = Self::new_at_stage(BlockValidationStage::FullyChecked);
+
+    pub const fn new_at_stage(stage: BlockValidationStage) -> Self {
+        Self {
+            last_successfull_validation_stage: stage,
+        }
+    }
+
+    pub const fn new() -> Self {
+        Self::new_at_stage(BlockValidationStage::Initial)
+    }
+
+    pub fn advance_validation_stage_to(&mut self, new_stage: BlockValidationStage) {
+        assert!(self.last_successfull_validation_stage.next() == Some(new_stage));
+        self.last_successfull_validation_stage = new_stage;
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.last_successfull_validation_stage == BlockValidationStage::FullyChecked
+    }
+
+    pub fn last_valid_stage(&self) -> BlockValidationStage {
+        self.last_successfull_validation_stage
+    }
+}

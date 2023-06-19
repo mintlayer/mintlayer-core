@@ -23,7 +23,7 @@ pub use crate::{
     block_index::BlockIndex,
     block_index_handle::BlockIndexHandle,
     block_index_history_iter::BlockIndexHistoryIterator,
-    block_status::{BlockStatus, BlockStatusField, Status},
+    block_status::{BlockStatus, BlockValidationStage},
     epoch_data::EpochData,
     error::GetAncestorError,
     error::PropertyQueryError,

@@ -99,7 +99,7 @@ impl TestFramework {
         let id = block.get_id();
         let block_index_result = self.chainstate.process_block(block, source)?;
         let index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
-            GenBlockIndex::Genesis(..) => panic!("we have processed the genesis block"),
+            GenBlockIndex::Genesis(..) => panic!("we have processed a block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
         self.block_indexes.push(index);

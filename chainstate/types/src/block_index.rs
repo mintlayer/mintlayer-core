@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 
 use crate::{BlockStatus, GenBlockIndex};
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: SignedBlockHeader,

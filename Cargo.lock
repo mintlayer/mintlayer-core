@@ -407,12 +407,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
-name = "bit_field"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
-
-[[package]]
 name = "bitcoin-bech32"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -772,13 +766,10 @@ dependencies = [
  "enum-iterator",
  "generic-array",
  "logging",
- "num-derive",
- "num-traits",
  "parity-scale-codec",
  "serialization",
  "storage",
  "thiserror",
- "utils",
 ]
 
 [[package]]
@@ -6327,14 +6318,11 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "atomic-traits",
- "bit_field",
  "criterion",
  "crypto",
  "directories",
- "enum-iterator",
  "logging",
  "loom",
- "num-derive",
  "num-traits",
  "parity-scale-codec",
  "probabilistic-collections",

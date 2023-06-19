@@ -50,8 +50,8 @@ use chainstate_storage::{
     TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockStatusField, EpochData,
-    PropertyQueryError, Status,
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
+    PropertyQueryError,
 };
 use common::{
     chain::{
@@ -274,17 +274,19 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    /// Create a read-write transaction and call the specified functor on it.
+    /// Create a read-write transaction, call `func` on it and commit.
+    /// If committing fails, repeat the whole process again until it succeeds or
+    /// the maximum number of commit attempts is reached.
     /// The `block_id` and `comment` parameters specify the context in which the function is
     /// executed and are used to form a proper error message.
-    fn with_rw_tx_for_block_id<F, T>(
+    fn with_rw_tx_for_block_id<Func, Res>(
         &mut self,
-        mut func: F,
+        mut func: Func,
         block_id: &Id<Block>,
         comment: &str,
-    ) -> Result<T, BlockError>
+    ) -> Result<Res, BlockError>
     where
-        F: FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<T, BlockError>,
+        Func: FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, BlockError>,
     {
         let mut attempt_number = 0;
         loop {
@@ -300,7 +302,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 Err(err) => {
                     if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
                         return Err(BlockError::DatabaseCommitError(
-                            block_id.clone(),
+                            *block_id,
                             *self.chainstate_config.max_db_commit_attempts,
                             err,
                             comment.into(),
@@ -314,6 +316,67 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
+    /// This is similar to `with_rw_tx_for_block_id`, but it also maintains a mutable state that
+    /// is passed to `func` and then returned to the caller.
+    /// Note that the state is reset to `initial_state` on each commit attempt and the returned
+    /// state is the one from the last commit attempt.
+    fn with_rw_tx_and_state_for_block_id<Func, Res, State>(
+        &mut self,
+        mut func: Func,
+        initial_state: &State,
+        block_id: &Id<Block>,
+        comment: &str,
+    ) -> (State, Result<Res, BlockError>)
+    where
+        Func: FnMut(
+            &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
+            &mut State,
+        ) -> Result<Res, BlockError>,
+        State: Clone,
+    {
+        let mut state = initial_state.clone();
+
+        let result = self.with_rw_tx_for_block_id(
+            |chainstate_ref| func(chainstate_ref, &mut state),
+            block_id,
+            comment,
+        );
+
+        (state, result)
+    }
+
+    // Perform the regular check_block, persist_block and activate_best_chain, updating
+    // `block_status` after each successful check.
+    // The returned bool indicates whether a reorg has occurred.
+    fn perform_block_checks(
+        chainstate_ref: &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
+        block: &WithId<Block>,
+        block_index: &BlockIndex,
+        block_status: &mut BlockStatus,
+    ) -> Result<bool, BlockError> {
+        chainstate_ref.check_block_parent(block)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::ParentOk);
+
+        chainstate_ref.check_block(block, false).map_err(BlockError::CheckBlockFailed)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
+
+        // Note: we have to persist BlockIndex too, because it will be used
+        // by activate_best_chain below. There is no point in saving
+        // an intermediate BlockStatus though, so we ignore block_status for now.
+        chainstate_ref.set_new_block_index(block_index)?;
+        chainstate_ref.persist_block(block)?;
+
+        let best_block_id =
+            chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+
+        let reorg_occurred = chainstate_ref.activate_best_chain(block_index, &best_block_id)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+
+        Ok(reorg_occurred)
+    }
+
+    // Attempt to process the block. On success return Some(block_index_of_the_passed_block)
+    // if a reorg has occurred and the passed block is now the best block, otherwise return None.
     fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
@@ -322,89 +385,62 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let block = self.check_legitimate_orphan(block_source, block).log_err()?;
         let block_id = block.get_id();
 
-        // Ensure that the block being submitted is new to us.
+        // Ensure that the block being submitted is new to us. If not, bail out immediately,
+        // otherwise create a new block index and continue.
         let block_index = {
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
             let existing_block_index = chainstate_ref
                 .get_block_index(&block_id)
-                .map_err(BlockError::PropertyQueryError)
+                .map_err(BlockError::BlockLoadError)
                 .log_err()?;
 
             if let Some(block_index) = existing_block_index {
-                // FIXME: can/should we also bail out if "all good" is "Good"?
-                if block_index.status().all_good() == Status::Bad {
-                    return Err(BlockError::InvalidBlockAlreadySeen(block_id));
-                }
-
-                block_index
-            } else {
-                let block_index =
-                    chainstate_ref.new_block_index(&block, BlockStatus::new_unknown()).log_err()?;
-                drop(chainstate_ref);
-
-                self.with_rw_tx_for_block_id(
-                    |chainstate_ref| chainstate_ref.set_block_index(&block_index).log_err(),
-                    &block_id,
-                    "initial block index saving",
-                )
-                .log_err()?;
-
-                block_index
+                return if block_index.status().is_valid() {
+                    Err(BlockError::BlockAlreadyProcessed(block_id))
+                } else {
+                    Err(BlockError::InvalidBlockAlreadyProcessed(block_id))
+                };
             }
+
+            chainstate_ref.new_block_index(&block, BlockStatus::new()).log_err()?
         };
 
-        // Note: technically, if we have loaded an existing block_index, some fields in its status may already be Good.
-        // But we re-check them anyway.
-        // FIXME: should we recheck only the fields with Unknown status?
-        let mut block_status = BlockStatus::new_unknown();
-
-        // Do the regular check_block, persist_block and activate_best_chain
-        let reorg_occurred = self.with_rw_tx_for_block_id(
-            |chainstate_ref| {
-                block_status = BlockStatus::new_unknown();
-
-                let parent_block_index =
-                    chainstate_ref.get_previous_block_index_for_new_block(&block)?;
-                let parent_block_status = parent_block_index.status().all_good();
-                block_status.set(BlockStatusField::Ancestors, parent_block_status);
-                if parent_block_status != Status::Good {
-                    return Err(BlockError::InvalidParent(block_id));
-                }
-
-                block_status
-                    .update_from_result(
-                        BlockStatusField::CheckBlock,
-                        chainstate_ref.check_block(&block, false),
-                    )
-                    .map_err(BlockError::CheckBlockFailed)?;
-
-                chainstate_ref.persist_block(&block)?;
-
-                let best_block_id =
-                    chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
-
-                block_status.update_from_result(
-                    BlockStatusField::BestChainActivation,
-                    chainstate_ref.activate_best_chain(&block_index, &best_block_id),
-                )
+        // Perform block checks; `check_result` is `Result<bool>`, where the bool indicates
+        // whether a reorg has occurred.
+        let (block_status, check_result) = self.with_rw_tx_and_state_for_block_id(
+            |chainstate_ref, block_status| {
+                Self::perform_block_checks(chainstate_ref, &block, &block_index, block_status)
             },
+            &BlockStatus::new(),
             &block_id,
             "block validation",
         );
 
+        if let Err(err @ BlockError::DatabaseCommitError(_, _, _, _)) = check_result {
+            // If we got here, then the block checks have succeeded, but the db has failed.
+            // Attempts to save the new status in BlockIndex in this situation will
+            // probably fail too. Moreover, even if we succeed, we'll get a strange situation
+            // where there is a BlockIndex in the db with a "fully checked" status, but the
+            // block itself is missing. So we bail out in this case.
+            return Err(err);
+        }
+
         // Update block index status
-        let mut block_index = block_index;
-        block_index.set_status(block_status);
+        let block_index = {
+            let mut block_index = block_index;
+            block_index.set_status(block_status);
+            block_index
+        };
 
         let status_update_result = self.with_rw_tx_for_block_id(
-            |chainstate_ref| chainstate_ref.set_block_index(&block_index),
+            |chainstate_ref| chainstate_ref.set_block_status(&block_index),
             &block_id,
             "block index update",
         );
 
         // If both block validation and block index update failed, we want to return the first
         // error, so we check it first.
-        let result = if reorg_occurred? {
+        let result = if check_result? {
             Some(block_index)
         } else {
             None

@@ -46,12 +46,10 @@ pub enum BlockError {
     CheckBlockFailed(#[from] CheckBlockError),
     #[error("Failed to update the internal blockchain state: {0}")]
     StateUpdateFailed(#[from] ConnectTransactionError),
-    // FIXME: remove this in favor of PropertyQueryError?
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
-    #[error("Generic property query error")]
-    // FIXME: is #[from] a good idea, provided that we have several errors that can contain PropertyQueryError?
-    PropertyQueryError(/*#[from]*/ PropertyQueryError),
+    #[error("Failed to load block")]
+    BlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
@@ -62,6 +60,10 @@ pub enum BlockError {
     BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
+    #[error("Block {0} has already been processed")]
+    BlockAlreadyProcessed(Id<Block>),
+    #[error("Block {0} has already been processed and marked as invalid")]
+    InvalidBlockAlreadyProcessed(Id<Block>),
     // Note: the last String here serves as a "comment" that helps distinguish separate commit attempts.
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2} ({3})")]
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error, String),
@@ -83,8 +85,6 @@ pub enum BlockError {
     SpendStakeError(#[from] SpendStakeError),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Block {0} has been seen already and marked as invalid")]
-    InvalidBlockAlreadySeen(Id<Block>),
     #[error("Block {0} has invalid previous block")]
     InvalidParent(Id<Block>),
 }
@@ -171,8 +171,6 @@ pub enum BlockSizeError {
 pub enum InitializationError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
-    // FIXME: rename to PropertyQueryError? (otherwise it sounds like just querying a property
-    // is already an error)
     #[error("{0}")]
     PropertyQuery(#[from] PropertyQueryError),
     #[error("Not at genesis but block at height 1 not available")]

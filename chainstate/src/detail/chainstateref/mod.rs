@@ -223,7 +223,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(bid == Some(*block_id))
     }
 
-    /// Read previous block from storage and return its BlockIndex
+    /// Read previous block from storage and return its BlockIndex.
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
@@ -665,6 +665,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
+    pub fn check_block_parent(&self, block: &WithId<Block>) -> Result<(), BlockError> {
+        let parent_block_index = self.get_previous_block_index_or_block_error(block)?;
+        if !parent_block_index.status().is_valid() {
+            return Err(BlockError::InvalidParent(block.get_id()));
+        }
+
+        Ok(())
+    }
+
     pub fn check_block(
         &self,
         block: &WithId<Block>,
@@ -754,16 +763,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    /// Given a new block, obtain its previous block's block index.
-    // Note: the only thing that is specific to new blocks here is the error type PrevBlockNotFound
-    // (which is expected to be produced only for new blocks obtained from peers).
-    // FIXME: is the above note correct?
-    pub fn get_previous_block_index_for_new_block(
+    /// Given a new block, obtain its previous block's block index; if not found, return
+    /// the appropriate BlockError.
+    // Note: the suffix "or_block_error" helps distinguish this function from another
+    // get_previous_block_index function in ChainstateRef, which returns PropertyQueryError.
+    fn get_previous_block_index_or_block_error(
         &self,
         block: &WithId<Block>,
     ) -> Result<GenBlockIndex, BlockError> {
         self.get_gen_block_index(&block.prev_block_id())
-            .map_err(BlockError::PropertyQueryError)?
+            .map_err(BlockError::BlockLoadError)?
             .ok_or(BlockError::PrevBlockNotFound)
     }
 
@@ -772,7 +781,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block: &WithId<Block>,
         block_status: BlockStatus,
     ) -> Result<BlockIndex, BlockError> {
-        let prev_block_index = self.get_previous_block_index_for_new_block(&block).log_err()?;
+        let prev_block_index = self.get_previous_block_index_or_block_error(block).log_err()?;
 
         // Set the block height
         let height = prev_block_index.block_height().next_height();
@@ -958,8 +967,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     ) -> Result<GenBlockIndex, BlockError> {
         let best_block_id = self
             .get_best_block_id()
-            // FIXME: here we actually "expect" on a db error, not on the absence of the best block
-            // (which is checked inside get_best_block_id).
             .expect("Best block not initialized")
             .classify(self.chain_config)
             .chain_block_id()
@@ -972,7 +979,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         let block_index = self
             .get_block_index(&best_block_id)
-            // FIXME: again, why expect on db errors? In other places they seem to be handled normally.
             .expect("Database error on retrieving current best block index")
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
@@ -988,7 +994,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(prev_block_index)
     }
 
-    // Returns true if a reorg has occurred.
+    // Returns true if a reorg has occurred and the passed block is now the best block.
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
@@ -1018,6 +1024,27 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     pub fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        self.db_tx.set_block_index(block_index).map_err(BlockError::from).log_err()
+    }
+
+    pub fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        if self.db_tx.get_block_index(block_index.block_id()).log_err()?.is_some() {
+            return Err(BlockError::BlockAlreadyExists(*block_index.block_id()));
+        }
+        self.set_block_index(block_index).log_err()
+    }
+
+    /// Save the passed BlockIndex assuming that only its status part has changed.
+    /// I.e. if a BlockIndex already exists for the block, it must be equal to `block_index`.
+    pub fn set_block_status(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        #[cfg(debug_assertions)]
+        if let Some(mut existing_block_index) =
+            self.db_tx.get_block_index(block_index.block_id()).log_err()?
+        {
+            existing_block_index.set_status(*block_index.status());
+            assert!(&existing_block_index == block_index);
+        }
+
         self.db_tx.set_block_index(block_index).map_err(BlockError::from).log_err()
     }
 

@@ -283,7 +283,7 @@ mod tests {
                         best_block,
                         height.into(),
                         timestamp,
-                        BlockStatus::new_unknown(),
+                        BlockStatus::new(),
                     );
                     best_block = block.get_id().into();
                     (height.into(), block_index)
@@ -572,7 +572,7 @@ mod tests {
             random_block_id.into(),
             BlockHeight::new(1),
             timestamp,
-            BlockStatus::new_unknown(),
+            BlockStatus::new(),
         );
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
