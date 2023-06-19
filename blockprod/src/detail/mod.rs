@@ -92,8 +92,7 @@ impl BlockProduction {
         &self.time_getter
     }
 
-    /// Private method used for unit testing
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn set_job_manager(&mut self, job_manager_handle: JobManagerHandle) {
         self.job_manager_handle = job_manager_handle
     }
@@ -488,4 +487,4 @@ fn generate_finalize_block_data(
 }
 
 #[cfg(test)]
-pub mod tests;
+mod tests;

@@ -103,9 +103,7 @@ mod tests {
     use common::{
         chain::{
             block::timestamp::BlockTimestamp,
-            config::{
-                create_unit_test_config, emission_schedule::Mlt, Builder, ChainConfig, ChainType,
-            },
+            config::{create_unit_test_config, Builder, ChainConfig, ChainType},
             create_unittest_pos_config, initial_difficulty,
             stakelock::StakePoolData,
             Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
@@ -123,8 +121,6 @@ mod tests {
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
-
-    const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * Mlt::ATOMS_PER_MLT);
 
     pub async fn process_block(chainstate: &ChainstateHandle, new_block: Block) {
         chainstate
@@ -187,6 +183,12 @@ mod tests {
     }
 
     pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
+        let min_stake_pool_pledge = {
+            // throw away just to get value
+            let chain_config = create_unit_test_config();
+            chain_config.min_stake_pool_pledge()
+        };
+
         let mut rng = make_seedable_rng(seed);
 
         let (genesis_stake_private_key, genesis_stake_public_key) =
@@ -198,7 +200,7 @@ mod tests {
         let create_genesis_pool_txoutput = TxOutput::CreateStakePool(
             H256::zero().into(),
             Box::new(StakePoolData::new(
-                MIN_STAKE_POOL_PLEDGE,
+                min_stake_pool_pledge,
                 Destination::PublicKey(genesis_stake_public_key.clone()),
                 genesis_vrf_public_key,
                 Destination::PublicKey(genesis_stake_public_key),

@@ -69,10 +69,10 @@ async fn collect_transactions_collect_txs_failed() {
             let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
             assert!(collected_transactions, "Expected collect_tx() to be called");
 
-            assert!(
-                matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
-                "Expected collect_tx() to fail"
-            );
+            match accumulator {
+                Err(BlockProductionError::MempoolChannelClosed) => {}
+                _ => panic!("Expected collect_tx() to fail"),
+            };
         },
     );
 
@@ -119,13 +119,10 @@ async fn collect_transactions_subsystem_error() {
             "Expected collect_tx() to not be called"
         );
 
-        assert!(
-            matches!(
-                accumulator,
-                Err(BlockProductionError::SubsystemCallError(_))
-            ),
-            "Expected a subsystem error"
-        );
+        match accumulator {
+            Err(BlockProductionError::SubsystemCallError(_)) => {}
+            _ => panic!("Expected a subsystem error"),
+        };
     })
     .await
     .expect("Subsystem error thread failed");
@@ -468,10 +465,10 @@ async fn stop_all_jobs_error() {
 
     let result = block_production.stop_all_jobs().await;
 
-    assert!(matches!(
-        result,
-        Err(BlockProductionError::JobManagerError(_))
-    ));
+    match result {
+        Err(BlockProductionError::JobManagerError(_)) => {}
+        _ => panic!("Unexpected return value"),
+    }
 }
 
 #[rstest]
@@ -492,7 +489,7 @@ async fn stop_all_jobs_ok(#[case] seed: Seed) {
 
     let mut mock_job_manager = Box::<MockJobManager>::default();
     let return_value = make_seedable_rng(seed).gen();
-    let _expected_value = return_value;
+    let expected_value = return_value;
 
     mock_job_manager
         .expect_stop_all_jobs()
@@ -503,7 +500,7 @@ async fn stop_all_jobs_ok(#[case] seed: Seed) {
 
     let result = block_production.stop_all_jobs().await;
 
-    assert!(matches!(result, Ok(_expected_value)));
+    assert_eq!(result, Ok(expected_value), "Unexpected return value");
 }
 
 #[rstest]
@@ -536,10 +533,10 @@ async fn stop_job_error(#[case] seed: Seed) {
 
     let result = block_production.stop_job(job_key).await;
 
-    assert!(matches!(
-        result,
-        Err(BlockProductionError::JobManagerError(_))
-    ));
+    match result {
+        Err(BlockProductionError::JobManagerError(_)) => {}
+        _ => panic!("Unexpected return value"),
+    }
 }
 
 #[rstest]
@@ -691,5 +688,5 @@ async fn stop_job_ok(#[case] seed: Seed) {
 
     let result = block_production.stop_job(job_key).await;
 
-    assert!(matches!(result, Ok(true)));
+    assert_eq!(result, Ok(true), "Unexpected return value");
 }
