@@ -665,6 +665,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
+    /// Given a new block, obtain its previous block's block index; if not found, return
+    /// the appropriate BlockError.
+    // Note: the suffix "or_block_error" helps distinguish this function from another
+    // get_previous_block_index function in ChainstateRef, which returns PropertyQueryError.
+    fn get_previous_block_index_or_block_error(
+        &self,
+        block: &WithId<Block>,
+    ) -> Result<GenBlockIndex, BlockError> {
+        self.get_gen_block_index(&block.prev_block_id())
+            .map_err(BlockError::BlockLoadError)?
+            .ok_or(BlockError::PrevBlockNotFound)
+    }
+
+    // Return Ok(()) if the specified block has a valid parent and an error otherwise.
     pub fn check_block_parent(&self, block: &WithId<Block>) -> Result<(), BlockError> {
         let parent_block_index = self.get_previous_block_index_or_block_error(block)?;
         if !parent_block_index.status().is_valid() {
@@ -761,19 +775,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
         Ok(result)
-    }
-
-    /// Given a new block, obtain its previous block's block index; if not found, return
-    /// the appropriate BlockError.
-    // Note: the suffix "or_block_error" helps distinguish this function from another
-    // get_previous_block_index function in ChainstateRef, which returns PropertyQueryError.
-    fn get_previous_block_index_or_block_error(
-        &self,
-        block: &WithId<Block>,
-    ) -> Result<GenBlockIndex, BlockError> {
-        self.get_gen_block_index(&block.prev_block_id())
-            .map_err(BlockError::BlockLoadError)?
-            .ok_or(BlockError::PrevBlockNotFound)
     }
 
     pub fn new_block_index(
@@ -994,7 +995,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(prev_block_index)
     }
 
-    // Returns true if a reorg has occurred and the passed block is now the best block.
+    /// Perform a reorg to the specified block if needed.
+    /// Return true if the reorg has been performed, and false otherwise.
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
@@ -1041,7 +1043,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         if let Some(mut existing_block_index) =
             self.db_tx.get_block_index(block_index.block_id()).log_err()?
         {
-            existing_block_index.set_status(*block_index.status());
+            existing_block_index.set_status(block_index.status());
             assert!(&existing_block_index == block_index);
         }
 

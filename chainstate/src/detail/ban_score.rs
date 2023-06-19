@@ -56,6 +56,7 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
+            BlockError::InvalidParent(_) => 100,
             BlockError::DatabaseCommitError(_, _, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
@@ -66,7 +67,6 @@ impl BanScore for BlockError {
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
             BlockError::SpendStakeError(_) => 100,
             BlockError::PoolDataNotFound(_) => 0,
-            BlockError::InvalidParent(_) => 100,
         }
     }
 }

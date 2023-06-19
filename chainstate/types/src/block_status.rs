@@ -43,6 +43,8 @@ impl BlockStatus {
         Self::new_at_stage(BlockValidationStage::Initial)
     }
 
+    /// Advance the last successful validation stage to the specified value.
+    /// Note that the stage can only be advanced one step at a time.
     pub fn advance_validation_stage_to(&mut self, new_stage: BlockValidationStage) {
         assert!(self.last_successfull_validation_stage.next() == Some(new_stage));
         self.last_successfull_validation_stage = new_stage;

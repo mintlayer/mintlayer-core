@@ -64,6 +64,8 @@ pub enum BlockError {
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
     InvalidBlockAlreadyProcessed(Id<Block>),
+    #[error("Block {0} has invalid parent block")]
+    InvalidParent(Id<Block>),
     // Note: the last String here serves as a "comment" that helps distinguish separate commit attempts.
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2} ({3})")]
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error, String),
@@ -85,8 +87,6 @@ pub enum BlockError {
     SpendStakeError(#[from] SpendStakeError),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Block {0} has invalid previous block")]
-    InvalidParent(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

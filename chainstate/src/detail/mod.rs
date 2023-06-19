@@ -345,8 +345,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         (state, result)
     }
 
-    // Perform the regular check_block, persist_block and activate_best_chain, updating
-    // `block_status` after each successful check.
+    // Perform all the regular block checks, updating `block_status` after each successful check.
     // The returned bool indicates whether a reorg has occurred.
     fn perform_block_checks(
         chainstate_ref: &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
@@ -362,7 +361,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Note: we have to persist BlockIndex too, because it will be used
         // by activate_best_chain below. There is no point in saving
-        // an intermediate BlockStatus though, so we ignore block_status for now.
+        // an intermediate BlockStatus though, so we ignore block_status here.
         chainstate_ref.set_new_block_index(block_index)?;
         chainstate_ref.persist_block(block)?;
 
@@ -375,7 +374,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(reorg_occurred)
     }
 
-    // Attempt to process the block. On success return Some(block_index_of_the_passed_block)
+    // Attempt to process the block. On success, return Some(block_index_of_the_passed_block)
     // if a reorg has occurred and the passed block is now the best block, otherwise return None.
     fn attempt_to_process_block(
         &mut self,
@@ -417,21 +416,21 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         );
 
         if let Err(err @ BlockError::DatabaseCommitError(_, _, _, _)) = check_result {
-            // If we got here, then the block checks have succeeded, but the db has failed.
+            // If we got here, then the block checks have succeeded, but the DB has failed.
             // Attempts to save the new status in BlockIndex in this situation will
             // probably fail too. Moreover, even if we succeed, we'll get a strange situation
-            // where there is a BlockIndex in the db with a "fully checked" status, but the
+            // where there is a BlockIndex in the DB with a "fully checked" status, but the
             // block itself is missing. So we bail out in this case.
             return Err(err);
         }
 
-        // Update block index status
         let block_index = {
             let mut block_index = block_index;
             block_index.set_status(block_status);
             block_index
         };
 
+        // Update block index status.
         let status_update_result = self.with_rw_tx_for_block_id(
             |chainstate_ref| chainstate_ref.set_block_status(&block_index),
             &block_id,

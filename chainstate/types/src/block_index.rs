@@ -86,8 +86,8 @@ impl BlockIndex {
         &self.some_ancestor
     }
 
-    pub fn status(&self) -> &BlockStatus {
-        &self.status
+    pub fn status(&self) -> BlockStatus {
+        self.status
     }
 
     pub fn set_status(&mut self, status: BlockStatus) {

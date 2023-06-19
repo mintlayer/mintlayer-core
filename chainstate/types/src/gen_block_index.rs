@@ -74,10 +74,10 @@ impl GenBlockIndex {
         }
     }
 
-    pub fn status(&self) -> &BlockStatus {
+    pub fn status(&self) -> BlockStatus {
         match self {
             GenBlockIndex::Block(b) => b.status(),
-            GenBlockIndex::Genesis(..) => &crate::block_status::BlockStatus::FULLY_CHECKED,
+            GenBlockIndex::Genesis(..) => crate::block_status::BlockStatus::FULLY_CHECKED,
         }
     }
 }
