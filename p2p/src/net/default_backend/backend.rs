@@ -39,7 +39,7 @@ use utils::{eventhandler::EventsController, set_flag::SetFlag};
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError, PeerError},
-    message::{PeerManagerMessage, SyncMessage},
+    message::PeerManagerMessage,
     net::{
         default_backend::{
             peer,
@@ -56,6 +56,11 @@ use crate::{
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
+
+/// Buffer size of the channel to the SyncManager peer task.
+/// How many unprocessed messages can be sent before the peer's event loop is blocked.
+// TODO: Decide what the optimal value is (for example, by comparing the initial block download time)
+const SYNC_CHAN_BUF_SIZE: usize = 20;
 
 /// Active peer data
 struct PeerContext {
@@ -199,7 +204,8 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        peer.tx.send(Event::Accepted)?;
+        let (sync_tx, sync_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
+        peer.tx.send(Event::Accepted { sync_tx })?;
 
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
@@ -209,6 +215,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 services: peer.services,
+                sync_rx,
             },
             &self.shutdown,
         );
@@ -543,95 +550,16 @@ where
         }
     }
 
-    fn handle_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
+    fn handle_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
         // Do not process remaining messages if the peer has been forcibly disconnected (for example, after being banned).
         // Without this check, the backend might send messages to the sync and peer managers after sending the disconnect notification.
         if !self.peers.contains_key(&peer) {
-            log::debug!("ignore received messaged from a disconnected peer");
+            log::info!("ignore received messaged from a disconnected peer {peer}");
             return Ok(());
         }
 
-        match message {
-            Message::Handshake(_) => {
-                log::error!("peer {peer} sent handshaking message");
-            }
-            Message::HeaderListRequest(r) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::HeaderListRequest(r),
-                },
-                &self.shutdown,
-            ),
-            Message::BlockListRequest(r) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::BlockListRequest(r),
-                },
-                &self.shutdown,
-            ),
-            Message::TransactionRequest(id) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::TransactionRequest(id),
-                },
-                &self.shutdown,
-            ),
-            Message::TransactionResponse(tx) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::TransactionResponse(tx),
-                },
-                &self.shutdown,
-            ),
-            Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::AddrListRequest(r),
-            })?,
-            Message::AnnounceAddrRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::AnnounceAddrRequest(r),
-            })?,
-            Message::PingRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::PingRequest(r),
-            })?,
-            Message::HeaderList(r) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::HeaderList(r),
-                },
-                &self.shutdown,
-            ),
-            Message::BlockResponse(r) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::BlockResponse(r),
-                },
-                &self.shutdown,
-            ),
-            Message::NewTransaction(id) => Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Message {
-                    peer,
-                    message: SyncMessage::NewTransaction(id),
-                },
-                &self.shutdown,
-            ),
-            Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::AddrListResponse(r),
-            })?,
-            Message::PingResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::PingResponse(r),
-            })?,
-        }
+        self.conn_tx.send(ConnectivityEvent::Message { peer, message })?;
+
         Ok(())
     }
 

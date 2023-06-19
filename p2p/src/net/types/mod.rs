@@ -21,6 +21,7 @@ use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
+use tokio::sync::mpsc::Receiver;
 
 use crate::{
     message::{PeerManagerMessage, SyncMessage},
@@ -142,22 +143,16 @@ pub enum ConnectivityEvent<A> {
     },
 }
 
-/// Syncing-related events
+/// Syncing-related events (sent from the backend)
 #[derive(Debug)]
 pub enum SyncingEvent {
     /// Peer connected
     Connected {
         peer_id: PeerId,
         services: Services,
+        sync_rx: Receiver<SyncMessage>,
     },
 
     /// Peer disconnected
-    Disconnected {
-        peer_id: PeerId,
-    },
-
-    Message {
-        peer: PeerId,
-        message: SyncMessage,
-    },
+    Disconnected { peer_id: PeerId },
 }

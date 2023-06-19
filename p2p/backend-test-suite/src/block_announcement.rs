@@ -96,24 +96,22 @@ where
             .clone()])))
         .unwrap();
 
-    match sync2.poll_next().await.unwrap() {
+    let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-        } => {}
+            sync_rx,
+        } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
     // Poll an event from the network for server2.
-    let header = match sync2.poll_next().await.unwrap() {
-        SyncingEvent::Message { peer: _, message } => match message {
-            SyncMessage::HeaderList(l) => {
-                assert_eq!(l.headers().len(), 1);
-                l.into_headers().pop().unwrap()
-            }
-            a => panic!("Unexpected announcement: {a:?}"),
-        },
-        event => panic!("Unexpected event: {event:?}"),
+    let header = match sync_rx_2.recv().await.unwrap() {
+        SyncMessage::HeaderList(l) => {
+            assert_eq!(l.headers().len(), 1);
+            l.into_headers().pop().unwrap()
+        }
+        a => panic!("Unexpected announcement: {a:?}"),
     };
     assert_eq!(header.timestamp().as_int_seconds(), 1337u64);
     assert_eq!(&header, block.header());
@@ -132,23 +130,21 @@ where
             .clone()])))
         .unwrap();
 
-    match sync1.poll_next().await.unwrap() {
+    let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-        } => {}
+            sync_rx,
+        } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
-    let header = match sync1.poll_next().await.unwrap() {
-        SyncingEvent::Message { peer: _, message } => match message {
-            SyncMessage::HeaderList(l) => {
-                assert_eq!(l.headers().len(), 1);
-                l.into_headers().pop().unwrap()
-            }
-            a => panic!("Unexpected announcement: {a:?}"),
-        },
-        event => panic!("Unexpected event: {event:?}"),
+    let header = match sync_rx_1.recv().await.unwrap() {
+        SyncMessage::HeaderList(l) => {
+            assert_eq!(l.headers().len(), 1);
+            l.into_headers().pop().unwrap()
+        }
+        a => panic!("Unexpected announcement: {a:?}"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
     assert_eq!(&header, block.header());

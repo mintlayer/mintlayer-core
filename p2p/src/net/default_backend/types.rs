@@ -18,6 +18,7 @@ use common::{
     primitives::{semver::SemVer, user_agent::UserAgent, Id},
 };
 use serialization::{Decode, Encode};
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     message::{
@@ -63,13 +64,13 @@ pub enum PeerEvent {
     ConnectionClosed,
 
     /// Message received from remote
-    MessageReceived { message: Message },
+    MessageReceived { message: PeerManagerMessage },
 }
 
 /// Events sent by the default_backend backend to peers
 #[derive(Debug)]
 pub enum Event {
-    Accepted,
+    Accepted { sync_tx: Sender<SyncMessage> },
     SendMessage(Box<Message>),
 }
 

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    collections::BTreeSet,
+    collections::BTreeMap,
     net::{IpAddr, SocketAddr},
     panic,
     sync::{atomic::AtomicBool, Arc, Mutex},
@@ -26,7 +26,7 @@ use crypto::random::Rng;
 use itertools::Itertools;
 use tokio::{
     sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
         oneshot,
     },
     task::JoinHandle,
@@ -75,14 +75,14 @@ pub struct SyncManagerHandle {
     pub peer_id: PeerId,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
-    sync_event_receiver: UnboundedReceiver<SyncingEvent>,
+    sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
-    connected_peers: Arc<Mutex<BTreeSet<PeerId>>>,
+    connected_peers: Arc<Mutex<BTreeMap<PeerId, Sender<SyncMessage>>>>,
 }
 
 impl SyncManagerHandle {
@@ -158,13 +158,15 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
+        let (sync_tx, sync_rx) = mpsc::channel(20);
         self.sync_event_sender
             .send(SyncingEvent::Connected {
                 peer_id: peer,
                 services: NodeType::Full.into(),
+                sync_rx,
             })
             .unwrap();
-        self.connected_peers.lock().unwrap().insert(peer);
+        self.connected_peers.lock().unwrap().insert(peer, sync_tx);
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -184,31 +186,21 @@ impl SyncManagerHandle {
         self.connected_peers.lock().unwrap().remove(&peer);
     }
 
-    pub fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
-        self.sync_event_sender.send(SyncingEvent::Message { peer, message }).unwrap();
+    pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
+        let sync_tx = self.connected_peers.lock().unwrap().get(&peer).unwrap().clone();
+        sync_tx.send(message).await.unwrap();
     }
 
     /// Sends an announcement to the sync manager.
-    pub fn broadcast_message(&mut self, peer: PeerId, message: SyncMessage) {
-        self.sync_event_sender.send(SyncingEvent::Message { peer, message }).unwrap();
+    pub async fn broadcast_message(&mut self, peer: PeerId, message: SyncMessage) {
+        self.send_message(peer, message).await;
     }
 
     /// Receives a message from the sync manager.
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
-        match self.event().await {
-            SyncingEvent::Message { peer, message } => (peer, message),
-            e => panic!("Unexpected event: {e:?}"),
-        }
-    }
-
-    /// Receives an error from the sync manager.
-    ///
-    /// Only fatal errors can be checked using this function. Non-fatal errors typically result in
-    /// increasing the ban score of a peer.
-    pub async fn error(&mut self) -> P2pError {
-        time::timeout(LONG_TIMEOUT, self.error_receiver.recv())
+        time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
-            .expect("Failed to receive error in time")
+            .expect("Failed to receive event in time")
             .unwrap()
     }
 
@@ -248,13 +240,6 @@ impl SyncManagerHandle {
     /// Panics if the sync manager sends an event (message or announcement).
     pub async fn assert_no_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
-    }
-
-    pub async fn event(&mut self) -> SyncingEvent {
-        time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
-            .await
-            .expect("Failed to receive event in time")
-            .unwrap()
     }
 
     /// Awaits on the sync manager join handle and rethrows the panic.
@@ -305,7 +290,9 @@ pub async fn try_sync_managers_once(
         // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
         let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
         let requested_txid = get_random_hash(rng).into();
-        manager.send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid));
+        manager
+            .send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
+            .await;
 
         if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
             // There should be no peer scoring or disconnections
@@ -313,31 +300,28 @@ pub async fn try_sync_managers_once(
         }
 
         for _ in 0..message_limit {
-            let sync_event = manager.sync_event_receiver.recv().await.unwrap();
+            let (peer, sync_event) = manager.sync_event_receiver.recv().await.unwrap();
 
             // Send sync messages between peers
             match &sync_event {
-                SyncingEvent::Message {
-                    peer: _,
-                    message: SyncMessage::TransactionResponse(tx_resp),
-                } => match tx_resp {
+                SyncMessage::TransactionResponse(tx_resp) => match tx_resp {
                     TransactionResponse::NotFound(txid) if *txid == requested_txid => {
                         break;
                     }
                     _ => {}
                 },
-                SyncingEvent::Message { peer, message } => {
-                    let other_manager = managers.iter_mut().find(|m| m.peer_id == *peer).unwrap();
-                    other_manager
-                        .sync_event_sender
-                        .send(SyncingEvent::Message {
-                            peer: sender_peer_id,
-                            message: message.clone(),
-                        })
-                        .unwrap();
+                message => {
+                    let other_manager = managers.iter_mut().find(|m| m.peer_id == peer).unwrap();
+                    let sync_tx = other_manager
+                        .connected_peers
+                        .lock()
+                        .unwrap()
+                        .get(&sender_peer_id)
+                        .unwrap()
+                        .clone();
+                    sync_tx.send(message.clone()).await.unwrap();
                     return true;
                 }
-                event => panic!("Unexpected message: {event:?}"),
             }
         }
     }
@@ -490,8 +474,8 @@ impl NetworkingService for NetworkingServiceStub {
 
 #[derive(Clone)]
 struct MessagingHandleMock {
-    events_sender: UnboundedSender<SyncingEvent>,
-    connected_peers: Arc<Mutex<BTreeSet<PeerId>>>,
+    events_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    connected_peers: Arc<Mutex<BTreeMap<PeerId, Sender<SyncMessage>>>>,
 }
 struct SyncingEventReceiverMock {
     events_receiver: UnboundedReceiver<SyncingEvent>,
@@ -499,18 +483,13 @@ struct SyncingEventReceiverMock {
 
 impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
-        self.events_sender.send(SyncingEvent::Message { peer, message }).unwrap();
+        self.events_sender.send((peer, message)).unwrap();
         Ok(())
     }
 
     fn broadcast_message(&mut self, message: SyncMessage) -> Result<()> {
-        for peer in self.connected_peers.lock().unwrap().iter() {
-            self.events_sender
-                .send(SyncingEvent::Message {
-                    peer: *peer,
-                    message: message.clone(),
-                })
-                .unwrap();
+        for peer_id in self.connected_peers.lock().unwrap().keys() {
+            self.events_sender.send((*peer_id, message.clone())).unwrap();
         }
         Ok(())
     }

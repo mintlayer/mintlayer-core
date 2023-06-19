@@ -34,21 +34,6 @@ use crate::{
     P2pError,
 };
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer() {
-    let mut handle = SyncManagerHandle::start().await;
-
-    let peer = PeerId::new();
-
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(Vec::new())),
-    );
-
-    handle.resume_panic().await;
-}
-
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -78,10 +63,12 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     let blocks = iter::repeat(block.get_id())
         .take(*p2p_config.max_request_blocks_count + 1)
         .collect();
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(blocks)),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(blocks)),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -122,10 +109,12 @@ async fn unknown_blocks(#[case] seed: Seed) {
     let expected_score =
         P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(unknown_blocks[0]))
             .ban_score();
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -163,10 +152,12 @@ async fn valid_request(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let ids = blocks.iter().map(|b| b.get_id()).collect();
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(ids)),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(ids)),
+        )
+        .await;
 
     for block in blocks {
         let (sent_to, message) = handle.message().await;
@@ -209,10 +200,12 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
+        )
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -225,10 +218,12 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     handle.assert_no_peer_manager_event().await;
 
     // Request the same block twice.
-    handle.send_message(
-        peer,
-        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);

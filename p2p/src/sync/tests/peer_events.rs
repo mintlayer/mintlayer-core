@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error::PeerError, sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId, P2pError,
-};
+use crate::{sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId};
 
 // Check that the header list request is sent to a newly connected peer.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -30,6 +28,7 @@ async fn connect_peer() {
 
 // Check that the attempt to connect the peer twice results in an error.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[should_panic = "Registered duplicated peer"]
 async fn connect_peer_twice() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -37,12 +36,8 @@ async fn connect_peer_twice() {
     handle.connect_peer(peer).await;
 
     handle.try_connect_peer(peer);
-    assert_eq!(
-        P2pError::PeerError(PeerError::PeerAlreadyExists),
-        handle.error().await
-    );
 
-    handle.join_subsystem_manager().await;
+    handle.resume_panic().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
