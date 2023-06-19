@@ -17,13 +17,23 @@ use crate::{framework::BlockOutputs, TestChainstate};
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
+        block::timestamp::BlockTimestamp,
+        config::{Builder as ConfigBuilder, ChainType},
+        create_unittest_pos_config,
         signature::inputsig::InputWitness,
+        stakelock::StakePoolData,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        Block, Destination, Genesis, OutPointSourceId, TxInput, TxOutput,
+        Block, ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId,
+        PoolId, TxInput, TxOutput, UpgradeVersion,
     },
-    primitives::{Amount, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
+    Uint256,
 };
-use crypto::random::{CryptoRng, Rng};
+use crypto::{
+    key::{PrivateKey, PublicKey},
+    random::{CryptoRng, Rng},
+    vrf::VRFPublicKey,
+};
 use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -288,4 +298,53 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
         )
     }))
     .collect()
+}
+
+pub fn create_chain_config_with_staking_pool(
+    rng: &mut (impl Rng + CryptoRng),
+    staker_pk: &PublicKey,
+    staker_vrf_pk: &VRFPublicKey,
+) -> ChainConfig {
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(1),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: create_unittest_pos_config(),
+            }),
+        ),
+    ];
+    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let stake_amount = Amount::from_atoms(40_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+
+    let mint_output =
+        TxOutput::Transfer(OutputValue::Coin(mint_amount), Destination::AnyoneCanSpend);
+
+    let pool = TxOutput::CreateStakePool(
+        PoolId::new(H256::random_using(rng)),
+        Box::new(StakePoolData::new(
+            stake_amount,
+            Destination::PublicKey(staker_pk.clone()),
+            staker_vrf_pk.clone(),
+            Destination::PublicKey(staker_pk.clone()),
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        )),
+    );
+
+    let genesis = Genesis::new(
+        String::new(),
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, pool],
+    );
+
+    let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
+    ConfigBuilder::new(ChainType::Regtest)
+        .net_upgrades(net_upgrades)
+        .genesis_custom(genesis)
+        .build()
 }

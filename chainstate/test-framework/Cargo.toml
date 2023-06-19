@@ -12,6 +12,7 @@ chainstate = { path = '..' }
 chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
+consensus = { path = '../../consensus' }
 crypto = { path = '../../crypto' }
 pos_accounting = {path = '../../pos_accounting'}
 serialization = {path = "../../serialization"}
