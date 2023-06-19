@@ -224,7 +224,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
     check_last_event(tf, events);
 
     // b3
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
@@ -234,7 +234,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
     );
     assert!(!is_block_in_main_chain(tf, tf.index_at(3).block_id()));
     // b4
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(4).block_id(),
         &(*tf.index_at(3).block_id()).into(),
@@ -244,7 +244,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
     );
     assert!(!is_block_in_main_chain(tf, tf.index_at(4).block_id()));
     // b5
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(5).block_id(),
         &(*tf.index_at(2).block_id()).into(),
@@ -254,7 +254,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
     );
     assert!(is_block_in_main_chain(tf, tf.index_at(5).block_id()));
     // b6
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(6).block_id(),
         &(*tf.index_at(5).block_id()).into(),
@@ -289,7 +289,7 @@ fn check_make_alternative_chain_longer(
         .unwrap();
     check_last_event(tf, events);
     // b3
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
@@ -299,7 +299,7 @@ fn check_make_alternative_chain_longer(
     );
     assert!(is_block_in_main_chain(tf, tf.index_at(3).block_id()));
     // b4
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(4).block_id(),
         &(*tf.index_at(3).block_id()).into(),
@@ -326,7 +326,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
     assert!(tf.create_chain(&(*tf.index_at(1).block_id()).into(), 1, rng).is_ok());
     check_last_event(tf, events);
 
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(1).block_id(),
         &tf.genesis().get_id().into(),
@@ -336,7 +336,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
     );
     assert!(is_block_in_main_chain(tf, tf.index_at(1).block_id()));
     // b2
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(2).block_id(),
         &(*tf.index_at(1).block_id()).into(),
@@ -346,7 +346,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
     );
     assert!(is_block_in_main_chain(tf, tf.index_at(2).block_id()));
     // b3
-    check_block_status(
+    check_block_reorg_state(
         tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
@@ -391,7 +391,7 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     tf.chainstate.subscribe_to_events(subscribe_func);
 }
 
-fn check_block_status(
+fn check_block_reorg_state(
     tf: &TestFramework,
     block_id: &Id<Block>,
     prev_block_id: &Id<GenBlock>,

@@ -172,7 +172,7 @@ pub enum InitializationError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("{0}")]
-    PropertyQuery(#[from] PropertyQueryError),
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Not at genesis but block at height 1 not available")]
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
