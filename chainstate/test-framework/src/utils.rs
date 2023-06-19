@@ -30,7 +30,7 @@ use common::{
     Uint256,
 };
 use crypto::{
-    key::{PrivateKey, PublicKey},
+    key::PublicKey,
     random::{CryptoRng, Rng},
     vrf::VRFPublicKey,
 };
@@ -336,9 +336,10 @@ pub fn create_chain_config_with_staking_pool(
         )),
     );
 
+    let genesis_time = common::time_getter::TimeGetter::default().get_time();
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(1685025323),
+        BlockTimestamp::from_duration_since_epoch(genesis_time),
         vec![mint_output, pool],
     );
 

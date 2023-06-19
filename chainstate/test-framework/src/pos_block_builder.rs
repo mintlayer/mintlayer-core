@@ -46,7 +46,6 @@ pub struct PoSBlockBuilder<'f> {
     framework: &'f mut TestFramework,
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
-    reward: BlockReward,
     consensus_data: Option<ConsensusData>,
     block_signing_key: Option<PrivateKey>,
     transactions: Vec<SignedTransaction>,
@@ -64,7 +63,6 @@ impl<'f> PoSBlockBuilder<'f> {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_duration_since_epoch(framework.time_getter.get_time());
-        let reward = BlockReward::new(Vec::new());
 
         let (staker_vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let (staker_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -88,7 +86,6 @@ impl<'f> PoSBlockBuilder<'f> {
             prev_block_hash,
             timestamp,
             consensus_data: None,
-            reward,
             block_signing_key: None,
             staking_pool,
             staking_outpoint: None,
@@ -133,12 +130,6 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    /// Overrides the block reward that is empty by default.
-    pub fn with_reward(mut self, reward: Vec<TxOutput>) -> Self {
-        self.reward = BlockReward::new(reward);
-        self
-    }
-
     pub fn with_block_signing_key(mut self, block_signing_key: PrivateKey) -> Self {
         self.block_signing_key = Some(block_signing_key);
         self
@@ -162,7 +153,15 @@ impl<'f> PoSBlockBuilder<'f> {
                 (ConsensusData::PoS(Box::new(pos_data)), block_timestamp)
             }
         };
-        let block_body = BlockBody::new(self.reward, self.transactions);
+
+        let staking_destination =
+            Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
+        let reward = BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
+            staking_destination,
+            self.staking_pool.unwrap(),
+        )]);
+
+        let block_body = BlockBody::new(reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
             self.prev_block_hash,
@@ -181,6 +180,23 @@ impl<'f> PoSBlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
+        //let target_block_time = match self
+        //    .framework
+        //    .chainstate
+        //    .get_chain_config()
+        //    .net_upgrade()
+        //    .consensus_status(self.framework.best_block_index().block_height())
+        //{
+        //    RequiredConsensus::PoS(status) => status,
+        //    RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+        //        panic!("Invalid consensus")
+        //    }
+        //}
+        //.get_chain_config()
+        //.target_block_time();
+        let target_block_time = common::chain::create_unittest_pos_config().target_block_time();
+        self.framework.progress_time_seconds_since_epoch(target_block_time.get());
+
         (
             Block::new_from_header(signed_header, block_body).unwrap(),
             self.framework,
@@ -195,8 +211,8 @@ impl<'f> PoSBlockBuilder<'f> {
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
         let (block, framework) = self.build_impl();
-        framework.process_block(block, BlockSource::Local)
-        // FIXME: framework advance time
+        let res = framework.process_block(block, BlockSource::Local)?;
+        Ok(res)
     }
 
     fn mine_pos_block(&self) -> (PoSData, BlockTimestamp) {

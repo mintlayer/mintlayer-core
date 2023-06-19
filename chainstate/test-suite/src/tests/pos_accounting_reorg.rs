@@ -22,7 +22,8 @@ use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, create_chain_config_with_staking_pool, empty_witness, TestFramework,
+    TransactionBuilder,
 };
 use common::{
     chain::{
@@ -32,6 +33,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
@@ -230,5 +232,43 @@ fn stake_pool_reorg(#[case] seed: Seed) {
 
             assert_eq!(storage.dump_raw(), expected_storage.dump_raw());
         }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn long_chain_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (staking_sk, staking_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let chain_config = create_chain_config_with_staking_pool(&mut rng, &staking_pk, &vrf_pk);
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        let target_block_time = common::chain::create_unittest_pos_config().target_block_time();
+        tf.progress_time_seconds_since_epoch(target_block_time.get());
+
+        let common_block_id = tf
+            .create_chain_pos(
+                &tf.genesis().get_id().into(),
+                5,
+                &mut rng,
+                &staking_sk,
+                &vrf_sk,
+            )
+            .unwrap();
+
+        let old_tip = tf
+            .create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
+            .unwrap();
+
+        let new_tip = tf
+            .create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
+            .unwrap();
+
+        assert_ne!(old_tip, new_tip);
+        assert_eq!(new_tip, tf.best_block_id());
     });
 }

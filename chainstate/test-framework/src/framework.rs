@@ -152,6 +152,7 @@ impl TestFramework {
             let block = self
                 .make_pos_block_builder(rng)
                 .with_parent(prev_block_id)
+                .with_block_signing_key(staking_sk.clone())
                 .with_stake_spending_key(staking_sk.clone())
                 .with_vrf_key(staking_vrf_sk.clone())
                 .build();
