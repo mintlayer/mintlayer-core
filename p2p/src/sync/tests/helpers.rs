@@ -186,14 +186,10 @@ impl SyncManagerHandle {
         self.connected_peers.lock().unwrap().remove(&peer);
     }
 
+    /// Sends an announcement to the sync manager.
     pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
         let sync_tx = self.connected_peers.lock().unwrap().get(&peer).unwrap().clone();
         sync_tx.send(message).await.unwrap();
-    }
-
-    /// Sends an announcement to the sync manager.
-    pub async fn broadcast_message(&mut self, peer: PeerId, message: SyncMessage) {
-        self.send_message(peer, message).await;
     }
 
     /// Receives a message from the sync manager.

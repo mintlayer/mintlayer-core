@@ -62,7 +62,7 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![block_2.header().clone()])),
         )
@@ -97,7 +97,7 @@ async fn invalid_timestamp() {
     )
     .unwrap();
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
@@ -146,7 +146,7 @@ async fn invalid_consensus_data() {
     )
     .unwrap();
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
@@ -218,7 +218,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
 
     // First announcement: the peer score shouldn't be changed.
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
         )
@@ -231,7 +231,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
 
     // Second announcement: misbehavior.
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
         )
@@ -271,7 +271,7 @@ async fn valid_block(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     handle
-        .broadcast_message(
+        .send_message(
             peer,
             SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
         )
