@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::Arc;
 
 use clap::Parser;
 use futures::never::Never;
@@ -28,6 +28,7 @@ use p2p::{
     config::{NodeType, P2pConfig},
     net::NetworkingService,
 };
+use utils::atomics::SeqCstAtomicBool;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
 mod config;
@@ -73,7 +74,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     });
 
     let transport = p2p::make_p2p_transport();
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 

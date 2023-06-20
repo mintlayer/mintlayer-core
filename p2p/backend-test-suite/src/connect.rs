@@ -15,13 +15,7 @@
 
 //! Connection tests.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -30,6 +24,7 @@ use p2p::{
     error::{DialError, P2pError},
     net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
 };
+use utils::atomics::SeqCstAtomicBool;
 
 tests![connect, connect_address_in_use, connect_accept,];
 
@@ -44,7 +39,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     N::start(
@@ -59,7 +54,7 @@ where
     .await
     .unwrap();
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender.send(());
 }
 
@@ -75,7 +70,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (connectivity, _messaging_handle, _sync, _) = N::start(
@@ -111,7 +106,7 @@ where
         ))
     ));
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }
@@ -129,7 +124,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut service1, _, _, _) = N::start(
@@ -162,7 +157,7 @@ where
     service2.connect(conn_addr[0].clone()).unwrap();
     service1.poll_next().await.unwrap();
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }

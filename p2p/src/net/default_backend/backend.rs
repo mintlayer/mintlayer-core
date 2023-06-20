@@ -17,13 +17,7 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{
@@ -34,7 +28,7 @@ use tokio::{
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
-use utils::{eventhandler::EventsController, set_flag::SetFlag};
+use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
 
 use crate::{
     config::P2pConfig,
@@ -125,7 +119,7 @@ pub struct Backend<T: TransportSocket> {
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
-    shutdown: Arc<AtomicBool>,
+    shutdown: Arc<SeqCstAtomicBool>,
     shutdown_receiver: oneshot::Receiver<()>,
 
     events_controller: EventsController<P2pEvent>,
@@ -145,7 +139,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
-        shutdown: Arc<AtomicBool>,
+        shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Self {
@@ -352,7 +346,7 @@ where
             );
             match peer.run().await {
                 Ok(()) => {}
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {}
+                Err(P2pError::ChannelClosed) if shutdown.load() => {}
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
             }
         });
@@ -617,13 +611,13 @@ where
     fn send_sync_event(
         sync_tx: &mpsc::UnboundedSender<SyncingEvent>,
         event: SyncingEvent,
-        shutdown: &Arc<AtomicBool>,
+        shutdown: &Arc<SeqCstAtomicBool>,
     ) {
         // SyncManager should always be active and so sending to a closed `conn_tx` is not a backend's problem, just log the error.
         // NOTE: `sync_tx` is not connected in some PeerManager tests.
         match sync_tx.send(event) {
             Ok(()) => {}
-            Err(_) if shutdown.load(Ordering::SeqCst) => {}
+            Err(_) if shutdown.load() => {}
             Err(_) => log::error!("sending sync event from the backend failed unexpectedly"),
         }
     }
