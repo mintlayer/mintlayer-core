@@ -65,7 +65,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (sent_to, message) = handle.message().await;
@@ -108,7 +108,7 @@ async fn initial_block_download() {
 
     let tx = transaction(chain_config.genesis_block_id());
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     handle.assert_no_event().await;
@@ -167,7 +167,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
 
     let tx = transaction(chain_config.genesis_block_id());
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -230,7 +230,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
 
     let tx = transaction(chain_config.genesis_block_id());
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -271,7 +271,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 
     let tx = transaction(chain_config.genesis_block_id());
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (sent_to, message) = handle.message().await;
@@ -282,7 +282,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     );
 
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -326,7 +326,7 @@ async fn valid_transaction(#[case] seed: Seed) {
 
     let tx = transaction(chain_config.genesis_block_id());
     handle
-        .broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
     let (sent_to, message) = handle.message().await;
