@@ -22,15 +22,14 @@ use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, create_chain_config_with_staking_pool, empty_witness, TestFramework,
-    TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, GenBlock,
-        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
+        Destination, GenBlock, Mlt, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -245,9 +244,26 @@ fn long_chain_reorg(#[case] seed: Seed) {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let chain_config = create_chain_config_with_staking_pool(&mut rng, &staking_pk, &vrf_pk);
+        let pool_id = PoolId::new(H256::random_using(&mut rng));
+        let stake_pool_data = StakePoolData::new(
+            Amount::from_atoms(40_000_000 * Mlt::ATOMS_PER_MLT),
+            Destination::PublicKey(staking_pk),
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(1000).unwrap(),
+            Amount::ZERO,
+        );
+
+        let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            mint_amount,
+            pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time =
+            chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-        let target_block_time = common::chain::create_unittest_pos_config().target_block_time();
         tf.progress_time_seconds_since_epoch(target_block_time.get());
 
         let common_block_id = tf

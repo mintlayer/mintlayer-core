@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,32 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TestFramework;
+use crate::{
+    utils::{get_target_block_time, pos_mine, produce_kernel_signature},
+    TestFramework,
+};
 use chainstate::{BlockSource, ChainstateError};
-use chainstate_types::pos_randomness::PoSRandomness;
-use chainstate_types::vrf_tools::construct_transcript;
-use chainstate_types::{BlockIndex, EpochStorageRead};
-use common::chain::block::block_body::BlockBody;
-use common::chain::block::consensus_data::PoSData;
-use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
-use common::chain::block::{BlockHeader, BlockRewardTransactable};
-use common::chain::config::EpochIndex;
-use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
-use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::{Destination, PoolId, RequiredConsensus, UtxoOutPoint};
-use common::primitives::{Amount, Compact, Idable};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochStorageRead};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{
+            block_body::BlockBody,
+            consensus_data::PoSData,
+            signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData},
+            timestamp::BlockTimestamp,
+            BlockHeader, BlockReward, ConsensusData,
+        },
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Block, GenBlock, TxOutput,
+        Block, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput, UtxoOutPoint,
     },
-    primitives::{Id, H256},
+    primitives::{Id, Idable, H256},
 };
-use crypto::key::{KeyKind, PrivateKey, PublicKey};
-use crypto::random::{CryptoRng, Rng};
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
+use crypto::{
+    key::{KeyKind, PrivateKey, PublicKey},
+    random::{CryptoRng, Rng},
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 use serialization::Encode;
 
 /// The block builder that allows construction and processing of a block.
@@ -51,7 +51,7 @@ pub struct PoSBlockBuilder<'f> {
     transactions: Vec<SignedTransaction>,
 
     staking_pool: Option<PoolId>,
-    staking_outpoint: Option<UtxoOutPoint>,
+    kernel_input_outpoint: Option<UtxoOutPoint>,
 
     staker_sk: PrivateKey,
     staker_vrf_sk: VRFPrivateKey,
@@ -88,7 +88,7 @@ impl<'f> PoSBlockBuilder<'f> {
             consensus_data: None,
             block_signing_key: None,
             staking_pool,
-            staking_outpoint: None,
+            kernel_input_outpoint: None,
             staker_sk,
             staker_vrf_sk,
         }
@@ -117,12 +117,6 @@ impl<'f> PoSBlockBuilder<'f> {
         self.prev_block_hash = Id::new(H256::random_using(rng));
         self
     }
-
-    /// Overrides the timestamp that is equal to the current time by default.
-    //pub fn with_timestamp(mut self, timestamp: BlockTimestamp) -> Self {
-    //    self.timestamp = timestamp;
-    //    self
-    //}
 
     /// Overrides the consensus data that is `ConsensusData::None` by default.
     pub fn with_consensus_data(mut self, data: PoSData) -> Self {
@@ -180,21 +174,10 @@ impl<'f> PoSBlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
-        //let target_block_time = match self
-        //    .framework
-        //    .chainstate
-        //    .get_chain_config()
-        //    .net_upgrade()
-        //    .consensus_status(self.framework.best_block_index().block_height())
-        //{
-        //    RequiredConsensus::PoS(status) => status,
-        //    RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-        //        panic!("Invalid consensus")
-        //    }
-        //}
-        //.get_chain_config()
-        //.target_block_time();
-        let target_block_time = common::chain::create_unittest_pos_config().target_block_time();
+        let target_block_time = get_target_block_time(
+            self.framework.chainstate.get_chain_config(),
+            self.framework.best_block_index().block_height().next_height(),
+        );
         self.framework.progress_time_seconds_since_epoch(target_block_time.get());
 
         (
@@ -216,12 +199,10 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     fn mine_pos_block(&self) -> (PoSData, BlockTimestamp) {
-        //let parent = tf.best_block_index();
         let parent_block_index = self.framework.block_index(&self.prev_block_hash);
         let staking_pool = self.staking_pool.expect("staking pool id must be set");
-        //tf.set_time_seconds_since_epoch(parent.block_timestamp().as_int_seconds() + 1);
 
-        let kernel_input = self.staking_outpoint.clone().unwrap_or_else(|| {
+        let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
             // if staking outpoint is not set try to extract it from the parent
             match &parent_block_index {
                 chainstate_types::GenBlockIndex::Block(block_index) => {
@@ -252,7 +233,7 @@ impl<'f> PoSBlockBuilder<'f> {
                 }
             }
         });
-        //let kernel_inputs = vec![kernel_input];
+
         let staking_destination =
             Destination::PublicKey(PublicKey::from_private_key(&self.staker_sk));
         let kernel_outputs =
@@ -264,11 +245,10 @@ impl<'f> PoSBlockBuilder<'f> {
             kernel_outputs.as_slice(),
             staking_destination,
             self.prev_block_hash,
-            kernel_input.clone(),
+            kernel_input_outpoint.clone(),
         );
 
         let new_block_height = parent_block_index.block_height().next_height();
-        // FIXME: calculate???
         let current_difficulty = match self
             .framework
             .chainstate
@@ -276,23 +256,16 @@ impl<'f> PoSBlockBuilder<'f> {
             .net_upgrade()
             .consensus_status(new_block_height)
         {
-            RequiredConsensus::PoS(status) => status,
+            RequiredConsensus::PoS(status) => status.get_chain_config().target_limit(),
             RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
                 panic!("Invalid consensus")
             }
-        }
-        .get_chain_config()
-        .target_limit();
+        };
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
         let randomness = match chain_config.sealed_epoch_index(&new_block_height) {
-            Some(epoch) => self
-                .framework
-                .storage
-                .get_epoch_data(epoch)
-                .unwrap()
-                .unwrap()
-                .randomness()
-                .clone(),
+            Some(epoch) => {
+                *self.framework.storage.get_epoch_data(epoch).unwrap().unwrap().randomness()
+            }
             None => PoSRandomness::new(chain_config.initial_randomness()),
         };
         let pool_balance =
@@ -300,7 +273,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         pos_mine(
             BlockTimestamp::from_duration_since_epoch(self.framework.current_time()),
-            kernel_input,
+            kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
             &self.staker_vrf_sk,
             randomness,
@@ -311,77 +284,4 @@ impl<'f> PoSBlockBuilder<'f> {
         )
         .unwrap()
     }
-}
-
-fn produce_kernel_signature(
-    tf: &TestFramework,
-    staking_sk: &PrivateKey,
-    reward_outputs: &[TxOutput],
-    staking_destination: Destination,
-    kernel_utxo_block_id: Id<GenBlock>,
-    kernel_outpoint: UtxoOutPoint,
-) -> StandardInputSignature {
-    let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.tx_id()).unwrap()
-        [kernel_outpoint.output_index() as usize];
-
-    let kernel_inputs = vec![kernel_outpoint.into()];
-
-    let block_reward_tx =
-        BlockRewardTransactable::new(Some(kernel_inputs.as_slice()), Some(reward_outputs), None);
-    StandardInputSignature::produce_uniparty_signature_for_input(
-        staking_sk,
-        SigHashType::default(),
-        staking_destination,
-        &block_reward_tx,
-        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
-        0,
-    )
-    .unwrap()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn pos_mine(
-    initial_timestamp: BlockTimestamp,
-    kernel_outpoint: UtxoOutPoint,
-    kernel_witness: InputWitness,
-    vrf_sk: &VRFPrivateKey,
-    sealed_epoch_randomness: PoSRandomness,
-    pool_id: PoolId,
-    pool_balance: Amount,
-    epoch_index: EpochIndex,
-    target: Compact,
-) -> Option<(PoSData, BlockTimestamp)> {
-    let mut timestamp = initial_timestamp;
-
-    for _ in 0..1000 {
-        let transcript =
-            construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
-
-        let pos_data = PoSData::new(
-            vec![kernel_outpoint.clone().into()],
-            vec![kernel_witness.clone()],
-            pool_id,
-            vrf_data,
-            target,
-        );
-
-        let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
-        if consensus::check_pos_hash(
-            epoch_index,
-            &sealed_epoch_randomness,
-            &pos_data,
-            &vrf_pk,
-            timestamp,
-            pool_balance,
-        )
-        .is_ok()
-        {
-            return Some((pos_data, timestamp));
-        }
-
-        timestamp = timestamp.add_int_seconds(1).unwrap();
-    }
-    None
 }

@@ -13,26 +13,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{framework::BlockOutputs, TestChainstate};
+use std::num::NonZeroU64;
+
+use crate::{framework::BlockOutputs, TestChainstate, TestFramework};
 use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp,
-        config::{Builder as ConfigBuilder, ChainType},
+        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},
+        config::{Builder as ConfigBuilder, ChainType, EpochIndex},
         create_unittest_pos_config,
-        signature::inputsig::InputWitness,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
         stakelock::StakePoolData,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        Block, ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId,
-        PoolId, TxInput, TxOutput, UpgradeVersion,
+        Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        OutPointSourceId, PoolId, RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
+        UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
+    primitives::{Amount, BlockHeight, Compact, Id, Idable},
     Uint256,
 };
 use crypto::{
-    key::PublicKey,
+    key::PrivateKey,
     random::{CryptoRng, Rng},
-    vrf::VRFPublicKey,
+    vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use test_utils::nft_utils::*;
 
@@ -300,11 +307,20 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
     .collect()
 }
 
+pub fn get_target_block_time(chain_config: &ChainConfig, block_height: BlockHeight) -> NonZeroU64 {
+    match chain_config.net_upgrade().consensus_status(block_height) {
+        RequiredConsensus::PoS(status) => status.get_chain_config().target_block_time(),
+        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+            unimplemented!()
+        }
+    }
+}
+
 pub fn create_chain_config_with_staking_pool(
-    rng: &mut (impl Rng + CryptoRng),
-    staker_pk: &PublicKey,
-    staker_vrf_pk: &VRFPublicKey,
-) -> ChainConfig {
+    mint_amount: Amount,
+    pool_id: PoolId,
+    pool_data: StakePoolData,
+) -> ConfigBuilder {
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -318,23 +334,11 @@ pub fn create_chain_config_with_staking_pool(
             }),
         ),
     ];
-    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
-    let stake_amount = Amount::from_atoms(40_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
 
     let mint_output =
         TxOutput::Transfer(OutputValue::Coin(mint_amount), Destination::AnyoneCanSpend);
 
-    let pool = TxOutput::CreateStakePool(
-        PoolId::new(H256::random_using(rng)),
-        Box::new(StakePoolData::new(
-            stake_amount,
-            Destination::PublicKey(staker_pk.clone()),
-            staker_vrf_pk.clone(),
-            Destination::PublicKey(staker_pk.clone()),
-            PerThousand::new(0).unwrap(),
-            Amount::ZERO,
-        )),
-    );
+    let pool = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
 
     let genesis_time = common::time_getter::TimeGetter::default().get_time();
     let genesis = Genesis::new(
@@ -347,5 +351,80 @@ pub fn create_chain_config_with_staking_pool(
     ConfigBuilder::new(ChainType::Regtest)
         .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
-        .build()
+}
+
+pub fn produce_kernel_signature(
+    tf: &TestFramework,
+    staking_sk: &PrivateKey,
+    reward_outputs: &[TxOutput],
+    staking_destination: Destination,
+    kernel_utxo_block_id: Id<GenBlock>,
+    kernel_outpoint: UtxoOutPoint,
+) -> StandardInputSignature {
+    let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
+    let utxo = &block_outputs.get(&kernel_outpoint.tx_id()).unwrap()
+        [kernel_outpoint.output_index() as usize];
+
+    let kernel_inputs = vec![kernel_outpoint.into()];
+
+    let block_reward_tx =
+        BlockRewardTransactable::new(Some(kernel_inputs.as_slice()), Some(reward_outputs), None);
+    StandardInputSignature::produce_uniparty_signature_for_input(
+        staking_sk,
+        SigHashType::default(),
+        staking_destination,
+        &block_reward_tx,
+        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
+        0,
+    )
+    .unwrap()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn pos_mine(
+    initial_timestamp: BlockTimestamp,
+    kernel_outpoint: UtxoOutPoint,
+    kernel_witness: InputWitness,
+    vrf_sk: &VRFPrivateKey,
+    sealed_epoch_randomness: PoSRandomness,
+    pool_id: PoolId,
+    pool_balance: Amount,
+    epoch_index: EpochIndex,
+    target: Compact,
+) -> Option<(PoSData, BlockTimestamp)> {
+    let mut timestamp = initial_timestamp;
+
+    for _ in 0..1000 {
+        let transcript = chainstate_types::vrf_tools::construct_transcript(
+            epoch_index,
+            &sealed_epoch_randomness.value(),
+            timestamp,
+        );
+        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+
+        let pos_data = PoSData::new(
+            vec![kernel_outpoint.clone().into()],
+            vec![kernel_witness.clone()],
+            pool_id,
+            vrf_data,
+            target,
+        );
+
+        let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
+        if consensus::check_pos_hash(
+            epoch_index,
+            &sealed_epoch_randomness,
+            &pos_data,
+            &vrf_pk,
+            timestamp,
+            pool_balance,
+        )
+        .is_ok()
+        {
+            return Some((pos_data, timestamp));
+        }
+
+        timestamp = timestamp.add_int_seconds(1).unwrap();
+    }
+    None
 }
