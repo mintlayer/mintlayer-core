@@ -15,19 +15,19 @@
 
 //! This module implements "simplified" atomic types, which use predefined memory orderings.
 //!
-//! They come in two variants: the "relaxed" ones, whose operations always use the "Relaxed"
-//! memory ordering, and "synchronizing" ones, whose stores are always "Release" and loads
-//! are always "Acquire".
+//! They come in three variants: one is the "relaxed" atomics, whose operations always use
+//! the "Relaxed" memory ordering, and the other two are the "synchronizing" ones, which use
+//! "acquire-release" and "sequentially-consistent" orderings respectively.
 //!
-//! The reason for having them is that there are basically two use cases for an atomic type:
+//! The reason for having them is that, first of all, there are basically two use cases
+//! for an atomic type:
 //! 1) a low-level thread synchronization primitive;
 //! 2) a way to get interior mutability and/or circumvent borrow checker's restrictions.
 //!
 //! In the first case, the atomic operations should normally use the "synchronizing"
-//! memory orderings, such as "Acquire" and "Release", and in the second case the
-//! (generally cheaper) "Relaxed" ordering is enough.
+//! memory orderings and in the second case the (generally cheaper) "Relaxed" ordering is enough.
 //!
-//! Additionally, sometimes atomic types can appear at the API boundary of a module or a package,
+//! Secondly, sometimes atomic types can appear at the API boundary of a module or a package,
 //! which may lead to a situation where a load is performed in one module and a store in another.
 //! In this case, using the standard atomics effectively breaks encapsulation because,
 //! on the one hand, the memory orderings used by modules are their implementation details
@@ -194,56 +194,83 @@ where
 }
 
 #[doc(hidden)]
-pub struct RelOrderings;
+pub struct RelaxedOrderings;
 
-impl Orderings for RelOrderings {
+impl Orderings for RelaxedOrderings {
     const ORD_LOAD: Ordering = Ordering::Relaxed;
     const ORD_STORE: Ordering = Ordering::Relaxed;
     const ORD_LOAD_STORE: Ordering = Ordering::Relaxed;
 }
 
-impl private::Sealed for RelOrderings {}
+impl private::Sealed for RelaxedOrderings {}
 
 /// The "relaxed" variant of the atomic.
-pub type RelAtomic<T> = Atomic<T, RelOrderings>;
+pub type RelaxedAtomic<T> = Atomic<T, RelaxedOrderings>;
 
-pub type RelAtomicBool = RelAtomic<bool>;
-pub type RelAtomicI8 = RelAtomic<i8>;
-pub type RelAtomicU8 = RelAtomic<u8>;
-pub type RelAtomicI16 = RelAtomic<i16>;
-pub type RelAtomicU16 = RelAtomic<u16>;
-pub type RelAtomicI32 = RelAtomic<i32>;
-pub type RelAtomicU32 = RelAtomic<u32>;
-pub type RelAtomicI64 = RelAtomic<i64>;
-pub type RelAtomicU64 = RelAtomic<u64>;
-pub type RelAtomicIsize = RelAtomic<isize>;
-pub type RelAtomicUsize = RelAtomic<usize>;
+pub type RelaxedAtomicBool = RelaxedAtomic<bool>;
+pub type RelaxedAtomicI8 = RelaxedAtomic<i8>;
+pub type RelaxedAtomicU8 = RelaxedAtomic<u8>;
+pub type RelaxedAtomicI16 = RelaxedAtomic<i16>;
+pub type RelaxedAtomicU16 = RelaxedAtomic<u16>;
+pub type RelaxedAtomicI32 = RelaxedAtomic<i32>;
+pub type RelaxedAtomicU32 = RelaxedAtomic<u32>;
+pub type RelaxedAtomicI64 = RelaxedAtomic<i64>;
+pub type RelaxedAtomicU64 = RelaxedAtomic<u64>;
+pub type RelaxedAtomicIsize = RelaxedAtomic<isize>;
+pub type RelaxedAtomicUsize = RelaxedAtomic<usize>;
 
 #[doc(hidden)]
-pub struct SynOrderings;
+pub struct AcqRelOrderings;
 
-impl Orderings for SynOrderings {
+impl Orderings for AcqRelOrderings {
     const ORD_LOAD: Ordering = Ordering::Acquire;
     const ORD_STORE: Ordering = Ordering::Release;
     const ORD_LOAD_STORE: Ordering = Ordering::AcqRel;
 }
 
-impl private::Sealed for SynOrderings {}
+impl private::Sealed for AcqRelOrderings {}
 
-/// The "synchronizing" variant of the atomic.
+/// The "acquire-release" variant of the atomic.
 ///
-/// Note: the prefix "Syn" has nothing to do with the standard `Sync` trait; both [RelAtomic<T>] and [SynAtomic<T>]
-/// are `Sync`.
-pub type SynAtomic<T> = Atomic<T, SynOrderings>;
+pub type AcqRelAtomic<T> = Atomic<T, AcqRelOrderings>;
 
-pub type SynAtomicBool = SynAtomic<bool>;
-pub type SynAtomicI8 = SynAtomic<i8>;
-pub type SynAtomicU8 = SynAtomic<u8>;
-pub type SynAtomicI16 = SynAtomic<i16>;
-pub type SynAtomicU16 = SynAtomic<u16>;
-pub type SynAtomicI32 = SynAtomic<i32>;
-pub type SynAtomicU32 = SynAtomic<u32>;
-pub type SynAtomicI64 = SynAtomic<i64>;
-pub type SynAtomicU64 = SynAtomic<u64>;
-pub type SynAtomicIsize = SynAtomic<isize>;
-pub type SynAtomicUsize = SynAtomic<usize>;
+pub type AcqRelAtomicBool = AcqRelAtomic<bool>;
+pub type AcqRelAtomicI8 = AcqRelAtomic<i8>;
+pub type AcqRelAtomicU8 = AcqRelAtomic<u8>;
+pub type AcqRelAtomicI16 = AcqRelAtomic<i16>;
+pub type AcqRelAtomicU16 = AcqRelAtomic<u16>;
+pub type AcqRelAtomicI32 = AcqRelAtomic<i32>;
+pub type AcqRelAtomicU32 = AcqRelAtomic<u32>;
+pub type AcqRelAtomicI64 = AcqRelAtomic<i64>;
+pub type AcqRelAtomicU64 = AcqRelAtomic<u64>;
+pub type AcqRelAtomicIsize = AcqRelAtomic<isize>;
+pub type AcqRelAtomicUsize = AcqRelAtomic<usize>;
+
+#[doc(hidden)]
+pub struct SeqCstOrderings;
+
+impl Orderings for SeqCstOrderings {
+    const ORD_LOAD: Ordering = Ordering::SeqCst;
+    const ORD_STORE: Ordering = Ordering::SeqCst;
+    const ORD_LOAD_STORE: Ordering = Ordering::SeqCst;
+}
+
+impl private::Sealed for SeqCstOrderings {}
+
+/// The "sequentially-consistent" variant of the atomic.
+///
+/// This is more expensive than [AcqRelAtomic] and gives an additional guarantee:
+/// there exists a single total order of all SeqCst operations that is observed by all threads.
+pub type SeqCstAtomic<T> = Atomic<T, SeqCstOrderings>;
+
+pub type SeqCstAtomicBool = SeqCstAtomic<bool>;
+pub type SeqCstAtomicI8 = SeqCstAtomic<i8>;
+pub type SeqCstAtomicU8 = SeqCstAtomic<u8>;
+pub type SeqCstAtomicI16 = SeqCstAtomic<i16>;
+pub type SeqCstAtomicU16 = SeqCstAtomic<u16>;
+pub type SeqCstAtomicI32 = SeqCstAtomic<i32>;
+pub type SeqCstAtomicU32 = SeqCstAtomic<u32>;
+pub type SeqCstAtomicI64 = SeqCstAtomic<i64>;
+pub type SeqCstAtomicU64 = SeqCstAtomic<u64>;
+pub type SeqCstAtomicIsize = SeqCstAtomic<isize>;
+pub type SeqCstAtomicUsize = SeqCstAtomic<usize>;

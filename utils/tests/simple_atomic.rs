@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use utils::{atomics::RelAtomicU32, concurrency};
+use utils::{atomics::RelaxedAtomicU32, concurrency};
 
 // Here we have simple tests that basically check that the correct function of the wrapped
 // type is called by each function of the "Atomic" wrapper.
@@ -23,7 +23,7 @@ use utils::{atomics::RelAtomicU32, concurrency};
 #[test]
 fn test_load_store_swap() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(1);
+        let a = RelaxedAtomicU32::new(1);
         assert_eq!(a.load(), 1);
 
         a.store(2);
@@ -37,7 +37,7 @@ fn test_load_store_swap() {
 #[test]
 fn test_compare_exchange() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(1);
+        let a = RelaxedAtomicU32::new(1);
 
         assert_eq!(a.compare_exchange(2, 1), Err(1));
         assert_eq!(a.load(), 1);
@@ -50,7 +50,7 @@ fn test_compare_exchange() {
 #[test]
 fn test_compare_exchange_weak() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(1);
+        let a = RelaxedAtomicU32::new(1);
 
         assert_eq!(a.compare_exchange_weak(2, 1), Err(1));
         assert_eq!(a.load(), 1);
@@ -63,7 +63,7 @@ fn test_compare_exchange_weak() {
 #[test]
 fn test_fetch_update() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(1);
+        let a = RelaxedAtomicU32::new(1);
 
         assert_eq!(
             a.fetch_update(|x| {
@@ -88,7 +88,7 @@ fn test_fetch_update() {
 #[test]
 fn test_bit_ops() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(0b1100);
+        let a = RelaxedAtomicU32::new(0b1100);
         assert_eq!(a.fetch_and(0b1010), 0b1100);
         assert_eq!(a.load(), 0b1000);
 
@@ -109,7 +109,7 @@ fn test_bit_ops() {
 #[test]
 fn test_num_ops() {
     concurrency::model(|| {
-        let a = RelAtomicU32::new(10);
+        let a = RelaxedAtomicU32::new(10);
 
         assert_eq!(a.fetch_add(20), 10);
         assert_eq!(a.load(), 30);
@@ -132,10 +132,10 @@ fn test_num_ops() {
 #[test]
 fn test_default_debug_from() {
     concurrency::model(|| {
-        let a = <RelAtomicU32 as Default>::default();
+        let a = <RelaxedAtomicU32 as Default>::default();
         assert_eq!(a.load(), 0);
 
-        let a: RelAtomicU32 = 123.into();
+        let a: RelaxedAtomicU32 = 123.into();
         assert_eq!(a.load(), 123);
 
         assert_eq!(format!("{a:?}"), "123");

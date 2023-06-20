@@ -42,7 +42,7 @@ use mempool::{
     MempoolHandle,
 };
 use tokio::sync::oneshot;
-use utils::atomics::{RelAtomicBool, SynAtomicU64};
+use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
@@ -248,7 +248,7 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let stop_flag = Arc::new(RelAtomicBool::new(false));
+        let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
@@ -277,7 +277,7 @@ impl BlockProduction {
                 .add_int_seconds(1)
                 .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
 
-            Arc::new(SynAtomicU64::new(tip_plus_one.as_int_seconds()))
+            Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
         };
 
         let max_block_timestamp = {
@@ -377,14 +377,14 @@ impl BlockProduction {
         }
     }
 
-    // TODO: here, `block_timestamp_seconds` is a scary thing because, by being Syn, it might
+    // TODO: here, `block_timestamp_seconds` is a scary thing because, by being AcqRel, it might
     // imply that we perform thread synchronization through it. Which would be a bad thing
     // to do, because thread synchronization via atomics is too low-level and non-trivial
     // to implement correctly. Normally, it should be properly encapsulated, but here we
     // share the variable across packages, passing it to `consensus::finalize_consensus_data`.
     // So it's better to get rid of it ASAP.
     // (Note that we don't really do any thread synchronization through it currently; we made
-    // it "Syn" just in case, for extra peace of mind.)
+    // it "AcqRel" just in case, for extra peace of mind.)
     // One way of removing it would be to pass the initial value via a non-atomic parameter and
     // return the updated value back; in `finalize_consensus_data` and its callees it can
     // be done simply via the functions' return values. And here in `spawn_block_solver` we
@@ -393,9 +393,9 @@ impl BlockProduction {
     fn spawn_block_solver(
         &self,
         current_tip_index: &GenBlockIndex,
-        stop_flag: Arc<RelAtomicBool>,
+        stop_flag: Arc<RelaxedAtomicBool>,
         block_body: &BlockBody,
-        block_timestamp_seconds: Arc<SynAtomicU64>,
+        block_timestamp_seconds: Arc<AcqRelAtomicU64>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
