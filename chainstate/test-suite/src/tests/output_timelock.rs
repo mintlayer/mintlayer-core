@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use common::{
     chain::{
@@ -41,6 +38,7 @@ use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
 };
+use utils::atomics::SeqCstAtomicU64;
 
 #[rstest]
 #[trace]
@@ -401,7 +399,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn output_lock_until_time(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let current_time = Arc::new(AtomicU64::new(1));
+        let current_time = Arc::new(SeqCstAtomicU64::new(1));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
@@ -419,7 +417,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), lock_time);
 
-        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+        current_time.store(*block_times.last().unwrap());
 
         let expected_height = 1;
         let (input_witness, input, _) = add_block_with_locked_output(
@@ -550,7 +548,7 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn output_lock_for_seconds(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let current_time = Arc::new(AtomicU64::new(1));
+        let current_time = Arc::new(SeqCstAtomicU64::new(1));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
@@ -569,7 +567,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), unlock_time);
 
-        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+        current_time.store(*block_times.last().unwrap());
 
         let expected_height = 1;
         let (input_witness, input, _) = add_block_with_locked_output(

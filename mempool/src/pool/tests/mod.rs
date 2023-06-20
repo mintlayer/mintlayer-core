@@ -18,6 +18,7 @@ use crate::{
     get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
     SystemUsageEstimator,
 };
+use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
 };
@@ -32,10 +33,7 @@ use common::{
     },
     primitives::{Id, Idable, H256},
 };
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 mod expiry;
 mod orphans;
@@ -872,7 +870,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
-    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time = Arc::new(SeqCstAtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let mut mock_usage = MockGetMemoryUsage::new();
     // Add parent
@@ -1072,10 +1070,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // between txs. Finally, when the fee rate falls under INCREMENTAL_RELAY_THRESHOLD, we
     // observer that it is set to zero
     let halflife = ROLLING_FEE_BASE_HALFLIFE / 4;
-    mock_time.store(
-        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
-        Ordering::SeqCst,
-    );
+    mock_time.store(mock_time.load() + halflife.as_secs());
     let dummy_tx = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(OutPointSourceId::Transaction(child_2_high_fee_id), 0),
@@ -1108,10 +1103,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         rolling_fee / NonZeroUsize::new(2).expect("nonzero")
     );
 
-    mock_time.store(
-        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
-        Ordering::SeqCst,
-    );
+    mock_time.store(mock_time.load() + halflife.as_secs());
     log::debug!("Second attempt to add dummy");
     mempool.add_transaction(dummy_tx)?.assert_in_mempool();
     log::debug!(
@@ -1128,10 +1120,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
 
     // Add another dummy until rolling feerate drops to zero
-    mock_time.store(
-        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
-        Ordering::SeqCst,
-    );
+    mock_time.store(mock_time.load() + halflife.as_secs());
 
     let another_dummy = TransactionBuilder::new()
         .add_input(

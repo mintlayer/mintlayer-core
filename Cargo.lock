@@ -3939,6 +3939,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -5700,6 +5701,7 @@ dependencies = [
  "hex",
  "rand_chacha 0.3.1",
  "serialization",
+ "utils",
 ]
 
 [[package]]
