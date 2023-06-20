@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::helpers::new_pub_key_destination;
@@ -55,6 +54,7 @@ use rstest::rstest;
 use test_utils::mock_time_getter::mocked_time_getter_seconds;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::timelock_check::OutputMaturityError;
+use utils::atomics::SeqCstAtomicU64;
 use utxo::UtxoSource;
 
 #[rstest]
@@ -1066,7 +1066,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
         let config = create_unit_test_config();
 
         // current time is genesis time
-        let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
+        let current_time = Arc::new(SeqCstAtomicU64::new(
             config.genesis_block().timestamp().as_int_seconds(),
         ));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
@@ -1097,7 +1097,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
 
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(
-                    current_time.load(Ordering::SeqCst) + max_future_offset,
+                    current_time.load() + max_future_offset,
                 ))
                 .build_and_process()
                 .unwrap()
@@ -1112,7 +1112,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
             assert_eq!(
                 tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(
-                        current_time.load(Ordering::SeqCst) + max_future_offset + 1,
+                        current_time.load() + max_future_offset + 1,
                     ))
                     .build_and_process()
                     .unwrap_err(),
@@ -1126,9 +1126,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
             // submit a block one second before genesis in time
             assert!(matches!(
                 tf.make_block_builder()
-                    .with_timestamp(BlockTimestamp::from_int_seconds(
-                        current_time.load(Ordering::SeqCst) - 1
-                    ))
+                    .with_timestamp(BlockTimestamp::from_int_seconds(current_time.load() - 1))
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(

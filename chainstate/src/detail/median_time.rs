@@ -60,7 +60,8 @@ mod test {
         },
         primitives::Idable,
     };
-    use std::sync::{atomic::Ordering, Arc};
+    use std::sync::Arc;
+    use utils::atomics::SeqCstAtomicU64;
 
     fn make_block(prev_block: Id<GenBlock>, time: BlockTimestampInternalType) -> Block {
         Block::new(
@@ -166,7 +167,7 @@ mod test {
         utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
 
-            let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
+            let current_time = Arc::new(SeqCstAtomicU64::new(
                 chain_config.genesis_block().timestamp().as_int_seconds(),
             ));
 
@@ -185,11 +186,11 @@ mod test {
             .unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
-            let block1_time = current_time.load(Ordering::SeqCst) + 1;
-            let block2_time = current_time.load(Ordering::SeqCst) + 10;
-            let block3_time = current_time.load(Ordering::SeqCst) + 17;
-            let block4_time = current_time.load(Ordering::SeqCst) + 18;
-            let block5_time = current_time.load(Ordering::SeqCst) + 20;
+            let block1_time = current_time.load() + 1;
+            let block2_time = current_time.load() + 10;
+            let block3_time = current_time.load() + 17;
+            let block4_time = current_time.load() + 18;
+            let block5_time = current_time.load() + 20;
 
             let block1 = make_block(chainstate.chain_config.genesis_block_id(), block1_time);
             let block2 = make_block(block1.get_id().into(), block2_time);

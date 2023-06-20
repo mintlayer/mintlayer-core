@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
@@ -39,6 +35,7 @@ use crate::{
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
+use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
@@ -48,7 +45,7 @@ pub struct TestFramework {
     // A clone of the TimeGetter supplied to the chainstate
     pub time_getter: TimeGetter,
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
-    pub time_value: Option<Arc<AtomicU64>>,
+    pub time_value: Option<Arc<SeqCstAtomicU64>>,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
@@ -81,7 +78,7 @@ impl TestFramework {
     /// this function increases the time value
     pub fn progress_time_seconds_since_epoch(&mut self, secs: u64) {
         match &self.time_value {
-            Some(v) => v.fetch_add(secs, std::sync::atomic::Ordering::SeqCst),
+            Some(v) => v.fetch_add(secs),
             None => {
                 panic!("Cannot progress time in TestFramework when custom time getter is supplied")
             }
@@ -92,7 +89,7 @@ impl TestFramework {
     /// this function sets the time value to whatever is provided
     pub fn set_time_seconds_since_epoch(&mut self, val: u64) {
         match &self.time_value {
-            Some(v) => v.store(val, std::sync::atomic::Ordering::SeqCst),
+            Some(v) => v.store(val),
             None => {
                 panic!("Cannot progress time in TestFramework when custom time getter is supplied")
             }
