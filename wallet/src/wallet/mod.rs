@@ -494,8 +494,12 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
-    pub fn scan_mempool(&mut self, _transactions: Vec<SignedTransaction>) -> WalletResult<()> {
-        Err(WalletError::NotImplemented("scan_mempool"))
+    pub fn scan_mempool(&mut self, transactions: Vec<SignedTransaction>) -> WalletResult<()> {
+        for account in self.accounts.values_mut() {
+            account.scan_new_unconfirmed_transactions(&transactions);
+        }
+
+        Ok(())
     }
 
     pub fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {

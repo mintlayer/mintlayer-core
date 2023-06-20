@@ -152,6 +152,7 @@ pub enum WalletCommand {
 
     GetBalance,
 
+    // TODO: add option to show unconfirmed utxos?
     ListUtxo {
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,

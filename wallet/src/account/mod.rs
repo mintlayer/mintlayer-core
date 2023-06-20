@@ -146,8 +146,11 @@ impl Account {
         let network_fee = Amount::from_atoms(10000);
 
         let utxos_by_currency = group_utxos_for_input(
-            self.get_utxos(UtxoType::Transfer | UtxoType::LockThenTransfer, median_time)
-                .into_iter(),
+            self.get_utxos_with_unconfirmed(
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                median_time,
+            )
+            .into_iter(),
             |(_, (tx_output, _))| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
                 grouped.push((element.0.clone(), element.1 .0.clone()));
@@ -559,6 +562,23 @@ impl Account {
         all_outputs
     }
 
+    pub fn get_utxos_with_unconfirmed(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        let mut all_outputs =
+            self.output_cache.utxos_with_token_ids_with_unconfirmed(current_block_info);
+        all_outputs.retain(|_outpoint, (txo, _token_id)| {
+            self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
+        });
+        all_outputs
+    }
+
     fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
@@ -566,12 +586,11 @@ impl Account {
     ) -> WalletResult<()> {
         let revoked_txs = self
             .output_cache
-            .txs()
-            .iter()
+            .txs_with_unconfirmed()
             .filter_map(|(id, tx)| match tx.state() {
                 TxState::Confirmed(height, _) => {
                     if height > common_block_height {
-                        Some(id.clone())
+                        Some(AccountWalletTxId::new(self.get_account_id(), id.clone()))
                     } else {
                         None
                     }
@@ -595,7 +614,10 @@ impl Account {
         tx: WalletTx,
     ) -> WalletResult<()> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
-            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(outpoint),
+            TxInput::Utxo(outpoint) => self
+                .output_cache
+                .get_txo(outpoint)
+                .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(_) => false,
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -605,6 +627,25 @@ impl Account {
             self.output_cache.add_tx(id, tx);
         }
         Ok(())
+    }
+
+    fn add_wallet_unconfirmed_tx_if_relevant(&mut self, tx: WalletTx) -> bool {
+        let relevant_inputs = tx.inputs().iter().any(|input| match input {
+            TxInput::Utxo(outpoint) => self
+                .output_cache
+                .get_txo_with_unconfirmed(outpoint)
+                .map_or(false, |txo| self.is_mine_or_watched(txo)),
+            TxInput::Account(_) => false,
+        });
+        let relevant_outputs = tx.outputs().iter().any(|txo| self.is_mine_or_watched(txo));
+
+        if relevant_inputs || relevant_outputs {
+            let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
+            self.output_cache.add_unconfirmed_tx(id, tx);
+            true
+        } else {
+            false
+        }
     }
 
     fn scan_genesis(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> WalletResult<()> {
@@ -658,6 +699,35 @@ impl Account {
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
         Ok(())
+    }
+
+    pub fn scan_new_unconfirmed_transactions(&mut self, transactions: &Vec<SignedTransaction>) {
+        let mut not_added = vec![];
+        for signed_tx in transactions {
+            let wallet_tx = WalletTx::Tx(TxData::new(
+                signed_tx.transaction().clone().into(),
+                TxState::InMempool,
+            ));
+
+            // in the case when 2 unconfirmed txs depend on each other, and the last one spends
+            // utxos that belong to this account it is not possible to determine if that tx is for
+            // this account or not if we haven't processed the previous tx before it.
+            // This can only happen for the last one in the chain, as any other tx will have an
+            // output belonging to this account.
+            if !self.add_wallet_unconfirmed_tx_if_relevant(wallet_tx) {
+                not_added.push(signed_tx);
+            }
+        }
+
+        // check them again after adding all we could
+        for signed_tx in not_added {
+            let wallet_tx = WalletTx::Tx(TxData::new(
+                signed_tx.transaction().clone().into(),
+                TxState::InMempool,
+            ));
+
+            self.add_wallet_unconfirmed_tx_if_relevant(wallet_tx);
+        }
     }
 
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {

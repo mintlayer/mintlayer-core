@@ -55,6 +55,10 @@ impl<Id: Encode> AccountPrefixedId<Id> {
     pub fn into_item_id(self) -> Id {
         self.item_id
     }
+
+    pub fn item_id(&self) -> &Id {
+        &self.item_id
+    }
 }
 
 impl<Id: Encode> HasPrefix<AccountId> for AccountPrefixedId<Id> {}
