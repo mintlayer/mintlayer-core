@@ -1579,15 +1579,10 @@ async fn mempool_full_real(#[case] seed: Seed) {
     mempool.max_size = memory_size - 1;
 
     // Attempt to add all the transactions but one
-    let (txs, last_tx) = {
-        let mut txs = txs;
-        let last_tx = txs.pop().unwrap();
-        (txs, last_tx)
-    };
-    for tx in &txs {
-        let (entry, _) = tx.clone().into_entry_and_fee();
+    let (last_tx, initial_txs) = txs.split_last().unwrap();
+    for tx in initial_txs {
         assert_eq!(
-            mempool.add_transaction_entry(entry),
+            mempool.add_transaction_entry(tx.tx_entry().clone()),
             Ok(TxStatus::InMempool)
         );
         log::trace!("Mempool mem usage updated: {}", mempool.memory_usage());
@@ -1596,19 +1591,20 @@ async fn mempool_full_real(#[case] seed: Seed) {
 
     // Add the last transaction, check the memory limit kicked in and the total number of
     // transactions has not increased.
-    let (last_tx, _) = last_tx.into_entry_and_fee();
-    let _ = mempool.add_transaction_entry(last_tx);
+    let _ = mempool.add_transaction_entry(last_tx.tx_entry().clone());
     assert!(mempool.store.txs_by_id.len() < num_txs);
 
-    // Bump the memory limit again, and re-insert the evicted transaction(s)
+    // Bump the memory limit again, and re-insert the evicted transaction(s). Also reset the
+    // rolling fee since recently evicted transactions bump it up.
     mempool.max_size = memory_size;
+    mempool.drop_rolling_fee();
+
     for tx in txs {
         if mempool.contains_transaction(tx.tx_id()) {
             continue;
         }
-        let (entry, _) = tx.into_entry_and_fee();
         assert_eq!(
-            mempool.add_transaction_entry(entry),
+            mempool.add_transaction_entry(tx.into_tx_entry()),
             Ok(TxStatus::InMempool)
         );
     }
@@ -1667,7 +1663,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 
     mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
     for id in ids {
-        mempool.store.remove_tx(&id, MempoolRemovalReason::Block)
+        mempool.store.remove_tx(&id, MempoolRemovalReason::Block);
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
     assert!(mempool.store.txs_by_creation_time.is_empty());

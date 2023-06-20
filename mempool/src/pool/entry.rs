@@ -43,13 +43,13 @@ impl TxAccountDependency {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxDependency {
     DelegationAccount(TxAccountDependency),
-    Transaction(Id<Transaction>),
+    TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
 }
 
 impl TxDependency {
     fn from_utxo(outpt: &UtxoOutPoint) -> Option<Self> {
-        outpt.tx_id().get_tx_id().map(|id| Self::Transaction(*id))
+        outpt.tx_id().get_tx_id().map(|id| Self::TxOutput(*id, outpt.output_index()))
     }
 
     fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
@@ -71,7 +71,7 @@ impl TxDependency {
 
     fn from_input_provides(input: &TxInput) -> Option<Self> {
         match input {
-            TxInput::Utxo(_) => None, // handled at transaction level
+            TxInput::Utxo(_) => None,
             TxInput::Account(acct) => Some(Self::from_account(acct.account(), acct.nonce())),
         }
     }
@@ -126,8 +126,10 @@ impl TxEntry {
 
     /// Dependency graph edges this entry provides
     pub fn provides(&self) -> impl Iterator<Item = TxDependency> + '_ {
-        std::iter::once(TxDependency::Transaction(*self.tx_id()))
-            .chain(self.inputs_iter().filter_map(TxDependency::from_input_provides))
+        let n_outputs = self.transaction().outputs().len() as u32;
+        let from_outputs = (0..n_outputs).map(|i| TxDependency::TxOutput(*self.tx_id(), i));
+        let from_inputs = self.inputs_iter().filter_map(TxDependency::from_input_provides);
+        from_outputs.chain(from_inputs)
     }
 
     fn inputs_iter(&self) -> impl Iterator<Item = &TxInput> + ExactSizeIterator + '_ {
@@ -151,6 +153,10 @@ impl TxEntryWithFee {
         self.entry.tx_id()
     }
 
+    pub fn tx_entry(&self) -> &TxEntry {
+        &self.entry
+    }
+
     pub fn transaction(&self) -> &SignedTransaction {
         self.entry.transaction()
     }
@@ -159,8 +165,7 @@ impl TxEntryWithFee {
         self.fee
     }
 
-    pub fn into_entry_and_fee(self) -> (TxEntry, Fee) {
-        let Self { entry, fee } = self;
-        (entry, fee)
+    pub fn into_tx_entry(self) -> TxEntry {
+        self.entry
     }
 }

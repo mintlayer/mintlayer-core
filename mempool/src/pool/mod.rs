@@ -25,7 +25,10 @@ use std::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
-    tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+    tx_verifier::{
+        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+        TransactionSource,
+    },
 };
 use common::{
     chain::{
@@ -422,16 +425,19 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     // Check the transaction against the mempool inclusion policy
-    fn check_mempool_policy(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
-        self.pays_minimum_relay_fees(tx)?;
-        self.pays_minimum_mempool_fee(tx)?;
+    fn check_mempool_policy(
+        &self,
+        entry: &TxEntryWithFee,
+    ) -> Result<Conflicts, MempoolPolicyError> {
+        self.pays_minimum_relay_fees(entry)?;
+        self.pays_minimum_mempool_fee(entry)?;
 
         if ENABLE_RBF {
-            self.rbf_checks(tx)
+            self.rbf_checks(entry)
         } else {
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
-                self.conflicting_tx_ids(tx.transaction()).next().is_none(),
+                self.conflicting_tx_ids(entry.tx_entry()).next().is_none(),
                 MempoolPolicyError::ConflictWithIrreplaceableTransaction
             );
             Ok(Conflicts::new(BTreeSet::new()))
@@ -500,10 +506,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn conflicting_tx_ids<'a>(
         &'a self,
-        tx: &'a SignedTransaction,
+        entry: &'a TxEntry,
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
-        let ins = tx.transaction().inputs().iter();
-        ins.filter_map(|input| self.store.find_conflicting_tx(input))
+        entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
 }
 
@@ -511,7 +516,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 impl<M: MemoryUsageEstimator> Mempool<M> {
     fn rbf_checks(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
-            .conflicting_tx_ids(tx.transaction())
+            .conflicting_tx_ids(tx.tx_entry())
             .map(|id_conflict| self.store.get_entry(id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
@@ -720,7 +725,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .collect();
 
         for tx_id in expired_ids.iter() {
-            self.store.drop_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry)
+            self.remove_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry);
         }
     }
 
@@ -748,9 +753,47 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
+            self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
+    }
+
+    fn remove_tx_and_descendants(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
+        let mut to_disconnect: Vec<TxMempoolEntry> =
+            self.store.drop_tx_and_descendants(tx_id, reason).into_iter().collect();
+
+        let source = TransactionSource::Mempool;
+
+        while !to_disconnect.is_empty() {
+            let mut to_disconnect_next = Vec::new();
+            let to_disconnect_orig_len = to_disconnect.len();
+
+            while let Some(entry) = to_disconnect.pop() {
+                let can_disconnect = self
+                    .tx_verifier
+                    .can_disconnect_transaction(&source, entry.tx_id())
+                    .log_err_pfx("Removing transaction from tx verifier")
+                    .unwrap_or(false);
+                if can_disconnect {
+                    self.tx_verifier
+                        .disconnect_transaction(&source, entry.transaction())
+                        .expect("can_disconnect just returned true");
+                } else {
+                    to_disconnect_next.push(entry);
+                }
+            }
+
+            to_disconnect = to_disconnect_next;
+
+            // After each iteration, the number of transactions left to be disconnected should go
+            // down. Otherwise, the process is stuck. It probably means the drop_tx_and_descendants
+            // is missing some descendants. That occurs if the idea of what constitutes a
+            // descendant is different between mempool and transaction verifier.
+            assert!(
+                to_disconnect.len() < to_disconnect_orig_len,
+                "Mempool tx verifier disconnecting stuck"
+            );
+        }
     }
 }
 
