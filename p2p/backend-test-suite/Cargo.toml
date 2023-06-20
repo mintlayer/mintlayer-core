@@ -14,6 +14,7 @@ p2p = { path = "../../p2p" }
 p2p-test-utils = { path = "../p2p-test-utils" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem/" }
+utils = { path = "../../utils/" }
 
 futures.workspace = true
 libtest-mimic.workspace = true

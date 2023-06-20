@@ -36,10 +36,7 @@ pub use crate::{
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 
 use tokio::{
@@ -54,6 +51,7 @@ use net::default_backend::transport::{
 use peer_manager::peerdb::storage::PeerDbStorage;
 use subsystem::{CallRequest, ShutdownRequest};
 
+use ::utils::atomics::SeqCstAtomicBool;
 use ::utils::ensure;
 use chainstate::chainstate_interface;
 use common::{
@@ -88,7 +86,7 @@ struct P2p<T: NetworkingService> {
 
     // TODO: This flag is a workaround for graceful p2p termination.
     // See https://github.com/mintlayer/mintlayer-core/issues/888 for more details.
-    shutdown: Arc<AtomicBool>,
+    shutdown: Arc<SeqCstAtomicBool>,
 
     backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<()>,
@@ -118,7 +116,7 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
-        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown = Arc::new(SeqCstAtomicBool::new(false));
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
@@ -156,11 +154,11 @@ where
             match peer_manager.run().await {
                 Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
+                Err(P2pError::ChannelClosed) if shutdown_.load() => {
                     log::info!("Peer manager is shut down");
                 }
                 Err(e) => {
-                    shutdown_.store(true, Ordering::SeqCst);
+                    shutdown_.store(true);
                     log::error!("Peer manager failed: {e:?}");
                 }
             }
@@ -181,11 +179,11 @@ where
             match sync_manager.run().await {
                 Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
+                Err(P2pError::ChannelClosed) if shutdown_.load() => {
                     log::info!("Sync manager is shut down");
                 }
                 Err(e) => {
-                    shutdown_.store(true, Ordering::SeqCst);
+                    shutdown_.store(true);
                     log::error!("Sync manager failed: {e:?}");
                 }
             }
@@ -218,7 +216,7 @@ where
     }
 
     async fn shutdown(self) {
-        self.shutdown.store(true, Ordering::SeqCst);
+        self.shutdown.store(true);
         let _ = self.backend_shutdown_sender.send(());
 
         // Wait for the tasks to shut down.
