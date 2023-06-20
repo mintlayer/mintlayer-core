@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
-
 use common::{
     chain::{transaction::TxInput, Destination, GenBlock, OutPointSourceId, PoolId},
     primitives::{Id, H256},
@@ -43,7 +41,7 @@ async fn collect_transactions_collect_txs_failed() {
     let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
 
     let mock_mempool = MempoolInterfaceMock::new();
-    mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
+    mock_mempool.collect_txs_should_error.store(true);
 
     let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
         let mock_mempool = mock_mempool.clone();
@@ -66,7 +64,7 @@ async fn collect_transactions_collect_txs_failed() {
 
             let accumulator = block_production.collect_transactions().await;
 
-            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
+            let collected_transactions = mock_mempool.collect_txs_called.load();
             assert!(collected_transactions, "Expected collect_tx() to be called");
 
             match accumulator {
@@ -113,7 +111,7 @@ async fn collect_transactions_subsystem_error() {
 
         let accumulator = block_production.collect_transactions().await;
 
-        let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
+        let collected_transactions = mock_mempool.collect_txs_called.load();
         assert!(
             !collected_transactions,
             "Expected collect_tx() to not be called"
@@ -160,7 +158,7 @@ async fn collect_transactions_succeeded() {
 
             let accumulator = block_production.collect_transactions().await;
 
-            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
+            let collected_transactions = mock_mempool.collect_txs_called.load();
             assert!(collected_transactions, "Expected collect_tx() to be called");
 
             assert!(

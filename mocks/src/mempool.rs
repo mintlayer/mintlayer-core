@@ -15,10 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering::Relaxed},
-    Arc,
-};
+use std::sync::Arc;
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -30,21 +27,22 @@ use mempool::{
     MempoolEvent, MempoolInterface, MempoolSubsystemInterface, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
+use utils::atomics::RelaxedAtomicBool;
 
 #[derive(Clone)]
 pub struct MempoolInterfaceMock {
-    pub add_transaction_called: Arc<AtomicBool>,
-    pub add_transaction_should_error: Arc<AtomicBool>,
-    pub get_all_called: Arc<AtomicBool>,
-    pub get_all_should_error: Arc<AtomicBool>,
-    pub contains_transaction_called: Arc<AtomicBool>,
-    pub contains_transaction_should_error: Arc<AtomicBool>,
-    pub collect_txs_called: Arc<AtomicBool>,
-    pub collect_txs_should_error: Arc<AtomicBool>,
-    pub subscribe_to_events_called: Arc<AtomicBool>,
-    pub subscribe_to_events_should_error: Arc<AtomicBool>,
-    pub run_called: Arc<AtomicBool>,
-    pub run_should_error: Arc<AtomicBool>,
+    pub add_transaction_called: Arc<RelaxedAtomicBool>,
+    pub add_transaction_should_error: Arc<RelaxedAtomicBool>,
+    pub get_all_called: Arc<RelaxedAtomicBool>,
+    pub get_all_should_error: Arc<RelaxedAtomicBool>,
+    pub contains_transaction_called: Arc<RelaxedAtomicBool>,
+    pub contains_transaction_should_error: Arc<RelaxedAtomicBool>,
+    pub collect_txs_called: Arc<RelaxedAtomicBool>,
+    pub collect_txs_should_error: Arc<RelaxedAtomicBool>,
+    pub subscribe_to_events_called: Arc<RelaxedAtomicBool>,
+    pub subscribe_to_events_should_error: Arc<RelaxedAtomicBool>,
+    pub run_called: Arc<RelaxedAtomicBool>,
+    pub run_should_error: Arc<RelaxedAtomicBool>,
 }
 
 impl Default for MempoolInterfaceMock {
@@ -56,18 +54,18 @@ impl Default for MempoolInterfaceMock {
 impl MempoolInterfaceMock {
     pub fn new() -> MempoolInterfaceMock {
         MempoolInterfaceMock {
-            add_transaction_called: Arc::new(AtomicBool::new(false)),
-            add_transaction_should_error: Arc::new(AtomicBool::new(false)),
-            get_all_called: Arc::new(AtomicBool::new(false)),
-            get_all_should_error: Arc::new(AtomicBool::new(false)),
-            contains_transaction_called: Arc::new(AtomicBool::new(false)),
-            contains_transaction_should_error: Arc::new(AtomicBool::new(false)),
-            collect_txs_called: Arc::new(AtomicBool::new(false)),
-            collect_txs_should_error: Arc::new(AtomicBool::new(false)),
-            subscribe_to_events_called: Arc::new(AtomicBool::new(false)),
-            subscribe_to_events_should_error: Arc::new(AtomicBool::new(false)),
-            run_called: Arc::new(AtomicBool::new(false)),
-            run_should_error: Arc::new(AtomicBool::new(false)),
+            add_transaction_called: Arc::new(RelaxedAtomicBool::new(false)),
+            add_transaction_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            get_all_called: Arc::new(RelaxedAtomicBool::new(false)),
+            get_all_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            contains_transaction_called: Arc::new(RelaxedAtomicBool::new(false)),
+            contains_transaction_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            collect_txs_called: Arc::new(RelaxedAtomicBool::new(false)),
+            collect_txs_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            subscribe_to_events_called: Arc::new(RelaxedAtomicBool::new(false)),
+            subscribe_to_events_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            run_called: Arc::new(RelaxedAtomicBool::new(false)),
+            run_should_error: Arc::new(RelaxedAtomicBool::new(false)),
         }
     }
 }
@@ -78,9 +76,9 @@ const SUBSYSTEM_ERROR: Error =
 #[async_trait::async_trait]
 impl MempoolInterface for MempoolInterfaceMock {
     fn add_transaction(&mut self, _tx: SignedTransaction) -> Result<TxStatus, Error> {
-        self.add_transaction_called.store(true, Relaxed);
+        self.add_transaction_called.store(true);
 
-        if self.add_transaction_should_error.load(Relaxed) {
+        if self.add_transaction_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
             Ok(TxStatus::InMempool)
@@ -88,9 +86,9 @@ impl MempoolInterface for MempoolInterfaceMock {
     }
 
     fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
-        self.get_all_called.store(true, Relaxed);
+        self.get_all_called.store(true);
 
-        if self.get_all_should_error.load(Relaxed) {
+        if self.get_all_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
             Ok(vec![])
@@ -98,9 +96,9 @@ impl MempoolInterface for MempoolInterfaceMock {
     }
 
     fn contains_transaction(&self, _tx: &Id<Transaction>) -> Result<bool, Error> {
-        self.contains_transaction_called.store(true, Relaxed);
+        self.contains_transaction_called.store(true);
 
-        if self.contains_transaction_should_error.load(Relaxed) {
+        if self.contains_transaction_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
             Ok(true)
@@ -127,9 +125,9 @@ impl MempoolInterface for MempoolInterfaceMock {
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
     ) -> Result<Box<dyn TransactionAccumulator>, Error> {
-        self.collect_txs_called.store(true, Relaxed);
+        self.collect_txs_called.store(true);
 
-        if self.collect_txs_should_error.load(Relaxed) {
+        if self.collect_txs_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
             Ok(tx_accumulator)
@@ -140,9 +138,9 @@ impl MempoolInterface for MempoolInterfaceMock {
         &mut self,
         _handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error> {
-        self.subscribe_to_events_called.store(true, Relaxed);
+        self.subscribe_to_events_called.store(true);
 
-        if self.subscribe_to_events_should_error.load(Relaxed) {
+        if self.subscribe_to_events_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
             Ok(())
@@ -157,9 +155,9 @@ impl MempoolSubsystemInterface for MempoolInterfaceMock {
         mut call_rq: CallRequest<dyn MempoolInterface>,
         mut shut_rq: ShutdownRequest,
     ) {
-        self.run_called.store(true, Relaxed);
+        self.run_called.store(true);
 
-        if !self.run_should_error.load(Relaxed) {
+        if !self.run_should_error.load() {
             tokio::select! {
                 call = call_rq.recv() => call(&mut self).await,
                 () = shut_rq.recv() => return,
