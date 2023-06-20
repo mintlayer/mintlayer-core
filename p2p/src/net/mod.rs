@@ -24,10 +24,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use futures::{future::BoxFuture, never::Never};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     config,
@@ -83,7 +81,7 @@ pub trait NetworkingService {
     type SyncingEventReceiver: Send;
 
     /// Initializes the network service provider.
-    async fn start(
+    async fn initialize(
         transport: Self::Transport,
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
@@ -95,7 +93,7 @@ pub trait NetworkingService {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'async_trait, crate::Result<Never>>,
     )>;
 }
 

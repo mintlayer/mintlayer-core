@@ -122,16 +122,31 @@ where
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
+        let (conn, messaging_handle, sync_event_receiver, run_backend) = T::initialize(
             transport,
             bind_addresses,
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
-            Arc::clone(&shutdown),
+            chain_config.clone(),
+            p2p_config.clone(),
+            shutdown.clone(),
             shutdown_receiver,
             subscribers_receiver,
         )
         .await?;
+        let backend_task = {
+            let shutdown = Arc::clone(&shutdown);
+            tokio::spawn(async move {
+                match run_backend.await {
+                    Ok(_) => unreachable!(),
+                    Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
+                        log::info!("Backend is shut down");
+                    }
+                    Err(e) => {
+                        shutdown.store(true, Ordering::SeqCst);
+                        log::error!("Failed to run backend: {e}");
+                    }
+                }
+            })
+        };
 
         // P2P creates its components (such as PeerManager, sync, pubsub, etc) and makes
         // communications with them in two possible ways:
@@ -144,57 +159,51 @@ where
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
+            chain_config.clone(),
+            p2p_config.clone(),
             conn,
             rx_peer_manager,
             time_getter.clone(),
             peerdb_storage,
         )?;
-        let shutdown_ = Arc::clone(&shutdown);
-        let peer_manager_task = tokio::spawn(async move {
-            match peer_manager.run().await {
-                Ok(_) => unreachable!(),
-                // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
-                    log::info!("Peer manager is shut down");
-                }
-                Err(e) => {
-                    shutdown_.store(true, Ordering::SeqCst);
-                    log::error!("Peer manager failed: {e:?}");
-                }
-            }
-        });
-
-        let sync_manager_task = {
-            let chainstate_handle = chainstate_handle.clone();
-            let tx_peer_manager = tx_peer_manager.clone();
-            let chain_config = Arc::clone(&chain_config);
-            let mempool_handle_ = mempool_handle.clone();
-            let messaging_handle_ = messaging_handle.clone();
-            let shutdown_ = Arc::clone(&shutdown);
-
+        let peer_manager_task = {
+            let shutdown = shutdown.clone();
             tokio::spawn(async move {
-                match sync::BlockSyncManager::<T>::new(
-                    chain_config,
-                    p2p_config,
-                    messaging_handle_,
-                    sync_event_receiver,
-                    chainstate_handle,
-                    mempool_handle_,
-                    tx_peer_manager,
-                    time_getter,
-                )
-                .run()
-                .await
-                {
+                match peer_manager.run().await {
                     Ok(_) => unreachable!(),
                     // The channel can be closed during the shutdown process.
-                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
+                    Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
+                        log::info!("Peer manager is shut down");
+                    }
+                    Err(e) => {
+                        shutdown.store(true, Ordering::SeqCst);
+                        log::error!("Peer manager failed: {e:?}");
+                    }
+                }
+            })
+        };
+
+        let mut sync_manager = sync::BlockSyncManager::<T>::new(
+            chain_config,
+            p2p_config,
+            messaging_handle.clone(),
+            sync_event_receiver,
+            chainstate_handle,
+            mempool_handle.clone(),
+            tx_peer_manager.clone(),
+            time_getter,
+        );
+        let sync_manager_task = {
+            let shutdown = shutdown.clone();
+            tokio::spawn(async move {
+                match sync_manager.run().await {
+                    Ok(_) => unreachable!(),
+                    // The channel can be closed during the shutdown process.
+                    Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
                         log::info!("Sync manager is shut down");
                     }
                     Err(e) => {
-                        shutdown_.store(true, Ordering::SeqCst);
+                        shutdown.store(true, Ordering::SeqCst);
                         log::error!("Sync manager failed: {e:?}");
                     }
                 }

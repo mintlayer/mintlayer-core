@@ -44,7 +44,7 @@ tests![block_announcement, block_announcement_no_subscription,];
 async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService + Debug,
+    N: NetworkingService + Debug + 'static,
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
@@ -54,7 +54,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
+    let (mut conn1, mut messaging_handle1, mut sync1, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -65,10 +65,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
+    let (mut conn2, mut messaging_handle2, mut sync2, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -79,6 +80,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
@@ -158,7 +160,7 @@ where
 async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService + Debug,
+    N: NetworkingService + Debug + 'static,
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
@@ -190,7 +192,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -201,10 +203,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -215,6 +218,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 

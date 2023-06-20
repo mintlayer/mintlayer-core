@@ -47,7 +47,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    N::start(
+    N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         config,
@@ -78,7 +78,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (connectivity, _messaging_handle, _sync, _) = N::start(
+    let (connectivity, _messaging_handle, _sync, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -89,11 +89,12 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     let addresses = connectivity.local_addresses().to_vec();
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let res = N::start(
+    let res = N::initialize(
         T::make_transport(),
         addresses,
         config,
@@ -102,13 +103,12 @@ where
         shutdown_receiver,
         subscribers_receiver,
     )
-    .await
-    .expect_err("address is not in use");
+    .await;
     assert!(matches!(
         res,
-        P2pError::DialError(DialError::IoError(
+        Err(P2pError::DialError(DialError::IoError(
             std::io::ErrorKind::AddrInUse | std::io::ErrorKind::AddrNotAvailable
-        ))
+        )))
     ));
 
     shutdown.store(true, Ordering::SeqCst);
@@ -132,7 +132,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service1, _, _, _) = N::start(
+    let (mut service1, _, _, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -143,10 +143,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service2, _, _, _) = N::start(
+    let (mut service2, _, _, run_backend) = N::initialize(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -157,6 +158,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
 
     let conn_addr = service1.local_addresses().to_vec();
     service2.connect(conn_addr[0].clone()).unwrap();

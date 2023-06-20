@@ -77,7 +77,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-    let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
+    let (conn, _messaging_handle, sync, run_backend) = p2p::P2pNetworkingService::initialize(
         transport,
         vec![],
         Arc::clone(&chain_config),
@@ -123,6 +123,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     // Spawn for better parallelism
     let crawler_manager_task = tokio::spawn(async move { crawler_manager.run().await });
     let server_task = tokio::spawn(server.run());
+    let backend_task =
+        tokio::spawn(async move { run_backend.await.map_err(error::DnsServerError::from) });
 
     tokio::select! {
         res = crawler_manager_task => {
@@ -131,6 +133,9 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         res = server_task => {
             res.expect("server should not panic")
         },
+        res = backend_task => {
+            res.expect("networking backend should not panic")
+        }
     }
 }
 

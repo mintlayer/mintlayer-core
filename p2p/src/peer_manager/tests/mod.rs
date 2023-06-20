@@ -69,7 +69,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn, _, _, _) = T::start(
+    let (conn, _, _, run_backend) = T::initialize(
         transport,
         vec![addr],
         Arc::clone(&chain_config),
@@ -80,6 +80,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(run_backend);
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
     let peer_manager = PeerManager::<T, _>::new(

@@ -23,6 +23,7 @@ use std::{
 
 use async_trait::async_trait;
 use crypto::random::Rng;
+use futures::{future::BoxFuture, never::Never};
 use itertools::Itertools;
 use tokio::{
     sync::{
@@ -450,7 +451,7 @@ impl NetworkingService for NetworkingServiceStub {
     type MessagingHandle = MessagingHandleMock;
     type SyncingEventReceiver = SyncingEventReceiverMock;
 
-    async fn start(
+    async fn initialize(
         _: Self::Transport,
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
@@ -462,7 +463,7 @@ impl NetworkingService for NetworkingServiceStub {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'async_trait, crate::Result<Never>>,
     )> {
         panic!("Stub service shouldn't be used directly");
     }

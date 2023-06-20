@@ -25,10 +25,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use futures::{future::BoxFuture, never::Never};
+use tokio::sync::{mpsc, oneshot};
 
 use common::{
     chain::ChainConfig,
@@ -120,7 +118,7 @@ impl NetworkingService for MockNetworkingService {
     type MessagingHandle = ();
     type SyncingEventReceiver = MockSyncingEventReceiver;
 
-    async fn start(
+    async fn initialize(
         _transport: Self::Transport,
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
@@ -132,7 +130,7 @@ impl NetworkingService for MockNetworkingService {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'async_trait, p2p::Result<Never>>,
     )> {
         unreachable!()
     }
