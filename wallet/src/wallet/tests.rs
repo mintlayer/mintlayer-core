@@ -733,7 +733,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(*token_amount, token_amount_to_issue);
 
     let tokens_to_transfer =
-        Amount::from_atoms(rng.gen_range(1..token_amount_to_issue.into_atoms()));
+        Amount::from_atoms(rng.gen_range(1..=token_amount_to_issue.into_atoms()));
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
@@ -775,10 +775,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             Currency::Token(token_id) => Some((token_id, amount)),
         })
         .collect_vec();
-    assert_eq!(token_balances.len(), 1);
-    let (_token_id, token_amount) = token_balances.first().expect("some");
+    assert!(token_balances.len() <= 1);
+    let token_amount = token_balances
+        .first()
+        .map_or(Amount::ZERO, |(_token_id, token_amount)| *token_amount);
     assert_eq!(
-        *token_amount,
+        token_amount,
         (token_amount_to_issue - tokens_to_transfer).expect("")
     );
 
