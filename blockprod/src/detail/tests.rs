@@ -559,7 +559,7 @@ mod produce_block {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn try_again_later() {
         // Ensure we reset the global mock time
-        let _reset_time_destructor = OnceDestructor::new(|| time::reset());
+        let _reset_time_destructor = OnceDestructor::new(time::reset);
 
         let (manager, chain_config, chainstate, mempool) = {
             let last_used_block_timestamp = TimeGetter::get_time(&TimeGetter::default());
