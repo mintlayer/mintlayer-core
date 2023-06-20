@@ -14,23 +14,25 @@
 // limitations under the License.
 
 pub mod default_strategy;
+pub use default_strategy::DefaultTransactionVerificationStrategy;
+
 pub mod tx_verification_strategy_utils;
 
-pub use default_strategy::DefaultTransactionVerificationStrategy;
-use pos_accounting::PoSAccountingView;
-use utxo::UtxosView;
-
-use crate::BlockError;
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::id::WithId,
 };
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig,
-    storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
-    TransactionVerifier,
+use pos_accounting::PoSAccountingView;
+use tx_verifier::{
+    error::ConnectTransactionError,
+    transaction_verifier::{
+        config::TransactionVerifierConfig,
+        storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
+        TransactionVerifier,
+    },
 };
+use utxo::UtxosView;
 
 // TODO: replace with trait_alias when stabilized
 pub trait TransactionVerifierMakerFn<C, S, U, A>:
@@ -52,18 +54,17 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
     #[allow(clippy::too_many_arguments)]
-    fn connect_block<C, H, S, M, U, A>(
+    fn connect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &H,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+        median_time_past: BlockTimestamp,
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
-        H: BlockIndexHandle,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         C: AsRef<ChainConfig>,
@@ -84,7 +85,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,

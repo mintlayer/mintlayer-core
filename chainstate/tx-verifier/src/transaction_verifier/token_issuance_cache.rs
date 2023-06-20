@@ -108,14 +108,20 @@ impl TokenIssuanceCache {
     fn insert_aux_data(
         &mut self,
         token_id: TokenId,
-        op: CachedAuxDataOp,
+        new_op: CachedAuxDataOp,
     ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
-            Entry::Occupied(_) => Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(
-                token_id,
-            )),
+            Entry::Occupied(mut entry) => match entry.get() {
+                CachedOperation::Write(_) | CachedOperation::Read(_) => Err(
+                    TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
+                ),
+                CachedOperation::Erase => {
+                    entry.insert(new_op);
+                    Ok(())
+                }
+            },
             Entry::Vacant(e) => {
-                e.insert(op);
+                e.insert(new_op);
                 Ok(())
             }
         }

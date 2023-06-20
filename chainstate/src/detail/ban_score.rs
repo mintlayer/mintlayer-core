@@ -23,6 +23,7 @@ use tx_verifier::{
 };
 
 use super::{
+    chainstateref::EpochSealError,
     transaction_verifier::{
         error::{ConnectTransactionError, TokensError},
         storage::TransactionVerifierStorageError,
@@ -60,10 +61,8 @@ impl BanScore for BlockError {
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
-            BlockError::RandomnessError(err) => err.ban_score(),
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
-            BlockError::SpendStakeError(_) => 100,
-            BlockError::PoolDataNotFound(_) => 0,
+            BlockError::EpochSealError(err) => err.ban_score(),
         }
     }
 }
@@ -234,6 +233,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::WitnessMerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
+            CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
+            CheckBlockError::BlockNotFound(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
@@ -249,6 +250,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
             CheckBlockError::GetAncestorError(_) => 100,
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
+            CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
+            CheckBlockError::EpochSealError(err) => err.ban_score(),
         }
     }
 }
@@ -466,6 +469,18 @@ impl BanScore for ChainstateError {
             ChainstateError::ProcessBlockError(e) => e.ban_score(),
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
+        }
+    }
+}
+
+impl BanScore for EpochSealError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            EpochSealError::StorageError(_) => 0,
+            EpochSealError::PoSAccountingError(err) => err.ban_score(),
+            EpochSealError::SpendStakeError(_) => 100,
+            EpochSealError::RandomnessError(err) => err.ban_score(),
+            EpochSealError::PoolDataNotFound(_) => 0,
         }
     }
 }

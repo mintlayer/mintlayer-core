@@ -14,16 +14,14 @@
 // limitations under the License.
 
 use chainstate::{
-    calculate_median_time_past,
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
-    BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
-    TransactionVerifierStorageError,
+    TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
 };
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::BlockIndex;
 use common::{
-    chain::{Block, ChainConfig},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use pos_accounting::PoSAccountingView;
@@ -56,28 +54,24 @@ impl Default for DisposableTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for DisposableTransactionVerificationStrategy {
-    fn connect_block<C, H, S, M, U, A>(
+    fn connect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &H,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+        median_time_past: BlockTimestamp,
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
-        H: BlockIndexHandle,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
-        let median_time_past =
-            calculate_median_time_past(block_index_handle, &block.prev_block_id());
         let block_subsidy =
             chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
 
@@ -101,17 +95,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &median_time_past,
                         take_front_tx_index(&mut tx_indices),
                     )
-                    .map_err(BlockError::StateUpdateFailed)
                     .log_err()?;
                 let consumed_cache = tx_verifier.consume()?;
-                flush_to_storage(&mut base_tx_verifier, consumed_cache)
-                    .map_err(BlockError::TransactionVerifierError)
-                    .log_err()?;
+                flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
                 (total + fee.0).ok_or_else(|| {
-                    BlockError::StateUpdateFailed(
-                        ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()),
-                    )
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })
             })
             .log_err()?;
@@ -141,7 +130,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -166,7 +155,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
 
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache)
-                    .map_err(BlockError::TransactionVerifierError)
+                    .map_err(ConnectTransactionError::TransactionVerifierError)
             })
             .log_err()?;
 

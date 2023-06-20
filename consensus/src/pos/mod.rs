@@ -22,7 +22,7 @@ pub mod target;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
-    BlockIndexHandle, GenBlockIndex,
+    BlockIndexHandle, EpochStorageRead, GenBlockIndex, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -90,16 +90,18 @@ pub fn check_pos_hash(
     Ok(())
 }
 
-fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
+fn randomness_of_sealed_epoch<S: EpochStorageRead>(
     chain_config: &ChainConfig,
     current_height: BlockHeight,
-    block_index_handle: &H,
+    epoch_storage: &S,
 ) -> Result<PoSRandomness, ConsensusPoSError> {
     let sealed_epoch_index = chain_config.sealed_epoch_index(&current_height);
 
     let random_seed = match sealed_epoch_index {
         Some(sealed_epoch_index) => {
-            let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
+            let epoch_data = epoch_storage
+                .get_epoch_data(sealed_epoch_index)
+                .map_err(PropertyQueryError::StorageError)?;
             match epoch_data {
                 Some(d) => *d.randomness(),
                 None => {
@@ -131,18 +133,19 @@ pub fn enforce_timestamp_ordering(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn check_proof_of_stake<H, U, P>(
+pub fn check_proof_of_stake<H, E, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
     header: &SignedBlockHeader,
     pos_data: &PoSData,
     block_index_handle: &H,
+    epoch_data_storage: &E,
     utxos_view: &U,
     pos_accounting_view: &P,
-    strict_pos_consensus_check: bool,
 ) -> Result<(), ConsensusPoSError>
 where
     H: BlockIndexHandle,
+    E: EpochStorageRead,
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
@@ -165,51 +168,48 @@ where
     enforce_timestamp_ordering(&prev_block_index, header)?;
 
     let current_height = prev_block_index.block_height().next_height();
-    let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
+    let random_seed = randomness_of_sealed_epoch(chain_config, current_height, epoch_data_storage)?;
 
-    // TODO: Remove the `strict_pos_consensus_check` flag once PoS kernels can be checked normally.
-    // See also https://github.com/mintlayer/mintlayer-core/issues/752 for details.
-    if strict_pos_consensus_check {
-        let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
-        let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
+    let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
+    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
 
-        // Proof of stake mandates signing the block with the same key of the kernel output
-        check_block_signature(header, &kernel_output)?;
+    // Proof of stake mandates signing the block with the same key of the kernel output
+    check_block_signature(header, &kernel_output)?;
 
-        let vrf_pub_key = match kernel_output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                // only pool outputs can be staked
-                return Err(ConsensusPoSError::RandomnessError(
-                    PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
-                ));
-            }
-            TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
-            TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let pool_data = pos_accounting_view
-                    .get_pool_data(pool_id)?
-                    .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
-                pool_data.vrf_public_key().clone()
-            }
-        };
+    let vrf_pub_key = match kernel_output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _) => {
+            // only pool outputs can be staked
+            return Err(ConsensusPoSError::RandomnessError(
+                PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
+            ));
+        }
+        TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+            let pool_data = pos_accounting_view
+                .get_pool_data(pool_id)?
+                .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
+            pool_data.vrf_public_key().clone()
+        }
+    };
 
-        let stake_pool_id = *pos_data.stake_pool_id();
-        let pool_balance = pos_accounting_view
-            .get_pool_balance(stake_pool_id)?
-            .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
+    let stake_pool_id = *pos_data.stake_pool_id();
+    let pool_balance = pos_accounting_view
+        .get_pool_balance(stake_pool_id)?
+        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
 
-        check_pos_hash(
-            current_epoch_index,
-            &random_seed,
-            pos_data,
-            &vrf_pub_key,
-            header.timestamp(),
-            pool_balance,
-        )?;
-    }
+    check_pos_hash(
+        current_epoch_index,
+        &random_seed,
+        pos_data,
+        &vrf_pub_key,
+        header.timestamp(),
+        pool_balance,
+    )?;
+
     Ok(())
 }
 

@@ -67,7 +67,6 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         }
     }
 
-    #[cfg(test)]
     pub fn from_data(parent: P, data: PoSAccountingDeltaData) -> Self {
         Self { parent, data }
     }

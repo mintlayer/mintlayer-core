@@ -28,5 +28,10 @@ hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 expect-test.workspace = true
 rstest.workspace = true
+
+[[bench]]
+name = "benches"
+harness = false

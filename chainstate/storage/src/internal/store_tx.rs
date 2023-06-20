@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndex, EpochData};
+use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
 use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
@@ -156,10 +156,6 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBBlockByHeight, _, _>(height)
             }
 
-            fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
-                self.read::<db::DBEpochData, _, _>(epoch_index)
-            }
-
             fn get_token_aux_data(
                 &self,
                 token_id: &TokenId,
@@ -214,6 +210,12 @@ macro_rules! impl_read_ops {
                 account: AccountType,
             ) -> crate::Result<Option<AccountNonce>> {
                 self.read::<db::DBAccountNonceCount, _, _>(account)
+            }
+        }
+
+        impl<'st, B: storage::Backend> EpochStorageRead for $TxType<'st, B> {
+            fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
+                self.read::<db::DBEpochData, _, _>(epoch_index)
             }
         }
 
@@ -496,14 +498,6 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .map_err(Into::into)
     }
 
-    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
-        self.write::<db::DBEpochData, _, _, _>(epoch_index, epoch_data)
-    }
-
-    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
-        self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
-    }
-
     fn set_account_nonce_count(
         &mut self,
         account: AccountType,
@@ -514,6 +508,16 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()> {
         self.0.get_mut::<db::DBAccountNonceCount, _>().del(account).map_err(Into::into)
+    }
+}
+
+impl<'st, B: storage::Backend> EpochStorageWrite for StoreTxRw<'st, B> {
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
+        self.write::<db::DBEpochData, _, _, _>(epoch_index, epoch_data)
+    }
+
+    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
+        self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
     }
 }
 

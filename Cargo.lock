@@ -744,6 +744,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
+ "criterion",
  "crypto",
  "expect-test",
  "hex",
