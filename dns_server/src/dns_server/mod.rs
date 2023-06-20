@@ -18,10 +18,7 @@
 use std::{
     collections::BTreeMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 use crypto::random::{make_pseudo_rng, SliceRandom};
@@ -37,6 +34,7 @@ use trust_dns_server::{
     store::in_memory::InMemoryAuthority,
     ServerFuture,
 };
+use utils::atomics::RelaxedAtomicU32;
 
 use crate::{config::DnsServerConfig, error::DnsServerError};
 
@@ -131,7 +129,7 @@ impl DnsServer {
 
 /// Wrapper for InMemoryAuthority that selects random addresses every second
 struct AuthorityImpl {
-    serial: AtomicU32,
+    serial: RelaxedAtomicU32,
     host: Name,
     nameserver: Option<Name>,
     mbox: Option<Name>,
@@ -146,7 +144,7 @@ impl AuthorityImpl {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("valid time expected")
             .as_secs() as u32;
-        let old_serial = self.serial.swap(new_serial, Ordering::Relaxed);
+        let old_serial = self.serial.swap(new_serial);
         if old_serial == new_serial {
             return;
         }
