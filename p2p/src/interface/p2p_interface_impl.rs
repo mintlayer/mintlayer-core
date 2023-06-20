@@ -103,6 +103,6 @@ where
         &mut self,
         handler: Arc<dyn Fn(P2pEvent) + Send + Sync>,
     ) -> crate::Result<()> {
-        self.subscribers_sender.send(handler).map_err(Into::into)
+        Ok(self.subscribers_sender.send(handler)?)
     }
 }

@@ -199,12 +199,10 @@ where
     }
 
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::SendMessage {
-                peer,
-                message: message.into(),
-            })
-            .map_err(Into::into)
+        Ok(self.cmd_tx.send(types::Command::SendMessage {
+            peer,
+            message: message.into(),
+        })?)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -218,12 +216,10 @@ where
 
 impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
-        self.command_sender
-            .send(types::Command::SendMessage {
-                peer,
-                message: message.into(),
-            })
-            .map_err(Into::into)
+        Ok(self.command_sender.send(types::Command::SendMessage {
+            peer,
+            message: message.into(),
+        })?)
     }
 
     fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()> {
