@@ -226,6 +226,21 @@ impl SyncManagerHandle {
         }
     }
 
+    pub async fn assert_no_disconnect_peer_event(&mut self, id: PeerId) {
+        time::timeout(SHORT_TIMEOUT, async {
+            loop {
+                match self.peer_manager_receiver.recv().await.unwrap() {
+                    PeerManagerEvent::Disconnect(peer_id, _) if id == peer_id => {
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .await
+        .unwrap_err();
+    }
+
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
