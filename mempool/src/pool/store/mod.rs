@@ -164,6 +164,7 @@ impl MempoolStore {
         self.txs_by_id.contains_key(id)
     }
 
+    #[allow(unused)]
     pub fn memory_usage(&self) -> usize {
         self.mem_tracker.get_usage()
     }
