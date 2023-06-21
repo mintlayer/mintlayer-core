@@ -18,13 +18,7 @@
 
 mod peer;
 
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::collections::HashSet;
 
 use futures::never::Never;
 use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
@@ -37,6 +31,10 @@ use common::{
 };
 use logging::log;
 use mempool::MempoolHandle;
+use utils::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use utils::tap_error_log::LogError;
 
 use crate::{
@@ -188,6 +186,12 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+        // FIXME: I'd like to make is_initial_block_download a simple atomic too,
+        // because it's shared between modules (this one and peer.rs), which is not nice.
+        // However, I'm a little confused by this optimization which uses the Relaxed ordering.
+        // Is it really needed? If yes, using a simple atomic will be a bit ugly (we'll have
+        // to access its "inner" object and make a Relaxed "load" on it). But I doubt that it's
+        // needed because in the context of networking any such overhead will be unnoticeable.
         let is_initial_block_download = if self.is_initial_block_download.load(Ordering::Relaxed) {
             let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
             self.is_initial_block_download.store(is_ibd, Ordering::Release);

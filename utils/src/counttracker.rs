@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use atomic_traits::{Atomic, NumOps};
+use crate::atomics::atomic_traits::{Atomic, AtomicNum};
 use num_traits::{One, Zero};
 use std::sync::Arc;
-
 #[must_use = "CountTracker is useless without holding its object"]
 pub struct CountTracker<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
 {
@@ -29,7 +28,7 @@ where
 
 impl<T> CountTracker<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
 {
@@ -48,7 +47,7 @@ where
 
 impl<T> Drop for CountTracker<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
 {

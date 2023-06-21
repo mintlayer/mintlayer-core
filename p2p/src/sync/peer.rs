@@ -16,10 +16,6 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
     time::Duration,
 };
 
@@ -44,6 +40,10 @@ use mempool::{
     MempoolHandle,
 };
 use utils::const_value::ConstValue;
+use utils::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use crate::{
     config::P2pConfig,
