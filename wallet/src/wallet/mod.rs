@@ -34,6 +34,8 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
+use itertools::Itertools;
+use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
     WalletStorageReadLocked, WalletStorageWriteLocked,
@@ -70,6 +72,8 @@ pub enum WalletError {
     EmptyLastAccount,
     #[error("The maximum number of accounts has been exceeded")]
     MaxNumAccountsExceeded,
+    #[error("No unsynced account")]
+    NoUnsyncedAccount,
     #[error("Not implemented: {0}")]
     NotImplemented(&'static str),
     #[error("The send request is complete")]
@@ -103,6 +107,7 @@ pub struct Wallet<B: storage::Backend> {
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
+    unsynced_account: Option<(U31, Account)>,
     selected_account: U31,
 }
 
@@ -143,6 +148,7 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts: BTreeMap::new(),
             latest_median_time,
+            unsynced_account: None,
             selected_account: U31::ZERO,
         };
 
@@ -165,7 +171,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         let accounts_info = db_tx.get_accounts_info()?;
 
-        let accounts = accounts_info
+        let mut accounts: BTreeMap<U31, Account> = accounts_info
             .keys()
             .map(|account_id| {
                 Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
@@ -180,12 +186,31 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
+        let first: &Account = accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
+        let last = accounts.values().last().ok_or(WalletError::WalletNotInitialized)?;
+
+        let unsynced_account = if first.best_block() != last.best_block() {
+            accounts.pop_last()
+        } else {
+            None
+        };
+
+        // sanity check all other accounts have the same the same best block
+        ensure!(
+            accounts
+                .values()
+                .tuple_windows()
+                .all(|(acc1, acc2)| acc1.best_block() == acc2.best_block()),
+            WalletError::WalletNotInitialized
+        );
+
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
             latest_median_time,
+            unsynced_account,
             selected_account: DEFAULT_ACCOUNT_INDEX,
         })
     }
@@ -365,9 +390,15 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        // TODO: Scan all accounts
+        // all synced account should have the same best block
         let account = self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
         Ok(account.best_block())
+    }
+
+    /// Returns the last scanned block hash and height for the unsynced_account.
+    /// Returns genesis block when the account is just created.
+    pub fn get_best_block_for_unsynced_account(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
+        self.unsynced_account.as_ref().map(|(_, acc)| acc.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.
@@ -387,6 +418,41 @@ impl<B: storage::Backend> Wallet<B> {
         }
 
         db_tx.commit()?;
+
+        Ok(())
+    }
+
+    /// Scan new blocks and update best block hash/height for the unsynced_account.
+    /// New block may reset the chain of previously scanned blocks.
+    ///
+    /// `common_block_height` is the height of the shared blocks that are still in sync after reorgs.
+    /// If `common_block_height` is zero, only the genesis block is considered common.
+    pub fn scan_new_blocks_for_unsynced_account(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+    ) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        let (_, account) = self.unsynced_account.as_mut().ok_or(WalletError::NoUnsyncedAccount)?;
+
+        account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
+
+        db_tx.commit()?;
+
+        if account.best_block().1
+            == self
+                .accounts
+                .values()
+                .next()
+                .ok_or(WalletError::WalletNotInitialized)?
+                .best_block()
+                .1
+        {
+            self.unsynced_account
+                .take()
+                .map(|(index, acc)| self.accounts.insert(index, acc));
+        }
 
         Ok(())
     }
