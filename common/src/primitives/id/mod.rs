@@ -89,7 +89,7 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Hash, Encode, Decode, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct Id<T> {
     id: H256,
