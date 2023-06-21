@@ -26,8 +26,10 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
-        Destination, GenBlock, Mlt, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        config::{create_unit_test_config, Builder as ConfigBuilder},
+        stakelock::StakePoolData,
+        tokens::OutputValue,
+        Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -245,8 +247,9 @@ fn long_chain_reorg(#[case] seed: Seed) {
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let pool_id = PoolId::new(H256::random_using(&mut rng));
+        let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
         let stake_pool_data = StakePoolData::new(
-            Amount::from_atoms(40_000_000 * Mlt::ATOMS_PER_MLT),
+            stake_pool_pledge,
             Destination::PublicKey(staking_pk),
             vrf_pk,
             Destination::AnyoneCanSpend,

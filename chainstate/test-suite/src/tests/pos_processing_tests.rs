@@ -36,7 +36,7 @@ use common::{
             consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
             ConsensusData,
         },
-        config::{Builder as ConfigBuilder, ChainType, EpochIndex},
+        config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
         create_unittest_pos_config,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -46,7 +46,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::OutputValue,
         AccountNonce, AccountOutPoint, AccountSpending, Block, ConsensusUpgrade, Destination,
-        GenBlock, Genesis, Mlt, NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId,
+        GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId,
         SignedTransaction, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
@@ -2103,7 +2103,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
-    let amount_to_stake = Amount::from_atoms(40_000_000 * Mlt::ATOMS_PER_MLT);
+    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
 
     let staker_reward_per_block = Amount::from_atoms(1000);
     let stake_pool_data = StakePoolData::new(

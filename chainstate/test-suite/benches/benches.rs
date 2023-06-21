@@ -15,7 +15,7 @@
 
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{stakelock::StakePoolData, Destination, Mlt, PoolId},
+    chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
     primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable, H256},
 };
 use crypto::{
@@ -54,8 +54,9 @@ pub fn pos_reorg(c: &mut Criterion) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
     let stake_pool_data = StakePoolData::new(
-        Amount::from_atoms(40_000_000 * Mlt::ATOMS_PER_MLT),
+        stake_pool_pledge,
         Destination::PublicKey(staking_pk),
         vrf_pk,
         Destination::AnyoneCanSpend,
