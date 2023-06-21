@@ -13,7 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod ip_address;
-pub mod peer_activity;
-pub mod peer_address;
-pub mod peer_id;
+use std::time::Duration;
+
+/// Activity with a peer.
+#[derive(Debug)]
+pub enum PeerActivity {
+    /// Node is pending for further actions with a peer.
+    Pending,
+    /// Node has sent a header list request to a peer and is expecting a header list response.
+    ExpectingHeaderList {
+        /// A time when the header list request was sent.
+        time: Duration,
+    },
+    /// Node has sent a block list request to a peer and is expecting block responses.
+    ExpectingBlocks {
+        /// A time when either the block list request was sent or last block response was received.
+        time: Duration,
+    },
+}
