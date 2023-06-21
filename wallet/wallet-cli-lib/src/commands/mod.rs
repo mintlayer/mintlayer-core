@@ -34,6 +34,18 @@ use self::helper_types::CliUtxoTypes;
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
+#[allow(clippy::large_enum_variant)]
+pub enum CLIWalletCommand {
+    SelectAccount {
+        account_index: U31,
+    },
+
+    #[clap(flatten)]
+    WalletCommand(WalletCommand),
+}
+
+#[derive(Debug, Parser)]
+#[clap(rename_all = "lower")]
 pub enum WalletCommand {
     /// Create new wallet
     CreateWallet {
@@ -106,12 +118,6 @@ pub enum WalletCommand {
     /// Creates a new account
     /// returns an error if the last created account does not have a transaction history
     CreateNewAccount,
-
-    /// Selects a different account
-    /// returns an error if an account with that index is not found
-    SelectAccount {
-        account_index: U31,
-    },
 
     StartStaking,
 
@@ -224,7 +230,13 @@ pub enum ConsoleCommand {
     ClearScreen,
     PrintHistory,
     ClearHistory,
-    SetStatus { status: String, print: String },
+    WalletInfo {
+        number_of_accounts: usize,
+        print_message: String,
+    },
+    SelectAccount {
+        account_index: U31,
+    },
     Exit,
 }
 
@@ -247,6 +259,7 @@ pub async fn handle_wallet_command(
     rpc_client: &NodeRpcClient,
     controller_opt: &mut Option<RpcController>,
     command: WalletCommand,
+    selected_account: Option<U31>,
 ) -> Result<ConsoleCommand, WalletCliError> {
     match command {
         WalletCommand::CreateWallet {
@@ -275,6 +288,7 @@ pub async fn handle_wallet_command(
             )
             .map_err(WalletCliError::Controller)?;
 
+            let number_of_accounts = wallet.account_indexes().count();
             *controller_opt = Some(RpcController::new(
                 Arc::clone(chain_config),
                 rpc_client.clone(),
@@ -288,7 +302,10 @@ pub async fn handle_wallet_command(
             } else {
                 "New wallet created successfully".to_owned()
             };
-            Ok(ConsoleCommand::Print(msg))
+            Ok(ConsoleCommand::WalletInfo {
+                number_of_accounts,
+                print_message: msg,
+            })
         }
 
         WalletCommand::OpenWallet { wallet_path } => {
@@ -300,15 +317,17 @@ pub async fn handle_wallet_command(
             let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
                 .map_err(WalletCliError::Controller)?;
 
+            let number_of_accounts = wallet.account_indexes().count();
             *controller_opt = Some(RpcController::new(
                 Arc::clone(chain_config),
                 rpc_client.clone(),
                 wallet,
             ));
 
-            Ok(ConsoleCommand::Print(
-                "Wallet loaded successfully".to_owned(),
-            ))
+            Ok(ConsoleCommand::WalletInfo {
+                number_of_accounts,
+                print_message: "Wallet loaded successfully".to_owned(),
+            })
         }
 
         WalletCommand::CloseWallet => {
@@ -316,7 +335,10 @@ pub async fn handle_wallet_command(
 
             *controller_opt = None;
 
-            Ok(ConsoleCommand::Print("Success".to_owned()))
+            Ok(ConsoleCommand::WalletInfo {
+                number_of_accounts: 0,
+                print_message: "Success".to_owned(),
+            })
         }
 
         WalletCommand::EncryptPrivateKeys { password } => {
@@ -416,7 +438,10 @@ pub async fn handle_wallet_command(
             let block = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .generate_block(transactions_opt)
+                .generate_block(
+                    selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    transactions_opt,
+                )
                 .await
                 .map_err(WalletCliError::Controller)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -427,7 +452,10 @@ pub async fn handle_wallet_command(
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .generate_blocks(count)
+                .generate_blocks(
+                    selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    count,
+                )
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
@@ -439,21 +467,9 @@ pub async fn handle_wallet_command(
                 .ok_or(WalletCliError::NoWallet)?
                 .create_account()
                 .map_err(WalletCliError::Controller)?;
-            Ok(ConsoleCommand::Print(format!(
-                "Success, the new account index is: {}",
-                new_account_index
-            )))
-        }
-
-        WalletCommand::SelectAccount { account_index } => {
-            controller_opt
-                .as_mut()
-                .ok_or(WalletCliError::NoWallet)?
-                .select_account(account_index)
-                .map_err(WalletCliError::Controller)?;
-            Ok(ConsoleCommand::SetStatus {
-                status: format!(" ({})", account_index),
-                print: format!("Success, the selected account index is: {}", account_index),
+            Ok(ConsoleCommand::WalletInfo {
+                number_of_accounts: new_account_index.into_u32() as usize,
+                print_message: format!("Success, the new account index is: {}", new_account_index),
             })
         }
 
@@ -522,7 +538,7 @@ pub async fn handle_wallet_command(
             let coin_balance = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_balance()
+                .get_balance(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                 .map_err(WalletCliError::Controller)?
                 .get(&Currency::Coin)
                 .copied()
@@ -537,7 +553,10 @@ pub async fn handle_wallet_command(
             let utxos = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_utxos(utxo_type.to_wallet_types())
+                .get_utxos(
+                    selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    utxo_type.to_wallet_types(),
+                )
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
         }
@@ -546,7 +565,7 @@ pub async fn handle_wallet_command(
             let address = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .new_address()
+                .new_address(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(address.get().to_owned()))
         }
@@ -555,7 +574,7 @@ pub async fn handle_wallet_command(
             let public_key = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .new_public_key()
+                .new_public_key(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(public_key.hex_encode()))
         }
@@ -564,7 +583,7 @@ pub async fn handle_wallet_command(
             let vrf_public_key = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_vrf_public_key()
+                .get_vrf_public_key(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
         }
@@ -575,7 +594,11 @@ pub async fn handle_wallet_command(
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .send_to_address(address, amount)
+                .send_to_address(
+                    selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    address,
+                    amount,
+                )
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
@@ -590,7 +613,11 @@ pub async fn handle_wallet_command(
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .create_stake_pool_tx(amount, decomission_key)
+                .create_stake_pool_tx(
+                    selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    amount,
+                    decomission_key,
+                )
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))

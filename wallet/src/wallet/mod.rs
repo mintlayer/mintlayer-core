@@ -41,7 +41,6 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageWriteLocked,
 };
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::utxo_types::UtxoTypes;
 use wallet_types::{AccountId, KeyPurpose};
 
@@ -70,6 +69,8 @@ pub enum WalletError {
     AccountAlreadyExists(U31),
     #[error("Cannot create a new account when last account is still empty")]
     EmptyLastAccount,
+    #[error("Cannot create a new account when last account is still not in sync")]
+    LastAccountNotInSync,
     #[error("The maximum number of accounts has been exceeded")]
     MaxNumAccountsExceeded,
     #[error("No unsynced account")]
@@ -108,7 +109,6 @@ pub struct Wallet<B: storage::Backend> {
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
     unsynced_account: Option<(U31, Account)>,
-    selected_account: U31,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -149,7 +149,6 @@ impl<B: storage::Backend> Wallet<B> {
             accounts: BTreeMap::new(),
             latest_median_time,
             unsynced_account: None,
-            selected_account: U31::ZERO,
         };
 
         wallet.create_account()?;
@@ -211,7 +210,6 @@ impl<B: storage::Backend> Wallet<B> {
             accounts,
             latest_median_time,
             unsynced_account,
-            selected_account: DEFAULT_ACCOUNT_INDEX,
         })
     }
 
@@ -232,6 +230,10 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn create_account(&mut self) -> WalletResult<U31> {
+        if self.unsynced_account.is_some() {
+            return Err(WalletError::LastAccountNotInSync);
+        }
+
         let next_account_index = self.accounts.last_key_value().map_or(
             Ok(U31::ZERO),
             |(last_account_index, last_account)| {
@@ -258,20 +260,9 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        // TODO: Rescan blockchain
-
-        self.accounts.insert(account.account_index(), account);
+        self.unsynced_account = Some((account.account_index(), account));
 
         Ok(next_account_index)
-    }
-
-    pub fn select_account(&mut self, account_index: U31) -> WalletResult<()> {
-        if self.accounts.contains_key(&account_index) {
-            self.selected_account = account_index;
-            Ok(())
-        } else {
-            Err(WalletError::NoAccountFoundWithIndex(account_index))
-        }
     }
 
     pub fn database(&self) -> &Store<B> {
@@ -313,21 +304,26 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(value)
     }
 
-    pub fn get_balance(&self, utxo_types: UtxoTypes) -> WalletResult<BTreeMap<Currency, Amount>> {
+    pub fn get_balance(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+    ) -> WalletResult<BTreeMap<Currency, Amount>> {
         self.accounts
-            .get(&self.selected_account)
-            .expect("selected account was checked when selected")
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
             .get_balance(utxo_types, self.latest_median_time)
     }
 
     pub fn get_utxos(
         &self,
+        account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self
             .accounts
-            .get(&self.selected_account)
-            .expect("selected account was checked when selected");
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
         let utxos = account.get_utxos(utxo_types, self.latest_median_time);
         let utxos = utxos
             .into_iter()
@@ -336,55 +332,59 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(utxos)
     }
 
-    pub fn get_new_address(&mut self) -> WalletResult<Address> {
-        self.for_account_rw(self.selected_account, |account, db_tx| {
+    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
+        self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
     }
 
-    pub fn get_new_public_key(&mut self) -> WalletResult<PublicKey> {
-        self.for_account_rw(self.selected_account, |account, db_tx| {
+    pub fn get_new_public_key(&mut self, account_index: U31) -> WalletResult<PublicKey> {
+        self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
         })
     }
 
-    pub fn get_vrf_public_key(&mut self) -> WalletResult<VRFPublicKey> {
+    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
         let db_tx = self.db.transaction_ro_unlocked()?;
         self.accounts
-            .get(&self.selected_account)
-            .expect("selected account was checked when selected")
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
             .get_vrf_public_key(&db_tx)
     }
 
     pub fn create_transaction_to_addresses(
         &mut self,
+        account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(self.selected_account, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request, latest_median_time)
         })
     }
 
     pub fn create_stake_pool_tx(
         &mut self,
+        account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(self.selected_account, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)
         })
     }
 
-    pub fn get_pos_gen_block_data(&mut self) -> WalletResult<PoSGenerateBlockInputData> {
+    pub fn get_pos_gen_block_data(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        let account = self
-            .accounts
-            .get(&self.selected_account)
-            .expect("selected account was checked when selected");
-        account.get_pos_gen_block_data(&db_tx, self.latest_median_time)
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get_pos_gen_block_data(&db_tx, self.latest_median_time)
     }
 
     /// Returns the last scanned block hash and height.

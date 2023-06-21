@@ -108,6 +108,7 @@ pub async fn run(
             &rpc_client,
             &mut controller_opt,
             commands::WalletCommand::OpenWallet { wallet_path },
+            None,
         )
         .await?;
     }
@@ -118,6 +119,7 @@ pub async fn run(
             &rpc_client,
             &mut controller_opt,
             commands::WalletCommand::StartStaking,
+            None,
         )
         .await?;
     }

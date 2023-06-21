@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
+use crypto::key::hdkd::u31::U31;
 use tokio::sync::{mpsc, oneshot};
 use wallet_controller::{NodeRpcClient, RpcController};
 
@@ -29,6 +30,7 @@ pub enum Event {
     HandleCommand {
         command: WalletCommand,
         res_tx: oneshot::Sender<Result<ConsoleCommand, WalletCliError>>,
+        selected_account: Option<U31>,
     },
 }
 
@@ -39,9 +41,19 @@ async fn handle_event(
     event: Event,
 ) {
     match event {
-        Event::HandleCommand { command, res_tx } => {
-            let res =
-                handle_wallet_command(chain_config, rpc_client, controller_opt, command).await;
+        Event::HandleCommand {
+            command,
+            res_tx,
+            selected_account,
+        } => {
+            let res = handle_wallet_command(
+                chain_config,
+                rpc_client,
+                controller_opt,
+                command,
+                selected_account,
+            )
+            .await;
             let _ = res_tx.send(res);
         }
     }

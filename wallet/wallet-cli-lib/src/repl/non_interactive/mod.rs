@@ -17,6 +17,7 @@ pub mod log;
 
 use clap::Command;
 use tokio::sync::mpsc;
+use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
@@ -44,12 +45,18 @@ fn process_line(
         None => return Ok(LineOutput::None),
     };
 
-    let command_output = super::run_command_blocking(event_tx, command)?;
+    // TODO: do we need to keep truck of selected_account in non interactive mode?
+    let command_output =
+        super::run_command_blocking(event_tx, command, Some(DEFAULT_ACCOUNT_INDEX))?;
 
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
-        ConsoleCommand::SetStatus { status: _, print } => Ok(LineOutput::Print(print)),
+        ConsoleCommand::WalletInfo {
+            number_of_accounts: _,
+            print_message,
+        } => Ok(LineOutput::Print(print_message)),
         ConsoleCommand::ClearScreen
+        | ConsoleCommand::SelectAccount { account_index: _ }
         | ConsoleCommand::PrintHistory
         | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(
             "Unsupported command in non-interactive mode: {}",

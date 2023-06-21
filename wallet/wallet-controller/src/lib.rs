@@ -168,40 +168,57 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
-    pub fn get_balance(&self) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+    pub fn get_balance(
+        &self,
+        account_index: U31,
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
-            .get_balance(UtxoType::Transfer | UtxoType::LockThenTransfer)
+            .get_balance(
+                account_index,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+            )
             .map_err(ControllerError::WalletError)
     }
 
     pub fn get_utxos(
         &self,
+        account_index: U31,
         utxo_types: UtxoTypes,
     ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
-        self.wallet.get_utxos(utxo_types).map_err(ControllerError::WalletError)
+        self.wallet
+            .get_utxos(account_index, utxo_types)
+            .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
-        self.wallet.get_new_address().map_err(ControllerError::WalletError)
+    pub fn new_address(&mut self, account_index: U31) -> Result<Address, ControllerError<T>> {
+        self.wallet.get_new_address(account_index).map_err(ControllerError::WalletError)
     }
 
-    pub fn new_public_key(&mut self) -> Result<PublicKey, ControllerError<T>> {
-        self.wallet.get_new_public_key().map_err(ControllerError::WalletError)
+    pub fn new_public_key(&mut self, account_index: U31) -> Result<PublicKey, ControllerError<T>> {
+        self.wallet
+            .get_new_public_key(account_index)
+            .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_vrf_public_key(&mut self) -> Result<VRFPublicKey, ControllerError<T>> {
-        self.wallet.get_vrf_public_key().map_err(ControllerError::WalletError)
+    pub fn get_vrf_public_key(
+        &mut self,
+        account_index: U31,
+    ) -> Result<VRFPublicKey, ControllerError<T>> {
+        self.wallet
+            .get_vrf_public_key(account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn send_to_address(
         &mut self,
+        account_index: U31,
         address: Address,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
-            .create_transaction_to_addresses([output])
+            .create_transaction_to_addresses(account_index, [output])
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)
@@ -211,12 +228,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub async fn create_stake_pool_tx(
         &mut self,
+        account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> Result<(), ControllerError<T>> {
         let tx = self
             .wallet
-            .create_stake_pool_tx(amount, decomission_key)
+            .create_stake_pool_tx(account_index, amount, decomission_key)
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)
@@ -226,10 +244,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub async fn generate_block(
         &mut self,
+        account_index: U31,
         transactions_opt: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, ControllerError<T>> {
-        let pos_data =
-            self.wallet.get_pos_gen_block_data().map_err(ControllerError::WalletError)?;
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data(account_index)
+            .map_err(ControllerError::WalletError)?;
         let block = self
             .rpc_client
             .generate_block(
@@ -241,10 +262,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(block)
     }
 
-    pub async fn generate_blocks(&mut self, count: u32) -> Result<(), ControllerError<T>> {
+    pub async fn generate_blocks(
+        &mut self,
+        account_index: U31,
+        count: u32,
+    ) -> Result<(), ControllerError<T>> {
         for _ in 0..count {
             self.sync_once().await?;
-            let block = self.generate_block(None).await?;
+            let block = self.generate_block(account_index, None).await?;
             self.rpc_client
                 .submit_block(block)
                 .await
@@ -255,10 +280,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub fn create_account(&mut self) -> Result<U31, ControllerError<T>> {
         self.wallet.create_account().map_err(ControllerError::WalletError)
-    }
-
-    pub fn select_account(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
-        self.wallet.select_account(account_index).map_err(ControllerError::WalletError)
     }
 
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
@@ -290,7 +311,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             }
 
             if self.staking_started {
-                let generate_res = self.generate_block(None).await;
+                let generate_res = self.generate_block(DEFAULT_ACCOUNT_INDEX, None).await;
 
                 if let Ok(block) = generate_res {
                     log::info!(
