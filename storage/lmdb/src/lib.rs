@@ -18,6 +18,9 @@ pub mod initial_map_size;
 pub mod memsize;
 pub mod resize_callback;
 
+// Note: we can't use utils::sync::atomic types here at the moment, because certain tests,
+// when run with loom, will panic with the message "Model exceeded maximum number of branches".
+// Probably we just need to configure loom model with a bigger max_branches value?
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
@@ -142,6 +145,10 @@ impl LmdbImpl {
         })
     }
 
+    // FIXME: I'd like to replace the SeqCst ordering here with Release, because it looks
+    // like an overkill, provided that the loads are only Acquire (unless these store operations
+    // must be in total order with some other SeqCst operations on some other atomic, but this
+    // shouldn't be true). Or maybe we should go in the other direction and make the load SeqCst?
     fn schedule_map_resize(&self) {
         self.map_resize_scheduled.store(true, Ordering::SeqCst);
     }

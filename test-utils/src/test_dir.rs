@@ -19,6 +19,8 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     sync::{
+        // Note: we can't use simplified atomics or loom version of std atomics here,
+        // because this code can be called from tests that are not loom-ready.
         atomic::{AtomicU32, Ordering},
         Arc,
     },
