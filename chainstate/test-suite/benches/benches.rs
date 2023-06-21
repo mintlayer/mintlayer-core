@@ -14,24 +14,89 @@
 // limitations under the License.
 
 use chainstate_test_framework::TestFramework;
-use common::primitives::Idable;
+use common::{
+    chain::{config::create_unit_test_config, stakelock::StakePoolData, Destination, PoolId},
+    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable, H256},
+};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 use test_utils::random::make_seedable_rng;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-// TODO: rework for PoS
-pub fn reorg(c: &mut Criterion) {
+pub fn pow_reorg(c: &mut Criterion) {
     let mut rng = make_seedable_rng(1111.into());
-    let mut tf = TestFramework::builder(&mut rng).build();
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(
+            common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                .max_depth_for_reorg(BlockDistance::new(5000))
+                .build(),
+        )
+        .build();
 
     let common_block_id = tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
 
     tf.create_chain(&common_block_id, 1000, &mut rng).unwrap();
 
-    c.bench_function("Reorg", |b| {
-        b.iter(|| tf.create_chain(&common_block_id, 1001, &mut rng).unwrap())
+    c.bench_function("PoW reorg", |b| {
+        b.iter(|| {
+            tf.create_chain(&common_block_id, 1001, &mut rng).unwrap();
+        })
     });
 }
 
-criterion_group!(benches, reorg);
+pub fn pos_reorg(c: &mut Criterion) {
+    let mut rng = make_seedable_rng(1111.into());
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
+    let stake_pool_data = StakePoolData::new(
+        stake_pool_pledge,
+        Destination::PublicKey(staking_pk),
+        vrf_pk,
+        Destination::AnyoneCanSpend,
+        PerThousand::new(1000).unwrap(),
+        Amount::ZERO,
+    );
+    let mint_amount = Amount::from_atoms(1000);
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        mint_amount,
+        pool_id,
+        stake_pool_data,
+    )
+    .max_depth_for_reorg(BlockDistance::new(5000))
+    .build();
+    let target_block_time =
+        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.get());
+
+    let common_block_id = tf
+        .create_chain_pos(
+            &tf.genesis().get_id().into(),
+            5,
+            &mut rng,
+            &staking_sk,
+            &vrf_sk,
+        )
+        .unwrap();
+
+    tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
+        .unwrap();
+
+    c.bench_function("PoS reorg", |b| {
+        b.iter(|| {
+            tf.create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
+                .unwrap();
+        })
+    });
+}
+
+criterion_group!(benches, pow_reorg, pos_reorg);
 criterion_main!(benches);

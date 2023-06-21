@@ -26,11 +26,16 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use crypto::random::{CryptoRng, Rng};
+use crypto::{
+    key::PrivateKey,
+    random::{CryptoRng, Rng},
+    vrf::VRFPrivateKey,
+};
 
 use rstest::rstest;
 
 use crate::{
+    pos_block_builder::PoSBlockBuilder,
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
@@ -61,6 +66,10 @@ impl TestFramework {
     /// Returns a block builder instance that can be used for block construction and processing.
     pub fn make_block_builder(&mut self) -> BlockBuilder {
         BlockBuilder::new(self)
+    }
+
+    pub fn make_pos_block_builder(&mut self, rng: &mut (impl Rng + CryptoRng)) -> PoSBlockBuilder {
+        PoSBlockBuilder::new(self, rng)
     }
 
     /// Get the current time using the time getter that was supplied to the test-framework
@@ -122,6 +131,30 @@ impl TestFramework {
                 .make_block_builder()
                 .add_test_transaction_with_parent(prev_block_id, rng)
                 .with_parent(prev_block_id)
+                .build();
+            prev_block_id = block.get_id().into();
+            self.process_block(block, BlockSource::Local)?;
+        }
+
+        Ok(prev_block_id)
+    }
+
+    pub fn create_chain_pos(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks: usize,
+        rng: &mut (impl Rng + CryptoRng),
+        staking_sk: &PrivateKey,
+        staking_vrf_sk: &VRFPrivateKey,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        let mut prev_block_id = *parent_block;
+        for _ in 0..blocks {
+            let block = self
+                .make_pos_block_builder(rng)
+                .with_parent(prev_block_id)
+                .with_block_signing_key(staking_sk.clone())
+                .with_stake_spending_key(staking_sk.clone())
+                .with_vrf_key(staking_vrf_sk.clone())
                 .build();
             prev_block_id = block.get_id().into();
             self.process_block(block, BlockSource::Local)?;

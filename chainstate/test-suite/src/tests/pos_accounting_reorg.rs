@@ -26,12 +26,15 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, GenBlock,
-        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        config::{create_unit_test_config, Builder as ConfigBuilder},
+        stakelock::StakePoolData,
+        tokens::OutputValue,
+        Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
@@ -230,5 +233,61 @@ fn stake_pool_reorg(#[case] seed: Seed) {
 
             assert_eq!(storage.dump_raw(), expected_storage.dump_raw());
         }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn long_chain_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (staking_sk, staking_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let pool_id = PoolId::new(H256::random_using(&mut rng));
+        let stake_pool_pledge = create_unit_test_config().min_stake_pool_pledge();
+        let stake_pool_data = StakePoolData::new(
+            stake_pool_pledge,
+            Destination::PublicKey(staking_pk),
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(1000).unwrap(),
+            Amount::ZERO,
+        );
+
+        let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            mint_amount,
+            pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time =
+            chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.progress_time_seconds_since_epoch(target_block_time.get());
+
+        let common_block_id = tf
+            .create_chain_pos(
+                &tf.genesis().get_id().into(),
+                5,
+                &mut rng,
+                &staking_sk,
+                &vrf_sk,
+            )
+            .unwrap();
+
+        let old_tip = tf
+            .create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
+            .unwrap();
+
+        let new_tip = tf
+            .create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
+            .unwrap();
+
+        assert_ne!(old_tip, new_tip);
+        assert_eq!(new_tip, tf.best_block_id());
     });
 }
