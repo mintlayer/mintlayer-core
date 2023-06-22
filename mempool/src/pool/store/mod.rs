@@ -537,33 +537,13 @@ impl MempoolStore {
         &mut self,
         tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
-    ) -> BTreeSet<TxMempoolEntry> {
-        if let Some(entry) = self.txs_by_id.get(tx_id) {
-            let tx_with_descendants = {
-                let mut descendants = entry.unconfirmed_descendants(self).0;
-                log::trace!(
-                    "Dropping tx {} which has {} descendants",
-                    tx_id.get(),
-                    descendants.len()
-                );
-
-                descendants.insert(*tx_id);
-                descendants
-            };
-
-            let mut removed = BTreeSet::new();
-            for descendant_id in &tx_with_descendants {
-                // It may be that this descendant has several ancestors and has already been removed
-                if let Some(descendant) = self.txs_by_id.get(descendant_id) {
-                    self.remove_tx(&descendant.tx_id().clone(), reason)
-                        .map(|entry| removed.insert(entry));
-                }
-            }
-
-            removed
-        } else {
-            BTreeSet::new()
-        }
+    ) -> impl Iterator<Item = TxMempoolEntry> + '_ {
+        let to_remove: Vec<_> = self
+            .txs_by_id
+            .get(tx_id)
+            .map(|entry| entry.depth_postorder_descendants(self).map(|e| *e.tx_id()).collect())
+            .unwrap_or_default();
+        to_remove.into_iter().filter_map(move |tx_id| self.remove_tx(&tx_id, reason))
     }
 
     pub fn find_conflicting_tx(&self, dep: &TxDependency) -> Option<&Id<Transaction>> {
@@ -772,6 +752,16 @@ impl TxMempoolEntry {
                     .unconfirmed_ancestors_inner(visited, store);
             }
         }
+    }
+
+    pub fn depth_postorder_descendants<'a>(
+        &'a self,
+        store: &'a MempoolStore,
+    ) -> impl Iterator<Item = &'a TxMempoolEntry> {
+        let children_fn = |entry: &&'a TxMempoolEntry| {
+            entry.children.iter().map(|id| store.txs_by_id[id].deref())
+        };
+        utils::graph_traversals::dag_depth_postorder(self, children_fn)
     }
 
     pub fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {

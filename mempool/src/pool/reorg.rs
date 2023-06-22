@@ -105,6 +105,9 @@ impl ReorgData {
                 block.into_transactions().into_iter().map(|tx| tx.transaction().get_id())
             })
             .collect();
+
+        // The transactions are returned in the order of them being disconnected which is the
+        // opposite of what we want for connecting, so we need to reverse the iterator here.
         self.disconnected
             .into_iter()
             .rev()
@@ -130,17 +133,22 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip
     let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
         .log_err_pfx("Fetching disconnected transactions on a reorg");
 
+    match disconnected_txs {
+        Ok(to_insert) => refresh_mempool(mempool, to_insert),
+        Err(_) => refresh_mempool(mempool, std::iter::empty()),
+    }
+}
+
+pub fn refresh_mempool<M: MemoryUsageEstimator>(
+    mempool: &mut Mempool<M>,
+    txs_to_insert: impl Iterator<Item = SignedTransaction>,
+) {
     let old_transactions = mempool.reset();
 
-    // Re-populate the verifier with transactions from disconnected chain.
-    // The transactions are returned in the order of them being disconnected which is the opposite
-    // of what we want, so we need to reverse the iterator here.
-    if let Ok(disconnected_txs) = disconnected_txs {
-        for tx in disconnected_txs {
-            let tx_id = tx.transaction().get_id();
-            if let Err(e) = mempool.add_transaction(tx) {
-                log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
-            }
+    for tx in txs_to_insert {
+        let tx_id = tx.transaction().get_id();
+        if let Err(e) = mempool.add_transaction(tx) {
+            log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
 

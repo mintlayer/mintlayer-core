@@ -759,40 +759,28 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn remove_tx_and_descendants(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
-        let mut to_disconnect: Vec<TxMempoolEntry> =
-            self.store.drop_tx_and_descendants(tx_id, reason).into_iter().collect();
-
         let source = TransactionSource::Mempool;
 
-        while !to_disconnect.is_empty() {
-            let mut to_disconnect_next = Vec::new();
-            let to_disconnect_orig_len = to_disconnect.len();
+        let result = self.store.drop_tx_and_descendants(tx_id, reason).try_for_each(|entry| {
+            self.tx_verifier
+                .disconnect_transaction(&source, entry.transaction())
+                .map_err(|err| (*entry.tx_id(), err))
+        });
 
-            while let Some(entry) = to_disconnect.pop() {
-                let can_disconnect = self
-                    .tx_verifier
-                    .can_disconnect_transaction(&source, entry.tx_id())
-                    .log_err_pfx("Removing transaction from tx verifier")
-                    .unwrap_or(false);
-                if can_disconnect {
-                    self.tx_verifier
-                        .disconnect_transaction(&source, entry.transaction())
-                        .expect("can_disconnect just returned true");
-                } else {
-                    to_disconnect_next.push(entry);
-                }
-            }
+        if let Err((disc_id, err)) = result {
+            // Transaction disconnection failed. This should never happen because transactions are
+            // disconnected leaves first. However, it can happen if the mempool store and the
+            // transaction verifier do not agree on inter-transaction dependencies due to a bug. In
+            // that case, log that it happened and opt for a nuclear option: refresh the mempool by
+            // removing all transactions and re-adding them. Code used during reorgs is utilized to
+            // accomplish this.
+            //
+            // TODO: Ideally, there should be single point of truth regarding inter-transaction
+            // dependencies. However, it does not appear to be easy to extract that information
+            // from the transaction verifier at the moment. To be addressed in the future.
 
-            to_disconnect = to_disconnect_next;
-
-            // After each iteration, the number of transactions left to be disconnected should go
-            // down. Otherwise, the process is stuck. It probably means the drop_tx_and_descendants
-            // is missing some descendants. That occurs if the idea of what constitutes a
-            // descendant is different between mempool and transaction verifier.
-            assert!(
-                to_disconnect.len() < to_disconnect_orig_len,
-                "Mempool tx verifier disconnecting stuck"
-            );
+            log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
+            reorg::refresh_mempool(self, std::iter::empty());
         }
     }
 }
