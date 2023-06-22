@@ -274,42 +274,39 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    /// Create a read-write transaction, call `func` on it and commit.
+    /// Create a read-write transaction, call `main_action` on it and commit.
     /// If committing fails, repeat the whole process again until it succeeds or
     /// the maximum number of commit attempts is reached.
-    /// The `block_id` and `comment` parameters specify the context in which the function is
-    /// executed and are used to form a proper error message.
-    fn with_rw_tx_for_block_id<Func, Res>(
+    /// If the maximum number of attempts is reached, use `on_db_err` to create
+    /// a BlockError and return it.
+    /// On each iteration, before doing anything else, call `on_new_attempt`
+    /// (this can be used for logging).
+    fn with_rw_tx<MainAction, OnNewAttempt, OnDbErr, Res>(
         &mut self,
-        mut func: Func,
-        block_id: &Id<Block>,
-        comment: &str,
+        mut main_action: MainAction,
+        mut on_new_attempt: OnNewAttempt,
+        on_db_err: OnDbErr,
     ) -> Result<Res, BlockError>
     where
-        Func: FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, BlockError>,
+        MainAction:
+            FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, BlockError>,
+        OnNewAttempt: FnMut(/*attempt_number:*/ usize),
+        OnDbErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> BlockError,
     {
-        let mut attempt_number = 0;
+        let mut attempts_count = 0;
         loop {
-            log::info!("Processing block ({}), block id = {}", comment, block_id);
+            on_new_attempt(attempts_count);
+            attempts_count += 1;
 
             let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
-
-            let result = func(&mut chainstate_ref).log_err()?;
-
+            let result = main_action(&mut chainstate_ref).log_err()?;
             let db_commit_result = chainstate_ref.commit_db_tx().log_err();
+
             match db_commit_result {
                 Ok(_) => return Ok(result),
                 Err(err) => {
-                    if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
-                        return Err(BlockError::DatabaseCommitError(
-                            *block_id,
-                            *self.chainstate_config.max_db_commit_attempts,
-                            err,
-                            comment.into(),
-                        ));
-                    } else {
-                        attempt_number += 1;
-                        continue;
+                    if attempts_count >= *self.chainstate_config.max_db_commit_attempts {
+                        return Err(on_db_err(attempts_count, err));
                     }
                 }
             }
@@ -320,34 +317,41 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// is passed to `func` and then returned to the caller.
     /// Note that the state is reset to `initial_state` on each commit attempt and the returned
     /// state is the one from the last commit attempt.
-    fn with_rw_tx_and_state_for_block_id<Func, Res, State>(
+    fn with_rw_tx_and_state<State, MainAction, OnNewAttempt, OnDbErr, Res>(
         &mut self,
-        mut func: Func,
         initial_state: &State,
-        block_id: &Id<Block>,
-        comment: &str,
+        mut main_action: MainAction,
+        on_new_attempt: OnNewAttempt,
+        on_db_err: OnDbErr,
     ) -> (State, Result<Res, BlockError>)
     where
-        Func: FnMut(
+        State: Clone,
+        MainAction: FnMut(
             &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
             &mut State,
         ) -> Result<Res, BlockError>,
-        State: Clone,
+        OnNewAttempt: FnMut(/*attempt_number:*/ usize),
+        OnDbErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> BlockError,
     {
-        let mut state = initial_state.clone();
+        // Note: the purpose of the Option here is just to get rid of extra clone at the beginning.
+        let mut state = None;
 
-        let result = self.with_rw_tx_for_block_id(
-            |chainstate_ref| func(chainstate_ref, &mut state),
-            block_id,
-            comment,
+        let result = self.with_rw_tx(
+            |chainstate_ref| main_action(chainstate_ref, state.insert(initial_state.clone())),
+            on_new_attempt,
+            on_db_err,
         );
 
+        // Note: this "or_else" part is only possible in the degenerate case where with_rw_tx
+        // doesn't invoke the closure even once.
+        let state = state.unwrap_or_else(|| initial_state.clone());
         (state, result)
     }
 
-    // Perform all the regular block checks, updating `block_status` after each successful check.
-    // The returned bool indicates whether a reorg has occurred.
-    fn perform_block_checks(
+    /// Integrate the block into the blocktree, performing all the necessary checks and
+    /// updating `block_status` after each successful check.
+    /// The returned bool indicates whether a reorg has occurred.
+    fn integrate_block(
         chainstate_ref: &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
         block: &WithId<Block>,
         block_index: &BlockIndex,
@@ -406,16 +410,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // Perform block checks; `check_result` is `Result<bool>`, where the bool indicates
         // whether a reorg has occurred.
-        let (block_status, check_result) = self.with_rw_tx_and_state_for_block_id(
-            |chainstate_ref, block_status| {
-                Self::perform_block_checks(chainstate_ref, &block, &block_index, block_status)
-            },
+        let (block_status, check_result) = self.with_rw_tx_and_state(
             &BlockStatus::new(),
-            &block_id,
-            "block validation",
+            |chainstate_ref, block_status| {
+                Self::integrate_block(chainstate_ref, &block, &block_index, block_status)
+            },
+            |attempt_number| {
+                log::info!("Processing block {block_id}, attempt #{attempt_number}");
+            },
+            |attempts_count, db_err| BlockError::BlockCommitError(block_id, attempts_count, db_err),
         );
 
-        if let Err(err @ BlockError::DatabaseCommitError(_, _, _, _)) = check_result {
+        if let Err(err @ BlockError::BlockCommitError(_, _, _)) = check_result {
             // If we got here, then the block checks have succeeded, but the DB has failed.
             // Attempts to save the new status in BlockIndex in this situation will
             // probably fail too. Moreover, even if we succeed, we'll get a strange situation
@@ -424,28 +430,23 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             return Err(err);
         }
 
-        let block_index = {
-            let mut block_index = block_index;
-            block_index.set_status(block_status);
-            block_index
-        };
+        let block_index = block_index.with_status(block_status);
 
         // Update block index status.
-        let status_update_result = self.with_rw_tx_for_block_id(
+        let status_update_result = self.with_rw_tx(
             |chainstate_ref| chainstate_ref.set_block_status(&block_index),
-            &block_id,
-            "block index update",
+            |attempt_number| {
+                log::info!("Updating status for block {block_id}, attempt #{attempt_number}");
+            },
+            |attempts_count, db_err| {
+                BlockError::BlockStatusCommitError(block_id, attempts_count, db_err)
+            },
         );
 
         // If both block validation and block index update failed, we want to return the first
         // error, so we check it first.
-        let result = if check_result? {
-            Some(block_index)
-        } else {
-            None
-        };
+        let result = check_result?.then_some(block_index);
         status_update_result?;
-
         Ok(result)
     }
 
@@ -687,5 +688,125 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 }
 
+// FIXME: should I move the tests to a separate file?
 #[cfg(test)]
-mod test;
+mod test {
+    use super::*;
+
+    mod with_rw_tx_tests {
+        use super::*;
+        use crate::detail::tx_verification_strategy::DefaultTransactionVerificationStrategy;
+        use chainstate_storage::mock::{MockStore, MockStoreTxRw};
+        use chainstate_types::storage_result::Error as StorageError;
+        use common::chain::config::create_unit_test_config;
+        use std::sync::Arc;
+
+        const MAX_COMMIT_ATTEMPTS: usize = 3;
+
+        // Make some error that can be returned from "commit".
+        fn make_commit_error() -> StorageError {
+            StorageError::Storage(storage::error::Recoverable::Io(
+                std::io::ErrorKind::Other,
+                "".into(),
+            ))
+        }
+
+        fn make_chainstate(
+            store: MockStore,
+        ) -> Chainstate<MockStore, DefaultTransactionVerificationStrategy> {
+            let chain_config = Arc::new(create_unit_test_config());
+            let chainstate_config =
+                ChainstateConfig::new().with_max_db_commit_attempts(MAX_COMMIT_ATTEMPTS);
+
+            Chainstate::new_no_genesis(
+                chain_config,
+                chainstate_config,
+                store,
+                DefaultTransactionVerificationStrategy::new(),
+                None,
+                Default::default(),
+            )
+        }
+
+        // Call with_rw_tx_and_state on a new chainstate, making required expectations.
+        // Use usize for the State type; the "goal" of the main action is to increment
+        // the initial state by 1.
+        fn test_with_rw_tx_and_state(
+            store: MockStore,
+            expected_result: Result<(), BlockError>,
+            expected_commit_attempts: usize,
+        ) {
+            let initial_state = 123;
+            let mut chainstate = make_chainstate(store);
+            let mut actual_commit_attempts = 0;
+
+            let (state, result) = chainstate.with_rw_tx_and_state(
+                &initial_state,
+                |_chainstate_ref, state| {
+                    assert_eq!(*state, initial_state);
+                    *state += 1;
+                    Ok(())
+                },
+                |attempt_number| {
+                    assert_eq!(attempt_number, actual_commit_attempts);
+                    actual_commit_attempts += 1;
+                },
+                |commit_attempts, db_err| -> BlockError {
+                    // Not all tests will reach this point, but if they do, these assertions
+                    // should pass.
+                    assert_eq!(commit_attempts, expected_commit_attempts);
+                    assert_eq!(db_err, make_commit_error());
+                    BlockError::StorageError(db_err)
+                },
+            );
+            assert_eq!(actual_commit_attempts, expected_commit_attempts);
+            assert_eq!(state, initial_state + 1);
+            assert_eq!(result, expected_result);
+        }
+
+        #[test]
+        fn with_rw_tx_and_state_when_first_commit_fails() {
+            utils::concurrency::model(|| {
+                let mut mock_seq = mockall::Sequence::new();
+                let mut store = MockStore::new();
+
+                store.expect_transaction_rw().times(1).in_sequence(&mut mock_seq).returning(
+                    move |_| {
+                        let mut tx_store = MockStoreTxRw::new();
+                        tx_store.expect_commit().returning(move || Err(make_commit_error()));
+                        Ok(tx_store)
+                    },
+                );
+
+                store.expect_transaction_rw().times(1).in_sequence(&mut mock_seq).returning(
+                    move |_| {
+                        let mut tx_store = MockStoreTxRw::new();
+                        tx_store.expect_commit().returning(move || Ok(()));
+                        Ok(tx_store)
+                    },
+                );
+
+                test_with_rw_tx_and_state(store, Ok(()), 2);
+            });
+        }
+
+        #[test]
+        fn with_rw_tx_and_state_when_all_commits_fail() {
+            utils::concurrency::model(|| {
+                let mut store = MockStore::new();
+
+                store.expect_transaction_rw().returning(move |_| {
+                    let mut tx_store = MockStoreTxRw::new();
+                    tx_store.expect_commit().returning(move || Err(make_commit_error()));
+                    Ok(tx_store)
+                });
+
+                test_with_rw_tx_and_state(
+                    store,
+                    Err(BlockError::StorageError(make_commit_error())),
+                    MAX_COMMIT_ATTEMPTS,
+                );
+            });
+        }
+    }
+}

@@ -66,9 +66,12 @@ pub enum BlockError {
     InvalidBlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has invalid parent block")]
     InvalidParent(Id<Block>),
-    // Note: the last String here serves as a "comment" that helps distinguish separate commit attempts.
-    #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2} ({3})")]
-    DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error, String),
+    #[error(
+        "Failed to commit block data to database for block {0} after {1} attempts with error {2}"
+    )]
+    BlockCommitError(Id<Block>, usize, chainstate_storage::Error),
+    #[error("Failed to commit block status update to database for block {0} after {1} attempts with error {2}")]
+    BlockStatusCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
     #[error("TransactionVerifier error: {0}")]

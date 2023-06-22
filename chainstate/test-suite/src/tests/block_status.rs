@@ -111,7 +111,7 @@ fn bad_parent(#[case] seed: Seed) {
         let block2_status = get_block_status(&tf, &block2_id);
         assert_eq!(
             block2_status.last_valid_stage(),
-            BlockValidationStage::Initial
+            BlockValidationStage::Unchecked
         );
     });
 }

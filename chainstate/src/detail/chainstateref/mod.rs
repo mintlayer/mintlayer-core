@@ -681,9 +681,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     // Return Ok(()) if the specified block has a valid parent and an error otherwise.
     pub fn check_block_parent(&self, block: &WithId<Block>) -> Result<(), BlockError> {
         let parent_block_index = self.get_previous_block_index_or_block_error(block)?;
-        if !parent_block_index.status().is_valid() {
-            return Err(BlockError::InvalidParent(block.get_id()));
-        }
+        ensure!(
+            parent_block_index.status().is_valid(),
+            BlockError::InvalidParent(block.get_id())
+        );
 
         Ok(())
     }

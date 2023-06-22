@@ -668,6 +668,7 @@ dependencies = [
  "serde_json",
  "serialization",
  "static_assertions",
+ "storage",
  "subsystem",
  "test-utils",
  "thiserror",

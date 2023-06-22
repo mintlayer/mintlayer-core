@@ -94,6 +94,11 @@ impl BlockIndex {
         self.status = status;
     }
 
+    pub fn with_status(mut self, status: BlockStatus) -> Self {
+        self.status = status;
+        self
+    }
+
     pub fn into_block_header(self) -> SignedBlockHeader {
         self.block_header
     }

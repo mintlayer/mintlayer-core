@@ -55,6 +55,11 @@ impl ChainstateConfig {
         Self::default()
     }
 
+    pub fn with_max_db_commit_attempts(mut self, max_db_commit_attempts: usize) -> Self {
+        self.max_db_commit_attempts = max_db_commit_attempts.into();
+        self
+    }
+
     pub fn with_max_orphan_blocks(mut self, max_orphan_blocks: usize) -> Self {
         self.max_orphan_blocks = max_orphan_blocks.into();
         self
