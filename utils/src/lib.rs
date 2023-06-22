@@ -24,6 +24,7 @@ pub mod default_data_dir;
 pub mod ensure;
 pub mod eventhandler;
 pub mod exp_rand;
+pub mod graph_traversals;
 pub mod maybe_encrypted;
 pub mod newtype;
 pub mod once_destructor;
