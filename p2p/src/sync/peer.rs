@@ -156,6 +156,9 @@ where
     async fn main_loop(&mut self) -> Result<()> {
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // The first tick completes immediately. Since we are dealing with a stalling check, we skip
+        // the first tick.
+        stalling_interval.tick().await;
 
         if self.common_services.has_service(Service::Blocks) {
             self.request_headers().await?;
