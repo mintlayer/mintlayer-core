@@ -100,28 +100,29 @@ pub async fn run(
         .await
         .map_err(WalletCliError::RpcError)?;
 
-    let mut controller_opt = None;
+    let controller_opt = None;
 
-    if let Some(wallet_path) = wallet_file {
-        commands::handle_wallet_command(
-            &chain_config,
-            &rpc_client,
-            &mut controller_opt,
-            commands::WalletCommand::OpenWallet { wallet_path },
-            None,
-        )
-        .await?;
+    if let Some(_wallet_path) = wallet_file {
+        // FIXME
+        // commands::handle_wallet_command(
+        //     &chain_config,
+        //     &rpc_client,
+        //     &mut controller_opt,
+        //     commands::WalletCommand::OpenWallet { wallet_path },
+        //     None,
+        // )
+        // .await?;
     }
 
     if start_staking {
-        commands::handle_wallet_command(
-            &chain_config,
-            &rpc_client,
-            &mut controller_opt,
-            commands::WalletCommand::StartStaking,
-            None,
-        )
-        .await?;
+        // commands::handle_wallet_command(
+        //     &chain_config,
+        //     &rpc_client,
+        //     &mut controller_opt,
+        //     commands::WalletCommand::StartStaking,
+        //     None,
+        // )
+        // .await?;
     }
 
     let (event_tx, event_rx) = mpsc::unbounded_channel();

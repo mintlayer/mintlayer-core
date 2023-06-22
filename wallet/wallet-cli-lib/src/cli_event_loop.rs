@@ -16,12 +16,11 @@
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
-use crypto::key::hdkd::u31::U31;
 use tokio::sync::{mpsc, oneshot};
 use wallet_controller::{NodeRpcClient, RpcController};
 
 use crate::{
-    commands::{handle_wallet_command, ConsoleCommand, WalletCommand},
+    commands::{CommandHandler, ConsoleCommand, WalletCommand},
     errors::WalletCliError,
 };
 
@@ -30,33 +29,7 @@ pub enum Event {
     HandleCommand {
         command: WalletCommand,
         res_tx: oneshot::Sender<Result<ConsoleCommand, WalletCliError>>,
-        selected_account: Option<U31>,
     },
-}
-
-async fn handle_event(
-    chain_config: &Arc<ChainConfig>,
-    rpc_client: &NodeRpcClient,
-    controller_opt: &mut Option<RpcController>,
-    event: Event,
-) {
-    match event {
-        Event::HandleCommand {
-            command,
-            res_tx,
-            selected_account,
-        } => {
-            let res = handle_wallet_command(
-                chain_config,
-                rpc_client,
-                controller_opt,
-                command,
-                selected_account,
-            )
-            .await;
-            let _ = res_tx.send(res);
-        }
-    }
 }
 
 pub async fn run(
@@ -65,6 +38,7 @@ pub async fn run(
     mut controller_opt: Option<RpcController>,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
 ) {
+    let mut command_handler = CommandHandler::new();
     loop {
         let background_task = async {
             match controller_opt.as_mut() {
@@ -76,8 +50,9 @@ pub async fn run(
         tokio::select! {
             event_opt = event_rx.recv() => {
                 match event_opt {
-                    Some(event) => {
-                        handle_event(chain_config, rpc_client, &mut controller_opt, event).await;
+                    Some(Event::HandleCommand { command, res_tx }) => {
+                        let res = command_handler.handle_wallet_command(chain_config, rpc_client, &mut controller_opt, command).await;
+                        let _ = res_tx.send(res);
                     },
                     None => return,
                 }

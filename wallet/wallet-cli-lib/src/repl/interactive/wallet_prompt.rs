@@ -15,63 +15,23 @@
 
 use std::borrow::Cow;
 
-use crypto::key::hdkd::u31::U31;
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus};
-use wallet_controller::DEFAULT_ACCOUNT_INDEX;
-
-use crate::errors::WalletCliError;
 
 /// A very simple [Prompt] trait implementation
 /// ([reedline::DefaultPrompt] shows the current dir and the clock on the right, which we don't need)
 #[derive(Clone)]
 pub struct WalletPrompt {
     prompt_left: String,
-    selected_account: Option<(U31, usize)>,
 }
 
 impl WalletPrompt {
     pub fn new() -> Self {
         WalletPrompt {
             prompt_left: "Wallet".into(),
-            selected_account: None,
         }
     }
-
-    fn update_status(&mut self) {
-        if let Some((selected_account, total_accounts)) = self.selected_account {
-            self.prompt_left = format!("Wallet: ({}/{})", selected_account, total_accounts)
-        } else {
-            self.prompt_left = "Wallet".into()
-        }
-    }
-
-    pub fn set_total_accounts(&mut self, new_total_accounts: usize) {
-        if new_total_accounts == 0 {
-            self.selected_account = None;
-        } else if let Some((_, total_accounts)) = self.selected_account.as_mut() {
-            *total_accounts = new_total_accounts;
-        } else {
-            self.selected_account.replace((DEFAULT_ACCOUNT_INDEX, new_total_accounts));
-        }
-
-        self.update_status();
-    }
-
-    pub fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
-        let (selected_account, total_accounts) =
-            self.selected_account.as_mut().ok_or(WalletCliError::NoWallet)?;
-
-        if selected_account.into_u32() as usize >= *total_accounts {
-            return Err(WalletCliError::AccountNotFound(account_index));
-        }
-
-        *selected_account = account_index;
-        self.update_status();
-        Ok(())
-    }
-
-    pub fn selected_account(&self) -> Option<U31> {
-        self.selected_account.as_ref().map(|(selected_account, _)| *selected_account)
+    pub fn set_status(&mut self, status: String) {
+        self.prompt_left = format!("Wallet{}", status);
     }
 }
 

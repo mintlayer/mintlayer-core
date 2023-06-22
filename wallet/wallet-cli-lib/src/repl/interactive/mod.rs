@@ -21,7 +21,6 @@ mod wallet_prompt;
 use std::path::PathBuf;
 
 use clap::Command;
-use crypto::key::hdkd::u31::U31;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, Reedline,
@@ -30,14 +29,11 @@ use reedline::{
 use tokio::sync::mpsc;
 
 use crate::{
-    cli_event_loop::Event,
-    commands::{CLIWalletCommand, ConsoleCommand},
-    console::ConsoleOutput,
-    errors::WalletCliError,
-    repl::interactive::key_bindings::add_menu_keybindings,
+    cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
+    errors::WalletCliError, repl::interactive::key_bindings::add_menu_keybindings,
 };
 
-use super::{cli_parse_input, get_repl_command};
+use super::{get_repl_command, parse_input};
 
 const HISTORY_MAX_LINES: usize = 1000;
 
@@ -107,7 +103,6 @@ fn process_line(
     repl_command: &Command,
     event_tx: &mpsc::UnboundedSender<Event>,
     sig: reedline::Signal,
-    selected_account: Option<U31>,
 ) -> Result<Option<ConsoleCommand>, WalletCliError> {
     let line = match sig {
         Signal::Success(line) => line,
@@ -120,17 +115,14 @@ fn process_line(
         }
     };
 
-    let command_opt = cli_parse_input(&line, repl_command)?;
+    let command_opt = parse_input(&line, repl_command)?;
 
     let command = match command_opt {
-        Some(CLIWalletCommand::SelectAccount { account_index }) => {
-            return Ok(Some(ConsoleCommand::SelectAccount { account_index }))
-        }
-        Some(CLIWalletCommand::WalletCommand(command)) => command,
+        Some(command) => command,
         None => return Ok(None),
     };
 
-    super::run_command_blocking(event_tx, command, selected_account).map(Option::Some)
+    super::run_command_blocking(event_tx, command).map(Option::Some)
 }
 
 pub fn run(
@@ -160,23 +152,18 @@ pub fn run(
         let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
         logger.set_print_directly(true);
 
-        let res = process_line(&repl_command, &event_tx, sig, prompt.selected_account());
+        let res = process_line(&repl_command, &event_tx, sig);
 
         match res {
             Ok(Some(ConsoleCommand::Print(text))) => {
                 console.print_line(&text);
             }
-            Ok(Some(ConsoleCommand::WalletInfo {
-                number_of_accounts,
+            Ok(Some(ConsoleCommand::SetStatus {
+                status,
                 print_message,
             })) => {
-                prompt.set_total_accounts(number_of_accounts);
+                prompt.set_status(status);
                 console.print_line(&print_message);
-            }
-            Ok(Some(ConsoleCommand::SelectAccount { account_index })) => {
-                if let Err(error) = prompt.set_selected_account(account_index) {
-                    console.print_error(error);
-                }
             }
             Ok(Some(ConsoleCommand::ClearScreen)) => {
                 line_editor.clear_scrollback().expect("Should not fail normally");
