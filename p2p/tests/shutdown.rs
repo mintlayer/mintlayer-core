@@ -52,7 +52,6 @@ async fn shutdown_timeout() {
         Arc::clone(&chain_config),
         chainstate.clone(),
         Default::default(),
-        mempool::SystemUsageEstimator {},
     );
     let mempool = manager.add_subsystem_with_custom_eventloop("shutdown-test-mempool", {
         move |call, shutdown| mempool.run(call, shutdown)

@@ -71,12 +71,7 @@ pub fn start_subsystems_with_chainstate(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
-        chain_config,
-        chainstate.clone(),
-        Default::default(),
-        mempool::SystemUsageEstimator {},
-    );
+    let mempool = mempool::make_mempool(chain_config, chainstate.clone(), Default::default());
     let mempool = manager.add_subsystem_with_custom_eventloop("p2p-test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)
     });

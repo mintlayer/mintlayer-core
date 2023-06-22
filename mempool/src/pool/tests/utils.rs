@@ -30,6 +30,14 @@ pub use test_utils::{
 
 use super::*;
 
+mockall::mock! {
+    pub MemoryUsageEstimator {}
+
+    impl MemoryUsageEstimator for MemoryUsageEstimator {
+        fn estimate_memory_usage(&self, store: &MempoolStore) -> usize;
+    }
+}
+
 impl TxStatus {
     /// Fetch status of given instruction from mempool, doing some integrity checks
     pub fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
@@ -104,7 +112,7 @@ pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
     result
 }
 
-pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee {
+pub async fn try_get_fee<M>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee {
     let tx_clone = tx.clone();
 
     // Outputs in this vec are:
