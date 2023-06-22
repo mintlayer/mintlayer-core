@@ -525,7 +525,7 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     let db = create_wallet_in_memory().unwrap();
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
-    // Need at least one address used from the previous account in otder to create a new account
+    // Need at least one address used from the previous account in order to create a new account
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
     let address = get_address(
@@ -559,7 +559,9 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    wallet.create_account().unwrap();
+    let new_account_index = wallet.create_account().unwrap();
+    assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
+    assert_eq!(wallet.number_of_accounts(), 2);
 }
 
 #[rstest]
@@ -997,4 +999,82 @@ fn lock_then_transfer(#[case] seed: Seed) {
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         (balance_without_locked_transer + amount_to_lock_then_transfer).unwrap()
     );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_sync_new_account(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+
+    let err = wallet.create_account().err().unwrap();
+    assert_eq!(err, WalletError::EmptyLastAccount);
+
+    let mut total_amount = Amount::ZERO;
+    let blocks = (0..rng.gen_range(1..10))
+        .map(|idx| {
+            let tx_amount1 = Amount::from_atoms(rng.gen_range(1..1000));
+            total_amount = (total_amount + tx_amount1).unwrap();
+            let address = get_address(
+                &chain_config,
+                MNEMONIC,
+                DEFAULT_ACCOUNT_INDEX,
+                KeyPurpose::ReceiveFunds,
+                idx.try_into().unwrap(),
+            );
+
+            let transaction1 = Transaction::new(
+                0,
+                Vec::new(),
+                vec![make_address_output(address, tx_amount1).unwrap()],
+            )
+            .unwrap();
+            let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
+            Block::new(
+                vec![signed_transaction1],
+                chain_config.genesis_block_id(),
+                chain_config.genesis_block().timestamp(),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap()
+        })
+        .collect_vec();
+
+    // move old account 1..10 block further then genesis
+    wallet.scan_new_blocks(BlockHeight::new(0), blocks.clone()).unwrap();
+    verify_wallet_balance(&chain_config, &wallet, total_amount);
+
+    // create new account which is back on genesis
+    let new_account_index = wallet.create_account().unwrap();
+    assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
+
+    // sync new account with the new block
+    for block in blocks {
+        // not yet synced
+        let err = wallet.get_balance(new_account_index, UtxoType::Transfer.into()).err().unwrap();
+        assert_eq!(
+            err,
+            WalletError::AccountNotSyncedWithIndex(new_account_index)
+        );
+
+        let (_, block_height) = wallet.get_best_block_for_unsynced_account().unwrap();
+        wallet.scan_new_blocks_for_unsynced_account(block_height, vec![block]).unwrap();
+    }
+    // now both account are in sync and can be used
+    let coin_balance = wallet
+        .get_balance(
+            new_account_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+    assert_eq!(wallet.account_indexes().count(), 2);
 }

@@ -22,6 +22,8 @@ mod repl;
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
+use cli_event_loop::Event;
+use commands::WalletCommand;
 use common::chain::{config::ChainType, ChainConfig};
 use config::WalletCliArgs;
 use console::{ConsoleInput, ConsoleOutput};
@@ -102,30 +104,27 @@ pub async fn run(
 
     let controller_opt = None;
 
-    if let Some(_wallet_path) = wallet_file {
-        // FIXME
-        // commands::handle_wallet_command(
-        //     &chain_config,
-        //     &rpc_client,
-        //     &mut controller_opt,
-        //     commands::WalletCommand::OpenWallet { wallet_path },
-        //     None,
-        // )
-        // .await?;
+    let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+    if let Some(wallet_path) = wallet_file {
+        let (res_tx, _res_rx) = tokio::sync::oneshot::channel();
+        event_tx
+            .send(Event::HandleCommand {
+                command: WalletCommand::OpenWallet { wallet_path },
+                res_tx,
+            })
+            .expect("should not fail");
     }
 
     if start_staking {
-        // commands::handle_wallet_command(
-        //     &chain_config,
-        //     &rpc_client,
-        //     &mut controller_opt,
-        //     commands::WalletCommand::StartStaking,
-        //     None,
-        // )
-        // .await?;
+        let (res_tx, _res_rx) = tokio::sync::oneshot::channel();
+        event_tx
+            .send(Event::HandleCommand {
+                command: WalletCommand::StartStaking,
+                res_tx,
+            })
+            .expect("should not fail");
     }
-
-    let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     // Run a blocking loop in a separate thread
     let repl_handle = std::thread::spawn(move || match mode {

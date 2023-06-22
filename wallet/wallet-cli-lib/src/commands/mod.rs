@@ -246,8 +246,14 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
+struct CLIWalletState {
+    selected_account: U31,
+    total_accounts: usize,
+}
+
 pub struct CommandHandler {
-    state: Option<(U31, usize)>,
+    // the CLIWalletState if there is a loaded wallet
+    state: Option<CLIWalletState>,
 }
 
 impl CommandHandler {
@@ -256,18 +262,27 @@ impl CommandHandler {
     }
 
     fn set_total_accounts(&mut self, new_total_accounts: usize) {
-        if let Some((_, total_accounts)) = self.state.as_mut() {
+        if let Some(CLIWalletState {
+            selected_account: _,
+            total_accounts,
+        }) = self.state.as_mut()
+        {
             *total_accounts = new_total_accounts;
         } else {
-            self.state.replace((DEFAULT_ACCOUNT_INDEX, new_total_accounts));
+            self.state.replace(CLIWalletState {
+                selected_account: DEFAULT_ACCOUNT_INDEX,
+                total_accounts: new_total_accounts,
+            });
         }
     }
 
     fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
-        let (selected_account, total_accounts) =
-            self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
+        let CLIWalletState {
+            selected_account,
+            total_accounts,
+        } = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
-        if selected_account.into_u32() as usize >= *total_accounts {
+        if account_index.into_u32() as usize >= *total_accounts {
             return Err(WalletCliError::AccountNotFound(account_index));
         }
 
@@ -276,14 +291,18 @@ impl CommandHandler {
     }
 
     fn selected_account(&self) -> Option<U31> {
-        self.state.as_ref().map(|(selected_account, _)| *selected_account)
+        self.state.as_ref().map(|state| state.selected_account)
     }
 
     fn repl_status(&mut self) -> String {
-        if let Some((selected_account, total_accounts)) = self.state {
-            format!("({}/{})", selected_account, total_accounts)
-        } else {
-            String::new()
+        match self.state {
+            Some(CLIWalletState {
+                selected_account,
+                total_accounts,
+            }) if total_accounts > 1 => {
+                format!("({}/{})", selected_account, total_accounts)
+            }
+            _ => String::new(),
         }
     }
 
@@ -324,7 +343,7 @@ impl CommandHandler {
                 )
                 .map_err(WalletCliError::Controller)?;
 
-                let number_of_accounts = wallet.account_indexes().count();
+                let number_of_accounts = wallet.number_of_accounts();
                 *controller_opt = Some(RpcController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
@@ -354,7 +373,7 @@ impl CommandHandler {
                 let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
                     .map_err(WalletCliError::Controller)?;
 
-                let number_of_accounts = wallet.account_indexes().count();
+                let number_of_accounts = wallet.number_of_accounts();
                 *controller_opt = Some(RpcController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
@@ -508,7 +527,7 @@ impl CommandHandler {
                     .create_account()
                     .map_err(WalletCliError::Controller)?;
 
-                self.set_selected_account(new_account_index)?;
+                self.set_total_accounts(new_account_index.into_u32() as usize);
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
                     print_message: format!(

@@ -65,6 +65,8 @@ pub enum WalletError {
     NoAccountFound(AccountId),
     #[error("No account found with index {0}")]
     NoAccountFoundWithIndex(U31),
+    #[error("Account with index {0} is not synced yet")]
+    AccountNotSyncedWithIndex(U31),
     #[error("Account with index {0} already exists")]
     AccountAlreadyExists(U31),
     #[error("Cannot create a new account when last account is still empty")]
@@ -72,7 +74,7 @@ pub enum WalletError {
     #[error("Cannot create a new account when last account is still not in sync")]
     LastAccountNotInSync,
     #[error("The maximum number of accounts has been exceeded")]
-    MaxNumAccountsExceeded,
+    AbsoluteMaxNumAccountsExceeded,
     #[error("No unsynced account")]
     NoUnsyncedAccount,
     #[error("Not implemented: {0}")]
@@ -185,16 +187,13 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
-        let first: &Account = accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
+        let first = accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
         let last = accounts.values().last().ok_or(WalletError::WalletNotInitialized)?;
 
-        let unsynced_account = if first.best_block() != last.best_block() {
-            accounts.pop_last()
-        } else {
-            None
-        };
+        let unsynced_account =
+            (first.best_block() != last.best_block()).then(|| accounts.pop_last()).flatten();
 
-        // sanity check all other accounts have the same the same best block
+        // sanity check all other accounts have the same best block
         ensure!(
             accounts
                 .values()
@@ -229,16 +228,23 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.keys()
     }
 
+    pub fn number_of_accounts(&self) -> usize {
+        self.accounts.len() + self.unsynced_account.is_some() as usize
+    }
+
     pub fn create_account(&mut self) -> WalletResult<U31> {
-        if self.unsynced_account.is_some() {
-            return Err(WalletError::LastAccountNotInSync);
-        }
+        ensure!(
+            self.unsynced_account.is_none(),
+            WalletError::LastAccountNotInSync
+        );
 
         let next_account_index = self.accounts.last_key_value().map_or(
             Ok(U31::ZERO),
             |(last_account_index, last_account)| {
                 if last_account.has_transactions() {
-                    last_account_index.plus_one().map_err(|_| WalletError::MaxNumAccountsExceeded)
+                    last_account_index
+                        .plus_one()
+                        .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded)
                 } else {
                     // Cannot create a new account if the latest created one has no transactions
                     // associated with it
@@ -260,7 +266,13 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        self.unsynced_account = Some((account.account_index(), account));
+        // if it is the only one insert it directly to accounts
+        if self.accounts.is_empty() {
+            self.accounts.insert(account.account_index(), account);
+        } else {
+            // else it is unsynced as the other accounts have already processed blocks
+            self.unsynced_account = Some((account.account_index(), account));
+        }
 
         Ok(next_account_index)
     }
@@ -304,14 +316,24 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(value)
     }
 
+    fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
+            .map_err(|err| match self.unsynced_account.as_ref() {
+                Some((idx, _)) if *idx == account_index => {
+                    WalletError::AccountNotSyncedWithIndex(account_index)
+                }
+                _ => err,
+            })
+    }
+
     pub fn get_balance(
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
-        self.accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+        self.get_account(account_index)?
             .get_balance(utxo_types, self.latest_median_time)
     }
 
@@ -320,10 +342,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
-        let account = self
-            .accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(utxo_types, self.latest_median_time);
         let utxos = utxos
             .into_iter()
@@ -346,10 +365,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
-            .get_vrf_public_key(&db_tx)
+        self.get_account(account_index)?.get_vrf_public_key(&db_tx)
     }
 
     pub fn create_transaction_to_addresses(
@@ -381,16 +397,14 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+        self.get_account(account_index)?
             .get_pos_gen_block_data(&db_tx, self.latest_median_time)
     }
 
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        // all synced account should have the same best block
+        // all synced accounts should have the same best block
         let account = self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
         Ok(account.best_block())
     }
@@ -440,15 +454,15 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        if account.best_block().1
-            == self
-                .accounts
-                .values()
-                .next()
-                .ok_or(WalletError::WalletNotInitialized)?
-                .best_block()
-                .1
-        {
+        let synced_best_block_height = self
+            .accounts
+            .values()
+            .next()
+            .ok_or(WalletError::WalletNotInitialized)?
+            .best_block()
+            .1;
+
+        if account.best_block().1 == synced_best_block_height {
             self.unsynced_account
                 .take()
                 .map(|(index, acc)| self.accounts.insert(index, acc));
