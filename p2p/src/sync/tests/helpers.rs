@@ -17,7 +17,7 @@ use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -51,6 +51,7 @@ use common::{
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config::NodeType,
@@ -469,7 +470,7 @@ impl NetworkingService for NetworkingServiceStub {
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
-        _: Arc<AtomicBool>,
+        _: Arc<SeqCstAtomicBool>,
         _: oneshot::Receiver<()>,
         _: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Result<(

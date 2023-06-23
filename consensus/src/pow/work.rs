@@ -28,7 +28,7 @@ use common::{
     primitives::{BlockHeight, Compact, Idable, H256},
     Uint256,
 };
-use utils::atomics::RelAtomicBool;
+use utils::atomics::RelaxedAtomicBool;
 
 use crate::pow::{
     error::ConsensusPoWError,
@@ -241,7 +241,7 @@ pub fn mine(
     block_header: &mut BlockHeader,
     max_nonce: u128,
     bits: Compact,
-    stop_flag: Arc<RelAtomicBool>,
+    stop_flag: Arc<RelaxedAtomicBool>,
 ) -> Result<MiningResult, ConsensusPoWError> {
     let mut data = Box::new(PoWData::new(bits, 0));
     for nonce in 0..max_nonce {

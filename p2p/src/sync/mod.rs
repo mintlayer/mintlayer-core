@@ -18,13 +18,7 @@
 
 mod peer;
 
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::collections::HashSet;
 
 use futures::never::Never;
 use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
@@ -37,6 +31,8 @@ use common::{
 };
 use logging::log;
 use mempool::MempoolHandle;
+use utils::atomics::AcqRelAtomicBool;
+use utils::sync::Arc;
 use utils::tap_error_log::LogError;
 
 use crate::{
@@ -71,7 +67,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     mempool_handle: MempoolHandle,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
-    is_initial_block_download: Arc<AtomicBool>,
+    is_initial_block_download: Arc<AcqRelAtomicBool>,
 
     /// The list of connected peers
     peers: HashSet<PeerId>,
@@ -124,7 +120,6 @@ where
                 // This shouldn't fail unless the chainstate subsystem is down which shouldn't
                 // happen since subsystems are shutdown in reverse order.
                 .expect("Chainstate call failed")?,
-            Ordering::Release,
         );
 
         loop {
@@ -188,9 +183,9 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
-        let is_initial_block_download = if self.is_initial_block_download.load(Ordering::Relaxed) {
+        let is_initial_block_download = if self.is_initial_block_download.load() {
             let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
-            self.is_initial_block_download.store(is_ibd, Ordering::Release);
+            self.is_initial_block_download.store(is_ibd);
             is_ibd
         } else {
             false

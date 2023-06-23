@@ -16,13 +16,14 @@
 use common::chain::tokens::OutputValue;
 
 use super::*;
+use ::utils::atomics::SeqCstAtomicU64;
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
-    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time = Arc::new(SeqCstAtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     logging::init_logging::<&str>(None);
 
@@ -67,7 +68,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let child_id = child.transaction().get_id();
-    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
+    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1);
 
     assert_eq!(
         mempool.add_transaction(child),
@@ -102,7 +103,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     }
     let parent = tx_builder.build();
 
-    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time = Arc::new(SeqCstAtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let chainstate = tf.chainstate();
     let config = Arc::clone(chainstate.get_chain_config());
@@ -160,7 +161,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
-    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
+    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1);
 
     mempool.add_transaction(child_1)?.assert_in_mempool();
     assert!(!mempool.contains_transaction(&expired_tx_id));

@@ -15,7 +15,7 @@
 
 use std::{
     net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -39,6 +39,7 @@ use crate::{
     utils::oneshot_nofail,
 };
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -540,7 +541,7 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, _) = T::start(
@@ -611,7 +612,7 @@ async fn connection_timeout_rpc_notified<T>(
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(

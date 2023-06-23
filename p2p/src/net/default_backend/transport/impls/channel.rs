@@ -17,7 +17,7 @@ use std::{
     collections::BTreeMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
-        atomic::{AtomicU16, AtomicU32, Ordering},
+        atomic::{AtomicU32 as StdAtomicU32, Ordering},
         Mutex,
     },
 };
@@ -32,6 +32,7 @@ use tokio::{
         oneshot::{self, Sender},
     },
 };
+use utils::sync::atomic::AtomicU16;
 
 use crate::{
     error::DialError,
@@ -47,7 +48,9 @@ type IncomingConnection = (SocketAddr, Sender<DuplexStream>);
 static CONNECTIONS: Lazy<Mutex<BTreeMap<SocketAddr, UnboundedSender<IncomingConnection>>>> =
     Lazy::new(Default::default);
 
-static NEXT_IP_ADDRESS: AtomicU32 = AtomicU32::new(1);
+// Note: we can't use utils::sync::atomic::AtomicU32 here, because loom types don't have a const
+// constructor function.
+static NEXT_IP_ADDRESS: StdAtomicU32 = StdAtomicU32::new(1);
 
 /// Creating a new transport is like adding a new "host" to the network with a new unique IPv4 address.
 ///

@@ -38,7 +38,7 @@ use common::{
     primitives::BlockHeight,
 };
 use serialization::{Decode, Encode};
-use utils::atomics::{RelAtomicBool, SynAtomicU64};
+use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 
 use crate::pos::input_data::generate_pos_consensus_data_and_reward;
 use crate::pow::input_data::generate_pow_consensus_data_and_reward;
@@ -177,8 +177,8 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
-    block_timestamp_seconds: Arc<SynAtomicU64>,
-    stop_flag: Arc<RelAtomicBool>,
+    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+    stop_flag: Arc<RelaxedAtomicBool>,
     finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {

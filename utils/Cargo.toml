@@ -10,7 +10,6 @@ crypto = { path = "../crypto/" }
 logging = {path = '../logging'}
 serialization = { path = "../serialization" }
 
-atomic-traits.workspace = true
 directories.workspace = true
 num-traits.workspace = true
 probabilistic-collections.workspace = true

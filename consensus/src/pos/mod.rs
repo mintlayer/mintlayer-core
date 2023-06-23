@@ -39,7 +39,7 @@ use common::{
 use crypto::vrf::VRFPublicKey;
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
-use utils::atomics::{RelAtomicBool, SynAtomicU64};
+use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::ensure;
 use utxo::UtxosView;
 
@@ -216,9 +216,9 @@ where
 pub fn stake(
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
-    block_timestamp_seconds: Arc<SynAtomicU64>,
+    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
-    stop_flag: Arc<RelAtomicBool>,
+    stop_flag: Arc<RelaxedAtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();

@@ -15,7 +15,8 @@
 
 use crate::blockuntilzero::BlockUntilZero;
 
-use std::sync::{atomic::AtomicI32, Arc};
+use crate::sync::atomic::AtomicI32;
+use std::sync::Arc;
 
 pub type EventHandler<E> = Arc<dyn Fn(E) + Send + Sync>;
 
