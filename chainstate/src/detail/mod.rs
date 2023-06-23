@@ -50,7 +50,8 @@ use chainstate_storage::{
     TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData, EpochStorageWrite, PropertyQueryError,
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
+    EpochStorageWrite, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -359,7 +360,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref.check_block_parent(block)?;
         block_status.advance_validation_stage_to(BlockValidationStage::ParentOk);
 
-        chainstate_ref.check_block(block, false).map_err(BlockError::CheckBlockFailed)?;
+        chainstate_ref.check_block(block).map_err(BlockError::CheckBlockFailed)?;
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
 
         // Note: we have to persist BlockIndex too, because it will be used
