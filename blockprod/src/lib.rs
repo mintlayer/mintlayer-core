@@ -97,7 +97,7 @@ mod tests {
     use std::time::Duration;
 
     use chainstate::{
-        BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
+        BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy, BlockIndex,
     };
     use chainstate_storage::inmemory::Store;
     use common::{
@@ -122,7 +122,7 @@ mod tests {
 
     use super::*;
 
-    pub async fn process_block(chainstate: &ChainstateHandle, new_block: Block) {
+    pub async fn assert_process_block(chainstate: &ChainstateHandle, new_block: Block) -> BlockIndex {
         chainstate
             .call_mut(move |this| {
                 let new_block_index = this
@@ -140,13 +140,15 @@ mod tests {
                     this.get_best_block_index().expect("Failed to get best block index: {:?}");
 
                 assert_eq!(
-                    new_block_index.into_gen_block_index().block_id(),
+                    new_block_index.clone().into_gen_block_index().block_id(),
                     best_block_index.block_id(),
                     "The new block index not the best block index"
                 );
+
+                new_block_index
             })
             .await
-            .expect("New block is not the new tip: {:?}");
+            .expect("New block is not the new tip: {:?}")
     }
 
     pub fn setup_blockprod_test(
