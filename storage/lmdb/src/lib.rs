@@ -145,16 +145,12 @@ impl LmdbImpl {
         })
     }
 
-    // FIXME: I'd like to replace the SeqCst ordering here with Release, because it looks
-    // like an overkill, provided that the loads are only Acquire (unless these store operations
-    // must be in total order with some other SeqCst operations on some other atomic, but this
-    // shouldn't be true). Or maybe we should go in the other direction and make the load SeqCst?
     fn schedule_map_resize(&self) {
-        self.map_resize_scheduled.store(true, Ordering::SeqCst);
+        self.map_resize_scheduled.store(true, Ordering::Release);
     }
 
     fn unschedule_map_resize(&self) {
-        self.map_resize_scheduled.store(false, Ordering::SeqCst);
+        self.map_resize_scheduled.store(false, Ordering::Release);
     }
 
     fn resize_if_resize_scheduled(&self) {
