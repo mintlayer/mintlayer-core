@@ -18,20 +18,31 @@ use std::{sync::atomic::Ordering, time::Duration};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        config::{Builder, ChainType},
+        config::{create_unit_test_config, Builder, ChainType},
+        create_unittest_pos_config,
+        stakelock::StakePoolData,
         transaction::TxInput,
-        Destination, GenBlock, Genesis, OutPointSourceId, PoolId,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
+        RequiredConsensus, TxOutput, UpgradeVersion,
     },
-    primitives::{time, Id, H256},
+    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Compact, Id, H256},
     time_getter::TimeGetter,
 };
-use consensus::{ConsensusCreationError, PoSGenerateBlockInputData, PoWGenerateBlockInputData};
-use crypto::random::Rng;
+use consensus::{
+    ConsensusCreationError, ConsensusPoSError, ConsensusPoWError, PoSGenerateBlockInputData,
+    PoWGenerateBlockInputData,
+};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 use mempool::{MempoolInterface, MempoolSubsystemInterface};
 use mocks::MempoolInterfaceMock;
 use rstest::rstest;
 use subsystem::CallRequest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tokio::time::sleep;
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
@@ -40,7 +51,7 @@ use crate::{
         GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool,
-    tests::{process_block, setup_blockprod_test, setup_pos},
+    tests::{assert_process_block, setup_blockprod_test, setup_pos},
     BlockProduction, BlockProductionError, JobKey,
 };
 
@@ -185,8 +196,29 @@ mod produce_block {
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn input_none() {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+    async fn pull_best_block_index_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn add_job_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn overflow_tip_plus_one() {
+        let (manager, chain_config, chainstate, mempool) = {
+            let genesis_block = Genesis::new(
+                "blockprod-testing".into(),
+                BlockTimestamp::from_int_seconds(u64::MAX),
+                vec![],
+            );
+
+            let override_chain_config =
+                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
+
+            setup_blockprod_test(Some(override_chain_config))
+        };
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -205,27 +237,21 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, job_finished_receiver) = block_production
+                let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
                         TransactionsSource::Provided(vec![]),
                     )
-                    .await
-                    .expect("Failed to produce a block: {:?}");
+                    .await;
 
-                job_finished_receiver.await.expect("Job finished receiver closed");
+                match result {
+                    Err(BlockProductionError::FailedConsensusInitialization(
+                        ConsensusCreationError::TimestampOverflow(_, 1),
+                    )) => {}
+                    _ => panic!("Expected timestamp overflow"),
+                };
 
-                assert_eq!(
-                    block_production
-                        .job_manager_handle
-                        .get_job_count()
-                        .await
-                        .expect("Error getting job count"),
-                    0,
-                    "Job manager should have zero jobs running"
-                );
-
-                process_block(&chainstate, new_block).await;
+                assert_job_count(&block_production, 0).await;
             }
         });
 
@@ -233,20 +259,14 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn input_pos(#[case] seed: Seed) {
-        let (
-            pos_chain_config,
-            genesis_stake_private_key,
-            genesis_vrf_private_key,
-            create_genesis_pool_txoutput,
-        ) = setup_pos(seed);
+    async fn overflow_max_blocktimestamp() {
+        let override_chain_config = Builder::new(ChainType::Regtest)
+            .max_future_block_time_offset(Duration::MAX)
+            .build();
 
         let (manager, chain_config, chainstate, mempool) =
-            setup_blockprod_test(Some(pos_chain_config));
+            setup_blockprod_test(Some(override_chain_config));
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -255,17 +275,6 @@ mod produce_block {
                 let _shutdown_signal = OnceDestructor::new(move || {
                     shutdown_trigger.initiate();
                 });
-
-                let input_data = Box::new(PoSGenerateBlockInputData::new(
-                    genesis_stake_private_key,
-                    genesis_vrf_private_key,
-                    PoolId::new(H256::zero()),
-                    vec![TxInput::from_utxo(
-                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
-                        0,
-                    )],
-                    vec![create_genesis_pool_txoutput],
-                ));
 
                 let block_production = BlockProduction::new(
                     chain_config,
@@ -276,27 +285,21 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, job_finished_receiver) = block_production
+                let result = block_production
                     .produce_block(
-                        GenerateBlockInputData::PoS(input_data),
+                        GenerateBlockInputData::None,
                         TransactionsSource::Provided(vec![]),
                     )
-                    .await
-                    .expect("Failed to produce a block: {:?}");
+                    .await;
 
-                job_finished_receiver.await.expect("Job finished receiver closed");
+                match result {
+                    Err(BlockProductionError::FailedConsensusInitialization(
+                        ConsensusCreationError::TimestampOverflow(_, _),
+                    )) => {}
+                    _ => panic!("Expected timestamp overflow"),
+                };
 
-                assert_eq!(
-                    block_production
-                        .job_manager_handle
-                        .get_job_count()
-                        .await
-                        .expect("Error getting job count"),
-                    0,
-                    "Job manager should have zero jobs running"
-                );
-
-                process_block(&chainstate, new_block).await;
+                assert_job_count(&block_production, 0).await;
             }
         });
 
@@ -305,8 +308,29 @@ mod produce_block {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn input_pow() {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+    async fn try_again_later() {
+        // Ensure we reset the global mock time on exit
+        let _reset_time_destructor = OnceDestructor::new(time::reset);
+
+        let (manager, chain_config, chainstate, mempool) = {
+            let last_used_block_timestamp = TimeGetter::get_time(&TimeGetter::default());
+
+            let genesis_block = Genesis::new(
+                "blockprod-testing".into(),
+                BlockTimestamp::from_duration_since_epoch(last_used_block_timestamp),
+                vec![],
+            );
+
+            let override_chain_config =
+                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
+
+            _ = time::set(
+                last_used_block_timestamp
+                    .saturating_sub(*override_chain_config.max_future_block_time_offset()),
+            );
+
+            setup_blockprod_test(Some(override_chain_config))
+        };
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -325,29 +349,19 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, job_finished_receiver) = block_production
+                let result = block_production
                     .produce_block(
-                        GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
-                            Destination::AnyoneCanSpend,
-                        ))),
+                        GenerateBlockInputData::None,
                         TransactionsSource::Provided(vec![]),
                     )
-                    .await
-                    .expect("Failed to produce a block: {:?}");
+                    .await;
 
-                job_finished_receiver.await.expect("Job finished receiver closed");
+                match result {
+                    Err(BlockProductionError::TryAgainLater) => {}
+                    _ => panic!("Expected timestamp overflow"),
+                };
 
-                assert_eq!(
-                    block_production
-                        .job_manager_handle
-                        .get_job_count()
-                        .await
-                        .expect("Error getting job count"),
-                    0,
-                    "Job manager should have zero jobs running"
-                );
-
-                process_block(&chainstate, new_block).await;
+                assert_job_count(&block_production, 0).await;
             }
         });
 
@@ -414,6 +428,437 @@ mod produce_block {
 
                 let block_production = BlockProduction::new(
                     chain_config,
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finished receiver closed");
+
+                assert_job_count(&block_production, 0).await;
+                assert_process_block(&chainstate, new_block).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solved_pow_consensus() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
+                            Destination::AnyoneCanSpend,
+                        ))),
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finished receiver closed");
+
+                assert_job_count(&block_production, 0).await;
+                assert_process_block(&chainstate, new_block).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solved_pos_consensus(#[case] seed: Seed) {
+        let (
+            pos_chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(seed);
+
+        let (manager, chain_config, chainstate, mempool) =
+            setup_blockprod_test(Some(pos_chain_config));
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config.clone(),
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let input_data = Box::new(PoSGenerateBlockInputData::new(
+                    genesis_stake_private_key,
+                    genesis_vrf_private_key,
+                    PoolId::new(H256::zero()),
+                    vec![TxInput::from_utxo(
+                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                        0,
+                    )],
+                    vec![create_genesis_pool_txoutput],
+                ));
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::PoS(input_data),
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finished receiver closed");
+
+                assert_job_count(&block_production, 0).await;
+                assert_process_block(&chainstate, new_block).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let (genesis_stake_private_key, genesis_stake_public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let (genesis_vrf_private_key, genesis_vrf_public_key) =
+            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let create_genesis_pool_txoutput = {
+            let min_stake_pool_pledge = {
+                // throw away just to get value
+                let chain_config = create_unit_test_config();
+                chain_config.min_stake_pool_pledge()
+            };
+
+            TxOutput::CreateStakePool(
+                H256::zero().into(),
+                Box::new(StakePoolData::new(
+                    min_stake_pool_pledge,
+                    Destination::PublicKey(genesis_stake_public_key.clone()),
+                    genesis_vrf_public_key,
+                    Destination::PublicKey(genesis_stake_public_key.clone()),
+                    PerThousand::new(1000).expect("Valid per thousand"),
+                    Amount::ZERO,
+                )),
+            )
+        };
+
+        let blocks_to_generate = rng.gen_range(100..=1000);
+
+        let net_upgrades_chain_config = {
+            let genesis_block = Genesis::new(
+                "blockprod-testing".into(),
+                BlockTimestamp::from_int_seconds(
+                    TimeGetter::default()
+                        .get_time()
+                        .checked_sub(Duration::new(
+                            // Genesis must be in the past: now - (1 day..2 weeks)
+                            rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
+                            0,
+                        ))
+                        .expect("No time underflow")
+                        .as_secs(),
+                ),
+                vec![create_genesis_pool_txoutput.clone()],
+            );
+
+            let consensus_types = vec![
+                ConsensusUpgrade::IgnoreConsensus,
+                ConsensusUpgrade::PoW {
+                    initial_difficulty: Compact::highest_value(),
+                },
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Compact::highest_value(),
+                    config: create_unittest_pos_config(),
+                },
+            ];
+
+            let mut randomized_net_upgrades = vec![(
+                BlockHeight::new(0),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+            )];
+
+            let mut next_height_consensus_change = 1;
+
+            while next_height_consensus_change < blocks_to_generate {
+                let next_consensus_type = rng.gen_range(0..consensus_types.len());
+
+                randomized_net_upgrades.push((
+                    BlockHeight::new(next_height_consensus_change),
+                    UpgradeVersion::ConsensusUpgrade(consensus_types[next_consensus_type].clone()),
+                ));
+
+                next_height_consensus_change = next_height_consensus_change + rng.gen_range(1..50);
+            }
+
+            let net_upgrades =
+                NetUpgrades::initialize(randomized_net_upgrades).expect("Net upgrades are valid");
+
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis_block)
+                .net_upgrades(net_upgrades)
+                .build()
+        };
+
+        let (manager, chain_config, chainstate, mempool) =
+            setup_blockprod_test(Some(net_upgrades_chain_config));
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config.clone(),
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let mut previous_kernel_input = TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                    0,
+                );
+
+                let mut previous_kernel_input_utxo = create_genesis_pool_txoutput.clone();
+
+                for block_height in 1..=blocks_to_generate {
+                    let input_data_pos =
+                        GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                            genesis_stake_private_key.clone(),
+                            genesis_vrf_private_key.clone(),
+                            PoolId::new(H256::zero()),
+                            vec![previous_kernel_input.clone()],
+                            vec![previous_kernel_input_utxo.clone()],
+                        )));
+
+                    let input_data_pow = GenerateBlockInputData::PoW(Box::new(
+                        PoWGenerateBlockInputData::new(Destination::AnyoneCanSpend),
+                    ));
+
+                    match chain_config
+                        .net_upgrade()
+                        .consensus_status(BlockHeight::new(block_height))
+                    {
+                        RequiredConsensus::IgnoreConsensus => {
+                            let (new_block, job_finished_receiver) = block_production
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    TransactionsSource::Provided(vec![]),
+                                )
+                                .await
+                                .expect("Failed to produce a block: {:?}");
+
+                            job_finished_receiver.await.expect("Job finished receiver closed");
+
+                            assert_job_count(&block_production, 0).await;
+                            assert_process_block(&chainstate, new_block.clone()).await;
+                        }
+                        RequiredConsensus::PoS(_) => {
+                            // Try no input data for PoS consensus
+
+                            let input_data_none_result = block_production
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    TransactionsSource::Provided(vec![]),
+                                )
+                                .await;
+
+                            match input_data_none_result {
+                                Err(BlockProductionError::FailedConsensusInitialization(
+                                    ConsensusCreationError::StakingError(
+                                        ConsensusPoSError::NoInputDataProvided,
+                                    ),
+                                )) => {}
+                                _ => panic!("Unexpected return value"),
+                            }
+
+                            // TODO: until duplicate job keys is fixed
+                            // in produce_block(), manually wait until
+                            // the job manager has cleaned up
+                            assert_job_count(&block_production, 0).await;
+
+                            // Try PoW input data for PoS consensus
+
+                            let input_data_pow_result = block_production
+                                .produce_block(input_data_pow, TransactionsSource::Provided(vec![]))
+                                .await;
+
+                            match input_data_pow_result {
+                                Err(BlockProductionError::FailedConsensusInitialization(
+                                    ConsensusCreationError::StakingError(
+                                        ConsensusPoSError::PoWInputDataProvided,
+                                    ),
+                                )) => {}
+                                _ => panic!("Unexpected return value"),
+                            }
+
+                            // TODO: until duplicate job keys is fixed
+                            // in produce_block(), manually wait until
+                            // the job manager has cleaned up
+                            assert_job_count(&block_production, 0).await;
+
+                            // Try PoS input data for PoS consensus
+
+                            let (new_block, job_finished_receiver) = block_production
+                                .produce_block(input_data_pos, TransactionsSource::Provided(vec![]))
+                                .await
+                                .expect("Failed to produce a job: {:?}");
+
+                            job_finished_receiver.await.expect("Job finished receiver closed");
+
+                            assert_job_count(&block_production, 0).await;
+                            let result = assert_process_block(&chainstate, new_block).await;
+
+                            // Update kernel input parameters for future PoS blocks
+
+                            previous_kernel_input = TxInput::from_utxo(
+                                OutPointSourceId::BlockReward(
+                                    result.into_gen_block_index().block_id(),
+                                ),
+                                0,
+                            );
+
+                            previous_kernel_input_utxo = TxOutput::ProduceBlockFromStake(
+                                Destination::PublicKey(genesis_stake_public_key.clone()),
+                                H256::zero().into(),
+                            );
+                        }
+                        RequiredConsensus::PoW(_) => {
+                            // Try no input data for PoW consensus
+
+                            let input_data_none_result = block_production
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    TransactionsSource::Provided(vec![]),
+                                )
+                                .await;
+
+                            match input_data_none_result {
+                                Err(BlockProductionError::FailedConsensusInitialization(
+                                    ConsensusCreationError::MiningError(
+                                        ConsensusPoWError::NoInputDataProvided,
+                                    ),
+                                )) => {}
+                                _ => panic!("Unexpected return value"),
+                            }
+
+                            // TODO: until duplicate job keys is fixed
+                            // in produce_block(), manually wait until
+                            // the job manager has cleaned up
+                            assert_job_count(&block_production, 0).await;
+
+                            // Try PoS input data for PoW consensus
+
+                            let input_data_pos_result = block_production
+                                .produce_block(input_data_pos, TransactionsSource::Provided(vec![]))
+                                .await;
+
+                            match input_data_pos_result {
+                                Err(BlockProductionError::FailedConsensusInitialization(
+                                    ConsensusCreationError::MiningError(
+                                        ConsensusPoWError::PoSInputDataProvided,
+                                    ),
+                                )) => {}
+                                _ => panic!("Unexpected return value"),
+                            }
+
+                            // TODO: until duplicate job keys is fixed
+                            // in produce_block(), manually wait until
+                            // the job manager has cleaned up
+                            assert_job_count(&block_production, 0).await;
+
+                            // Try PoW input data for PoW consensus
+
+                            let (new_block, job_finished_receiver) = block_production
+                                .produce_block(input_data_pow, TransactionsSource::Provided(vec![]))
+                                .await
+                                .expect("Failed to produce a block: {:?}");
+
+                            job_finished_receiver.await.expect("Job finished receiver closed");
+
+                            assert_job_count(&block_production, 0).await;
+                            assert_process_block(&chainstate, new_block).await;
+                        }
+                    }
+                }
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn multiple_jobs_with_wait(#[case] seed: Seed) {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config,
                     chainstate,
                     mempool,
                     Default::default(),
@@ -434,10 +879,8 @@ mod produce_block {
                         .unwrap();
 
                     job.await.unwrap();
+                    assert_job_count(&block_production, 0).await;
                 }
-
-                let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
-                assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
             }
         });
 
@@ -493,224 +936,13 @@ mod produce_block {
                         Ok(_) => continue,
                     }
                 }
+
+                assert_job_count(&block_production, 0).await;
             }
         });
 
         manager.main().await;
         join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn overflow_tip_plus_one() {
-        let (manager, chain_config, chainstate, mempool) = {
-            let genesis_block = Genesis::new(
-                "blockprod-testing".into(),
-                BlockTimestamp::from_int_seconds(u64::MAX),
-                vec![],
-            );
-
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
-
-            setup_blockprod_test(Some(override_chain_config))
-        };
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate.clone(),
-                    mempool,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::TimestampOverflow(_, 1),
-                    )) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn overflow_max_blocktimestamp() {
-        let override_chain_config = Builder::new(ChainType::Regtest)
-            .max_future_block_time_offset(Duration::MAX)
-            .build();
-
-        let (manager, chain_config, chainstate, mempool) =
-            setup_blockprod_test(Some(override_chain_config));
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate.clone(),
-                    mempool,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::TimestampOverflow(_, _),
-                    )) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn try_again_later() {
-        // Ensure we reset the global mock time
-        let _reset_time_destructor = OnceDestructor::new(time::reset);
-
-        let (manager, chain_config, chainstate, mempool) = {
-            let last_used_block_timestamp = TimeGetter::get_time(&TimeGetter::default());
-
-            let genesis_block = Genesis::new(
-                "blockprod-testing".into(),
-                BlockTimestamp::from_duration_since_epoch(last_used_block_timestamp),
-                vec![],
-            );
-
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
-
-            _ = time::set(
-                last_used_block_timestamp
-                    .saturating_sub(*override_chain_config.max_future_block_time_offset()),
-            );
-
-            setup_blockprod_test(Some(override_chain_config))
-        };
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate.clone(),
-                    mempool,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::TryAgainLater) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn tip_changed() {
-        // TODO: mock chainstate to return new tip
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn transaction_source_mempool() {
-        // TODO: mock mempool to return transactions
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn transaction_source_provided() {
-        // TODO: supply transactions
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn cancel_received() {
-        // TODO: mock job manager
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn solver_error() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn solver_header_error() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn new_block_error() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn solved_ignore_consensus() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn solved_pow_consensus() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn solved_pos_consensus() {
-        // TODO
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn lots_of_blocks_with_differing_consensus() {
-        // TODO
     }
 }
 
