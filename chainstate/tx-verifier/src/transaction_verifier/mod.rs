@@ -100,6 +100,12 @@ pub struct TransactionVerifierDelta {
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
+impl TransactionVerifierDelta {
+    pub fn consume(self) -> (ConsumedUtxoCache, PoSAccountingDeltaData) {
+        (self.utxo_cache, self.accounting_delta)
+    }
+}
+
 /// The tool used to verify transactions and cache their updated states in memory
 pub struct TransactionVerifier<C, S, U, A> {
     chain_config: C,

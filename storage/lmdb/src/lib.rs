@@ -18,6 +18,9 @@ pub mod initial_map_size;
 pub mod memsize;
 pub mod resize_callback;
 
+// Note: we can't use utils::sync::atomic types here at the moment, because certain tests,
+// when run with loom, will panic with the message "Model exceeded maximum number of branches".
+// Probably we just need to configure loom model with a bigger max_branches value?
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
@@ -143,11 +146,11 @@ impl LmdbImpl {
     }
 
     fn schedule_map_resize(&self) {
-        self.map_resize_scheduled.store(true, Ordering::SeqCst);
+        self.map_resize_scheduled.store(true, Ordering::Release);
     }
 
     fn unschedule_map_resize(&self) {
-        self.map_resize_scheduled.store(false, Ordering::SeqCst);
+        self.map_resize_scheduled.store(false, Ordering::Release);
     }
 
     fn resize_if_resize_scheduled(&self) {

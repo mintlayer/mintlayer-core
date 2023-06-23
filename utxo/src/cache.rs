@@ -81,6 +81,15 @@ impl<P: UtxosView> UtxosCache<P> {
         })
     }
 
+    pub fn from_data(parent: P, utxos: ConsumedUtxoCache) -> Result<Self, P::Error> {
+        Ok(UtxosCache {
+            parent,
+            current_block_hash: utxos.best_block,
+            utxos: utxos.container,
+            memory_usage: 0,
+        })
+    }
+
     pub fn set_best_block(&mut self, block_hash: Id<GenBlock>) {
         self.current_block_hash = block_hash;
     }

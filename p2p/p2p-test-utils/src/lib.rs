@@ -15,13 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
@@ -36,6 +30,7 @@ use common::{
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
+use utils::atomics::SeqCstAtomicU64;
 
 pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
@@ -71,12 +66,7 @@ pub fn start_subsystems_with_chainstate(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
-        chain_config,
-        chainstate.clone(),
-        Default::default(),
-        mempool::SystemUsageEstimator {},
-    );
+    let mempool = mempool::make_mempool(chain_config, chainstate.clone(), Default::default());
     let mempool = manager.add_subsystem_with_custom_eventloop("p2p-test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)
     });
@@ -101,7 +91,7 @@ pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
 }
 
 pub struct P2pBasicTestTimeGetter {
-    current_time_millis: Arc<AtomicU64>,
+    current_time_millis: Arc<SeqCstAtomicU64>,
 }
 
 impl P2pBasicTestTimeGetter {
@@ -109,7 +99,7 @@ impl P2pBasicTestTimeGetter {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
-        let current_time_millis = Arc::new(AtomicU64::new(current_time.as_millis() as u64));
+        let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
         Self {
             current_time_millis,
         }
@@ -120,7 +110,6 @@ impl P2pBasicTestTimeGetter {
     }
 
     pub fn advance_time(&self, duration: Duration) {
-        self.current_time_millis
-            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
+        self.current_time_millis.fetch_add(duration.as_millis() as u64);
     }
 }

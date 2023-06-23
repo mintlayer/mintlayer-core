@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::Arc;
 
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
@@ -32,6 +32,7 @@ use crate::{
     },
     TestFramework, TestStore,
 };
+use utils::atomics::SeqCstAtomicU64;
 
 pub enum TxVerificationStrategy {
     Default,
@@ -111,8 +112,8 @@ impl TestFrameworkBuilder {
     /// Create the TimeGetter of the TestFramework, with the following logic:
     /// The default TimeGetter of the TestFramework simply loads the value of time from an atomic u64
     /// If a custom TimeGetter is supplied, then this value won't exist
-    fn create_time_getter_and_value(&self) -> (TimeGetter, Option<Arc<AtomicU64>>) {
-        let time_value = Arc::new(AtomicU64::new(
+    fn create_time_getter_and_value(&self) -> (TimeGetter, Option<Arc<SeqCstAtomicU64>>) {
+        let time_value = Arc::new(SeqCstAtomicU64::new(
             self.chain_config.genesis_block().timestamp().as_int_seconds(),
         ));
 

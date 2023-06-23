@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -27,7 +21,6 @@ use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
     primitives::{user_agent::mintlayer_core_user_agent, Id, H256},
 };
-
 use p2p::{
     config::{NodeType, P2pConfig},
     message::{HeaderList, SyncMessage},
@@ -37,6 +30,7 @@ use p2p::{
     },
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
+use utils::atomics::SeqCstAtomicBool;
 
 tests![block_announcement, block_announcement_no_subscription,];
 
@@ -51,7 +45,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
@@ -96,24 +90,22 @@ where
             .clone()])))
         .unwrap();
 
-    match sync2.poll_next().await.unwrap() {
+    let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-        } => {}
+            sync_rx,
+        } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
     // Poll an event from the network for server2.
-    let header = match sync2.poll_next().await.unwrap() {
-        SyncingEvent::Message { peer: _, message } => match message {
-            SyncMessage::HeaderList(l) => {
-                assert_eq!(l.headers().len(), 1);
-                l.into_headers().pop().unwrap()
-            }
-            a => panic!("Unexpected announcement: {a:?}"),
-        },
-        event => panic!("Unexpected event: {event:?}"),
+    let header = match sync_rx_2.recv().await.unwrap() {
+        SyncMessage::HeaderList(l) => {
+            assert_eq!(l.headers().len(), 1);
+            l.into_headers().pop().unwrap()
+        }
+        a => panic!("Unexpected announcement: {a:?}"),
     };
     assert_eq!(header.timestamp().as_int_seconds(), 1337u64);
     assert_eq!(&header, block.header());
@@ -132,28 +124,26 @@ where
             .clone()])))
         .unwrap();
 
-    match sync1.poll_next().await.unwrap() {
+    let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-        } => {}
+            sync_rx,
+        } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
-    let header = match sync1.poll_next().await.unwrap() {
-        SyncingEvent::Message { peer: _, message } => match message {
-            SyncMessage::HeaderList(l) => {
-                assert_eq!(l.headers().len(), 1);
-                l.into_headers().pop().unwrap()
-            }
-            a => panic!("Unexpected announcement: {a:?}"),
-        },
-        event => panic!("Unexpected event: {event:?}"),
+    let header = match sync_rx_1.recv().await.unwrap() {
+        SyncMessage::HeaderList(l) => {
+            assert_eq!(l.headers().len(), 1);
+            l.into_headers().pop().unwrap()
+        }
+        a => panic!("Unexpected announcement: {a:?}"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
     assert_eq!(&header, block.header());
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }
@@ -191,7 +181,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
@@ -236,7 +226,7 @@ where
             .clone()])))
         .unwrap();
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }

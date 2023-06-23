@@ -18,16 +18,10 @@
 
 mod peer;
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::collections::HashSet;
 
 use futures::never::Never;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
@@ -37,11 +31,13 @@ use common::{
 };
 use logging::log;
 use mempool::MempoolHandle;
+use utils::atomics::AcqRelAtomicBool;
+use utils::sync::Arc;
 use utils::tap_error_log::LogError;
 
 use crate::{
     config::P2pConfig,
-    error::{P2pError, PeerError},
+    error::P2pError,
     message::{HeaderList, SyncMessage},
     net::{
         types::{services::Services, SyncingEvent},
@@ -71,10 +67,10 @@ pub struct BlockSyncManager<T: NetworkingService> {
     mempool_handle: MempoolHandle,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
-    is_initial_block_download: Arc<AtomicBool>,
+    is_initial_block_download: Arc<AcqRelAtomicBool>,
 
-    /// A mapping from a peer identifier to the channel.
-    peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
+    /// The list of connected peers
+    peers: HashSet<PeerId>,
 
     time_getter: TimeGetter,
 }
@@ -124,7 +120,6 @@ where
                 // This shouldn't fail unless the chainstate subsystem is down which shouldn't
                 // happen since subsystems are shutdown in reverse order.
                 .expect("Chainstate call failed")?,
-            Ordering::Release,
         );
 
         loop {
@@ -136,22 +131,23 @@ where
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
-                    self.handle_peer_event(event?)?;
+                    self.handle_peer_event(event?);
                 },
             }
         }
     }
 
     /// Starts a task for the new peer.
-    pub fn register_peer(&mut self, peer: PeerId, remote_services: Services) -> Result<()> {
+    pub fn register_peer(
+        &mut self,
+        peer: PeerId,
+        remote_services: Services,
+        sync_rx: Receiver<SyncMessage>,
+    ) {
         log::debug!("Register peer {peer} to sync manager");
 
-        let (sender, receiver) = mpsc::unbounded_channel();
-        self.peers
-            .insert(peer, sender)
-            // This should never happen because a peer can only connect once.
-            .map(|_| Err::<(), _>(P2pError::PeerError(PeerError::PeerAlreadyExists)))
-            .transpose()?;
+        let inserted = self.peers.insert(peer);
+        assert!(inserted, "Registered duplicated peer: {peer}");
 
         let messaging_handle = self.messaging_handle.clone();
         let peer_manager_sender = self.peer_manager_sender.clone();
@@ -168,31 +164,28 @@ where
                 chainstate_handle,
                 mempool_handle,
                 peer_manager_sender,
+                sync_rx,
                 messaging_handle,
-                receiver,
                 is_initial_block_download,
                 time_getter,
             )
             .run()
             .await;
         });
-
-        Ok(())
     }
 
     /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
-        self.peers
-            .remove(&peer)
-            .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer}"));
+        let removed = self.peers.remove(&peer);
+        assert!(removed, "Unregistering unknown peer: {peer}");
     }
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
-        let is_initial_block_download = if self.is_initial_block_download.load(Ordering::Relaxed) {
+        let is_initial_block_download = if self.is_initial_block_download.load() {
             let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
-            self.is_initial_block_download.store(is_ibd, Ordering::Release);
+            self.is_initial_block_download.store(is_ibd);
             is_ibd
         } else {
             false
@@ -215,24 +208,15 @@ where
     }
 
     /// Sends an event to the corresponding peer.
-    fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
-        let (peer, message) = match event {
-            SyncingEvent::Connected { peer_id, services } => {
-                self.register_peer(peer_id, services)?;
-                return Ok(());
-            }
-            SyncingEvent::Disconnected { peer_id } => {
-                self.unregister_peer(peer_id);
-                return Ok(());
-            }
-            SyncingEvent::Message { peer, message } => (peer, message),
-        };
-
-        let peer_channel = self.peers.get(&peer).unwrap_or_else(|| {
-            panic!("Received a message from unknown peer ({peer}): {message:?}")
-        });
-
-        peer_channel.send(message).map_err(Into::into)
+    fn handle_peer_event(&mut self, event: SyncingEvent) {
+        match event {
+            SyncingEvent::Connected {
+                peer_id,
+                services,
+                sync_rx,
+            } => self.register_peer(peer_id, services, sync_rx),
+            SyncingEvent::Disconnected { peer_id } => self.unregister_peer(peer_id),
+        }
     }
 }
 

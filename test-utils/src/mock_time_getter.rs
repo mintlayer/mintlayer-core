@@ -14,62 +14,55 @@
 // limitations under the License.
 
 use common::time_getter::{TimeGetter, TimeGetterFn};
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
+use utils::atomics::SeqCstAtomicU64;
 
-pub fn mocked_time_getter_seconds(seconds: Arc<AtomicU64>) -> TimeGetter {
+pub fn mocked_time_getter_seconds(seconds: Arc<SeqCstAtomicU64>) -> TimeGetter {
     TimeGetter::new(Arc::new(MockedMsecTimeGetterFn::new(seconds, 1000)))
 }
 
-pub fn mocked_time_getter_milliseconds(milliseconds: Arc<AtomicU64>) -> TimeGetter {
+pub fn mocked_time_getter_milliseconds(milliseconds: Arc<SeqCstAtomicU64>) -> TimeGetter {
     TimeGetter::new(Arc::new(MockedMsecTimeGetterFn::new(milliseconds, 1)))
 }
 
 struct MockedMsecTimeGetterFn {
-    count: Arc<AtomicU64>,
+    count: Arc<SeqCstAtomicU64>,
     multiplier: u64,
 }
 
 impl MockedMsecTimeGetterFn {
-    fn new(count: Arc<AtomicU64>, multiplier: u64) -> Self {
+    fn new(count: Arc<SeqCstAtomicU64>, multiplier: u64) -> Self {
         Self { count, multiplier }
     }
 }
 
 impl TimeGetterFn for MockedMsecTimeGetterFn {
     fn get_time(&self) -> Duration {
-        Duration::from_millis(self.multiplier * self.count.load(Ordering::SeqCst))
+        Duration::from_millis(self.multiplier * self.count.load())
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::sync::atomic::Ordering;
-
     use crate::mock_time_getter::mocked_time_getter_seconds;
 
     use super::*;
 
     #[test]
     fn test_mocked_time_getter_seconds() {
-        let seconds = Arc::new(AtomicU64::new(12345));
+        let seconds = Arc::new(SeqCstAtomicU64::new(12345));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&seconds));
         let time = time_getter.get_time();
-        seconds.fetch_add(123, Ordering::SeqCst);
+        seconds.fetch_add(123);
         assert_eq!(time_getter.get_time() - time, Duration::from_secs(123));
     }
 
     #[test]
     fn test_mocked_time_getter_milliseconds() {
-        let milliseconds = Arc::new(AtomicU64::new(12345));
+        let milliseconds = Arc::new(SeqCstAtomicU64::new(12345));
         let time_getter = mocked_time_getter_milliseconds(Arc::clone(&milliseconds));
         let time = time_getter.get_time();
-        milliseconds.fetch_add(123, Ordering::SeqCst);
+        milliseconds.fetch_add(123);
         assert_eq!(time_getter.get_time() - time, Duration::from_millis(123));
     }
 }

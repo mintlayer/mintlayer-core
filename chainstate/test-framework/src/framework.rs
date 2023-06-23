@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
-};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
@@ -26,14 +22,20 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use crypto::random::{CryptoRng, Rng};
+use crypto::{
+    key::PrivateKey,
+    random::{CryptoRng, Rng},
+    vrf::VRFPrivateKey,
+};
 
 use rstest::rstest;
 
 use crate::{
+    pos_block_builder::PoSBlockBuilder,
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
+use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
@@ -43,7 +45,7 @@ pub struct TestFramework {
     // A clone of the TimeGetter supplied to the chainstate
     pub time_getter: TimeGetter,
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
-    pub time_value: Option<Arc<AtomicU64>>,
+    pub time_value: Option<Arc<SeqCstAtomicU64>>,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
@@ -63,6 +65,10 @@ impl TestFramework {
         BlockBuilder::new(self)
     }
 
+    pub fn make_pos_block_builder(&mut self, rng: &mut (impl Rng + CryptoRng)) -> PoSBlockBuilder {
+        PoSBlockBuilder::new(self, rng)
+    }
+
     /// Get the current time using the time getter that was supplied to the test-framework
     pub fn current_time(&self) -> Duration {
         self.time_getter.get_time()
@@ -72,7 +78,7 @@ impl TestFramework {
     /// this function increases the time value
     pub fn progress_time_seconds_since_epoch(&mut self, secs: u64) {
         match &self.time_value {
-            Some(v) => v.fetch_add(secs, std::sync::atomic::Ordering::SeqCst),
+            Some(v) => v.fetch_add(secs),
             None => {
                 panic!("Cannot progress time in TestFramework when custom time getter is supplied")
             }
@@ -83,7 +89,7 @@ impl TestFramework {
     /// this function sets the time value to whatever is provided
     pub fn set_time_seconds_since_epoch(&mut self, val: u64) {
         match &self.time_value {
-            Some(v) => v.store(val, std::sync::atomic::Ordering::SeqCst),
+            Some(v) => v.store(val),
             None => {
                 panic!("Cannot progress time in TestFramework when custom time getter is supplied")
             }
@@ -122,6 +128,30 @@ impl TestFramework {
                 .make_block_builder()
                 .add_test_transaction_with_parent(prev_block_id, rng)
                 .with_parent(prev_block_id)
+                .build();
+            prev_block_id = block.get_id().into();
+            self.process_block(block, BlockSource::Local)?;
+        }
+
+        Ok(prev_block_id)
+    }
+
+    pub fn create_chain_pos(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks: usize,
+        rng: &mut (impl Rng + CryptoRng),
+        staking_sk: &PrivateKey,
+        staking_vrf_sk: &VRFPrivateKey,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        let mut prev_block_id = *parent_block;
+        for _ in 0..blocks {
+            let block = self
+                .make_pos_block_builder(rng)
+                .with_parent(prev_block_id)
+                .with_block_signing_key(staking_sk.clone())
+                .with_stake_spending_key(staking_sk.clone())
+                .with_vrf_key(staking_vrf_sk.clone())
                 .build();
             prev_block_id = block.get_id().into();
             self.process_block(block, BlockSource::Local)?;

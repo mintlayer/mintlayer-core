@@ -25,6 +25,7 @@ use common::{
 };
 use crypto::key::PublicKey;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
+use wallet::account::Currency;
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
 use crate::errors::WalletCliError;
@@ -483,11 +484,14 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::GetBalance => {
-            let (coin_balance, _tokens_balance) = controller_opt
+            let coin_balance = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
                 .get_balance()
-                .map_err(WalletCliError::Controller)?;
+                .map_err(WalletCliError::Controller)?
+                .get(&Currency::Coin)
+                .copied()
+                .unwrap_or(Amount::ZERO);
             Ok(ConsoleCommand::Print(print_coin_amount(
                 chain_config,
                 coin_balance,

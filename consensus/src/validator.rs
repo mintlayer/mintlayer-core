@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::BlockIndexHandle;
+use chainstate_types::{BlockIndexHandle, EpochStorageRead};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockHeader, ConsensusData},
@@ -30,16 +30,17 @@ use crate::{
 };
 
 /// Checks if the given block identified by the header contains the correct consensus data.
-pub fn validate_consensus<H, U, P>(
+pub fn validate_consensus<H, E, U, P>(
     chain_config: &ChainConfig,
     header: &SignedBlockHeader,
     block_index_handle: &H,
+    epoch_data_storage: &E,
     utxos_view: &U,
     pos_accounting_view: &P,
-    strict_pos_consensus_check: bool,
 ) -> Result<(), ConsensusVerificationError>
 where
     H: BlockIndexHandle,
+    E: EpochStorageRead,
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
@@ -69,10 +70,10 @@ where
             chain_config,
             &pos_status,
             block_index_handle,
+            epoch_data_storage,
             utxos_view,
             pos_accounting_view,
             header,
-            strict_pos_consensus_check,
         ),
     }
 }
@@ -109,17 +110,18 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus<H, U, P>(
+fn validate_pos_consensus<H, E, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
     block_index_handle: &H,
+    epoch_data_storage: &E,
     utxos_view: &U,
     pos_accounting_view: &P,
     header: &SignedBlockHeader,
-    strict_pos_consensus_check: bool,
 ) -> Result<(), ConsensusVerificationError>
 where
     H: BlockIndexHandle,
+    E: EpochStorageRead,
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
@@ -135,9 +137,9 @@ where
             header,
             pos_data,
             block_index_handle,
+            epoch_data_storage,
             utxos_view,
             pos_accounting_view,
-            strict_pos_consensus_check,
         )
         .map_err(Into::into),
     }

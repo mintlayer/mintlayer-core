@@ -37,20 +37,6 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer() {
-    let mut handle = SyncManagerHandle::builder().build().await;
-
-    let peer = PeerId::new();
-
-    let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
-    let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
-
-    handle.resume_panic().await;
-}
-
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -78,7 +64,9 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -87,10 +75,12 @@ async fn invalid_transaction(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.send_message(
-        peer,
-        SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
+        )
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -117,7 +107,9 @@ async fn initial_block_download() {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     handle.assert_no_event().await;
     handle.assert_no_peer_manager_event().await;
@@ -174,7 +166,9 @@ async fn no_transaction_service(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -235,7 +229,9 @@ async fn too_many_announcements(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -274,7 +270,9 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -283,7 +281,9 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -325,7 +325,9 @@ async fn valid_transaction(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
+    handle
+        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+        .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -334,10 +336,12 @@ async fn valid_transaction(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.send_message(
-        peer,
-        SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
-    );
+    handle
+        .send_message(
+            peer,
+            SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
+        )
+        .await;
 
     assert_eq!(
         SyncMessage::NewTransaction(tx.transaction().get_id()),

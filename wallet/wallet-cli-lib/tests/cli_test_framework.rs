@@ -222,7 +222,6 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         Arc::clone(&chain_config),
         chainstate.clone(),
         Default::default(),
-        mempool::SystemUsageEstimator {},
     );
     let mempool = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)

@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use atomic_traits::{Atomic, NumOps};
 use num_traits::{One, Zero};
 use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 
+use crate::atomics::atomic_traits::{Atomic, AtomicNum};
 use crate::counttracker::CountTracker;
 
 pub struct BlockUntilZero<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum + From<<T as Atomic>::Type>,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
     <T as Atomic>::Type: Ord,
@@ -34,14 +34,15 @@ where
 
 impl<T> BlockUntilZero<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum + From<<T as Atomic>::Type>,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
     <T as Atomic>::Type: Ord,
 {
     pub fn new() -> Self {
+        let value: T = <T as Atomic>::Type::zero().into();
         Self {
-            value: Arc::new(<T as Atomic>::new(<T as Atomic>::Type::zero())),
+            value: Arc::new(value),
         }
     }
 
@@ -63,7 +64,7 @@ where
 
 impl<T> Default for BlockUntilZero<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum + From<<T as Atomic>::Type>,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
     <T as Atomic>::Type: Ord,
@@ -75,7 +76,7 @@ where
 
 impl<T> Drop for BlockUntilZero<T>
 where
-    T: Atomic + NumOps,
+    T: AtomicNum + From<<T as Atomic>::Type>,
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
     <T as Atomic>::Type: Ord,

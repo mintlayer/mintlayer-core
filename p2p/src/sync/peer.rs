@@ -16,16 +16,12 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
     time::Duration,
 };
 
 use itertools::Itertools;
 use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{Receiver, UnboundedSender},
     time::MissedTickBehavior,
 };
 
@@ -43,7 +39,9 @@ use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     MempoolHandle,
 };
+use utils::atomics::AcqRelAtomicBool;
 use utils::const_value::ConstValue;
+use utils::sync::Arc;
 
 use crate::{
     config::P2pConfig,
@@ -56,7 +54,7 @@ use crate::{
         types::services::{Service, Services},
         NetworkingService,
     },
-    types::peer_id::PeerId,
+    types::{peer_activity::PeerActivity, peer_id::PeerId},
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
@@ -73,8 +71,8 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
-    message_receiver: UnboundedReceiver<SyncMessage>,
-    is_initial_block_download: Arc<AtomicBool>,
+    sync_rx: Receiver<SyncMessage>,
+    is_initial_block_download: Arc<AcqRelAtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
     known_headers: Vec<SignedBlockHeader>,
@@ -91,11 +89,10 @@ pub struct Peer<T: NetworkingService> {
     /// A number of consecutive unconnected headers received from a peer. This counter is reset
     /// after receiving a valid header.
     unconnected_headers: usize,
-    /// A time when the last message from the peer is received.
-    /// This field is equal to `None` if we aren't waiting for specific messages
-    /// (when the peer downloads blocks from us, or when we receive an empty header list response)
-    /// TODO: Use enum to make it clearer what's it about
-    last_activity: Option<Duration>,
+    /// Last activity with the peer. For example, when we expect blocks from a peer, we can mark
+    /// the peer with `PeerActivity::ExpectingBlocks`. We can use this information to, for example,
+    /// disconnect the peer in case we haven't received expected data within a certain time period.
+    last_activity: PeerActivity,
     time_getter: TimeGetter,
 }
 
@@ -112,9 +109,9 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
-        message_receiver: UnboundedReceiver<SyncMessage>,
-        is_initial_block_download: Arc<AtomicBool>,
+        is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
         let local_services: Services = (*p2p_config.node_type).into();
@@ -128,7 +125,7 @@ where
             mempool_handle,
             peer_manager_sender,
             messaging_handle,
-            message_receiver,
+            sync_rx,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
@@ -136,7 +133,7 @@ where
             best_known_block: None,
             announced_transactions: BTreeSet::new(),
             unconnected_headers: 0,
-            last_activity: None,
+            last_activity: PeerActivity::Pending,
             time_getter,
         }
     }
@@ -157,15 +154,17 @@ where
     async fn main_loop(&mut self) -> Result<()> {
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // The first tick completes immediately. Since we are dealing with a stalling check, we skip
+        // the first tick.
+        stalling_interval.tick().await;
 
         if self.common_services.has_service(Service::Blocks) {
             self.request_headers().await?;
-            self.last_activity = Some(self.time_getter.get_time());
         }
 
         loop {
             tokio::select! {
-                message = self.message_receiver.recv() => {
+                message = self.sync_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
@@ -174,12 +173,14 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                _ = stalling_interval.tick(), if self.last_activity.is_some() => {}
+                _ = stalling_interval.tick(), if !matches!(self.last_activity, PeerActivity::Pending) => {}
             }
 
             // Run on each loop iteration, so it's easier to test
-            if let Some(last_activity) = self.last_activity {
-                self.handle_stalling_interval(last_activity).await?;
+            if let PeerActivity::ExpectingHeaderList { time }
+            | PeerActivity::ExpectingBlocks { time } = self.last_activity
+            {
+                self.handle_stalling_interval(time).await?;
             }
         }
     }
@@ -192,7 +193,13 @@ where
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )
+        )?;
+
+        self.last_activity = PeerActivity::ExpectingHeaderList {
+            time: self.time_getter.get_time(),
+        };
+
+        Ok(())
     }
 
     async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
@@ -220,7 +227,7 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             // TODO: Check if a peer has permissions to ask for headers during the initial block download.
             log::debug!("Ignoring headers request because the node is in initial block download");
             return Ok(());
@@ -248,7 +255,7 @@ where
             block_ids.len(),
         );
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             log::debug!("Ignoring blocks request because the node is in initial block download");
             return Ok(());
         }
@@ -299,7 +306,7 @@ where
 
         // A peer can ignore the headers request if it is in the initial block download state.
         // Assume this is the case if it asks us for blocks.
-        self.last_activity = None;
+        self.last_activity = PeerActivity::Pending;
 
         self.blocks_queue.extend(block_ids.into_iter());
 
@@ -308,7 +315,6 @@ where
 
     async fn handle_header_list(&mut self, headers: Vec<SignedBlockHeader>) -> Result<()> {
         log::debug!("Headers list from peer {}", self.id());
-        self.last_activity = Some(self.time_getter.get_time());
 
         if !self.known_headers.is_empty() {
             // The headers list contains exactly one header when a new block is announced.
@@ -337,7 +343,7 @@ where
         if headers.is_empty() {
             // We don't need anything from this peer unless we are still receiving blocks.
             if self.requested_blocks.is_empty() {
-                self.last_activity = None;
+                self.last_activity = PeerActivity::Pending;
             }
 
             return Ok(());
@@ -393,14 +399,9 @@ where
             if is_max_headers {
                 self.request_headers().await?;
             } else {
-                // Temporary fix for the unexpected disconnect bug:
-                // There are two connected and fully synchronized nodes: Node1 and Node2.
-                // Node1 generates a new block and sends a header notification to the Node2.
-                // Node2 sends a header list message to all connected peers.
-                // Node1 receives the headers list messages but does nothing because the specific block is already known.
-                // Node1 unexpectedly disconnects Node2.
-                // TODO: Add a test for this situation and fix it properly.
-                self.last_activity = None;
+                // Since we know all the blocks the peer knows, we expect no further data and mark
+                // the peer activity as pending.
+                self.last_activity = PeerActivity::Pending;
             }
             return Ok(());
         }
@@ -421,7 +422,6 @@ where
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
         log::debug!("Block ({}) from peer {}", block.get_id(), self.id());
-        self.last_activity = Some(self.time_getter.get_time());
 
         if self.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
@@ -464,6 +464,12 @@ where
                 let headers = mem::take(&mut self.known_headers);
                 self.request_blocks(headers)?;
             }
+        } else {
+            // We expect additional blocks from the peer. Update the timestamp we received the
+            // current one.
+            self.last_activity = PeerActivity::ExpectingBlocks {
+                time: self.time_getter.get_time(),
+            };
         }
 
         Ok(())
@@ -517,7 +523,7 @@ where
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!("Transaction announcement from {} peer: {tx}", self.id());
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             log::debug!(
                 "Ignoring transaction announcement because the node is in initial block download"
             );
@@ -648,6 +654,10 @@ where
             SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
         )?;
         self.requested_blocks.extend(block_ids);
+
+        self.last_activity = PeerActivity::ExpectingBlocks {
+            time: self.time_getter.get_time(),
+        };
 
         Ok(())
     }

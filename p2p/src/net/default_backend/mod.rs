@@ -18,13 +18,7 @@ pub mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::{
@@ -33,6 +27,7 @@ use tokio::{
 };
 
 use logging::log;
+use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     error::P2pError,
@@ -119,7 +114,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        shutdown: Arc<AtomicBool>,
+        shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(
@@ -152,11 +147,11 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
             match backend.run().await {
                 Ok(_) => unreachable!(),
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
+                Err(P2pError::ChannelClosed) if shutdown.load() => {
                     log::info!("Backend is shut down");
                 }
                 Err(e) => {
-                    shutdown.store(true, Ordering::SeqCst);
+                    shutdown.store(true);
                     log::error!("Failed to run backend: {e}");
                 }
             }
@@ -199,12 +194,10 @@ where
     }
 
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::SendMessage {
-                peer,
-                message: message.into(),
-            })
-            .map_err(Into::into)
+        Ok(self.cmd_tx.send(types::Command::SendMessage {
+            peer,
+            message: message.into(),
+        })?)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -218,12 +211,10 @@ where
 
 impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
-        self.command_sender
-            .send(types::Command::SendMessage {
-                peer,
-                message: message.into(),
-            })
-            .map_err(Into::into)
+        Ok(self.command_sender.send(types::Command::SendMessage {
+            peer,
+            message: message.into(),
+        })?)
     }
 
     fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()> {

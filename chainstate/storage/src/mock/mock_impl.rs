@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::{BlockIndex, EpochData};
+use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
 use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
@@ -57,7 +57,6 @@ mockall::mock! {
             tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
-
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
@@ -88,9 +87,11 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
-
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+    }
+
+    impl EpochStorageRead for Store {
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -188,11 +189,13 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
-        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
-        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
-
         fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
+    }
+
+    impl EpochStorageWrite for Store {
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -333,9 +336,11 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
-
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+    }
+
+    impl EpochStorageRead for StoreTxRo {
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -443,9 +448,11 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
-
        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+    }
+
+    impl EpochStorageRead for StoreTxRw {
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -544,11 +551,13 @@ mockall::mock! {
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
-        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
-        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
-
         fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
+    }
+
+    impl EpochStorageWrite for StoreTxRw {
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

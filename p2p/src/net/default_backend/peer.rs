@@ -15,15 +15,18 @@
 
 use std::{sync::Arc, time::Duration};
 
-use tokio::{sync::mpsc, time::timeout};
+use tokio::{
+    sync::mpsc::{self, Sender},
+    time::timeout,
+};
 
 use common::chain::ChainConfig;
 use logging::log;
-use utils::set_flag::SetFlag;
 
 use crate::{
     config::P2pConfig,
     error::{P2pError, ProtocolError},
+    message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
             transport::TransportSocket,
@@ -35,7 +38,10 @@ use crate::{
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
-use super::{transport::BufferedTranscoder, types::HandshakeNonce};
+use super::{
+    transport::BufferedTranscoder,
+    types::{HandshakeNonce, Message},
+};
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -196,6 +202,67 @@ where
         Ok(())
     }
 
+    async fn handle_socket_msg(
+        peer: PeerId,
+        msg: Message,
+        tx: &mut mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+        sync_tx: &mut Sender<SyncMessage>,
+    ) -> crate::Result<()> {
+        // TODO: Use a bounded channel to send messages to the peer manager
+        match msg {
+            Message::Handshake(_) => {
+                log::error!("peer {peer} sent handshaking message");
+            }
+
+            Message::PingRequest(r) => tx.send((
+                peer,
+                PeerEvent::MessageReceived {
+                    message: PeerManagerMessage::PingRequest(r),
+                },
+            ))?,
+            Message::PingResponse(r) => tx.send((
+                peer,
+                PeerEvent::MessageReceived {
+                    message: PeerManagerMessage::PingResponse(r),
+                },
+            ))?,
+            Message::AddrListRequest(r) => tx.send((
+                peer,
+                PeerEvent::MessageReceived {
+                    message: PeerManagerMessage::AddrListRequest(r),
+                },
+            ))?,
+            Message::AddrListResponse(r) => tx.send((
+                peer,
+                PeerEvent::MessageReceived {
+                    message: PeerManagerMessage::AddrListResponse(r),
+                },
+            ))?,
+            Message::AnnounceAddrRequest(r) => tx.send((
+                peer,
+                PeerEvent::MessageReceived {
+                    message: PeerManagerMessage::AnnounceAddrRequest(r),
+                },
+            ))?,
+
+            Message::HeaderListRequest(v) => {
+                sync_tx.send(SyncMessage::HeaderListRequest(v)).await?
+            }
+            Message::BlockListRequest(v) => sync_tx.send(SyncMessage::BlockListRequest(v)).await?,
+            Message::TransactionRequest(v) => {
+                sync_tx.send(SyncMessage::TransactionRequest(v)).await?
+            }
+            Message::NewTransaction(v) => sync_tx.send(SyncMessage::NewTransaction(v)).await?,
+            Message::TransactionResponse(v) => {
+                sync_tx.send(SyncMessage::TransactionResponse(v)).await?
+            }
+            Message::HeaderList(v) => sync_tx.send(SyncMessage::HeaderList(v)).await?,
+            Message::BlockResponse(v) => sync_tx.send(SyncMessage::BlockResponse(v)).await?,
+        }
+
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
         let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
@@ -211,7 +278,8 @@ where
             }
         }
 
-        let mut was_accepted = SetFlag::new();
+        // The channel to the sync manager peer task (set when the peer is accepted)
+        let mut sync_tx_opt = None;
 
         loop {
             tokio::select! {
@@ -219,22 +287,18 @@ where
                 biased;
 
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    Event::Accepted => was_accepted.set(),
+                    Event::Accepted{ sync_tx } => {
+                        sync_tx_opt = Some(sync_tx);
+                    },
                     Event::SendMessage(message) => self.socket.send(*message).await?,
                 },
-                event = self.socket.recv(), if was_accepted.test() => match event {
+                event = self.socket.recv(), if sync_tx_opt.is_some() => match event {
+                    Ok(message) => {
+                        Self::handle_socket_msg(self.peer_id, message, &mut self.tx, sync_tx_opt.as_mut().expect("sync_tx_opt is some")).await?;
+                    }
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
                         return Ok(());
-                    }
-                    Ok(message) => {
-                        self.tx
-                            .send((
-                                self.peer_id,
-                                types::PeerEvent::MessageReceived {
-                                    message
-                                },
-                            ))?;
                     }
                 }
             }

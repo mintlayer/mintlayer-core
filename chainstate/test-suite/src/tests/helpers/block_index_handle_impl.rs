@@ -92,11 +92,4 @@ impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a,
     ) -> Result<Option<common::chain::block::BlockReward>, PropertyQueryError> {
         unimplemented!()
     }
-
-    fn get_epoch_data(
-        &self,
-        _epoch_index: u64,
-    ) -> Result<Option<chainstate_types::EpochData>, PropertyQueryError> {
-        unimplemented!()
-    }
 }

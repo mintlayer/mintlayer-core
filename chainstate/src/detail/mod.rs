@@ -50,8 +50,7 @@ use chainstate_storage::{
     TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
-    PropertyQueryError,
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData, EpochStorageWrite, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -604,14 +603,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
 
-        chainstate_ref.check_block(&block, false).log_err()?;
+        chainstate_ref.check_block(&block).log_err()?;
 
         Ok(block)
     }
 
     pub fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block_header(&header, false).log_err()?;
+        chainstate_ref.check_block_header(&header).log_err()?;
         Ok(())
     }
 

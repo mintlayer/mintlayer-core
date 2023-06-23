@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -29,7 +23,6 @@ use common::{
     primitives::Idable,
     time_getter::TimeGetter,
 };
-
 use p2p::{
     error::P2pError,
     message::{HeaderList, SyncMessage},
@@ -41,6 +34,7 @@ use p2p::{
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
     PeerManagerEvent,
 };
+use utils::atomics::SeqCstAtomicBool;
 
 tests![invalid_pubsub_block,];
 
@@ -61,7 +55,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
@@ -119,15 +113,16 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
-        match sync2.poll_next().await.unwrap() {
-            SyncingEvent::Connected { .. } => {}
+        let (peer, mut sync_rx) = match sync2.poll_next().await.unwrap() {
+            SyncingEvent::Connected {
+                peer_id,
+                services: _,
+                sync_rx,
+            } => (peer_id, sync_rx),
             e => panic!("Unexpected event type: {e:?}"),
         };
-        let peer = match sync2.poll_next().await.unwrap() {
-            SyncingEvent::Message {
-                peer,
-                message: SyncMessage::HeaderListRequest(_),
-            } => peer,
+        match sync_rx.recv().await.unwrap() {
+            SyncMessage::HeaderListRequest(_) => {}
             e => panic!("Unexpected event type: {e:?}"),
         };
         messaging_handle_2
@@ -157,7 +152,7 @@ where
         e => panic!("invalid event received: {e:?}"),
     }
 
-    shutdown.store(true, Ordering::SeqCst);
+    shutdown.store(true);
     let _ = shutdown_sender.send(());
     let _ = sync1_handle.await.unwrap();
     shutdown_trigger.initiate();

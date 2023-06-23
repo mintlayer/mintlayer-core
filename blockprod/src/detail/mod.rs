@@ -15,10 +15,7 @@
 
 pub mod job_manager;
 
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    mpsc, Arc,
-};
+use std::sync::{mpsc, Arc};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
 use chainstate_types::{
@@ -45,10 +42,11 @@ use mempool::{
     MempoolHandle,
 };
 use tokio::sync::oneshot;
+use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    detail::job_manager::{JobKey, JobManager},
+    detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
     BlockProductionError,
 };
 
@@ -64,7 +62,7 @@ pub struct BlockProduction {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
-    job_manager: JobManager,
+    job_manager_handle: JobManagerHandle,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
@@ -76,14 +74,14 @@ impl BlockProduction {
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
-        let job_manager = JobManager::new(chainstate_handle.clone());
+        let job_manager_handle = Box::new(JobManagerImpl::new(chainstate_handle.clone()));
 
         let block_production = Self {
             chain_config,
             chainstate_handle,
             mempool_handle,
             time_getter,
-            job_manager,
+            job_manager_handle,
             mining_thread_pool,
         };
 
@@ -94,15 +92,20 @@ impl BlockProduction {
         &self.time_getter
     }
 
+    #[cfg(test)]
+    fn set_job_manager(&mut self, job_manager_handle: JobManagerHandle) {
+        self.job_manager_handle = job_manager_handle
+    }
+
     pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
-        self.job_manager
+        self.job_manager_handle
             .stop_all_jobs()
             .await
             .map_err(BlockProductionError::JobManagerError)
     }
 
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {
-        Ok(self.job_manager.stop_job(job_key).await? == 1)
+        Ok(self.job_manager_handle.stop_job(job_key).await? == 1)
     }
 
     pub async fn collect_transactions(
@@ -245,16 +248,16 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let stop_flag = Arc::new(AtomicBool::new(false));
+        let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
-            self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
+            self.job_manager_handle.add_job(custom_id, tip_at_start.block_id()).await?;
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
         let (job_stopper_function, job_finished_receiver) =
-            self.job_manager.make_job_stopper_function();
+            self.job_manager_handle.make_job_stopper_function();
         let _job_stopper_destructor = OnceDestructor::new(move || job_stopper_function(job_key));
 
         // Unlike Proof of Work, which can vary any header field when
@@ -274,7 +277,7 @@ impl BlockProduction {
                 .add_int_seconds(1)
                 .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
 
-            Arc::new(AtomicU64::new(tip_plus_one.as_int_seconds()))
+            Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
         };
 
         let max_block_timestamp = {
@@ -292,12 +295,11 @@ impl BlockProduction {
         loop {
             {
                 // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
-                let last_used_block_timestamp = BlockTimestamp::from_int_seconds(
-                    last_timestamp_seconds_used.load(Ordering::SeqCst),
-                );
+                let last_used_block_timestamp =
+                    BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
                 if last_used_block_timestamp >= max_block_timestamp {
-                    stop_flag.store(true, Ordering::Relaxed);
+                    stop_flag.store(true);
                     return Err(BlockProductionError::TryAgainLater);
                 }
             }
@@ -350,7 +352,7 @@ impl BlockProduction {
 
             tokio::select! {
                 _ = cancel_receiver.recv() => {
-                    stop_flag.store(true, Ordering::Relaxed);
+                    stop_flag.store(true);
 
                     // This can fail if the mining thread has already finished
                     let _ended = ended_receiver.recv();
@@ -375,13 +377,25 @@ impl BlockProduction {
         }
     }
 
+    // TODO: here, `block_timestamp_seconds` is a scary thing because, by being AcqRel, it might
+    // imply that we perform thread synchronization through it. Which would be a bad thing
+    // to do, because thread synchronization via atomics is too low-level and non-trivial
+    // to implement correctly. Normally, it should be properly encapsulated, but here we
+    // share the variable across packages, passing it to `consensus::finalize_consensus_data`.
+    // So it's better to get rid of it ASAP.
+    // (Note that we don't really do any thread synchronization through it currently; we made
+    // it "AcqRel" just in case, for extra peace of mind.)
+    // One way of removing it would be to pass the initial value via a non-atomic parameter and
+    // return the updated value back; in `finalize_consensus_data` and its callees it can
+    // be done simply via the functions' return values. And here in `spawn_block_solver` we
+    // already have a one-shot `result_sender`, which may be used for that purpose.
     #[allow(clippy::too_many_arguments)]
     fn spawn_block_solver(
         &self,
         current_tip_index: &GenBlockIndex,
-        stop_flag: Arc<AtomicBool>,
+        stop_flag: Arc<RelaxedAtomicBool>,
         block_body: &BlockBody,
-        block_timestamp_seconds: Arc<AtomicU64>,
+        block_timestamp_seconds: Arc<AcqRelAtomicU64>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -395,8 +409,7 @@ impl BlockProduction {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
-            let block_timestamp =
-                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
+            let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),

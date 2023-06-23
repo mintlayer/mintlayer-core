@@ -15,7 +15,10 @@
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
-    chain::{tokens::OutputValue, DelegationId, PoolId},
+    chain::{
+        tokens::{OutputValue, TokenData},
+        DelegationId, PoolId,
+    },
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -72,6 +75,24 @@ impl TxOutput {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
+        }
+    }
+
+    pub fn is_token_or_nft_issuance(&self) -> bool {
+        match self {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                match v {
+                    OutputValue::Token(data) => match data.as_ref() {
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
+                        TokenData::TokenTransfer(_) => false,
+                    },
+                    OutputValue::Coin(_) => false,
+                }
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => false,
         }
     }
 }

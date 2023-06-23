@@ -17,6 +17,7 @@ mod jobs_container;
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{chain::GenBlock, primitives::Id};
 use logging::log;
@@ -100,6 +101,73 @@ pub struct JobManager {
     new_job_sender: UnboundedSender<NewJobEvent>,
     stop_job_sender: UnboundedSender<(Option<JobKey>, oneshot::Sender<usize>)>,
     shutdown_sender: UnboundedSender<oneshot::Sender<usize>>,
+}
+
+#[async_trait]
+pub trait JobManagerInterface: Send + Sync {
+    async fn get_job_count(&self) -> Result<usize, JobManagerError>;
+
+    async fn add_job(
+        &self,
+        custom_id: Option<Vec<u8>>,
+        block_id: Id<GenBlock>,
+    ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
+
+    async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
+
+    async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError>;
+
+    /// For destructors, we make a job stopper that will send a stop signal
+    ///
+    /// Returns both the function and a oneshot-receiver.
+    ///
+    /// Once the job is dropped from the job manager, the receiver will be notified.
+    fn make_job_stopper_function(
+        &self,
+    ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>);
+}
+
+pub type JobManagerHandle = Box<dyn JobManagerInterface>;
+
+pub struct JobManagerImpl {
+    job_manager: JobManager,
+}
+
+impl JobManagerImpl {
+    pub fn new(chainstate_handle: ChainstateHandle) -> Self {
+        Self {
+            job_manager: JobManager::new(chainstate_handle),
+        }
+    }
+}
+
+#[async_trait]
+impl JobManagerInterface for JobManagerImpl {
+    async fn get_job_count(&self) -> Result<usize, JobManagerError> {
+        self.job_manager.get_job_count().await
+    }
+
+    async fn add_job(
+        &self,
+        custom_id: Option<Vec<u8>>,
+        block_id: Id<GenBlock>,
+    ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
+        self.job_manager.add_job(custom_id, block_id).await
+    }
+
+    async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError> {
+        self.job_manager.stop_all_jobs().await
+    }
+
+    async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError> {
+        self.job_manager.stop_job(job_key).await
+    }
+
+    fn make_job_stopper_function(
+        &self,
+    ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>) {
+        self.job_manager.make_job_stopper_function()
+    }
 }
 
 /// Helper function that calls a closure if the event is `Some`.
@@ -252,11 +320,6 @@ impl JobManager {
         result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
 
-    /// For destructors, we make a job stopper that will send a stop signal
-    ///
-    /// Returns both the function and a oneshot-receiver.
-    ///
-    /// Once the job is dropped from the job manager, the receiver will be notified.
     #[must_use]
     pub fn make_job_stopper_function(
         &self,
@@ -287,3 +350,35 @@ impl Drop for JobManager {
 }
 
 // TODO: tests
+#[cfg(test)]
+pub mod tests {
+    use common::{chain::GenBlock, primitives::Id};
+    use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+
+    use crate::detail::job_manager::{JobManagerError, JobManagerInterface};
+
+    use super::*;
+
+    mockall::mock! {
+        pub JobManager {}
+
+        #[async_trait::async_trait]
+        impl JobManagerInterface for JobManager {
+            async fn get_job_count(&self) -> Result<usize, JobManagerError>;
+
+            async fn add_job(
+                &self,
+                custom_id: Option<Vec<u8>>,
+                block_id: Id<GenBlock>,
+            ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
+
+            async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
+
+            async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError>;
+
+            fn make_job_stopper_function(
+                &self,
+            ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>);
+        }
+    }
+}

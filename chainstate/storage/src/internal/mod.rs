@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::{BlockIndex, EpochData};
+use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
@@ -248,9 +248,16 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
-
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+    }
+}
+
+impl<B: storage::Backend> EpochStorageRead for Store<B> {
+    delegate_to_transaction! {
+        fn get_epoch_data(
+            &self,
+            epoch_index: EpochIndex,
+        ) -> crate::Result<Option<EpochData>>;
     }
 }
 
@@ -400,11 +407,20 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
 
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
-        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
-        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
-
         fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
+    }
+}
+
+impl<B: storage::Backend> EpochStorageWrite for Store<B> {
+    delegate_to_transaction! {
+        fn set_epoch_data(
+            &mut self,
+            epoch_index: u64,
+            epoch_data: &EpochData,
+        ) -> crate::Result<()>;
+
+        fn del_epoch_data(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
     }
 }
 

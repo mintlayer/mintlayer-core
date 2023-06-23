@@ -20,7 +20,7 @@
 use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr},
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -48,6 +48,7 @@ use p2p::{
     P2pEventHandler,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     crawler_p2p::crawler_manager::{
@@ -125,7 +126,7 @@ impl NetworkingService for MockNetworkingService {
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
-        _shutdown: Arc<AtomicBool>,
+        _shutdown: Arc<SeqCstAtomicBool>,
         _shutdown_receiver: oneshot::Receiver<()>,
         _subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> p2p::Result<(

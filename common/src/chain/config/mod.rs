@@ -53,6 +53,8 @@ const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     };
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
 
+const DEFAULT_MAX_DEPTH_FOR_REORG: BlockDistance = BlockDistance::new(1000);
+
 pub const BIP44_PATH: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(44).0);
 pub const MINTLAYER_COIN_TYPE: ChildNumber =
     ChildNumber::from_hardened(U31::from_u32_with_msb(0x4D4C).0);
@@ -133,6 +135,7 @@ pub struct ChainConfig {
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
     max_no_signature_data_size: usize,
+    max_depth_for_reorg: BlockDistance,
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
@@ -344,6 +347,17 @@ impl ChainConfig {
     #[must_use]
     pub fn token_max_description_len(&self) -> usize {
         self.token_max_description_len
+    }
+
+    #[must_use]
+    pub fn max_depth_for_reorg(&self) -> BlockDistance {
+        self.max_depth_for_reorg
+    }
+
+    #[must_use]
+    pub fn min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
+        let result = current_tip_height - self.max_depth_for_reorg;
+        result.unwrap_or(BlockHeight::new(0))
     }
 
     /// The maximum length of a name of a token

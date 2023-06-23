@@ -15,16 +15,16 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::pos::{calculate_new_target, pos_mine};
+use super::helpers::pos::calculate_new_target;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
 };
-use chainstate_storage::{BlockchainStorageRead, Transactional};
+use chainstate_storage::Transactional;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
-use chainstate_types::vrf_tools::construct_transcript;
+use chainstate_types::{vrf_tools::construct_transcript, EpochStorageRead};
 use common::{
     chain::{
         block::{
@@ -167,7 +167,7 @@ fn stable_block_time(#[case] seed: Seed) {
         )
         .unwrap();
 
-        let (pos_data, valid_block_timestamp) = pos_mine(
+        let (pos_data, valid_block_timestamp) = chainstate_test_framework::pos_mine(
             initial_block_time,
             UtxoOutPoint::new(best_block_source_id, 0),
             InputWitness::Standard(kernel_sig),

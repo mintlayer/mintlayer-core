@@ -14,8 +14,9 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, pool::Mempool, tx_accumulator::TransactionAccumulator, GetMemoryUsage,
-    MempoolEvent, MempoolInterface, MempoolSubsystemInterface, TxStatus,
+    error::Error, pool::memory_usage_estimator::StoreMemoryUsageEstimator,
+    tx_accumulator::TransactionAccumulator, MempoolEvent, MempoolInterface,
+    MempoolSubsystemInterface, TxStatus,
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -29,28 +30,27 @@ use subsystem::{CallRequest, ShutdownRequest};
 use tokio::sync::mpsc;
 use utils::tap_error_log::LogError;
 
+type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
+
 /// Mempool initializer
 ///
 /// Contains all the information required to spin up the mempool subsystem
-struct MempoolInit<M> {
+struct MempoolInit {
     chain_config: Arc<ChainConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
-    memory_usage_estimator: M,
 }
 
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInit<M> {
-    pub fn new(
+impl MempoolInit {
+    fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         time_getter: TimeGetter,
-        memory_usage_estimator: M,
     ) -> Self {
         Self {
             chain_config,
             chainstate_handle,
             time_getter,
-            memory_usage_estimator,
         }
     }
 
@@ -71,7 +71,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInit<M> {
 }
 
 #[async_trait::async_trait]
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for MempoolInit<M> {
+impl MempoolSubsystemInterface for MempoolInit {
     async fn run(
         self,
         mut call_rq: CallRequest<dyn MempoolInterface>,
@@ -82,7 +82,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for Me
             self.chain_config,
             self.chainstate_handle,
             self.time_getter,
-            self.memory_usage_estimator,
+            StoreMemoryUsageEstimator,
         );
 
         log::trace!("Subscribing to chainstate events");
@@ -103,7 +103,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for Me
     }
 }
 
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> {
+impl MempoolInterface for Mempool {
     fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
         self.add_transaction(tx)
     }
@@ -149,19 +149,10 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> 
 }
 
 /// Mempool constructor
-pub fn make_mempool<M>(
+pub fn make_mempool(
     chain_config: Arc<ChainConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
-    memory_usage_estimator: M,
-) -> impl MempoolSubsystemInterface
-where
-    M: GetMemoryUsage + 'static + Send + Sync,
-{
-    MempoolInit::new(
-        chain_config,
-        chainstate_handle,
-        time_getter,
-        memory_usage_estimator,
-    )
+) -> impl MempoolSubsystemInterface {
+    MempoolInit::new(chain_config, chainstate_handle, time_getter)
 }
