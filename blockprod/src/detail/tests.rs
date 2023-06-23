@@ -355,11 +355,53 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn multiple_jobs_with_wait(#[case] seed: Seed) {
+    async fn pull_consensus_data_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn tip_changed() {
+        // TODO: mock chainstate to return new tip
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_source_mempool() {
+        // TODO: mock mempool to return transactions
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_source_mempool_error() {
+        // TODO: mock mempool to return transactions
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_source_provided() {
+        // TODO: supply transactions
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_received() {
+        // TODO: mock job manager
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solver_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solver_header_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn new_block_error() {
+        // TODO
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn solved_ignore_consensus() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
         let join_handle = tokio::spawn({
