@@ -636,7 +636,7 @@ mod produce_block {
                     UpgradeVersion::ConsensusUpgrade(consensus_types[next_consensus_type].clone()),
                 ));
 
-                next_height_consensus_change = next_height_consensus_change + rng.gen_range(1..50);
+                next_height_consensus_change += rng.gen_range(1..50);
             }
 
             let net_upgrades =

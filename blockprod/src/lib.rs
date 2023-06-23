@@ -97,7 +97,8 @@ mod tests {
     use std::time::Duration;
 
     use chainstate::{
-        BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy, BlockIndex,
+        BlockIndex, BlockSource, ChainstateConfig, ChainstateHandle,
+        DefaultTransactionVerificationStrategy,
     };
     use chainstate_storage::inmemory::Store;
     use common::{
@@ -122,7 +123,10 @@ mod tests {
 
     use super::*;
 
-    pub async fn assert_process_block(chainstate: &ChainstateHandle, new_block: Block) -> BlockIndex {
+    pub async fn assert_process_block(
+        chainstate: &ChainstateHandle,
+        new_block: Block,
+    ) -> BlockIndex {
         chainstate
             .call_mut(move |this| {
                 let new_block_index = this
