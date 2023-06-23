@@ -39,11 +39,9 @@ use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     MempoolHandle,
 };
+use utils::atomics::AcqRelAtomicBool;
 use utils::const_value::ConstValue;
-use utils::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use utils::sync::Arc;
 
 use crate::{
     config::P2pConfig,
@@ -74,7 +72,7 @@ pub struct Peer<T: NetworkingService> {
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
-    is_initial_block_download: Arc<AtomicBool>,
+    is_initial_block_download: Arc<AcqRelAtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
     known_headers: Vec<SignedBlockHeader>,
@@ -113,7 +111,7 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
-        is_initial_block_download: Arc<AtomicBool>,
+        is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
         let local_services: Services = (*p2p_config.node_type).into();
@@ -229,7 +227,7 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             // TODO: Check if a peer has permissions to ask for headers during the initial block download.
             log::debug!("Ignoring headers request because the node is in initial block download");
             return Ok(());
@@ -257,7 +255,7 @@ where
             block_ids.len(),
         );
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             log::debug!("Ignoring blocks request because the node is in initial block download");
             return Ok(());
         }
@@ -525,7 +523,7 @@ where
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!("Transaction announcement from {} peer: {tx}", self.id());
 
-        if self.is_initial_block_download.load(Ordering::Acquire) {
+        if self.is_initial_block_download.load() {
             log::debug!(
                 "Ignoring transaction announcement because the node is in initial block download"
             );
