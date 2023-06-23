@@ -187,10 +187,10 @@ mod test {
 
             // we use unordered block times, and ensure that the median will be in the right spot
             let block1_time = current_time.load() + 1;
-            let block2_time = current_time.load() + 10;
-            let block3_time = current_time.load() + 17;
+            let block2_time = current_time.load() + 20;
+            let block3_time = current_time.load() + 10;
             let block4_time = current_time.load() + 18;
-            let block5_time = current_time.load() + 20;
+            let block5_time = current_time.load() + 17;
 
             let block1 = make_block(chainstate.chain_config.genesis_block_id(), block1_time);
             let block2 = make_block(block1.get_id().into(), block2_time);
@@ -244,21 +244,21 @@ mod test {
                 // median time for block of height 3
                 let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block3.get_id().into());
-                assert_eq!(median, BlockTimestamp::from_int_seconds(block2_time));
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 4
                 let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block4.get_id().into());
-                assert_eq!(median, BlockTimestamp::from_int_seconds(block2_time));
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 5
                 let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block5.get_id().into());
-                assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block5_time));
             }
         });
     }
