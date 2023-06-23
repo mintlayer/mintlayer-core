@@ -27,22 +27,22 @@ use mempool::{
     MempoolEvent, MempoolInterface, MempoolSubsystemInterface, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
-use utils::atomics::RelaxedAtomicBool;
+use utils::atomics::AcqRelAtomicBool;
 
 #[derive(Clone)]
 pub struct MempoolInterfaceMock {
-    pub add_transaction_called: Arc<RelaxedAtomicBool>,
-    pub add_transaction_should_error: Arc<RelaxedAtomicBool>,
-    pub get_all_called: Arc<RelaxedAtomicBool>,
-    pub get_all_should_error: Arc<RelaxedAtomicBool>,
-    pub contains_transaction_called: Arc<RelaxedAtomicBool>,
-    pub contains_transaction_should_error: Arc<RelaxedAtomicBool>,
-    pub collect_txs_called: Arc<RelaxedAtomicBool>,
-    pub collect_txs_should_error: Arc<RelaxedAtomicBool>,
-    pub subscribe_to_events_called: Arc<RelaxedAtomicBool>,
-    pub subscribe_to_events_should_error: Arc<RelaxedAtomicBool>,
-    pub run_called: Arc<RelaxedAtomicBool>,
-    pub run_should_error: Arc<RelaxedAtomicBool>,
+    pub add_transaction_called: Arc<AcqRelAtomicBool>,
+    pub add_transaction_should_error: Arc<AcqRelAtomicBool>,
+    pub get_all_called: Arc<AcqRelAtomicBool>,
+    pub get_all_should_error: Arc<AcqRelAtomicBool>,
+    pub contains_transaction_called: Arc<AcqRelAtomicBool>,
+    pub contains_transaction_should_error: Arc<AcqRelAtomicBool>,
+    pub collect_txs_called: Arc<AcqRelAtomicBool>,
+    pub collect_txs_should_error: Arc<AcqRelAtomicBool>,
+    pub subscribe_to_events_called: Arc<AcqRelAtomicBool>,
+    pub subscribe_to_events_should_error: Arc<AcqRelAtomicBool>,
+    pub run_called: Arc<AcqRelAtomicBool>,
+    pub run_should_error: Arc<AcqRelAtomicBool>,
 }
 
 impl Default for MempoolInterfaceMock {
@@ -54,18 +54,18 @@ impl Default for MempoolInterfaceMock {
 impl MempoolInterfaceMock {
     pub fn new() -> MempoolInterfaceMock {
         MempoolInterfaceMock {
-            add_transaction_called: Arc::new(RelaxedAtomicBool::new(false)),
-            add_transaction_should_error: Arc::new(RelaxedAtomicBool::new(false)),
-            get_all_called: Arc::new(RelaxedAtomicBool::new(false)),
-            get_all_should_error: Arc::new(RelaxedAtomicBool::new(false)),
-            contains_transaction_called: Arc::new(RelaxedAtomicBool::new(false)),
-            contains_transaction_should_error: Arc::new(RelaxedAtomicBool::new(false)),
-            collect_txs_called: Arc::new(RelaxedAtomicBool::new(false)),
-            collect_txs_should_error: Arc::new(RelaxedAtomicBool::new(false)),
-            subscribe_to_events_called: Arc::new(RelaxedAtomicBool::new(false)),
-            subscribe_to_events_should_error: Arc::new(RelaxedAtomicBool::new(false)),
-            run_called: Arc::new(RelaxedAtomicBool::new(false)),
-            run_should_error: Arc::new(RelaxedAtomicBool::new(false)),
+            add_transaction_called: Arc::new(AcqRelAtomicBool::new(false)),
+            add_transaction_should_error: Arc::new(AcqRelAtomicBool::new(false)),
+            get_all_called: Arc::new(AcqRelAtomicBool::new(false)),
+            get_all_should_error: Arc::new(AcqRelAtomicBool::new(false)),
+            contains_transaction_called: Arc::new(AcqRelAtomicBool::new(false)),
+            contains_transaction_should_error: Arc::new(AcqRelAtomicBool::new(false)),
+            collect_txs_called: Arc::new(AcqRelAtomicBool::new(false)),
+            collect_txs_should_error: Arc::new(AcqRelAtomicBool::new(false)),
+            subscribe_to_events_called: Arc::new(AcqRelAtomicBool::new(false)),
+            subscribe_to_events_should_error: Arc::new(AcqRelAtomicBool::new(false)),
+            run_called: Arc::new(AcqRelAtomicBool::new(false)),
+            run_should_error: Arc::new(AcqRelAtomicBool::new(false)),
         }
     }
 }
