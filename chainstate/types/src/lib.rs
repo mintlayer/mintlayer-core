@@ -23,6 +23,7 @@ pub use crate::{
     block_index::BlockIndex,
     block_index_handle::BlockIndexHandle,
     block_index_history_iter::BlockIndexHistoryIterator,
+    block_status::{BlockStatus, BlockValidationStage},
     epoch_data::EpochData,
     epoch_data_cache::{
         ConsumedEpochDataCache, EpochDataCache, EpochStorageRead, EpochStorageWrite,
@@ -38,6 +39,7 @@ mod ancestor;
 mod block_index;
 mod block_index_handle;
 mod block_index_history_iter;
+mod block_status;
 mod epoch_data;
 mod epoch_data_cache;
 mod error;

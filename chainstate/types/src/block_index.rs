@@ -20,9 +20,9 @@ use common::primitives::{BlockHeight, Id, Idable, H256};
 use common::Uint256;
 use serialization::{Decode, Encode};
 
-use crate::GenBlockIndex;
+use crate::{BlockStatus, GenBlockIndex};
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: SignedBlockHeader,
@@ -30,6 +30,7 @@ pub struct BlockIndex {
     chain_trust: H256,
     height: BlockHeight,
     time_max: BlockTimestamp,
+    status: BlockStatus,
 }
 
 impl BlockIndex {
@@ -39,6 +40,7 @@ impl BlockIndex {
         some_ancestor: Id<GenBlock>,
         height: BlockHeight,
         time_max: BlockTimestamp,
+        status: BlockStatus,
     ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
@@ -48,6 +50,7 @@ impl BlockIndex {
             chain_trust: chain_trust.into(),
             height,
             time_max,
+            status,
         }
     }
 
@@ -81,6 +84,19 @@ impl BlockIndex {
 
     pub fn some_ancestor(&self) -> &Id<GenBlock> {
         &self.some_ancestor
+    }
+
+    pub fn status(&self) -> BlockStatus {
+        self.status
+    }
+
+    pub fn set_status(&mut self, status: BlockStatus) {
+        self.status = status;
+    }
+
+    pub fn with_status(mut self, status: BlockStatus) -> Self {
+        self.status = status;
+        self
     }
 
     pub fn into_block_header(self) -> SignedBlockHeader {

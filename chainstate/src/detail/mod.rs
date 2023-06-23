@@ -50,7 +50,8 @@ use chainstate_storage::{
     TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, EpochData, EpochStorageWrite, PropertyQueryError,
+    pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
+    EpochStorageWrite, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -273,52 +274,180 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
+    /// Create a read-write transaction, call `main_action` on it and commit.
+    /// If committing fails, repeat the whole process again until it succeeds or
+    /// the maximum number of commit attempts is reached.
+    /// If the maximum number of attempts is reached, use `on_db_err` to create
+    /// a BlockError and return it.
+    /// On each iteration, before doing anything else, call `on_new_attempt`
+    /// (this can be used for logging).
+    fn with_rw_tx<MainAction, OnNewAttempt, OnDbErr, Res>(
+        &mut self,
+        mut main_action: MainAction,
+        mut on_new_attempt: OnNewAttempt,
+        on_db_err: OnDbErr,
+    ) -> Result<Res, BlockError>
+    where
+        MainAction:
+            FnMut(&mut chainstateref::ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, BlockError>,
+        OnNewAttempt: FnMut(/*attempt_number:*/ usize),
+        OnDbErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> BlockError,
+    {
+        let mut attempts_count = 0;
+        loop {
+            on_new_attempt(attempts_count);
+            attempts_count += 1;
+
+            let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
+            let result = main_action(&mut chainstate_ref).log_err()?;
+            let db_commit_result = chainstate_ref.commit_db_tx().log_err();
+
+            match db_commit_result {
+                Ok(_) => return Ok(result),
+                Err(err) => {
+                    if attempts_count >= *self.chainstate_config.max_db_commit_attempts {
+                        return Err(on_db_err(attempts_count, err));
+                    }
+                }
+            }
+        }
+    }
+
+    /// This is similar to `with_rw_tx_for_block_id`, but it also maintains a mutable state that
+    /// is passed to `func` and then returned to the caller.
+    /// Note that the state is reset to `initial_state` on each commit attempt and the returned
+    /// state is the one from the last commit attempt.
+    fn with_rw_tx_and_state<State, MainAction, OnNewAttempt, OnDbErr, Res>(
+        &mut self,
+        initial_state: &State,
+        mut main_action: MainAction,
+        on_new_attempt: OnNewAttempt,
+        on_db_err: OnDbErr,
+    ) -> (State, Result<Res, BlockError>)
+    where
+        State: Clone,
+        MainAction: FnMut(
+            &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
+            &mut State,
+        ) -> Result<Res, BlockError>,
+        OnNewAttempt: FnMut(/*attempt_number:*/ usize),
+        OnDbErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> BlockError,
+    {
+        // Note: the purpose of the Option here is just to get rid of extra clone at the beginning.
+        let mut state = None;
+
+        let result = self.with_rw_tx(
+            |chainstate_ref| main_action(chainstate_ref, state.insert(initial_state.clone())),
+            on_new_attempt,
+            on_db_err,
+        );
+
+        // Note: this "or_else" part is only possible in the degenerate case where with_rw_tx
+        // doesn't invoke the closure even once.
+        let state = state.unwrap_or_else(|| initial_state.clone());
+        (state, result)
+    }
+
+    /// Integrate the block into the blocktree, performing all the necessary checks and
+    /// updating `block_status` after each successful check.
+    /// The returned bool indicates whether a reorg has occurred.
+    fn integrate_block(
+        chainstate_ref: &mut chainstateref::ChainstateRef<TxRw<'_, S>, V>,
+        block: &WithId<Block>,
+        block_index: &BlockIndex,
+        block_status: &mut BlockStatus,
+    ) -> Result<bool, BlockError> {
+        chainstate_ref.check_block_parent(block)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::ParentOk);
+
+        chainstate_ref.check_block(block).map_err(BlockError::CheckBlockFailed)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
+
+        // Note: we have to persist BlockIndex too, because it will be used
+        // by activate_best_chain below. There is no point in saving
+        // an intermediate BlockStatus though, so we ignore block_status here.
+        chainstate_ref.set_new_block_index(block_index)?;
+        chainstate_ref.persist_block(block)?;
+
+        let best_block_id =
+            chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+
+        let reorg_occurred = chainstate_ref.activate_best_chain(block_index, &best_block_id)?;
+        block_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+
+        Ok(reorg_occurred)
+    }
+
+    // Attempt to process the block. On success, return Some(block_index_of_the_passed_block)
+    // if a reorg has occurred and the passed block is now the best block, otherwise return None.
     fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let block = self.check_legitimate_orphan(block_source, block).log_err()?;
-
         let block_id = block.get_id();
-        let mut attempt_number = 0;
-        loop {
-            log::info!("Processing block: {}", block_id);
 
-            let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
-
-            let best_block_id = chainstate_ref
-                .get_best_block_id()
-                .map_err(BlockError::BestBlockLoadError)
+        // Ensure that the block being submitted is new to us. If not, bail out immediately,
+        // otherwise create a new block index and continue.
+        let block_index = {
+            let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
+            let existing_block_index = chainstate_ref
+                .get_block_index(&block_id)
+                .map_err(BlockError::BlockLoadError)
                 .log_err()?;
 
-            chainstate_ref
-                .check_block(&block)
-                .map_err(BlockError::CheckBlockFailed)
-                .log_err()?;
-
-            let block_index = chainstate_ref.persist_block(&block).log_err()?;
-            let result =
-                chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
-            let db_commit_result = chainstate_ref.commit_db_tx().log_err();
-            match db_commit_result {
-                Ok(_) => {}
-                Err(err) => {
-                    if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
-                        return Err(BlockError::DatabaseCommitError(
-                            block.get_id(),
-                            *self.chainstate_config.max_db_commit_attempts,
-                            err,
-                        ));
-                    } else {
-                        attempt_number += 1;
-                        continue;
-                    }
-                }
+            if let Some(block_index) = existing_block_index {
+                return if block_index.status().is_valid() {
+                    Err(BlockError::BlockAlreadyProcessed(block_id))
+                } else {
+                    Err(BlockError::InvalidBlockAlreadyProcessed(block_id))
+                };
             }
 
-            return Ok(result);
+            chainstate_ref.new_block_index(&block, BlockStatus::new()).log_err()?
+        };
+
+        // Perform block checks; `check_result` is `Result<bool>`, where the bool indicates
+        // whether a reorg has occurred.
+        let (block_status, check_result) = self.with_rw_tx_and_state(
+            &BlockStatus::new(),
+            |chainstate_ref, block_status| {
+                Self::integrate_block(chainstate_ref, &block, &block_index, block_status)
+            },
+            |attempt_number| {
+                log::info!("Processing block {block_id}, attempt #{attempt_number}");
+            },
+            |attempts_count, db_err| BlockError::BlockCommitError(block_id, attempts_count, db_err),
+        );
+
+        if let Err(err @ BlockError::BlockCommitError(_, _, _)) = check_result {
+            // If we got here, then the block checks have succeeded, but the DB has failed.
+            // Attempts to save the new status in BlockIndex in this situation will
+            // probably fail too. Moreover, even if we succeed, we'll get a strange situation
+            // where there is a BlockIndex in the DB with a "fully checked" status, but the
+            // block itself is missing. So we bail out in this case.
+            return Err(err);
         }
+
+        let block_index = block_index.with_status(block_status);
+
+        // Update block index status.
+        let status_update_result = self.with_rw_tx(
+            |chainstate_ref| chainstate_ref.set_block_status(&block_index),
+            |attempt_number| {
+                log::info!("Updating status for block {block_id}, attempt #{attempt_number}");
+            },
+            |attempts_count, db_err| {
+                BlockError::BlockStatusCommitError(block_id, attempts_count, db_err)
+            },
+        );
+
+        // If both block validation and block index update failed, we want to return the first
+        // error, so we check it first.
+        let result = check_result?.then_some(block_index);
+        status_update_result?;
+        Ok(result)
     }
 
     /// process orphan blocks that depend on the given block, recursively

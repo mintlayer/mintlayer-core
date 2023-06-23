@@ -14,6 +14,7 @@ logging = { path = '../../logging' }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage/" }
 
-thiserror.workspace = true
-parity-scale-codec.workspace = true
+enum-iterator.workspace = true
 generic-array.workspace = true
+parity-scale-codec.workspace = true
+thiserror.workspace = true

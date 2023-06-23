@@ -35,5 +35,6 @@ tokio.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
+storage = { path = "../storage" }
 
 rstest.workspace = true

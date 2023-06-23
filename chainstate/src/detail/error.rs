@@ -58,8 +58,18 @@ pub enum BlockError {
     BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
-    #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
-    DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
+    #[error("Block {0} has already been processed")]
+    BlockAlreadyProcessed(Id<Block>),
+    #[error("Block {0} has already been processed and marked as invalid")]
+    InvalidBlockAlreadyProcessed(Id<Block>),
+    #[error("Block {0} has invalid parent block")]
+    InvalidParent(Id<Block>),
+    #[error(
+        "Failed to commit block data to database for block {0} after {1} attempts with error {2}"
+    )]
+    BlockCommitError(Id<Block>, usize, chainstate_storage::Error),
+    #[error("Failed to commit block status update to database for block {0} after {1} attempts with error {2}")]
+    BlockStatusCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
     #[error("TransactionVerifier error: {0}")]
@@ -169,7 +179,7 @@ pub enum InitializationError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("{0}")]
-    PropertyQuery(#[from] PropertyQueryError),
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Not at genesis but block at height 1 not available")]
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
