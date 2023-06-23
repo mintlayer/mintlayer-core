@@ -184,12 +184,6 @@ mod tests {
     }
 
     pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
-        let min_stake_pool_pledge = {
-            // throw away just to get value
-            let chain_config = create_unit_test_config();
-            chain_config.min_stake_pool_pledge()
-        };
-
         let mut rng = make_seedable_rng(seed);
 
         let (genesis_stake_private_key, genesis_stake_public_key) =
@@ -198,21 +192,29 @@ mod tests {
         let (genesis_vrf_private_key, genesis_vrf_public_key) =
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let create_genesis_pool_txoutput = TxOutput::CreateStakePool(
-            H256::zero().into(),
-            Box::new(StakePoolData::new(
-                min_stake_pool_pledge,
-                Destination::PublicKey(genesis_stake_public_key.clone()),
-                genesis_vrf_public_key,
-                Destination::PublicKey(genesis_stake_public_key),
-                PerThousand::new(1000).expect("Valid per thousand"),
-                Amount::ZERO,
-            )),
-        );
+        let create_genesis_pool_txoutput = {
+            let min_stake_pool_pledge = {
+                // throw away just to get value
+                let chain_config = create_unit_test_config();
+                chain_config.min_stake_pool_pledge()
+            };
+
+            TxOutput::CreateStakePool(
+                H256::zero().into(),
+                Box::new(StakePoolData::new(
+                    min_stake_pool_pledge,
+                    Destination::PublicKey(genesis_stake_public_key.clone()),
+                    genesis_vrf_public_key,
+                    Destination::PublicKey(genesis_stake_public_key),
+                    PerThousand::new(1000).expect("Valid per thousand"),
+                    Amount::ZERO,
+                )),
+            )
+        };
 
         let pos_chain_config = {
             let genesis_block = Genesis::new(
-                "blockprod-unit-tests".into(),
+                "blockprod-testing".into(),
                 BlockTimestamp::from_int_seconds(
                     TimeGetter::default()
                         .get_time()
