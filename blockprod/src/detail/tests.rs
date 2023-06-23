@@ -1127,3 +1127,18 @@ mod stop_job {
         assert_eq!(result, Ok(true), "Unexpected return value");
     }
 }
+
+async fn assert_job_count(block_production: &BlockProduction, expected_jobs_count: usize) {
+    // try for a sufficient amount of time before giving up with an error
+    for _ in 1..100 {
+        let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
+
+        if jobs_count == expected_jobs_count {
+            return;
+        }
+
+        sleep(tokio::time::Duration::from_millis(50)).await;
+    }
+
+    panic!("Job count was unexpected");
+}
