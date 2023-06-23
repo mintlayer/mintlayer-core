@@ -127,16 +127,23 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
 
 impl Activate for UpgradeVersion {}
 
+#[derive(thiserror::Error, Debug)]
+pub enum NetUpgradesInitializeError {
+    #[error("Must be initialized with a non-empty vector of upgrades")]
+    NoUpgrades,
+    #[error("First upgrade must be at genesis")]
+    FirstUpgradeNotAtGenesis,
+}
+
 impl<T: Ord> NetUpgrades<T> {
-    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> anyhow::Result<Self> {
+    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Result<Self, NetUpgradesInitializeError> {
         let mut upgrades = upgrades;
         upgrades.sort_unstable();
 
         match upgrades.first() {
-            Some(&(height, _)) if height == BlockHeight::zero() =>
-                Ok(Self(upgrades)),
-                _ =>
-                Err(anyhow::Error::msg("NetUpgrades must be initialized with a nonempty vector of upgrades with an upgrade at genesis"))
+            Some(&(height, _)) if height == BlockHeight::zero() => Ok(Self(upgrades)),
+            Some(_) => Err(NetUpgradesInitializeError::FirstUpgradeNotAtGenesis),
+            None => Err(NetUpgradesInitializeError::NoUpgrades),
         }
     }
 
@@ -315,7 +322,8 @@ mod tests {
         check(three_height.next_height(), MockVersion::Three);
     }
 
-    fn mock_consensus_upgrades() -> anyhow::Result<NetUpgrades<UpgradeVersion>> {
+    fn mock_consensus_upgrades() -> Result<NetUpgrades<UpgradeVersion>, NetUpgradesInitializeError>
+    {
         let genesis_pow = BlockHeight::new(0);
         let first_pos_upgrade = BlockHeight::new(10_000);
         let back_to_pow = BlockHeight::new(15_000);

@@ -16,7 +16,6 @@ serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
 utils = {path = '../utils'}
 
-anyhow.workspace = true
 bech32.workspace = true
 fixed-hash.workspace = true
 generic-array.workspace = true
