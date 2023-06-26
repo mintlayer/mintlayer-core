@@ -13,10 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use generic_array::{sequence::Split, typenum::U32, GenericArray};
+use hmac::{Hmac, Mac};
 use merlin::Transcript;
 use serialization::{Decode, Encode};
+use sha2::Sha512;
+use zeroize::Zeroize;
 
-use crate::random::{make_true_rng, CryptoRng, Rng};
+use crate::{
+    key::hdkd::{
+        chain_code::{ChainCode, CHAINCODE_LENGTH},
+        child_number::ChildNumber,
+        derivable::{Derivable, DerivationError},
+        derivation_path::DerivationPath,
+    },
+    random::{make_true_rng, CryptoRng, Rng},
+};
 
 pub use self::primitives::VRFReturn;
 
@@ -149,6 +161,97 @@ impl VRFPublicKey {
             }
         }
     }
+}
+
+/// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
+/// the private key at one of the nodes of this tree.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct ExtendedVRFPrivateKey {
+    /// The absolute derivation path that was used to derive this key
+    derivation_path: DerivationPath,
+    /// The chain code is used in BIP32 in conjunction with the private key to allow derivation
+    /// of child keys
+    chain_code: ChainCode,
+    /// The private key to be used to derive child keys of this node using BIP32 rules
+    private_key: VRFPrivateKey,
+}
+
+impl ExtendedVRFPrivateKey {
+    pub fn new_master(
+        seed: &[u8],
+        keykind: VRFKeyKind,
+    ) -> Result<ExtendedVRFPrivateKey, DerivationError> {
+        // Create a new mac with the appropriate BIP39 constant
+        let mut mac = new_hmac_sha_512(b"Bitcoin seed");
+
+        mac.update(seed);
+
+        let (private_key, chain_code) = to_key_and_chain_code(mac, keykind)?;
+
+        Ok(ExtendedVRFPrivateKey {
+            derivation_path: DerivationPath::empty(),
+            private_key,
+            chain_code,
+        })
+    }
+}
+
+impl Derivable for ExtendedVRFPrivateKey {
+    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
+        match self.private_key.key {
+            VRFPrivateKeyHolder::Schnorrkel(key) => {
+                let (private_key, chain_code) = key.derive_child(self.chain_code, num);
+                let new_derivaton_path = {
+                    let mut child_path = self.derivation_path.into_vec();
+                    child_path.push(num);
+                    child_path.try_into()?
+                };
+                Ok(ExtendedVRFPrivateKey {
+                    private_key: VRFPrivateKey {
+                        key: VRFPrivateKeyHolder::Schnorrkel(private_key),
+                    },
+                    chain_code,
+                    derivation_path: new_derivaton_path,
+                })
+            }
+        }
+    }
+
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self.derivation_path
+    }
+}
+
+fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
+    Hmac::<Sha512>::new_from_slice(key).expect("HMAC can take key of any size")
+}
+
+fn to_key_and_chain_code(
+    mac: Hmac<Sha512>,
+    keykind: VRFKeyKind,
+) -> Result<(VRFPrivateKey, ChainCode), DerivationError> {
+    // Finalize the hmac
+    let mut result = mac.finalize().into_bytes();
+
+    // Split in to two 32 byte arrays
+    let (mut secret_key_bytes, mut chain_code_bytes): (
+        GenericArray<u8, U32>,
+        GenericArray<u8, U32>,
+    ) = result.split();
+    result.zeroize();
+
+    // Create the secret key
+    let secret_key = VRFPrivateKey::new_using_random_bytes(&secret_key_bytes, keykind)
+        .map(|(prv, _pub)| prv)
+        .map_err(|_| DerivationError::KeyDerivationError)?;
+    secret_key_bytes.zeroize();
+
+    // Chain code
+    let chain_code: [u8; CHAINCODE_LENGTH] = chain_code_bytes.into();
+    let chain_code = ChainCode::from(chain_code);
+    chain_code_bytes.zeroize();
+
+    Ok((secret_key, chain_code))
 }
 
 #[cfg(test)]

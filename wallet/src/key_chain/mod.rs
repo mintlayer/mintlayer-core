@@ -58,6 +58,7 @@ pub const BIP44_KEY_INDEX: usize = 4;
 
 /// Default cryptography type
 const DEFAULT_KEY_KIND: ExtendedKeyKind = ExtendedKeyKind::Secp256k1Schnorr;
+const DEFAULT_VRF_KEY_KIND: VRFKeyKind = VRFKeyKind::Schnorrkel;
 /// Default size of the number of unused addresses that need to be checked after the
 /// last used address.
 pub const LOOKAHEAD_SIZE: u32 = 20;
@@ -89,8 +90,8 @@ pub enum KeyChainError {
     KeysNotInSameHierarchy,
     #[error("Invalid key purpose index {0}")]
     InvalidKeyPurpose(ChildNumber),
-    #[error("Only one root key is supported")]
-    OnlyOneRootKeyIsSupported,
+    #[error("KeyChain not initialized missing root keys")]
+    KeyChainNotInitialized,
     #[error("Cannot issue more keys, lookahead exceeded")]
     LookAheadExceeded,
     #[error("The provided key is not a root in a hierarchy")]

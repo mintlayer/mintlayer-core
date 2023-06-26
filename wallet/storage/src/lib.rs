@@ -25,8 +25,8 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -64,7 +64,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
-    fn exactly_one_root_key(&self) -> Result<bool>;
+    fn root_keys_exist(&self) -> Result<bool>;
     fn get_keychain_usage_state(
         &self,
         id: &AccountKeyPurposeId,
@@ -83,8 +83,7 @@ pub trait WalletStorageReadLocked {
 
 /// Queries on persistent wallet data with access to encrypted data
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
-    fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
-    fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+    fn get_root_key(&self) -> Result<Option<RootKeys>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -120,8 +119,8 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 
 /// Modifying operations on persistent wallet data with access to encrypted data
 pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
-    fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
-    fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
+    fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
+    fn del_root_key(&mut self) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data for encryption

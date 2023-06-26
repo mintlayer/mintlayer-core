@@ -96,7 +96,7 @@ fn get_address(
     purpose: KeyPurpose,
     address_index: U31,
 ) -> Address {
-    let root_key = MasterKeyChain::mnemonic_to_root_key(mnemonic, None).unwrap();
+    let (root_key, _root_vrf_key) = MasterKeyChain::mnemonic_to_root_key(mnemonic, None).unwrap();
     let mut address_path = make_account_path(chain_config, account_index).into_vec();
     address_path.push(purpose.get_deterministic_index());
     address_path.push(ChildNumber::from_normal(address_index));

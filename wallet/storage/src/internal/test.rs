@@ -21,10 +21,10 @@ use crate::WalletStorageWriteUnlocked;
 
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::random::{CryptoRng, Rng};
+use crypto::vrf::ExtendedVRFPrivateKey;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use wallet_types::RootKeyContent;
-use wallet_types::RootKeyId;
+use wallet_types::keys::RootKeys;
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
     (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
@@ -49,20 +49,28 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut store = Store::new(DefaultBackend::new_in_memory()).unwrap();
-        let (xpriv_key, xpub_key) =
+        let (xpriv_key, _xpub_key) =
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
-        let key_id = RootKeyId::from(xpub_key);
-        let key_content = RootKeyContent::from(xpriv_key);
+        let seed_bytes: Vec<u8> = (0..64).map(|_| rng.gen::<u8>()).collect();
+        let vrf_key = ExtendedVRFPrivateKey::new_master(
+            seed_bytes.as_slice(),
+            crypto::vrf::VRFKeyKind::Schnorrkel,
+        )
+        .unwrap();
+        let key_content = RootKeys {
+            root_key: xpriv_key,
+            root_vrf_key: vrf_key,
+        };
         {
             let mut db_tx = store.transaction_rw_unlocked(None).unwrap();
-            db_tx.set_root_key(&key_id, &key_content).unwrap();
+            db_tx.set_root_key(&key_content).unwrap();
             db_tx.commit().unwrap();
         }
 
         {
             let db_tx = store.transaction_ro_unlocked().unwrap();
             // check it was written correctly
-            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+            assert_eq!(db_tx.get_root_key().unwrap().unwrap(), key_content);
         }
 
         // now encrypt the keys with a new password
@@ -73,7 +81,7 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
         {
             let db_tx = store.transaction_ro_unlocked().unwrap();
             // check it can decrypt it correctly
-            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+            assert_eq!(db_tx.get_root_key().unwrap().unwrap(), key_content);
         }
 
         // after locking the store can't operate on the root keys
@@ -103,7 +111,7 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
             let db_tx = store.transaction_ro_unlocked().unwrap();
 
             // check it can decrypt it correctly
-            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+            assert_eq!(db_tx.get_root_key().unwrap().unwrap(), key_content);
         }
     })
 }

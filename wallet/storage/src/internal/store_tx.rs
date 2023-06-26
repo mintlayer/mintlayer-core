@@ -21,8 +21,8 @@ use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utils::maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError};
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
+    AccountKeyPurposeId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -158,7 +158,7 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
-            fn exactly_one_root_key(&self) -> crate::Result<bool> {
+            fn root_keys_exist(&self) -> crate::Result<bool> {
                 self.storage
                     .get::<db::DBRootKeys, _>()
                     .prefix_iter_decoded(&())
@@ -282,28 +282,12 @@ macro_rules! impl_read_unlocked_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
         impl<'st, B: storage::Backend> WalletStorageReadUnlocked for $TxType<'st, B> {
-            fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
-                Ok(self.read::<db::DBRootKeys, _, _>(id)?.map(|v| {
-                    v.try_take(self.encryption_key).expect("key was checked when unlocked")
-                }))
-            }
-
-            /// Collect and return all keys from the storage
-            fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
-                self.storage
-                    .get::<db::DBRootKeys, _>()
-                    .prefix_iter_decoded(&())
-                    .map_err(crate::Error::from)
-                    .map(|item| {
-                        item.map(|(k, v)| {
-                            (
-                                k,
-                                v.try_take(self.encryption_key)
-                                    .expect("key was checked when unlocked"),
-                            )
-                        })
-                    })
-                    .map(Iterator::collect)
+            fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
+                Ok(
+                    self.read::<db::DBRootKeys, _, _>(&RootKeyConstant {})?.map(|v| {
+                        v.try_take(self.encryption_key).expect("key was checked when unlocked")
+                    }),
+                )
             }
         }
     };
@@ -456,13 +440,16 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
 
 /// Wallet data storage transaction
 impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'st, B> {
-    fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
+    fn set_root_key(&mut self, tx: &RootKeys) -> crate::Result<()> {
         let value = MaybeEncrypted::new(tx, self.encryption_key);
-        self.write::<db::DBRootKeys, _, _, _>(id, value)
+        self.write::<db::DBRootKeys, _, _, _>(RootKeyConstant, value)
     }
 
-    fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
-        self.storage.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+    fn del_root_key(&mut self) -> crate::Result<()> {
+        self.storage
+            .get_mut::<db::DBRootKeys, _>()
+            .del(&RootKeyConstant {})
+            .map_err(Into::into)
     }
 }
 

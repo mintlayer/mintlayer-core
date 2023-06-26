@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::random::{CryptoRng, Rng};
+use crate::{
+    key::hdkd::{chain_code::ChainCode, child_number::ChildNumber},
+    random::{CryptoRng, Rng},
+};
 use merlin::Transcript;
-use schnorrkel::Keypair;
+use schnorrkel::{derive::Derivation, Keypair};
 use serialization::{Decode, Encode};
 
 use self::data::SchnorrkelVRFReturn;
@@ -128,6 +131,33 @@ impl SchnorrkelPrivateKey {
         .vrf_sign(message);
 
         SchnorrkelVRFReturn::new(io.to_preout(), proof)
+    }
+
+    pub fn derive_child(
+        &self,
+        chain_code: ChainCode,
+        child_number: ChildNumber,
+    ) -> (Self, ChainCode) {
+        if child_number.is_hardened() {
+            let (mini_secret, new_chain_code) = self.key.hard_derive_mini_secret_key(
+                Some(schnorrkel::derive::ChainCode(chain_code.into_array())),
+                child_number.into_encoded_be_bytes(),
+            );
+
+            (
+                Self {
+                    key: mini_secret.expand(schnorrkel::ExpansionMode::Uniform),
+                },
+                new_chain_code.0.into(),
+            )
+        } else {
+            let (secret_key, new_chain_code) = self.key.derived_key_simple(
+                schnorrkel::derive::ChainCode(chain_code.into_array()),
+                child_number.into_encoded_be_bytes(),
+            );
+
+            (Self { key: secret_key }, new_chain_code.0.into())
+        }
     }
 }
 
