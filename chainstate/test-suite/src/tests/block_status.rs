@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, BlockSource, ChainstateError};
+use chainstate::{BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -43,7 +43,7 @@ fn some_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn good_block(#[case] seed: Seed) {
+fn process_good_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -65,11 +65,11 @@ fn good_block(#[case] seed: Seed) {
     });
 }
 
-// Check a failure due to a bad parent block.
+// Check a process_block failure due to a bad parent.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn bad_parent(#[case] seed: Seed) {
+fn process_block_with_bad_parent(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -105,7 +105,9 @@ fn bad_parent(#[case] seed: Seed) {
         let error = tf.process_block(block2, BlockSource::Local).unwrap_err();
         assert_eq!(
             error,
-            ChainstateError::ProcessBlockError(BlockError::InvalidParent(block2_id))
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidParent(block2_id)
+            ))
         );
 
         let block2_status = get_block_status(&tf, &block2_id);
@@ -116,11 +118,58 @@ fn bad_parent(#[case] seed: Seed) {
     });
 }
 
-// Check a failure during the "check_block" phase.
+// Check a preliminary_header_check failure due to a bad parent.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn check_block_failure(#[case] seed: Seed) {
+fn preliminary_header_check_with_bad_parent(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        // A tx with no inputs and outputs.
+        let tx1 = TransactionBuilder::new().build();
+
+        let block1 = tf.make_block_builder().with_transactions(vec![tx1]).build();
+        let block1_id = block1.get_id();
+        // process_block should fail, but we don't care about the exact error.
+        tf.process_block(block1, BlockSource::Local).unwrap_err();
+
+        let block1_status = get_block_status(&tf, &block1_id);
+        assert!(!block1_status.is_valid());
+
+        // Now create a block with a legit tx, but using block1 as the parent.
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Burn(some_coins(&mut rng)))
+            .build();
+        let block2 = tf
+            .make_block_builder()
+            .with_transactions(vec![tx2])
+            .with_parent(block1_id.into())
+            .build();
+
+        let error = tf.chainstate.preliminary_header_check(block2.header().clone()).unwrap_err();
+        assert_eq!(
+            error,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidParent(block2.get_id())
+            ))
+        );
+    });
+}
+
+// Check a process_block failure during the "check_block" phase.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn process_block_check_block_failure(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -141,11 +190,11 @@ fn check_block_failure(#[case] seed: Seed) {
     });
 }
 
-// Check a failure during the "activate_best_chain" phase.
+// Check a process_block failure during the "activate_best_chain" phase.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn best_chain_activation_failure(#[case] seed: Seed) {
+fn process_block_best_chain_activation_failure(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -193,7 +242,7 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
     });
 }
 
-// Check processing of a good block.
+// Check processing of a good block twice.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

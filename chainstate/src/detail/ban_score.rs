@@ -57,7 +57,6 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
-            BlockError::InvalidParent(_) => 100,
             BlockError::BlockCommitError(_, _, _) => 0,
             BlockError::BlockStatusCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
@@ -256,6 +255,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
             CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
             CheckBlockError::EpochSealError(err) => err.ban_score(),
+            CheckBlockError::InvalidParent(_) => 100,
         }
     }
 }

@@ -217,14 +217,24 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Read previous block from storage and return its BlockIndex.
+    fn get_previous_block_index_by_header(
+        &self,
+        block_header: &SignedBlockHeader,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        let prev_block_id = block_header.prev_block_id();
+        self.get_gen_block_index(prev_block_id)
+            .log_err()?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
+    }
+
+    /// Read previous block from storage and return its BlockIndex.
+    // FIXME: rename it? Or maybe delete it and rename get_previous_block_index_by_header to
+    // get_previous_block_index?
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let prev_block_id = block_index.prev_block_id();
-        self.get_gen_block_index(prev_block_id)
-            .log_err()?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
+        self.get_previous_block_index_by_header(block_index.block_header())
     }
 
     pub fn get_ancestor(
@@ -452,7 +462,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    // Return Ok(()) if the specified block has a valid parent and an error otherwise.
+    pub fn check_block_parent(
+        &self,
+        block_header: &SignedBlockHeader,
+    ) -> Result<(), CheckBlockError> {
+        let parent_block_index = self.get_previous_block_index_by_header(block_header)?;
+        ensure!(
+            parent_block_index.status().is_valid(),
+            CheckBlockError::InvalidParent(block_header.block_id())
+        );
+
+        Ok(())
+    }
+
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        self.check_block_parent(header).log_err()?;
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
         self.check_block_height_vs_max_reorg_depth(header)?;
@@ -719,30 +744,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(*block_index.block_id()).log_err()
     }
 
-    /// Given a new block, obtain its previous block's block index; if not found, return
-    /// the appropriate BlockError.
-    // Note: the suffix "or_block_error" helps distinguish this function from another
-    // get_previous_block_index function in ChainstateRef, which returns PropertyQueryError.
-    fn get_previous_block_index_or_block_error(
-        &self,
-        block: &WithId<Block>,
-    ) -> Result<GenBlockIndex, BlockError> {
-        self.get_gen_block_index(&block.prev_block_id())
-            .map_err(BlockError::BlockLoadError)?
-            .ok_or(BlockError::PrevBlockNotFound)
-    }
-
-    // Return Ok(()) if the specified block has a valid parent and an error otherwise.
-    pub fn check_block_parent(&self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let parent_block_index = self.get_previous_block_index_or_block_error(block)?;
-        ensure!(
-            parent_block_index.status().is_valid(),
-            BlockError::InvalidParent(block.get_id())
-        );
-
-        Ok(())
-    }
-
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header()).log_err()?;
 
@@ -828,12 +829,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
+    /// Given a new block's header, obtain its previous block's block index; if not found,
+    /// return the appropriate BlockError.
+    // Note: the suffix "or_block_error" helps distinguish this function from other
+    // get_previous_block_index functions in ChainstateRef, which return PropertyQueryError.
+    fn get_previous_block_index_or_block_error(
+        &self,
+        block_header: &SignedBlockHeader,
+    ) -> Result<GenBlockIndex, BlockError> {
+        self.get_gen_block_index(block_header.prev_block_id())
+            .map_err(BlockError::BlockLoadError)?
+            .ok_or(BlockError::PrevBlockNotFound)
+    }
+
     pub fn new_block_index(
         &self,
         block: &WithId<Block>,
         block_status: BlockStatus,
     ) -> Result<BlockIndex, BlockError> {
-        let prev_block_index = self.get_previous_block_index_or_block_error(block).log_err()?;
+        let prev_block_index =
+            self.get_previous_block_index_or_block_error(block.header()).log_err()?;
 
         // Set the block height
         let height = prev_block_index.block_height().next_height();
