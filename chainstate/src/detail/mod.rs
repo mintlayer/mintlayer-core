@@ -357,7 +357,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_index: &BlockIndex,
         block_status: &mut BlockStatus,
     ) -> Result<bool, BlockError> {
-        chainstate_ref.check_block_parent(block)?;
+        // Note: at this moment check_block_parent is also performed inside check_block.
+        // The only purpose of doing it here as well is to be able to distinguish the situation
+        // when the parent is bad from other check_block failures.
+        // Also note that we can't just check the result of check_block, see if it's not
+        // InvalidParent and advance the stage to ParentOk if that's so, because this
+        // will only be correct if the parent validity check is the first check in check_block
+        // (which technically is true, but such a dependency will be very fragile).
+        // FIXME: but do we need ParentOk as a separate stage at all? If yes, then probably
+        // check_block should maintain the status itself (and then it can be as fine-grained
+        // as we want), otherwise it's better to remove it.
+        chainstate_ref.check_block_parent(block.header())?;
         block_status.advance_validation_stage_to(BlockValidationStage::ParentOk);
 
         chainstate_ref.check_block(block).map_err(BlockError::CheckBlockFailed)?;

@@ -62,8 +62,6 @@ pub enum BlockError {
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
     InvalidBlockAlreadyProcessed(Id<Block>),
-    #[error("Block {0} has invalid parent block")]
-    InvalidParent(Id<Block>),
     #[error(
         "Failed to commit block data to database for block {0} after {1} attempts with error {2}"
     )]
@@ -134,6 +132,8 @@ pub enum CheckBlockError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
+    #[error("Block {0} has invalid parent block")]
+    InvalidParent(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
