@@ -21,9 +21,7 @@ use common::Uint256;
 pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
-use crate::key_chain::{
-    make_path_to_vrf_key, vrf_from_private_key, AccountKeyChain, KeyChainError,
-};
+use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{make_address_output, make_address_output_token, make_stake_output};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
@@ -261,9 +259,11 @@ impl Account {
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
         let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
-        let private_key =
-            self.key_chain.get_private_key_for_path(&vrf_key_path, db_tx)?.private_key();
-        Ok(vrf_from_private_key(&private_key))
+        let vrf_private_key =
+            self.key_chain.get_private_vrf_key_for_path(&vrf_key_path, db_tx)?.private_key();
+        let vrf_public_key = VRFPublicKey::from_private_key(&vrf_private_key);
+
+        Ok((vrf_private_key, vrf_public_key))
     }
 
     pub fn get_vrf_public_key(

@@ -33,8 +33,7 @@ mod with_purpose;
 
 pub use account_key_chain::AccountKeyChain;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PrivateKey;
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
+use crypto::vrf::VRFKeyKind;
 pub use master_key_chain::MasterKeyChain;
 
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -45,7 +44,6 @@ use crypto::key::extended::ExtendedKeyKind;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
 use crypto::key::hdkd::derivation_path::DerivationPath;
-use serialization::Encode;
 use wallet_types::keys::{KeyPurpose, KeyPurposeError};
 use wallet_types::AccountId;
 
@@ -149,15 +147,6 @@ fn get_purpose_and_index(
     })?;
     let key_index = path[BIP44_KEY_INDEX];
     Ok((purpose, key_index))
-}
-
-/// Derive a VRF private key from a normal PrivateKey
-pub fn vrf_from_private_key(private_key: &PrivateKey) -> (VRFPrivateKey, VRFPublicKey) {
-    // TODO: This whole thing is a temporary solution. The proper way is to use BIP-44 secrets.
-    let bytes = private_key.encode();
-    let key_hash = crypto::hash::hash::<crypto::hash::Sha3_512, _>(bytes);
-    VRFPrivateKey::new_using_random_bytes(&key_hash[0..32], VRFKeyKind::Schnorrkel)
-        .expect("should not fail")
 }
 
 #[cfg(test)]

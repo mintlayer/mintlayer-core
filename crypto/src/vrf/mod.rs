@@ -194,6 +194,10 @@ impl ExtendedVRFPrivateKey {
             chain_code,
         })
     }
+
+    pub fn private_key(self) -> VRFPrivateKey {
+        self.private_key
+    }
 }
 
 impl Derivable for ExtendedVRFPrivateKey {

@@ -89,6 +89,14 @@ impl MasterKeyChain {
         Ok(key)
     }
 
+    pub fn load_root_vrf_key(
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<ExtendedVRFPrivateKey> {
+        let key = db_tx.get_root_key()?.ok_or(KeyChainError::KeyChainNotInitialized)?.root_vrf_key;
+
+        Ok(key)
+    }
+
     /// Creates a Master key chain, checks the database for an existing one
     pub fn new_from_existing_database(
         chain_config: Arc<ChainConfig>,
