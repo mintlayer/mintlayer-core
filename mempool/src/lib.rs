@@ -19,6 +19,7 @@ use common::{
     chain::Block,
     primitives::{BlockHeight, Id},
 };
+pub use config::MempoolMaxSize;
 pub use interface::{
     mempool_interface::{MempoolInterface, MempoolSubsystemInterface},
     mempool_interface_impl::make_mempool,

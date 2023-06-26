@@ -24,7 +24,7 @@ use common::{
 use mempool::{
     error::{Error, TxValidationError},
     tx_accumulator::TransactionAccumulator,
-    MempoolEvent, MempoolInterface, MempoolSubsystemInterface, TxStatus,
+    MempoolEvent, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
 use utils::atomics::AcqRelAtomicBool;
@@ -145,6 +145,18 @@ impl MempoolInterface for MempoolInterfaceMock {
         } else {
             Ok(())
         }
+    }
+
+    fn memory_usage(&self) -> usize {
+        unimplemented!()
+    }
+
+    fn get_max_size(&self) -> MempoolMaxSize {
+        unimplemented!()
+    }
+
+    fn set_max_size(&mut self, _max_size: MempoolMaxSize) -> Result<(), Error> {
+        unimplemented!()
     }
 }
 

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{memory_usage_estimator::StoreMemoryUsageEstimator, *};
-use crate::tx_accumulator::DefaultTxAccumulator;
+use crate::{config::MempoolMaxSize, tx_accumulator::DefaultTxAccumulator};
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
@@ -1576,7 +1576,7 @@ async fn mempool_full_real(#[case] seed: Seed) {
     // Set up mempool such that exactly one of the transactions does not fit
     let tf = TestFramework::builder(&mut rng).build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.max_size = memory_size - 1;
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size - 1);
 
     // Attempt to add all the transactions but one
     let (last_tx, initial_txs) = txs.split_last().unwrap();
@@ -1596,7 +1596,7 @@ async fn mempool_full_real(#[case] seed: Seed) {
 
     // Bump the memory limit again, and re-insert the evicted transaction(s). Also reset the
     // rolling fee since recently evicted transactions bump it up.
-    mempool.max_size = memory_size;
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size);
     mempool.drop_rolling_fee();
 
     for tx in txs {

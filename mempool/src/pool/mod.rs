@@ -84,7 +84,7 @@ pub struct Mempool<M> {
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
-    max_size: usize,
+    max_size: MempoolMaxSize,
     max_tx_age: Duration,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     clock: TimeGetter,
@@ -118,7 +118,7 @@ impl<M> Mempool<M> {
             chain_config,
             store: MempoolStore::new(),
             chainstate_handle,
-            max_size: MAX_MEMPOOL_SIZE_BYTES,
+            max_size: MempoolMaxSize::default(),
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
             rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
@@ -160,19 +160,23 @@ impl<M> Mempool<M> {
         utxo::UtxosStorageRead::get_best_block_for_utxos(&self.tx_verifier)
             .expect("best block to exist")
     }
+
+    pub fn max_size(&self) -> MempoolMaxSize {
+        self.max_size
+    }
 }
 
 // Rolling-fee-related methods
 impl<M: MemoryUsageEstimator> Mempool<M> {
-    fn memory_usage(&self) -> usize {
+    pub fn memory_usage(&self) -> usize {
         self.memory_usage_estimator.estimate_memory_usage(&self.store)
     }
 
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.memory_usage();
-        if mem_usage < self.max_size / 4 {
+        if mem_usage < self.max_size.as_bytes() / 4 {
             ROLLING_FEE_BASE_HALFLIFE / 4
-        } else if mem_usage < self.max_size / 2 {
+        } else if mem_usage < self.max_size.as_bytes() / 2 {
             ROLLING_FEE_BASE_HALFLIFE / 2
         } else {
             ROLLING_FEE_BASE_HALFLIFE
@@ -686,6 +690,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
+    pub fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
+        if max_size > self.max_size {
+            self.drop_rolling_fee();
+        }
+        self.max_size = max_size;
+        self.limit_mempool_size()
+    }
+
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
         let removed_fees = self.trim()?;
         if !removed_fees.is_empty() {
@@ -731,7 +743,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-        while !self.store.is_empty() && self.memory_usage() > self.max_size {
+        while !self.store.is_empty() && self.memory_usage() > self.max_size.as_bytes() {
             // TODO sort by descendant score, not by fee
             let removed_id = self
                 .store
