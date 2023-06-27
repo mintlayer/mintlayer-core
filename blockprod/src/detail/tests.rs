@@ -847,7 +847,26 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn solved_pow_consensus() {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+        let override_chain_config = {
+            let net_upgrades = NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::new(0),
+                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+                ),
+                (
+                    BlockHeight::new(1),
+                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                        initial_difficulty: Compact::highest_value(),
+                    }),
+                ),
+            ])
+            .expect("Net upgrade is valid");
+
+            Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
+        };
+
+        let (manager, chain_config, chainstate, mempool) =
+            setup_blockprod_test(Some(override_chain_config));
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
