@@ -146,7 +146,7 @@ impl BlockProduction {
                 move |this| {
                     let best_block_index = this
                         .get_best_block_index()
-                        .expect("Best block index retrieval failed in block production");
+                        .map_err(|_| PropertyQueryError::BestBlockIndexNotFound)?;
 
                     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
                         this.get_ancestor(
