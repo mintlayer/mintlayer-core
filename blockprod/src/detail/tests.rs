@@ -86,8 +86,7 @@ mod collect_transactions {
 
                 let accumulator = block_production.collect_transactions().await;
 
-                let collected_transactions =
-                    mock_mempool.collect_txs_called.load(Ordering::Relaxed);
+                let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");
 
                 match accumulator {
@@ -135,7 +134,10 @@ mod collect_transactions {
             let accumulator = block_production.collect_transactions().await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load();
-            assert!(collected_transactions, "Expected collect_tx() to be called");
+            assert!(
+                !collected_transactions,
+                "Expected collect_tx() not to be called"
+            );
 
             match accumulator {
                 Err(BlockProductionError::SubsystemCallError(_)) => {}
