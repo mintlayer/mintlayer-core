@@ -25,6 +25,10 @@ impl Compact {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF])
             .into()
     }
+
+    pub fn lowest_value() -> Self {
+        Uint256([0, 0, 0, 0]).into()
+    }
 }
 
 impl std::fmt::Debug for Compact {
