@@ -571,7 +571,7 @@ mod produce_block {
         let (genesis_vrf_private_key, genesis_vrf_public_key) =
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let create_genesis_pool_txoutput = {
+        let mut kernel_input_utxo = {
             let min_stake_pool_pledge = {
                 // throw away just to get value
                 let chain_config = create_unit_test_config();
@@ -607,7 +607,7 @@ mod produce_block {
                         .expect("No time underflow")
                         .as_secs(),
                 ),
-                vec![create_genesis_pool_txoutput.clone()],
+                vec![kernel_input_utxo.clone()],
             );
 
             let consensus_types = vec![
@@ -668,12 +668,10 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let mut previous_kernel_input = TxInput::from_utxo(
+                let mut kernel_input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                     0,
                 );
-
-                let mut previous_kernel_input_utxo = create_genesis_pool_txoutput.clone();
 
                 for block_height in 1..=blocks_to_generate {
                     let input_data_pos =
@@ -681,8 +679,8 @@ mod produce_block {
                             genesis_stake_private_key.clone(),
                             genesis_vrf_private_key.clone(),
                             PoolId::new(H256::zero()),
-                            vec![previous_kernel_input.clone()],
-                            vec![previous_kernel_input_utxo.clone()],
+                            vec![kernel_input.clone()],
+                            vec![kernel_input_utxo.clone()],
                         )));
 
                     let input_data_pow = GenerateBlockInputData::PoW(Box::new(
@@ -765,14 +763,14 @@ mod produce_block {
 
                             // Update kernel input parameters for future PoS blocks
 
-                            previous_kernel_input = TxInput::from_utxo(
+                            kernel_input = TxInput::from_utxo(
                                 OutPointSourceId::BlockReward(
                                     result.into_gen_block_index().block_id(),
                                 ),
                                 0,
                             );
 
-                            previous_kernel_input_utxo = TxOutput::ProduceBlockFromStake(
+                            kernel_input_utxo = TxOutput::ProduceBlockFromStake(
                                 Destination::PublicKey(genesis_stake_public_key.clone()),
                                 H256::zero().into(),
                             );
