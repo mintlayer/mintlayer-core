@@ -47,37 +47,25 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::NoInputs => 100,
             MempoolPolicyError::NoOutputs => 100,
             MempoolPolicyError::ExceedsMaxBlockSize => 100,
+            MempoolPolicyError::RelayFeeOverflow => 100,
 
             // Errors to do with transaction conflicts and replacements are not punished since the
             // peer may not be aware of all the transactions the node has in the mempool.
             // This could be refined later.
+            MempoolPolicyError::Conflict(_) => 0,
             MempoolPolicyError::MempoolFull => 0,
             MempoolPolicyError::TransactionAlreadyInMempool => 0,
-            MempoolPolicyError::ConflictWithIrreplaceableTransaction => 0,
-            MempoolPolicyError::TooManyPotentialReplacements => 0,
             MempoolPolicyError::ConflictsFeeOverflow => 0,
             MempoolPolicyError::TransactionFeeLowerThanConflictsWithDescendants => 0,
-            MempoolPolicyError::ReplacementFeeLowerThanOriginal {
-                replacement_tx: _,
-                replacement_fee: _,
-                original_tx: _,
-                original_fee: _,
-            } => 0,
-            MempoolPolicyError::SpendsNewUnconfirmedOutput => 0,
+            MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. } => 0,
             MempoolPolicyError::AdditionalFeesUnderflow => 0,
 
             // The peer should not pass transactions not meeting the minimal fee threshold
-            MempoolPolicyError::InsufficientFeesToRelay {
-                tx_fee: _,
-                relay_fee: _,
-            } => 100,
+            MempoolPolicyError::InsufficientFeesToRelay { .. } => 100,
             MempoolPolicyError::InsufficientFeesToRelayRBF => 100,
 
             // Rolling fee may be out of sync
-            MempoolPolicyError::RollingFeeThresholdNotMet {
-                minimum_fee: _,
-                tx_fee: _,
-            } => 0,
+            MempoolPolicyError::RollingFeeThresholdNotMet { .. } => 0,
 
             // These depend on other transactions we have in the mempool so don't hold the peer
             // liable for these errors. Could be refined later.
@@ -86,7 +74,6 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::FeeOverflow => 0,
             MempoolPolicyError::GetParentError => 0,
             MempoolPolicyError::DescendantOfExpiredTransaction => 0,
-            MempoolPolicyError::RelayFeeOverflow => 100,
         }
     }
 }

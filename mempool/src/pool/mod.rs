@@ -56,7 +56,7 @@ use self::{
 };
 use crate::{
     config,
-    error::{Error, MempoolPolicyError, OrphanPoolError, TxValidationError},
+    error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
     tx_accumulator::TransactionAccumulator,
     MempoolEvent, TxStatus,
 };
@@ -442,7 +442,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
                 self.conflicting_tx_ids(entry.tx_entry()).next().is_none(),
-                MempoolPolicyError::ConflictWithIrreplaceableTransaction
+                MempoolConflictError::Irreplacable
             );
             Ok(Conflicts::new(BTreeSet::new()))
         }
@@ -468,6 +468,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 OrphanPoolError::NonceGapTooLarge(gap),
             );
         }
+
+        self.orphan_rbf_checks(transaction)?;
 
         Ok(())
     }
@@ -531,19 +533,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         }
     }
 
+    fn orphan_rbf_checks(&self, tx: &TxEntry) -> Result<(), OrphanPoolError> {
+        let mut conflicts = self.conflicting_tx_ids(tx).peekable();
+        if conflicts.peek().is_none() {
+            // Early exit if there are no conflicts
+            return Ok(());
+        }
+
+        if ENABLE_RBF {
+            // Note: Since RBF is currently disabled, the following is effectively dead code and
+            // completely untested. Needs to be reviewed when RBF is re-enabled.
+            let conflicts: Vec<_> = conflicts
+                .map(|id_conflict| self.store.get_entry(id_conflict).expect("entry for id"))
+                .collect();
+            self.all_conflicts_replaceable(&conflicts)?;
+            self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
+            self.potential_replacements_within_limit(&conflicts)?;
+            Ok(())
+        } else {
+            Err(OrphanPoolError::MempoolConflict)
+        }
+    }
+
     fn do_rbf_checks(
         &self,
         tx: &TxEntryWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<Conflicts, MempoolPolicyError> {
-        for entry in conflicts {
-            // Enforce BIP125 Rule #1.
-
-            ensure!(
-                entry.is_replaceable(&self.store),
-                MempoolPolicyError::ConflictWithIrreplaceableTransaction
-            );
-        }
+        // Enforce BIP125 Rule #1.
+        self.all_conflicts_replaceable(conflicts)?;
         // It's possible that the replacement pays more fees than its direct conflicts but not more
         // than all conflicts (i.e. the direct conflicts have high-fee descendants). However, if the
         // replacement doesn't pay more fees than its direct conflicts, then we can be sure it's not
@@ -552,15 +570,27 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         // that the replacement transaction pays more than its direct conflicts.
         self.pays_more_than_direct_conflicts(tx, conflicts)?;
         // Enforce BIP125 Rule #2.
-        self.spends_no_new_unconfirmed_outputs(tx, conflicts)?;
+        self.spends_no_new_unconfirmed_outputs(tx.tx_entry(), conflicts)?;
         // Enforce BIP125 Rule #5.
-        let conflicts_with_descendants = self.potential_replacements_within_limit(conflicts)?;
+        self.potential_replacements_within_limit(conflicts)?;
         // Enforce BIP125 Rule #3.
+        let conflicts_with_descendants = self.replacements_with_descendants(conflicts);
         let total_conflict_fees =
             self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
         // Enforce BIP125 Rule #4.
         self.pays_for_bandwidth(tx, total_conflict_fees)?;
         Ok(Conflicts::from(conflicts_with_descendants))
+    }
+
+    fn all_conflicts_replaceable(
+        &self,
+        conflicts: &[&TxMempoolEntry],
+    ) -> Result<(), MempoolConflictError> {
+        ensure!(
+            conflicts.iter().all(|entry| entry.is_replaceable(&self.store)),
+            MempoolConflictError::Irreplacable,
+        );
+        Ok(())
     }
 
     fn pays_for_bandwidth(
@@ -609,26 +639,26 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn spends_no_new_unconfirmed_outputs(
         &self,
-        tx: &TxEntryWithFee,
+        tx: &TxEntry,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<(), MempoolPolicyError> {
+    ) -> Result<(), MempoolConflictError> {
         let inputs_spent_by_conflicts = conflicts
             .iter()
             .flat_map(|conflict| conflict.transaction().inputs().iter())
             .collect::<BTreeSet<_>>();
 
-        tx.transaction()
-            .inputs()
-            .iter()
-            .find(|input| {
-                // input spends an unconfirmed output
-                input.spends_unconfirmed(self) &&
-                // this unconfirmed output is not spent by one of the conflicts
-                !inputs_spent_by_conflicts.contains(input)
-            })
-            .map_or(Ok(()), |_| {
-                Err(MempoolPolicyError::SpendsNewUnconfirmedOutput)
-            })
+        let spends_new_unconfirmed = tx.transaction().inputs().iter().any(|input| {
+            // input spends an unconfirmed output
+            let unconfirmed = input.spends_unconfirmed(self);
+            // this unconfirmed output is not spent by one of the conflicts
+            let new = !inputs_spent_by_conflicts.contains(input);
+            unconfirmed && new
+        });
+        ensure!(
+            spends_new_unconfirmed,
+            MempoolConflictError::SpendsNewUnconfirmed,
+        );
+        Ok(())
     }
 
     fn pays_more_than_direct_conflicts(
@@ -653,21 +683,27 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     fn potential_replacements_within_limit(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<BTreeSet<Id<Transaction>>, MempoolPolicyError> {
+    ) -> Result<(), MempoolConflictError> {
         let mut num_potential_replacements = 0;
         for conflict in conflicts {
             num_potential_replacements += conflict.count_with_descendants();
-            if num_potential_replacements > MAX_BIP125_REPLACEMENT_CANDIDATES {
-                return Err(MempoolPolicyError::TooManyPotentialReplacements);
-            }
+            ensure!(
+                num_potential_replacements <= MAX_BIP125_REPLACEMENT_CANDIDATES,
+                MempoolConflictError::TooManyReplacements,
+            );
         }
-        let replacements_with_descendants = conflicts
+        Ok(())
+    }
+
+    fn replacements_with_descendants(
+        &self,
+        conflicts: &[&TxMempoolEntry],
+    ) -> BTreeSet<Id<Transaction>> {
+        conflicts
             .iter()
             .flat_map(|conflict| BTreeSet::from(conflict.unconfirmed_descendants(&self.store)))
             .chain(conflicts.iter().map(|conflict| *conflict.tx_id()))
-            .collect();
-
-        Ok(replacements_with_descendants)
+            .collect()
     }
 }
 

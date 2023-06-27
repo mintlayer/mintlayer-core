@@ -255,7 +255,7 @@ impl MempoolStore {
             self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
                 tracker.modify(
                     txs_by_id.get_mut(&ancestor_id).expect("ancestor"),
-                    |ancestor, _| {
+                    |ancestor, _| -> Result<(), MempoolPolicyError> {
                         let total_fee = (ancestor.fees_with_descendants + entry.fee)
                             .ok_or(MempoolPolicyError::AncestorFeeUpdateOverflow)?;
                         ancestor.fees_with_descendants = total_fee;
@@ -264,7 +264,7 @@ impl MempoolStore {
                         Ok(())
                     },
                 )
-            })?
+            })?;
         }
         Ok(())
     }

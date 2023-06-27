@@ -36,6 +36,8 @@ pub enum Error {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum MempoolPolicyError {
+    #[error(transparent)]
+    Conflict(#[from] MempoolConflictError),
     #[error("Mempool is full")]
     MempoolFull,
     #[error("Transaction has no inputs.")]
@@ -46,8 +48,6 @@ pub enum MempoolPolicyError {
     ExceedsMaxBlockSize,
     #[error("Transaction already exists in the mempool.")]
     TransactionAlreadyInMempool,
-    #[error("Transaction conflicts with another, irreplaceable transaction.")]
-    ConflictWithIrreplaceableTransaction,
     #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
@@ -55,10 +55,6 @@ pub enum MempoolPolicyError {
         original_tx: H256,
         original_fee: Fee,
     },
-    #[error("Transaction would require too many replacements.")]
-    TooManyPotentialReplacements,
-    #[error("Replacement transaction spends an unconfirmed input which was not spent by any of the original transactions.")]
-    SpendsNewUnconfirmedOutput,
     #[error("The sum of the fees of this transaction's conflicts overflows.")]
     ConflictsFeeOverflow,
     #[error("Transaction pays a fee that is lower than the fee of its conflicts with their descendants.")]
@@ -99,6 +95,8 @@ pub enum TxValidationError {
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum OrphanPoolError {
+    #[error(transparent)]
+    Conflict(#[from] MempoolConflictError),
     #[error("Transaction already present")]
     Duplicate,
     #[error("Transaction {0} too large to be accepted into orphan pool (max {1})")]
@@ -107,10 +105,22 @@ pub enum OrphanPoolError {
     Full,
     #[error("Account nonces too distant, gap: {0}")]
     NonceGapTooLarge(u64),
+    #[error("Conflicts with an irreplaceable transaction in mempool")]
+    MempoolConflict,
 }
 
 impl From<ConnectTransactionError> for Error {
     fn from(e: ConnectTransactionError) -> Self {
         TxValidationError::from(e).into()
     }
+}
+
+#[derive(Debug, Error, PartialEq, Eq, Clone)]
+pub enum MempoolConflictError {
+    #[error("Transaction conflicts with another, irreplaceable transaction.")]
+    Irreplacable,
+    #[error("Replacement transaction spends an unconfirmed input which was not spent by any of the original transactions.")]
+    SpendsNewUnconfirmed,
+    #[error("Transaction would require too many replacements.")]
+    TooManyReplacements,
 }

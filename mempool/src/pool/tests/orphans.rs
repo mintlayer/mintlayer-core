@@ -138,32 +138,20 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
 
     // Set up the transactions
 
-    let mut make_tx = |ins: &[(OutPointSourceId, u32)], outs: &[u128]| {
-        let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
-            b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(&mut rng))
-        });
-        let builder = outs.iter().fold(builder, |b, a| {
-            b.add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(*a)),
-                Destination::AnyoneCanSpend,
-            ))
-        });
-        builder.build()
-    };
-
     let tx0 = make_tx(
+        &mut rng,
         &[(OutPointSourceId::BlockReward(genesis_id.into()), 0)],
         &[100_000_000, 50_000_000],
     );
     let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
 
-    let tx1 = make_tx(&[(tx0_outpt.clone(), 0)], &[80_000_000]);
+    let tx1 = make_tx(&mut rng, &[(tx0_outpt.clone(), 0)], &[80_000_000]);
     let tx1_outpt = OutPointSourceId::Transaction(tx1.transaction().get_id());
 
-    let tx2 = make_tx(&[(tx0_outpt, 1)], &[30_000_000]);
+    let tx2 = make_tx(&mut rng, &[(tx0_outpt, 1)], &[30_000_000]);
     let tx2_outpt = OutPointSourceId::Transaction(tx2.transaction().get_id());
 
-    let tx3 = make_tx(&[(tx1_outpt, 0), (tx2_outpt, 0)], &[90_000_000]);
+    let tx3 = make_tx(&mut rng, &[(tx1_outpt, 0), (tx2_outpt, 0)], &[90_000_000]);
 
     let txs = vec![tx0, tx1, tx2, tx3];
     let tx_ids: Vec<_> = txs.iter().map(|tx| tx.transaction().get_id()).collect();
@@ -182,6 +170,41 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
             assert_eq!(mempool.contains_orphan_transaction(tx_id), expected_orphans);
         }
     }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis_id = tf.genesis().get_id();
+
+    // Set up the transactions
+
+    let tx0 = make_tx(
+        &mut rng,
+        &[(OutPointSourceId::BlockReward(genesis_id.into()), 0)],
+        &[100_000_000, 50_000_000],
+    );
+    let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
+    let dangling = OutPointSourceId::Transaction(Id::new(H256(rng.gen())));
+
+    let tx1a = make_tx(&mut rng, &[(tx0_outpt.clone(), 0)], &[80_000_000]);
+    let tx1b = make_tx(&mut rng, &[(dangling, 0), (tx0_outpt, 0)], &[30_000_000]);
+
+    // Add the first two transactions into mempool
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    assert_eq!(mempool.add_transaction(tx0), Ok(TxStatus::InMempool));
+    assert_eq!(mempool.add_transaction(tx1a), Ok(TxStatus::InMempool));
+
+    // Check transaction that conflicts with one in mempool gets rejected instead of ending up in
+    // the orphan pool.
+    assert_eq!(
+        mempool.add_transaction(tx1b),
+        Err(OrphanPoolError::MempoolConflict.into()),
+    );
 }
 
 #[rstest]
