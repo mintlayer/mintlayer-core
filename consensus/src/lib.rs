@@ -71,6 +71,8 @@ pub enum ConsensusCreationError {
     MiningStopped,
     #[error("Mining failed")]
     MiningFailed,
+    #[error("Property query error: `{0}`")]
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Staking error: {0}")]
     StakingError(#[from] ConsensusPoSError),
     #[error("Staking failed")]
