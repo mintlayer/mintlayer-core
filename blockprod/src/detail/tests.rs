@@ -596,7 +596,6 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn transaction_source_mempool_error() {
-        // TODO: mock mempool to return transactions
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
 
         let mock_mempool = MempoolInterfaceMock::new();
@@ -684,7 +683,6 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn transaction_source_provided() {
-        // TODO: supply transactions
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
         let join_handle = tokio::spawn({
@@ -729,7 +727,7 @@ mod produce_block {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancel_received(#[case] seed: Seed) {
-        let net_upgrades_chain_config = {
+        let override_chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![
                 (
                     BlockHeight::new(0),
@@ -751,7 +749,7 @@ mod produce_block {
         };
 
         let (manager, chain_config, chainstate, mempool) =
-            setup_blockprod_test(Some(net_upgrades_chain_config));
+            setup_blockprod_test(Some(override_chain_config));
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -986,7 +984,7 @@ mod produce_block {
 
         let blocks_to_generate = rng.gen_range(100..=1000);
 
-        let net_upgrades_chain_config = {
+        let override_chain_config = {
             let genesis_block = Genesis::new(
                 "blockprod-testing".into(),
                 BlockTimestamp::from_int_seconds(
@@ -1042,7 +1040,7 @@ mod produce_block {
         };
 
         let (manager, chain_config, chainstate, mempool) =
-            setup_blockprod_test(Some(net_upgrades_chain_config));
+            setup_blockprod_test(Some(override_chain_config));
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
