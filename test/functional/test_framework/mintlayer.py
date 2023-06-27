@@ -58,7 +58,7 @@ def make_tx(inputs, output_amounts, flags = 0):
     }
     signed_tx = {
         'transaction': tx,
-        'signatures': [witness for _ in outputs],
+        'signatures': [witness for _ in inputs],
     }
     tx_id = hash_object(base_tx_obj, tx)
     encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
