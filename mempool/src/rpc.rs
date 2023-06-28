@@ -22,7 +22,7 @@ use common::{
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
-use crate::TxStatus;
+use crate::{MempoolMaxSize, TxStatus};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct GetTxResponse {
@@ -47,6 +47,17 @@ trait MempoolRpc {
 
     #[method(name = "local_best_block_id")]
     async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>>;
+
+    #[method(name = "memory_usage")]
+    async fn memory_usage(&self) -> rpc::Result<usize>;
+
+    #[method(name = "get_max_size")]
+    async fn get_max_size(&self) -> rpc::Result<usize>;
+
+    // TODO: We should accept more convenient ways of setting the size in addition to plain byte
+    // count, e.g. "200MB" instead of 200000000
+    #[method(name = "set_max_size")]
+    async fn set_max_size(&self, max_size: usize) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -85,5 +96,18 @@ impl MempoolRpcServer for super::MempoolHandle {
 
     async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
         rpc::handle_result(self.call(|this| this.best_block_id()).await)
+    }
+
+    async fn memory_usage(&self) -> rpc::Result<usize> {
+        rpc::handle_result(self.call(|this| this.memory_usage()).await)
+    }
+
+    async fn get_max_size(&self) -> rpc::Result<usize> {
+        rpc::handle_result(self.call(|this| this.get_max_size().as_bytes()).await)
+    }
+
+    async fn set_max_size(&self, max_size: usize) -> rpc::Result<()> {
+        let max_size = MempoolMaxSize::from_bytes(max_size);
+        rpc::handle_result(self.call_mut(move |this| this.set_max_size(max_size)).await)
     }
 }

@@ -157,7 +157,7 @@ impl TxOrphanPool {
         !entry.requires().any(|dep| match dep {
             // Always consider account deps. TODO: can be optimized in the future
             TxDependency::DelegationAccount(_) => false,
-            TxDependency::Transaction(tx_id) => self.maps.by_tx_id.contains_key(&tx_id),
+            TxDependency::TxOutput(tx_id, _) => self.maps.by_tx_id.contains_key(&tx_id),
         })
     }
 

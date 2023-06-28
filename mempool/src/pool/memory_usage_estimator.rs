@@ -23,10 +23,7 @@ pub trait MemoryUsageEstimator: Send + Sync + 'static {
 pub struct StoreMemoryUsageEstimator;
 
 impl MemoryUsageEstimator for StoreMemoryUsageEstimator {
-    fn estimate_memory_usage(&self, _store: &MempoolStore) -> usize {
-        // TODO: Just a temporary value to emulate the original behavior. In order for eviction to
-        // work properly, we need to get transaction verifier and mempool to agree on transaction
-        // dependencies.
-        0
+    fn estimate_memory_usage(&self, store: &MempoolStore) -> usize {
+        store.memory_usage()
     }
 }

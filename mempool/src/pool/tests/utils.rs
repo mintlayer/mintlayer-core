@@ -25,7 +25,7 @@ pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Rng, Seed},
+    random::{make_seedable_rng, CryptoRng, Rng, Seed},
 };
 
 use super::*;
@@ -169,4 +169,56 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
         OutputValue::Coin(amt) => *amt,
         OutputValue::Token(_) => Amount::ZERO,
     }
+}
+
+/// Generate a valid transaction graph.
+///
+/// This produces an infinite iterator but taking too many items may not be valid:
+/// * The transaction fees may drop below minimum threshold.
+/// * In extreme, 0-value outputs may be generated.
+pub fn generate_transaction_graph(
+    rng: &mut (impl Rng + CryptoRng),
+    time: Time,
+) -> impl Iterator<Item = TxEntryWithFee> + '_ {
+    let tf = TestFramework::builder(rng).build();
+    let mut utxos = vec![(
+        TxInput::from_utxo(tf.genesis().get_id().into(), 0),
+        100_000_000_000_000_u128,
+    )];
+
+    std::iter::repeat_with(move || {
+        let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));
+        let n_outputs = rng.gen_range(1..=3);
+
+        let mut builder = TransactionBuilder::new();
+        let mut total = 0u128;
+        let mut amts = Vec::new();
+
+        for _ in 0..n_inputs {
+            let (outpt, amt) = utxos.swap_remove(rng.gen_range(0..utxos.len()));
+            total += amt;
+            builder = builder.add_input(outpt, empty_witness(rng));
+        }
+
+        for _ in 0..n_outputs {
+            let amt = rng.gen_range((total / 2)..(95 * total / 100));
+            total -= amt;
+            builder = builder.add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(amt)),
+                Destination::AnyoneCanSpend,
+            ));
+            amts.push(amt);
+        }
+
+        let tx = builder.build();
+        let tx_id = tx.transaction().get_id();
+
+        utxos.extend(
+            amts.into_iter()
+                .enumerate()
+                .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
+        );
+
+        TxEntryWithFee::new(TxEntry::new(tx, time), Fee::new(Amount::from_atoms(total)))
+    })
 }

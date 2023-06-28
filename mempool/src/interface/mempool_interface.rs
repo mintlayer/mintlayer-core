@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent, TxStatus};
+use crate::{
+    error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent, MempoolMaxSize, TxStatus,
+};
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
@@ -54,6 +56,15 @@ pub trait MempoolInterface: Send + Sync {
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error>;
+
+    /// Get current memory usage
+    fn memory_usage(&self) -> usize;
+
+    /// Get maximum mempool size
+    fn get_max_size(&self) -> MempoolMaxSize;
+
+    /// Set the maximum mempool size
+    fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]

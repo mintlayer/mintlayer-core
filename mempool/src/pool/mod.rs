@@ -25,7 +25,10 @@ use std::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
-    tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+    tx_verifier::{
+        transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+        TransactionSource,
+    },
 };
 use common::{
     chain::{
@@ -81,7 +84,7 @@ pub struct Mempool<M> {
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
-    max_size: usize,
+    max_size: MempoolMaxSize,
     max_tx_age: Duration,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     clock: TimeGetter,
@@ -115,7 +118,7 @@ impl<M> Mempool<M> {
             chain_config,
             store: MempoolStore::new(),
             chainstate_handle,
-            max_size: MAX_MEMPOOL_SIZE_BYTES,
+            max_size: MempoolMaxSize::default(),
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
             rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
@@ -157,19 +160,23 @@ impl<M> Mempool<M> {
         utxo::UtxosStorageRead::get_best_block_for_utxos(&self.tx_verifier)
             .expect("best block to exist")
     }
+
+    pub fn max_size(&self) -> MempoolMaxSize {
+        self.max_size
+    }
 }
 
 // Rolling-fee-related methods
 impl<M: MemoryUsageEstimator> Mempool<M> {
-    fn memory_usage(&self) -> usize {
+    pub fn memory_usage(&self) -> usize {
         self.memory_usage_estimator.estimate_memory_usage(&self.store)
     }
 
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.memory_usage();
-        if mem_usage < self.max_size / 4 {
+        if mem_usage < self.max_size.as_bytes() / 4 {
             ROLLING_FEE_BASE_HALFLIFE / 4
-        } else if mem_usage < self.max_size / 2 {
+        } else if mem_usage < self.max_size.as_bytes() / 2 {
             ROLLING_FEE_BASE_HALFLIFE / 2
         } else {
             ROLLING_FEE_BASE_HALFLIFE
@@ -422,16 +429,19 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     // Check the transaction against the mempool inclusion policy
-    fn check_mempool_policy(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
-        self.pays_minimum_relay_fees(tx)?;
-        self.pays_minimum_mempool_fee(tx)?;
+    fn check_mempool_policy(
+        &self,
+        entry: &TxEntryWithFee,
+    ) -> Result<Conflicts, MempoolPolicyError> {
+        self.pays_minimum_relay_fees(entry)?;
+        self.pays_minimum_mempool_fee(entry)?;
 
         if ENABLE_RBF {
-            self.rbf_checks(tx)
+            self.rbf_checks(entry)
         } else {
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
-                self.conflicting_tx_ids(tx.transaction()).next().is_none(),
+                self.conflicting_tx_ids(entry.tx_entry()).next().is_none(),
                 MempoolPolicyError::ConflictWithIrreplaceableTransaction
             );
             Ok(Conflicts::new(BTreeSet::new()))
@@ -500,10 +510,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn conflicting_tx_ids<'a>(
         &'a self,
-        tx: &'a SignedTransaction,
+        entry: &'a TxEntry,
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
-        let ins = tx.transaction().inputs().iter();
-        ins.filter_map(|input| self.store.find_conflicting_tx(input))
+        entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
 }
 
@@ -511,7 +520,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 impl<M: MemoryUsageEstimator> Mempool<M> {
     fn rbf_checks(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
-            .conflicting_tx_ids(tx.transaction())
+            .conflicting_tx_ids(tx.tx_entry())
             .map(|id_conflict| self.store.get_entry(id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
@@ -681,6 +690,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
+    pub fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
+        if max_size > self.max_size {
+            self.drop_rolling_fee();
+        }
+        self.max_size = max_size;
+        self.limit_mempool_size()
+    }
+
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
         let removed_fees = self.trim()?;
         if !removed_fees.is_empty() {
@@ -720,13 +737,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .collect();
 
         for tx_id in expired_ids.iter() {
-            self.store.drop_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry)
+            self.remove_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry);
         }
     }
 
     fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-        while !self.store.is_empty() && self.memory_usage() > self.max_size {
+        while !self.store.is_empty() && self.memory_usage() > self.max_size.as_bytes() {
             // TODO sort by descendant score, not by fee
             let removed_id = self
                 .store
@@ -748,9 +765,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
+            self.remove_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
+    }
+
+    fn remove_tx_and_descendants(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
+        let source = TransactionSource::Mempool;
+
+        let result = self.store.drop_tx_and_descendants(tx_id, reason).try_for_each(|entry| {
+            self.tx_verifier
+                .disconnect_transaction(&source, entry.transaction())
+                .map_err(|err| (*entry.tx_id(), err))
+        });
+
+        if let Err((disc_id, err)) = result {
+            // Transaction disconnection failed. This should never happen because transactions are
+            // disconnected leaves first. However, it can happen if the mempool store and the
+            // transaction verifier do not agree on inter-transaction dependencies due to a bug. In
+            // that case, log that it happened and opt for a nuclear option: refresh the mempool by
+            // removing all transactions and re-adding them. Code used during reorgs is utilized to
+            // accomplish this.
+            //
+            // TODO: Ideally, there should be single point of truth regarding inter-transaction
+            // dependencies. However, it does not appear to be easy to extract that information
+            // from the transaction verifier at the moment. To be addressed in the future.
+
+            log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
+            reorg::refresh_mempool(self, std::iter::empty());
+        }
     }
 }
 

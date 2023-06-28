@@ -17,6 +17,32 @@ use std::time::Duration;
 
 pub type Time = Duration;
 
+/// Mempool size configuration
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
+pub struct MempoolMaxSize(usize);
+
+impl MempoolMaxSize {
+    pub fn from_bytes(n: usize) -> Self {
+        Self(n)
+    }
+
+    pub fn as_bytes(&self) -> usize {
+        self.0
+    }
+}
+
+impl Default for MempoolMaxSize {
+    fn default() -> Self {
+        Self::from_bytes(MAX_MEMPOOL_SIZE_BYTES)
+    }
+}
+
+impl std::fmt::Display for MempoolMaxSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}B", self.0)
+    }
+}
+
 pub const ENABLE_RBF: bool = false;
 
 // Number of times we try to add transaction if the tip moves during validation

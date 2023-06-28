@@ -107,7 +107,7 @@ pub struct MempoolStore {
 
     // We keep the information of which inputs are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
-    pub spender_txs: Tracked<BTreeMap<TxInput, Id<Transaction>>>,
+    pub spender_txs: Tracked<BTreeMap<TxDependency, Id<Transaction>>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
     // which the transactions have been inserted into the mempool, so they can be re-inserted in
@@ -164,7 +164,6 @@ impl MempoolStore {
         self.txs_by_id.contains_key(id)
     }
 
-    #[allow(unused)]
     pub fn memory_usage(&self) -> usize {
         self.mem_tracker.get_usage()
     }
@@ -288,16 +287,17 @@ impl MempoolStore {
     }
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
-        for input in entry.transaction().inputs().iter() {
-            self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
-                spender_txs.insert(input.clone(), *entry.tx_id());
-            })
-        }
+        self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
+            spender_txs.extend(entry.tx_entry().requires().map(|dep| (dep, *entry.tx_id())));
+        })
     }
 
     fn unspend_outpoints(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.spender_txs, |spender_txs, _| {
-            spender_txs.retain(|_, id| id != entry.tx_id());
+            entry.tx_entry().requires().for_each(|dep| {
+                let removed = spender_txs.remove(&dep);
+                assert_eq!(removed, Some(*entry.tx_id()));
+            });
         })
     }
 
@@ -441,7 +441,11 @@ impl MempoolStore {
         }
     }
 
-    pub fn remove_tx(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
+    pub fn remove_tx(
+        &mut self,
+        tx_id: &Id<Transaction>,
+        reason: MempoolRemovalReason,
+    ) -> Option<TxMempoolEntry> {
         log::info!("remove_tx: {}", tx_id.get());
         let entry = self.mem_tracker.modify(&mut self.txs_by_id, |by_id, _| by_id.remove(tx_id));
 
@@ -452,10 +456,11 @@ impl MempoolStore {
                 self.update_descendant_state_for_drop(&entry)
             }
             self.drop_tx(&entry);
+            Some(entry)
         } else {
-            let txs_by_score = self.txs_by_descendant_score.values().map(Deref::deref);
-            assert!(!txs_by_score.flatten().any(|id| *id == *tx_id));
+            assert!(!self.txs_by_descendant_score.values().any(|by_ds| by_ds.contains(tx_id)));
             assert!(!self.spender_txs.iter().any(|(_, id)| *id == *tx_id));
+            None
         }
     }
 
@@ -523,34 +528,26 @@ impl MempoolStore {
 
     pub fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
-            self.remove_tx(&conflict, MempoolRemovalReason::Replaced)
+            self.remove_tx(&conflict, MempoolRemovalReason::Replaced);
         }
     }
 
+    // Remove given transaction and its descendants. Return the IDs of the removed transactions
     pub fn drop_tx_and_descendants(
         &mut self,
         tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
-    ) {
-        if let Some(entry) = self.txs_by_id.get(tx_id) {
-            let descendants = entry.unconfirmed_descendants(self);
-            log::trace!(
-                "Dropping tx {} which has {} descendants",
-                tx_id.get(),
-                descendants.len()
-            );
-            self.remove_tx(&entry.tx_id().clone(), reason);
-            for descendant_id in descendants.0 {
-                // It may be that this descendant has several ancestors and has already been removed
-                if let Some(descendant) = self.txs_by_id.get(&descendant_id) {
-                    self.remove_tx(&descendant.tx_id().clone(), reason)
-                }
-            }
-        }
+    ) -> impl Iterator<Item = TxMempoolEntry> + '_ {
+        let to_remove: Vec<_> = self
+            .txs_by_id
+            .get(tx_id)
+            .map(|entry| entry.depth_postorder_descendants(self).map(|e| *e.tx_id()).collect())
+            .unwrap_or_default();
+        to_remove.into_iter().filter_map(move |tx_id| self.remove_tx(&tx_id, reason))
     }
 
-    pub fn find_conflicting_tx(&self, input: &TxInput) -> Option<&Id<Transaction>> {
-        self.spender_txs.get(input)
+    pub fn find_conflicting_tx(&self, dep: &TxDependency) -> Option<&Id<Transaction>> {
+        self.spender_txs.get(dep)
     }
 
     /// Take all the transactions from the store in the original order of insertion
@@ -597,7 +594,8 @@ impl TxMempoolEntry {
         parents: BTreeSet<Id<Transaction>>,
         ancestors: BTreeSet<TxMempoolEntry>,
     ) -> Result<TxMempoolEntry, MempoolPolicyError> {
-        let (entry, fee) = entry.into_entry_and_fee();
+        let fee = entry.fee();
+        let entry = entry.into_tx_entry();
         let size = entry.size();
         let size_with_ancestors: usize =
             ancestors.iter().map(TxMempoolEntry::size).sum::<usize>() + size;
@@ -754,6 +752,16 @@ impl TxMempoolEntry {
                     .unconfirmed_ancestors_inner(visited, store);
             }
         }
+    }
+
+    pub fn depth_postorder_descendants<'a>(
+        &'a self,
+        store: &'a MempoolStore,
+    ) -> impl Iterator<Item = &'a TxMempoolEntry> {
+        let children_fn = |entry: &&'a TxMempoolEntry| {
+            entry.children.iter().map(|id| store.txs_by_id[id].deref())
+        };
+        utils::graph_traversals::dag_depth_postorder(self, children_fn)
     }
 
     pub fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {

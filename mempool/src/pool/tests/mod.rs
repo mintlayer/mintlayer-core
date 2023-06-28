@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{memory_usage_estimator::StoreMemoryUsageEstimator, *};
-use crate::tx_accumulator::DefaultTxAccumulator;
+use crate::{config::MempoolMaxSize, tx_accumulator::DefaultTxAccumulator};
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
@@ -1495,7 +1495,7 @@ fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
+async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
 
     let mut rng = make_seedable_rng(seed);
@@ -1532,6 +1532,84 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     assert_eq!(res, Err(MempoolPolicyError::MempoolFull.into()));
     mempool.store.assert_valid();
     Ok(())
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[case::fail(Seed(1))]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn mempool_full_real(#[case] seed: Seed) {
+    logging::init_logging::<&str>(None);
+    let mut rng = make_seedable_rng(seed);
+
+    let num_txs = rng.gen_range(5..20);
+    let time = TimeGetter::default().get_time();
+    let txs: Vec<_> = generate_transaction_graph(&mut rng, time).take(num_txs).collect();
+
+    let encoded_size: usize = txs.iter().map(|tx| tx.transaction().encoded_size()).sum();
+
+    // Get total memory size without memory limit
+    let memory_size = {
+        let mut storage = MempoolStore::new();
+        for entry in &txs {
+            storage.add_transaction(entry.clone()).expect("tx insertion to succeed");
+            log::trace!("Storage mem usage updated: {}", storage.memory_usage());
+        }
+
+        // Dump some stats. Useful for rough insights into the overhead taken up by mempool
+        // metadata compared to "raw" encoded transaction size.
+        log::debug!(
+            "STATS: {} txs, {} ins, {} outs, {}B encoded, {}B mem consumption",
+            num_txs,
+            txs.iter().map(|tx| tx.transaction().inputs().len()).sum::<usize>(),
+            txs.iter().map(|tx| tx.transaction().outputs().len()).sum::<usize>(),
+            encoded_size,
+            storage.memory_usage(),
+        );
+
+        storage.memory_usage()
+    };
+
+    assert!(memory_size >= encoded_size);
+
+    // Set up mempool such that exactly one of the transactions does not fit
+    let tf = TestFramework::builder(&mut rng).build();
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size - 1);
+
+    // Attempt to add all the transactions but one
+    let (last_tx, initial_txs) = txs.split_last().unwrap();
+    for tx in initial_txs {
+        assert_eq!(
+            mempool.add_transaction_entry(tx.tx_entry().clone()),
+            Ok(TxStatus::InMempool)
+        );
+        log::trace!("Mempool mem usage updated: {}", mempool.memory_usage());
+    }
+    assert_eq!(mempool.store.txs_by_id.len(), num_txs - 1);
+
+    // Add the last transaction, check the memory limit kicked in and the total number of
+    // transactions has not increased.
+    let _ = mempool.add_transaction_entry(last_tx.tx_entry().clone());
+    assert!(mempool.store.txs_by_id.len() < num_txs);
+
+    // Bump the memory limit again, and re-insert the evicted transaction(s). Also reset the
+    // rolling fee since recently evicted transactions bump it up.
+    mempool.max_size = MempoolMaxSize::from_bytes(memory_size);
+    mempool.drop_rolling_fee();
+
+    for tx in txs {
+        if mempool.contains_transaction(tx.tx_id()) {
+            continue;
+        }
+        assert_eq!(
+            mempool.add_transaction_entry(tx.into_tx_entry()),
+            Ok(TxStatus::InMempool)
+        );
+    }
+
+    assert_eq!(mempool.store.txs_by_id.len(), num_txs, "Some txs missing");
 }
 
 #[rstest]
@@ -1585,7 +1663,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 
     mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
     for id in ids {
-        mempool.store.remove_tx(&id, MempoolRemovalReason::Block)
+        mempool.store.remove_tx(&id, MempoolRemovalReason::Block);
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
     assert!(mempool.store.txs_by_creation_time.is_empty());

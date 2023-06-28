@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Mempool tx eviction test
+
+Check that:
+* Transactions are properly evicted from mempool if size limit is reached
+"""
+
+from test_framework.test_framework import BitcoinTestFramework
+from test_framework.util import assert_raises_rpc_error
+from test_framework.mintlayer import *
+import time
+
+class MempoolTxEvictionTest(BitcoinTestFramework):
+
+    def set_test_params(self):
+        self.setup_clean_chain = True
+        self.num_nodes = 1
+        self.extra_args = [[]]
+
+    def setup_network(self):
+        self.setup_nodes()
+        self.sync_all(self.nodes[0:1])
+
+    def run_test(self):
+        node = self.nodes[0]
+
+        # Get chain tip
+        genesis_id = node.chainstate_best_block_id()
+        self.log.debug('Initial tip: {}'.format(genesis_id))
+
+        # Prepare three transactions, each spending the previous one in sequence
+        (tx1, tx1_id) = make_tx([ reward_input(genesis_id) ], [ 1_000_000 ] )
+        (tx2, tx2_id) = make_tx([ tx_input(tx1_id) ], [ 900_000 ] )
+        (tx3, tx3_id) = make_tx([ tx_input(tx2_id) ], [ 800_000 ] )
+
+        # Submit the transactions
+        node.mempool_submit_transaction(tx1)
+        node.mempool_submit_transaction(tx2)
+        node.mempool_submit_transaction(tx3)
+        assert node.mempool_contains_tx(tx1_id)
+        assert node.mempool_contains_tx(tx2_id)
+        assert node.mempool_contains_tx(tx3_id)
+
+        # Set the mempool limit to evict the last transaction
+        node.mempool_set_max_size(node.mempool_memory_usage() - 1)
+        assert node.mempool_contains_tx(tx1_id)
+        assert node.mempool_contains_tx(tx2_id)
+        assert not node.mempool_contains_tx(tx3_id)
+
+        # Try to re-add the transaction, check it failed
+        assert_raises_rpc_error(None, "fee threshold not met", node.mempool_submit_transaction, tx3)
+
+        # Set the mempool limit to evict the second last transaction too
+        node.mempool_set_max_size(node.mempool_memory_usage() - 1)
+        assert node.mempool_contains_tx(tx1_id)
+        assert not node.mempool_contains_tx(tx2_id)
+        assert not node.mempool_contains_tx(tx3_id)
+
+        # Reset the mempool size to fit all transactions. Submit the missing transactions again
+        # in the opposite order, check they both make their way in.
+        node.mempool_set_max_size(300_000_000)
+        node.mempool_submit_transaction(tx3)
+        node.mempool_submit_transaction(tx2)
+        assert node.mempool_contains_tx(tx1_id)
+        assert node.mempool_contains_tx(tx2_id)
+        assert node.mempool_contains_tx(tx3_id)
+
+        # Evict all transactions and reset the size afterwards
+        node.mempool_set_max_size(20)
+        node.mempool_set_max_size(300_000_000)
+        assert not node.mempool_contains_tx(tx1_id)
+
+        # Add a transaction that pays two outputs
+        (tx1, tx1_id) = make_tx([ reward_input(genesis_id) ], [ 100_000_000, 100_000_000 ])
+        node.mempool_submit_transaction(tx1)
+
+        # Add two transactions with CPFP semantics
+        (tx2a, tx2a_id) = make_tx([ tx_input(tx1_id) ], [ 99_000_000 ])
+        (tx3a, tx3a_id) = make_tx([ tx_input(tx2a_id) ], [ 90_000_000 ])
+        node.mempool_submit_transaction(tx2a)
+        node.mempool_submit_transaction(tx3a)
+
+        # Limit the mempool size so no more transactions fit
+        node.mempool_set_max_size(node.mempool_memory_usage())
+        assert node.mempool_contains_tx(tx1_id)
+        assert node.mempool_contains_tx(tx2a_id)
+        assert node.mempool_contains_tx(tx3a_id)
+
+        # Add a transaction that pays higher fees than the previous two, so both need to be evicted
+        (tx2b, tx2b_id) = make_tx([ tx_input(tx1_id, index = 1) ], [ 50_000_000, 5_000_000 ])
+        node.mempool_submit_transaction(tx2b)
+        assert node.mempool_contains_tx(tx1_id)
+        assert node.mempool_contains_tx(tx2b_id)
+        assert not node.mempool_contains_tx(tx2a_id)
+        assert not node.mempool_contains_tx(tx3a_id)
+
+
+if __name__ == '__main__':
+    MempoolTxEvictionTest().main()
+
