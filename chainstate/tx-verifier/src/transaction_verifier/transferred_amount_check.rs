@@ -591,7 +591,7 @@ mod tests {
         let delegation_id = DelegationId::new(H256::zero());
         let delegated_amount = Amount::from_atoms(rng.gen_range(1..100_000));
         let overspend_amount = Amount::from_atoms(delegated_amount.into_atoms() + 1);
-        let withdraw_amount = Amount::from_atoms(rng.gen_range(1..delegated_amount.into_atoms()));
+        let withdraw_amount = Amount::from_atoms(rng.gen_range(1..=delegated_amount.into_atoms()));
 
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
             BTreeMap::new(),
