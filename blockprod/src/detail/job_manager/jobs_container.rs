@@ -76,10 +76,7 @@ impl JobsContainer {
     /// Returns true if the job was removed, false if it was not found.
     fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
         match self.jobs.entry(job_key) {
-            Entry::Vacant(j) => {
-                log::error!("Attempted to stop non-existent job: {j:?}");
-                false
-            }
+            Entry::Vacant(_) => false,
             Entry::Occupied(entry) => {
                 let removed_job = entry.remove();
 
