@@ -73,8 +73,8 @@ pub enum WalletError {
     EmptyLastAccount,
     #[error("Cannot create a new account when last account is still not in sync")]
     LastAccountNotInSync,
-    #[error("The maximum number of accounts has been exceeded")]
-    AbsoluteMaxNumAccountsExceeded,
+    #[error("The maximum number of accounts has been exceeded: {0}")]
+    AbsoluteMaxNumAccountsExceeded(u32),
     #[error("No unsynced account")]
     NoUnsyncedAccount,
     #[error("Not implemented: {0}")]
@@ -110,7 +110,7 @@ pub struct Wallet<B: storage::Backend> {
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
-    unsynced_account: Option<(U31, Account)>,
+    unsynced_accounts: BTreeMap<U31, Account>,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -150,7 +150,7 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts: BTreeMap::new(),
             latest_median_time,
-            unsynced_account: None,
+            unsynced_accounts: BTreeMap::new(),
         };
 
         wallet.create_account()?;
@@ -187,20 +187,14 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
-        let first = accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
-        let last = accounts.values().last().ok_or(WalletError::WalletNotInitialized)?;
-
-        let unsynced_account =
-            (first.best_block() != last.best_block()).then(|| accounts.pop_last()).flatten();
-
-        // sanity check all other accounts have the same best block
-        ensure!(
-            accounts
-                .values()
-                .tuple_windows()
-                .all(|(acc1, acc2)| acc1.best_block() == acc2.best_block()),
-            WalletError::WalletNotInitialized
-        );
+        let unsynced_account = accounts
+            .values()
+            .tuple_windows()
+            .find_map(|(acc1, acc2)| {
+                (acc1.best_block() != acc2.best_block()).then(|| acc2.account_index())
+            })
+            .map(|first_unsynced| accounts.split_off(&first_unsynced))
+            .unwrap_or_default();
 
         Ok(Wallet {
             chain_config,
@@ -208,7 +202,7 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts,
             latest_median_time,
-            unsynced_account,
+            unsynced_accounts: unsynced_account,
         })
     }
 
@@ -229,12 +223,12 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn number_of_accounts(&self) -> usize {
-        self.accounts.len() + self.unsynced_account.is_some() as usize
+        self.accounts.len() + self.unsynced_accounts.len()
     }
 
     pub fn create_account(&mut self) -> WalletResult<U31> {
         ensure!(
-            self.unsynced_account.is_none(),
+            self.unsynced_accounts.is_empty(),
             WalletError::LastAccountNotInSync
         );
 
@@ -242,9 +236,11 @@ impl<B: storage::Backend> Wallet<B> {
             Ok(U31::ZERO),
             |(last_account_index, last_account)| {
                 if last_account.has_transactions() {
-                    last_account_index
-                        .plus_one()
-                        .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded)
+                    last_account_index.plus_one().map_err(|_| {
+                        WalletError::AbsoluteMaxNumAccountsExceeded(
+                            last_account_index.into_u32() + 1,
+                        )
+                    })
                 } else {
                     // Cannot create a new account if the latest created one has no transactions
                     // associated with it
@@ -271,7 +267,7 @@ impl<B: storage::Backend> Wallet<B> {
             self.accounts.insert(account.account_index(), account);
         } else {
             // else it is unsynced as the other accounts have already processed blocks
-            self.unsynced_account = Some((account.account_index(), account));
+            self.unsynced_accounts.insert(account.account_index(), account);
         }
 
         Ok(next_account_index)
@@ -320,10 +316,8 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
-            .map_err(|err| match self.unsynced_account.as_ref() {
-                Some((idx, _)) if *idx == account_index => {
-                    WalletError::AccountNotSyncedWithIndex(account_index)
-                }
+            .map_err(|err| match self.unsynced_accounts.get(&account_index) {
+                Some(_) => WalletError::AccountNotSyncedWithIndex(account_index),
                 _ => err,
             })
     }
@@ -412,7 +406,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns the last scanned block hash and height for the unsynced_account.
     /// Returns genesis block when the account is just created.
     pub fn get_best_block_for_unsynced_account(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
-        self.unsynced_account.as_ref().map(|(_, acc)| acc.best_block())
+        self.unsynced_accounts.values().next().map(|acc| acc.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.
@@ -448,7 +442,11 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
-        let (_, account) = self.unsynced_account.as_mut().ok_or(WalletError::NoUnsyncedAccount)?;
+        let account = self
+            .unsynced_accounts
+            .values_mut()
+            .next()
+            .ok_or(WalletError::NoUnsyncedAccount)?;
 
         account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
 
@@ -463,8 +461,8 @@ impl<B: storage::Backend> Wallet<B> {
             .1;
 
         if account.best_block().1 == synced_best_block_height {
-            self.unsynced_account
-                .take()
+            self.unsynced_accounts
+                .pop_first()
                 .map(|(index, acc)| self.accounts.insert(index, acc));
         }
 
