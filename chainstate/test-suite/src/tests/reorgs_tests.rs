@@ -232,7 +232,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(tf, tf.index_at(3).block_id()));
+    assert!(!tf.is_block_in_main_chain(tf.index_at(3).block_id()));
     // b4
     check_block_reorg_state(
         tf,
@@ -242,7 +242,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
         3,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(tf, tf.index_at(4).block_id()));
+    assert!(!tf.is_block_in_main_chain(tf.index_at(4).block_id()));
     // b5
     check_block_reorg_state(
         tf,
@@ -252,7 +252,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
         3,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(5).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(5).block_id()));
     // b6
     check_block_reorg_state(
         tf,
@@ -262,7 +262,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
         4,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(6).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(6).block_id()));
 }
 
 fn check_make_alternative_chain_longer(
@@ -297,7 +297,7 @@ fn check_make_alternative_chain_longer(
         2,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(3).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(3).block_id()));
     // b4
     check_block_reorg_state(
         tf,
@@ -307,7 +307,7 @@ fn check_make_alternative_chain_longer(
         3,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(4).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(4).block_id()));
 }
 
 fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
@@ -334,7 +334,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
         1,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(1).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(1).block_id()));
     // b2
     check_block_reorg_state(
         tf,
@@ -344,7 +344,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
         2,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(tf, tf.index_at(2).block_id()));
+    assert!(tf.is_block_in_main_chain(tf.index_at(2).block_id()));
     // b3
     check_block_reorg_state(
         tf,
@@ -354,7 +354,7 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(tf, tf.index_at(3).block_id()));
+    assert!(!tf.is_block_in_main_chain(tf.index_at(3).block_id()));
 }
 
 fn check_last_event(tf: &mut TestFramework, events: &EventList) {
@@ -365,7 +365,7 @@ fn check_last_event(tf: &mut TestFramework, events: &EventList) {
     match events.last() {
         Some((block_id, block_height)) => {
             let block_index = tf.block_indexes.last().unwrap();
-            if is_block_in_main_chain(tf, block_index.block_id()) {
+            if tf.is_block_in_main_chain(block_index.block_id()) {
                 // If block not in main chain then it means we didn't receive a new tip event. Nothing to check!
                 assert_eq!(block_id, block_index.block_id());
                 assert_eq!(block_height, &block_index.block_height());
@@ -429,15 +429,6 @@ fn check_block_at_height(
         let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
         assert_eq!(real_next_block_id, expected_block_id);
     }
-}
-
-fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
-    let block_index = tf.block_index(&(*block_id).into());
-    let height = block_index.block_height();
-    tf.chainstate
-        .get_block_id_from_height(&height)
-        .unwrap()
-        .map_or(false, |id| id == block_index.block_id())
 }
 
 #[derive(Debug, Eq, PartialEq)]
