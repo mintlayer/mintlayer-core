@@ -23,6 +23,7 @@ use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::Address;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
     Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
@@ -97,6 +98,7 @@ pub struct Wallet<B: storage::Backend> {
     db: Store<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
+    latest_median_time: BlockTimestamp,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -129,11 +131,13 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
+        let latest_median_time = chain_config.genesis_block().timestamp();
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts: BTreeMap::new(),
+            latest_median_time,
         })
     }
 
@@ -163,11 +167,13 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
+        let latest_median_time = chain_config.genesis_block().timestamp();
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
+            latest_median_time,
         })
     }
 
@@ -263,7 +269,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
-            .get_balance(utxo_types)
+            .get_balance(utxo_types, self.latest_median_time)
     }
 
     pub fn get_utxos(
@@ -275,7 +281,7 @@ impl<B: storage::Backend> Wallet<B> {
             .accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        let utxos = account.get_utxos(utxo_types);
+        let utxos = account.get_utxos(utxo_types, self.latest_median_time);
         let utxos = utxos
             .into_iter()
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
@@ -309,8 +315,9 @@ impl<B: storage::Backend> Wallet<B> {
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
+        let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.process_send_request(db_tx, request)
+            account.process_send_request(db_tx, request, latest_median_time)
         })
     }
 
@@ -320,8 +327,9 @@ impl<B: storage::Backend> Wallet<B> {
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.create_stake_pool_tx(db_tx, amount, decomission_key)
+            account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)
         })
     }
 
@@ -334,7 +342,7 @@ impl<B: storage::Backend> Wallet<B> {
             .accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        account.get_pos_gen_block_data(&db_tx)
+        account.get_pos_gen_block_data(&db_tx, self.latest_median_time)
     }
 
     /// Returns the last scanned block hash and height.
@@ -369,6 +377,10 @@ impl<B: storage::Backend> Wallet<B> {
     /// Rescan mempool for unconfirmed transactions and UTXOs
     pub fn scan_mempool(&mut self, _transactions: Vec<SignedTransaction>) -> WalletResult<()> {
         Err(WalletError::NotImplemented("scan_mempool"))
+    }
+
+    pub fn set_median_time(&mut self, median_time: BlockTimestamp) {
+        self.latest_median_time = median_time
     }
 }
 

@@ -41,6 +41,7 @@ struct MockWallet {
     genesis_id: Id<GenBlock>,
     blocks: Vec<Id<Block>>,
     new_tip_tx: mpsc::UnboundedSender<Id<Block>>,
+    latest_median_time: BlockTimestamp,
 }
 
 impl MockWallet {
@@ -49,6 +50,7 @@ impl MockWallet {
             genesis_id: chain_config.genesis_block_id(),
             blocks: Vec::new(),
             new_tip_tx,
+            latest_median_time: chain_config.genesis_block().timestamp(),
         }
     }
 
@@ -92,6 +94,10 @@ impl SyncingWallet for MockWallet {
         );
 
         Ok(())
+    }
+
+    fn update_median_time(&mut self, median_time: BlockTimestamp) {
+        self.latest_median_time = median_time
     }
 }
 

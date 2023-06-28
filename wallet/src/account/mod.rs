@@ -16,6 +16,7 @@
 mod output_cache;
 mod utxo_selector;
 
+use common::chain::block::timestamp::BlockTimestamp;
 use common::Uint256;
 pub use utxo_selector::UtxoSelectorError;
 
@@ -51,7 +52,7 @@ use wallet_storage::{
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
-use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, KeyPurpose, WalletTx};
+use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
 
 use self::output_cache::OutputCache;
 use self::utxo_selector::PayFee;
@@ -122,6 +123,7 @@ impl Account {
         &mut self,
         mut request: SendRequest,
         db_tx: &mut impl WalletStorageWriteLocked,
+        median_time: BlockTimestamp,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
@@ -144,7 +146,8 @@ impl Account {
         let network_fee = Amount::from_atoms(10000);
 
         let utxos_by_currency = group_utxos_for_input(
-            self.get_utxos(UtxoType::Transfer.into()).into_iter(),
+            self.get_utxos(UtxoType::Transfer | UtxoType::LockThenTransfer, median_time)
+                .into_iter(),
             |(_, (tx_output, _))| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
                 grouped.push((element.0.clone(), element.1 .0.clone()));
@@ -242,8 +245,9 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         request: SendRequest,
+        median_time: BlockTimestamp,
     ) -> WalletResult<SignedTransaction> {
-        let request = self.select_inputs_for_send_request(request, db_tx)?;
+        let request = self.select_inputs_for_send_request(request, db_tx, median_time)?;
         // TODO: Randomize inputs and outputs
 
         let tx = self.sign_transaction(request, db_tx)?;
@@ -273,6 +277,7 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         amount: Amount,
         decomission_key: Option<PublicKey>,
+        median_time: BlockTimestamp,
     ) -> WalletResult<SignedTransaction> {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
@@ -295,7 +300,7 @@ impl Account {
             Amount::ZERO,
         )?;
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
-        let mut request = self.select_inputs_for_send_request(request, db_tx)?;
+        let mut request = self.select_inputs_for_send_request(request, db_tx, median_time)?;
 
         let new_pool_id = match request
             .inputs()
@@ -331,8 +336,12 @@ impl Account {
     pub fn get_pos_gen_block_data(
         &self,
         db_tx: &impl WalletStorageReadUnlocked,
+        median_time: BlockTimestamp,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let utxos = self.get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake);
+        let utxos = self.get_utxos(
+            UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
+            median_time,
+        );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
             utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
@@ -514,9 +523,13 @@ impl Account {
         Ok(false)
     }
 
-    pub fn get_balance(&self, utxo_types: UtxoTypes) -> WalletResult<BTreeMap<Currency, Amount>> {
+    pub fn get_balance(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+    ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types).into_iter(),
+            self.get_utxos(utxo_types, median_time).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -531,8 +544,13 @@ impl Account {
     pub fn get_utxos(
         &self,
         utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        let mut all_outputs = self.output_cache.utxos_with_token_ids();
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        let mut all_outputs = self.output_cache.utxos_with_token_ids(current_block_info);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -549,7 +567,7 @@ impl Account {
             .txs()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height) => {
+                TxState::Confirmed(height, _) => {
                     if height > common_block_height {
                         Some(id.clone())
                     } else {
@@ -616,7 +634,7 @@ impl Account {
 
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
-            let tx_state = TxState::Confirmed(block_height);
+            let tx_state = TxState::Confirmed(block_height, block.timestamp());
 
             let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
             self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
