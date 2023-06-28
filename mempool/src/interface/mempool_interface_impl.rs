@@ -108,24 +108,24 @@ impl MempoolInterface for Mempool {
         self.add_transaction(tx)
     }
 
-    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
-        Ok(self.get_all())
+    fn get_all(&self) -> Vec<SignedTransaction> {
+        self.get_all()
     }
 
-    fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
-        Ok(self.contains_transaction(tx_id))
+    fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+        self.contains_transaction(tx_id)
     }
 
-    fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        Ok(self.transaction(id).cloned())
+    fn transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction> {
+        self.transaction(id).cloned()
     }
 
-    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error> {
-        Ok(self.contains_orphan_transaction(tx))
+    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> bool {
+        self.contains_orphan_transaction(tx)
     }
 
-    fn orphan_transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        Ok(self.orphan_transaction(id).cloned())
+    fn orphan_transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction> {
+        self.orphan_transaction(id).cloned()
     }
 
     fn best_block_id(&self) -> Id<GenBlock> {

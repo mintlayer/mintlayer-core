@@ -34,9 +34,7 @@ pub struct MempoolInterfaceMock {
     pub add_transaction_called: Arc<AcqRelAtomicBool>,
     pub add_transaction_should_error: Arc<AcqRelAtomicBool>,
     pub get_all_called: Arc<AcqRelAtomicBool>,
-    pub get_all_should_error: Arc<AcqRelAtomicBool>,
     pub contains_transaction_called: Arc<AcqRelAtomicBool>,
-    pub contains_transaction_should_error: Arc<AcqRelAtomicBool>,
     pub collect_txs_called: Arc<AcqRelAtomicBool>,
     pub collect_txs_should_error: Arc<AcqRelAtomicBool>,
     pub subscribe_to_events_called: Arc<AcqRelAtomicBool>,
@@ -57,9 +55,7 @@ impl MempoolInterfaceMock {
             add_transaction_called: Arc::new(AcqRelAtomicBool::new(false)),
             add_transaction_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             get_all_called: Arc::new(AcqRelAtomicBool::new(false)),
-            get_all_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             contains_transaction_called: Arc::new(AcqRelAtomicBool::new(false)),
-            contains_transaction_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             collect_txs_called: Arc::new(AcqRelAtomicBool::new(false)),
             collect_txs_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             subscribe_to_events_called: Arc::new(AcqRelAtomicBool::new(false)),
@@ -85,36 +81,26 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
+    fn get_all(&self) -> Vec<SignedTransaction> {
         self.get_all_called.store(true);
-
-        if self.get_all_should_error.load() {
-            Err(SUBSYSTEM_ERROR)
-        } else {
-            Ok(vec![])
-        }
+        Vec::new()
     }
 
-    fn contains_transaction(&self, _tx: &Id<Transaction>) -> Result<bool, Error> {
+    fn contains_transaction(&self, _tx: &Id<Transaction>) -> bool {
         self.contains_transaction_called.store(true);
-
-        if self.contains_transaction_should_error.load() {
-            Err(SUBSYSTEM_ERROR)
-        } else {
-            Ok(true)
-        }
+        true
     }
 
-    fn contains_orphan_transaction(&self, _tx: &Id<Transaction>) -> Result<bool, Error> {
-        Ok(true)
+    fn contains_orphan_transaction(&self, _tx: &Id<Transaction>) -> bool {
+        true
     }
 
-    fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        unimplemented!()
+    fn transaction(&self, _id: &Id<Transaction>) -> Option<SignedTransaction> {
+        None
     }
 
-    fn orphan_transaction(&self, _: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        unimplemented!()
+    fn orphan_transaction(&self, _: &Id<Transaction>) -> Option<SignedTransaction> {
+        None
     }
 
     fn best_block_id(&self) -> Id<GenBlock> {

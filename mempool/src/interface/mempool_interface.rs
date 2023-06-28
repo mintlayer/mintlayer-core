@@ -28,19 +28,19 @@ pub trait MempoolInterface: Send + Sync {
     fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error>;
 
     /// Get all transactions from mempool
-    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
+    fn get_all(&self) -> Vec<SignedTransaction>;
 
     /// Get a specific transaction from the main mempool (non-orphan)
-    fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
+    fn transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction>;
 
     /// Get a specific transaction from the orphan pool
-    fn orphan_transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
+    fn orphan_transaction(&self, id: &Id<Transaction>) -> Option<SignedTransaction>;
 
     /// Check given transaction is contained in the main mempool (non-orphan)
-    fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+    fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
 
     /// Check given transaction is contained in the main mempool (non-orphan)
-    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> bool;
 
     /// Best block ID according to mempool. May be temporarily out of sync with chainstate.
     fn best_block_id(&self) -> Id<GenBlock>;

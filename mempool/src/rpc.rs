@@ -72,13 +72,10 @@ impl MempoolRpcServer for super::MempoolHandle {
 
     async fn get_transaction(&self, tx_id: Id<Transaction>) -> rpc::Result<Option<GetTxResponse>> {
         let res: Option<_> = rpc::handle_result(
-            self.call(move |this| -> Result<_, crate::error::Error> {
-                let res = if let Some(tx) = this.transaction(&tx_id)? {
-                    Some((tx, TxStatus::InMempool))
-                } else {
-                    this.orphan_transaction(&tx_id)?.map(|tx| (tx, TxStatus::InOrphanPool))
-                };
-                Ok(res)
+            self.call(move |this| {
+                this.transaction(&tx_id).map(|tx| (tx, TxStatus::InMempool)).or_else(|| {
+                    this.orphan_transaction(&tx_id).map(|tx| (tx, TxStatus::InOrphanPool))
+                })
             })
             .await,
         )?;
