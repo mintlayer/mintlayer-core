@@ -482,7 +482,7 @@ where
             )));
         }
 
-        let tx = self.mempool_handle.call(move |m| m.transaction(&id)).await??;
+        let tx = self.mempool_handle.call(move |m| m.transaction(&id)).await?;
         let res = match tx {
             Some(tx) => TransactionResponse::Found(tx),
             None => TransactionResponse::NotFound(id),
@@ -550,7 +550,7 @@ where
             ));
         }
 
-        if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await??) {
+        if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
             self.messaging_handle
                 .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
