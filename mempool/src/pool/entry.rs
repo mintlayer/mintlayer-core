@@ -21,7 +21,7 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use super::{Fee, Time};
+use super::{Fee, Time, TxOrigin};
 
 /// A dependency of a transaction on a previous account state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -84,11 +84,12 @@ pub struct TxEntry {
     transaction: SignedTransaction,
     creation_time: Time,
     encoded_size: usize,
+    origin: TxOrigin,
 }
 
 impl TxEntry {
     /// Create a new mempool transaction entry
-    pub fn new(transaction: SignedTransaction, creation_time: Time) -> Self {
+    pub fn new(transaction: SignedTransaction, creation_time: Time, origin: TxOrigin) -> Self {
         let tx_id = transaction.transaction().get_id();
         let encoded_size = serialization::Encode::encoded_size(&transaction);
         Self {
@@ -96,6 +97,7 @@ impl TxEntry {
             transaction,
             creation_time,
             encoded_size,
+            origin,
         }
     }
 
@@ -117,6 +119,11 @@ impl TxEntry {
     /// Encoded size of this entry
     pub fn size(&self) -> usize {
         self.encoded_size
+    }
+
+    /// Where we got this transaction
+    pub fn origin(&self) -> TxOrigin {
+        self.origin
     }
 
     /// Dependency graph edges this entry requires

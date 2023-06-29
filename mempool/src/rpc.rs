@@ -22,7 +22,7 @@ use common::{
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
-use crate::{MempoolMaxSize, TxStatus};
+use crate::{MempoolMaxSize, TxOrigin, TxStatus};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct GetTxResponse {
@@ -88,7 +88,11 @@ impl MempoolRpcServer for super::MempoolHandle {
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<TxStatus> {
-        rpc::handle_result(self.call_mut(|this| this.add_transaction(tx.take())).await.log_err())
+        let res = self
+            .call_mut(move |this| this.add_transaction(tx.take(), TxOrigin::LocalMempool))
+            .await
+            .log_err();
+        rpc::handle_result(res)
     }
 
     async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {

@@ -103,9 +103,11 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
     async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        P2pRpcClient::submit_transaction(&self.http_client, tx.into())
+        // TODO: Should this return tx status?
+        let _ = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
             .await
-            .map_err(NodeRpcError::ResponseError)
+            .map_err(NodeRpcError::ResponseError)?;
+        Ok(())
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
