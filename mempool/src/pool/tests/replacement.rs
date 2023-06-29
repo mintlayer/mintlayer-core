@@ -115,7 +115,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     .expect("should be able to spend here");
     assert_eq!(
         mempool.add_transaction(replacement.clone()),
-        Err(MempoolPolicyError::ConflictWithIrreplaceableTransaction.into())
+        Err(MempoolPolicyError::from(MempoolConflictError::Irreplacable).into())
     );
 
     mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);

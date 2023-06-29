@@ -566,7 +566,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         assert_eq!(result, Ok(TxStatus::InMempool));
         assert!(!mempool.contains_transaction(&replaced_tx_id));
     } else {
-        assert_eq!(result, Ok(TxStatus::InOrphanPool));
+        assert_eq!(result, Err(Error::Orphan(OrphanPoolError::MempoolConflict)));
         assert!(mempool.contains_transaction(&replaced_tx_id));
     };
 
@@ -783,7 +783,10 @@ async fn too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
         .expect_err("expected error TooManyPotentialReplacements")
         .downcast()
         .expect("failed to downcast");
-    assert_eq!(err, MempoolPolicyError::TooManyPotentialReplacements.into());
+    assert_eq!(
+        err,
+        MempoolPolicyError::from(MempoolConflictError::TooManyReplacements).into(),
+    );
     Ok(())
 }
 
@@ -853,7 +856,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
 
     let res = mempool.add_transaction(incoming_tx);
-    assert_eq!(res, Ok(TxStatus::InOrphanPool));
+    assert_eq!(res, Err(Error::Orphan(OrphanPoolError::MempoolConflict)));
     mempool.store.assert_valid();
     Ok(())
 }

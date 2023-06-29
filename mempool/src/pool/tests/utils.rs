@@ -171,6 +171,23 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
     }
 }
 
+pub fn make_tx(
+    rng: &mut (impl Rng + CryptoRng),
+    ins: &[(OutPointSourceId, u32)],
+    outs: &[u128],
+) -> SignedTransaction {
+    let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
+        b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(rng))
+    });
+    let builder = outs.iter().fold(builder, |b, a| {
+        b.add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(*a)),
+            Destination::AnyoneCanSpend,
+        ))
+    });
+    builder.build()
+}
+
 /// Generate a valid transaction graph.
 ///
 /// This produces an infinite iterator but taking too many items may not be valid:
