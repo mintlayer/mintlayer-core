@@ -19,7 +19,7 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
-use common::address::Address;
+use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
@@ -78,6 +78,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
+    fn get_median_time(&self) -> Result<Option<BlockTimestamp>>;
 }
 
 /// Queries on persistent wallet data with access to encrypted data
@@ -114,6 +115,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         content: &ExtendedPublicKey,
     ) -> Result<()>;
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data

@@ -896,7 +896,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let seconds_between_blocks = rng.gen_range(10..100);
     let block1_id = block1.get_id();
     // not important that it is not the actual median
-    wallet.set_median_time(timestamp);
+    wallet.set_median_time(timestamp).unwrap();
     let timestamp = block1.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
@@ -942,7 +942,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     .unwrap();
 
     // not important that it is not the actual median
-    wallet.set_median_time(timestamp);
+    wallet.set_median_time(timestamp).unwrap();
     let mut timestamp = block2.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
     wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
 
@@ -984,7 +984,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         )
         .unwrap();
         // not important that it is not the actual median
-        wallet.set_median_time(timestamp);
+        wallet.set_median_time(timestamp).unwrap();
         timestamp = new_block.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
         wallet.scan_new_blocks(BlockHeight::new(2 + idx), vec![new_block]).unwrap();
     }

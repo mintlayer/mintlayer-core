@@ -33,7 +33,7 @@ pub trait SyncingWallet {
         blocks: Vec<Block>,
     ) -> WalletResult<()>;
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp);
+    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
@@ -49,7 +49,7 @@ impl SyncingWallet for DefaultWallet {
         self.scan_new_blocks(common_block_height, blocks)
     }
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp) {
+    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.set_median_time(median_time)
     }
 }
@@ -124,7 +124,9 @@ pub async fn sync_once<T: NodeInterface>(
             .scan_blocks(common_block_height, vec![block])
             .map_err(ControllerError::WalletError)?;
 
-        wallet.update_median_time(chain_info.median_time);
+        wallet
+            .update_median_time(chain_info.median_time)
+            .map_err(ControllerError::WalletError)?;
 
         log::info!(
             "Node chainstate updated, block height: {}, tip block id: {}",

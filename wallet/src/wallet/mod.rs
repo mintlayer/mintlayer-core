@@ -165,9 +165,11 @@ impl<B: storage::Backend> Wallet<B> {
             .map(|account| (account.account_index(), account))
             .collect();
 
+        let latest_median_time =
+            db_tx.get_median_time()?.unwrap_or(chain_config.genesis_block().timestamp());
+
         db_tx.close();
 
-        let latest_median_time = chain_config.genesis_block().timestamp();
         Ok(Wallet {
             chain_config,
             db,
@@ -379,8 +381,10 @@ impl<B: storage::Backend> Wallet<B> {
         Err(WalletError::NotImplemented("scan_mempool"))
     }
 
-    pub fn set_median_time(&mut self, median_time: BlockTimestamp) {
-        self.latest_median_time = median_time
+    pub fn set_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+        self.latest_median_time = median_time;
+        self.db.transaction_rw(None)?.set_median_time(median_time)?;
+        Ok(())
     }
 }
 

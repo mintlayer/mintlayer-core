@@ -96,8 +96,9 @@ impl SyncingWallet for MockWallet {
         Ok(())
     }
 
-    fn update_median_time(&mut self, median_time: BlockTimestamp) {
-        self.latest_median_time = median_time
+    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+        self.latest_median_time = median_time;
+        Ok(())
     }
 }
 
