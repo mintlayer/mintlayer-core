@@ -300,7 +300,7 @@ impl CommandHandler {
                 selected_account,
                 total_accounts,
             }) if total_accounts > 1 => {
-                format!("({}/{})", selected_account, total_accounts)
+                format!("(Account No. {})", selected_account)
             }
             _ => String::new(),
         }
