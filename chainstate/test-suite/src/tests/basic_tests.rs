@@ -53,11 +53,11 @@ fn test_is_block_in_main_chain(#[case] seed: Seed) {
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 
     let block1_id = tf.index_at(1).block_id();
-    assert!(tf.chainstate.is_block_in_main_chain(block1_id).unwrap());
+    assert!(tf.chainstate.is_block_in_main_chain(&(*block1_id).into()).unwrap());
 
     let block2_id = tf.index_at(2).block_id();
-    assert!(tf.chainstate.is_block_in_main_chain(block2_id).unwrap());
+    assert!(tf.chainstate.is_block_in_main_chain(&(*block2_id).into()).unwrap());
 
     let block3_id = tf.index_at(3).block_id();
-    assert!(!tf.chainstate.is_block_in_main_chain(block3_id).unwrap());
+    assert!(!tf.chainstate.is_block_in_main_chain(&(*block3_id).into()).unwrap());
 }

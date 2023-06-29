@@ -221,7 +221,7 @@ impl TestFramework {
     }
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
-        self.chainstate.is_block_in_main_chain(block_id).unwrap()
+        self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
     }
 }
 
