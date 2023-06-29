@@ -54,7 +54,8 @@ use crate::{
         types::services::{Service, Services},
         NetworkingService,
     },
-    types::{peer_activity::PeerActivity, peer_id::PeerId},
+    sync::types::PeerActivity,
+    types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
