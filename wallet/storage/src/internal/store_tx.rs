@@ -19,7 +19,10 @@ use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
-use utils::maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError};
+use utils::{
+    ensure,
+    maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
+};
 use wallet_types::{
     keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
     AccountKeyPurposeId, AccountWalletTxId, KeychainUsageState, WalletTx,
@@ -158,13 +161,16 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
-            fn root_keys_exist(&self) -> crate::Result<bool> {
+            fn check_root_keys_sanity(&self) -> crate::Result<()> {
                 self.storage
                     .get::<db::DBRootKeys, _>()
                     .prefix_iter_decoded(&())
                     .map_err(crate::Error::from)
                     .map(Iterator::count)
-                    .map(|count| count == 1)
+                    .and_then(|count| {
+                        ensure!(count == 1, crate::Error::WalletWithoutARootKey);
+                        Ok(())
+                    })
             }
 
             /// Collect and return all transactions from the storage

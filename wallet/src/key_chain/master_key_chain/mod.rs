@@ -21,7 +21,6 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use crypto::vrf::ExtendedVRFPrivateKey;
 use std::sync::Arc;
-use utils::ensure;
 use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
@@ -102,10 +101,7 @@ impl MasterKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
     ) -> KeyChainResult<Self> {
-        ensure!(
-            db_tx.root_keys_exist()?,
-            KeyChainError::KeyChainNotInitialized
-        );
+        db_tx.check_root_keys_sanity()?;
         Ok(MasterKeyChain { chain_config })
     }
 

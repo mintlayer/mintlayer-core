@@ -13,21 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use generic_array::{sequence::Split, typenum::U32, GenericArray};
 use hmac::{Hmac, Mac};
 use merlin::Transcript;
 use serialization::{Decode, Encode};
 use sha2::Sha512;
-use zeroize::Zeroize;
 
 use crate::{
     key::hdkd::{
-        chain_code::{ChainCode, CHAINCODE_LENGTH},
+        chain_code::ChainCode,
         child_number::ChildNumber,
         derivable::{Derivable, DerivationError},
         derivation_path::DerivationPath,
     },
     random::{make_true_rng, CryptoRng, Rng},
+    util::{self, new_hmac_sha_512},
 };
 
 pub use self::primitives::VRFReturn;
@@ -226,36 +225,15 @@ impl Derivable for ExtendedVRFPrivateKey {
     }
 }
 
-fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
-    Hmac::<Sha512>::new_from_slice(key).expect("HMAC can take key of any size")
-}
-
 fn to_key_and_chain_code(
     mac: Hmac<Sha512>,
-    keykind: VRFKeyKind,
+    key_kind: VRFKeyKind,
 ) -> Result<(VRFPrivateKey, ChainCode), DerivationError> {
-    // Finalize the hmac
-    let mut result = mac.finalize().into_bytes();
-
-    // Split in to two 32 byte arrays
-    let (mut secret_key_bytes, mut chain_code_bytes): (
-        GenericArray<u8, U32>,
-        GenericArray<u8, U32>,
-    ) = result.split();
-    result.zeroize();
-
-    // Create the secret key
-    let secret_key = VRFPrivateKey::new_using_random_bytes(&secret_key_bytes, keykind)
-        .map(|(prv, _pub)| prv)
-        .map_err(|_| DerivationError::KeyDerivationError)?;
-    secret_key_bytes.zeroize();
-
-    // Chain code
-    let chain_code: [u8; CHAINCODE_LENGTH] = chain_code_bytes.into();
-    let chain_code = ChainCode::from(chain_code);
-    chain_code_bytes.zeroize();
-
-    Ok((secret_key, chain_code))
+    util::to_key_and_chain_code(mac, |secret_key_bytes| {
+        VRFPrivateKey::new_using_random_bytes(secret_key_bytes, key_kind)
+            .map(|(prv, _pub)| prv)
+            .map_err(|_| DerivationError::KeyDerivationError)
+    })
 }
 
 #[cfg(test)]

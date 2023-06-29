@@ -119,6 +119,8 @@ impl KeychainUsageState {
     }
 }
 
+/// Just an empty struct used as key for the DB table
+/// It only represents a single value as there can be only one root key
 #[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct RootKeyConstant;
 

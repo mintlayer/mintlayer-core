@@ -44,6 +44,8 @@ pub enum Error {
     WalletAlreadyUnlocked,
     #[error("Cannot lock the wallet without setting a password")]
     WalletLockedWithoutAPassword,
+    #[error("Wallet file without a root key")]
+    WalletWithoutARootKey,
 }
 
 /// Possibly failing result of wallet storage query
@@ -64,7 +66,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
-    fn root_keys_exist(&self) -> Result<bool>;
+    fn check_root_keys_sanity(&self) -> Result<()>;
     fn get_keychain_usage_state(
         &self,
         id: &AccountKeyPurposeId,
