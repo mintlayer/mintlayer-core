@@ -57,8 +57,9 @@ use self::{
 use crate::{
     config,
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
+    event::{self, MempoolEvent},
     tx_accumulator::TransactionAccumulator,
-    MempoolEvent, TxStatus,
+    TxOrigin, TxStatus,
 };
 
 use crate::config::*;
@@ -835,9 +836,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
 // Mempool Interface and Event Reactions
 impl<M: MemoryUsageEstimator> Mempool<M> {
-    pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
+    pub fn add_transaction(
+        &mut self,
+        tx: SignedTransaction,
+        origin: TxOrigin,
+    ) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
-        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time))
+        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time, origin))
     }
 
     /// Add given transaction entry and potentially its descendants sourced from the orphan pool
@@ -855,19 +860,25 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     None => continue,
                     Some(orphan) => orphan,
                 };
+                let origin = orphan.origin();
 
                 match self.add_transaction_entry(orphan) {
                     Ok(TxStatus::InMempool) => {
                         let former_orphan =
                             self.store.get_entry(&orphan_tx_id).expect("just added");
                         work_queue.extend(self.orphans.ready_children_of(former_orphan.tx_entry()));
+
                         log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
+                        let event = event::OrphanProcessed::accepted(orphan_tx_id, origin);
+                        self.events_controller.broadcast(event.into());
                     }
                     Ok(TxStatus::InOrphanPool) => {
                         log::debug!("Orphan tx {orphan_tx_id} stays in the orphan pool");
                     }
                     Err(err) => {
                         log::info!("Orphan transaction {orphan_tx_id} no longer validates: {err}");
+                        let event = event::OrphanProcessed::rejected(orphan_tx_id, err, origin);
+                        self.events_controller.broadcast(event.into());
                     }
                 }
             }
@@ -947,15 +958,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
             chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.new_tip_set(block_id, block_height);
+                self.on_new_tip(block_id, block_height);
             }
         }
     }
 
-    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn on_new_tip(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
         reorg::handle_new_tip(self, block_id);
-        self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
+        let event = event::NewTip::new(block_id, block_height);
+        self.events_controller.broadcast(event.into());
     }
 }
 

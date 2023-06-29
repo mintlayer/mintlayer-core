@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::SignedTransaction;
+use mempool::TxStatus;
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
@@ -54,7 +55,7 @@ trait P2pRpc {
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()>;
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus>;
 }
 
 #[async_trait::async_trait]
@@ -94,7 +95,12 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()> {
-        rpc::handle_result(self.call_async_mut(|s| s.submit_transaction(tx.take())).await)
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus> {
+        rpc::handle_result(
+            self.call_async_mut(move |this| {
+                this.submit_transaction(tx.take(), mempool::TxOrigin::LocalP2p)
+            })
+            .await,
+        )
     }
 }

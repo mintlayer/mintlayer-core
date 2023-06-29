@@ -70,13 +70,13 @@ async fn two_transactions_in_sequence(
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     // Add the second transaction first
-    let res = mempool.add_transaction(tx1);
+    let res = mempool.add_transaction(tx1, TxOrigin::TEST);
     assert_eq!(res, Ok(TxStatus::InOrphanPool));
     assert!(mempool.contains_orphan_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx1_id));
 
     // Now add the first transaction
-    let res = mempool.add_transaction(tx0);
+    let res = mempool.add_transaction(tx0, TxOrigin::TEST);
     assert_eq!(res, Ok(TxStatus::InMempool));
 
     // Now the second tx (which we submitted first) should be either rejected or in mempool
@@ -160,7 +160,7 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     for (tx_no, expected_mempool, expected_orphans) in insertion_plan {
-        let _ = mempool.add_transaction(txs[tx_no].clone()).expect("tx add");
+        let _ = mempool.add_transaction(txs[tx_no].clone(), TxOrigin::TEST).expect("tx add");
 
         // Check the expected mempool state
         for (i, tx_id) in tx_ids.iter().enumerate() {
@@ -196,13 +196,19 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
 
     // Add the first two transactions into mempool
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    assert_eq!(mempool.add_transaction(tx0), Ok(TxStatus::InMempool));
-    assert_eq!(mempool.add_transaction(tx1a), Ok(TxStatus::InMempool));
+    assert_eq!(
+        mempool.add_transaction(tx0, TxOrigin::TEST),
+        Ok(TxStatus::InMempool)
+    );
+    assert_eq!(
+        mempool.add_transaction(tx1a, TxOrigin::TEST),
+        Ok(TxStatus::InMempool)
+    );
 
     // Check transaction that conflicts with one in mempool gets rejected instead of ending up in
     // the orphan pool.
     assert_eq!(
-        mempool.add_transaction(tx1b),
+        mempool.add_transaction(tx1b, TxOrigin::TEST),
         Err(OrphanPoolError::MempoolConflict.into()),
     );
 }
@@ -242,7 +248,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
         // Now add each transaction in the subsequence
         tx_subseq.iter().for_each(|tx| {
             let tx = tx.transaction().clone();
-            let _ = mempool.add_transaction(tx).expect("tx add");
+            let _ = mempool.add_transaction(tx, TxOrigin::TEST).expect("tx add");
         });
 
         // Check the final state of each transaction in the original sequence

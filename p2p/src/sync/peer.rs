@@ -535,10 +535,12 @@ where
         }
 
         if let Some(transaction) = tx {
-            super::process_incoming_transaction(
+            let origin = mempool::TxOrigin::Peer(self.id());
+            let _ = super::process_incoming_transaction(
                 &self.mempool_handle,
                 &mut self.messaging_handle,
                 transaction,
+                origin,
             )
             .await?;
         }

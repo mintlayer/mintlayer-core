@@ -13,5 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod mempool_interface;
-pub mod mempool_interface_impl;
+mod mempool_interface;
+mod mempool_interface_impl;
+
+pub use mempool_interface::{MempoolInterface, MempoolSubsystemInterface};
+pub use mempool_interface_impl::make_mempool;

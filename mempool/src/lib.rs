@@ -15,32 +15,23 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
-use common::{
-    chain::Block,
-    primitives::{BlockHeight, Id},
-};
 pub use config::MempoolMaxSize;
-pub use interface::{
-    mempool_interface::{MempoolInterface, MempoolSubsystemInterface},
-    mempool_interface_impl::make_mempool,
-};
-
-use crate::error::Error as MempoolError;
+pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
+pub use tx_origin::TxOrigin;
 
 mod config;
 pub mod error;
+pub mod event;
 mod interface;
 mod pool;
 pub mod rpc;
 pub mod tx_accumulator;
-
-#[derive(Debug, Clone)]
-pub enum MempoolEvent {
-    NewTip(Id<Block>, BlockHeight),
-}
+mod tx_origin;
 
 /// Result of adding transaction to the mempool
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize)]
+#[derive(
+    Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
 #[must_use = "Please check whether the tx was accepted to main mempool or orphan pool"]
 pub enum TxStatus {
     /// Transaction is in mempool
@@ -61,4 +52,4 @@ impl TxStatus {
 
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 
-pub type Result<T> = core::result::Result<T, MempoolError>;
+pub type Result<T> = core::result::Result<T, error::Error>;

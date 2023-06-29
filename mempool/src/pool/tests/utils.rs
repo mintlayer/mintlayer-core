@@ -236,6 +236,7 @@ pub fn generate_transaction_graph(
                 .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
         );
 
-        TxEntryWithFee::new(TxEntry::new(tx, time), Fee::new(Amount::from_atoms(total)))
+        let entry = TxEntry::new(tx, time, TxOrigin::TEST);
+        TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
     })
 }

@@ -90,11 +90,16 @@ where
         Ok(())
     }
 
-    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
+    async fn submit_transaction(
+        &mut self,
+        tx: SignedTransaction,
+        origin: mempool::TxOrigin,
+    ) -> crate::Result<mempool::TxStatus> {
         crate::sync::process_incoming_transaction(
             &self.mempool_handle,
             &mut self.messaging_handle,
             tx,
+            origin,
         )
         .await
     }

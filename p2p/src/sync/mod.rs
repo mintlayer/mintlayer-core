@@ -34,7 +34,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::MempoolHandle;
+use mempool::{event::OrphanProcessed, MempoolHandle, TxOrigin};
 use utils::atomics::AcqRelAtomicBool;
 use utils::sync::Arc;
 use utils::tap_error_log::LogError;
@@ -126,12 +126,20 @@ where
                 .expect("Chainstate call failed")?,
         );
 
+        let mut orphan_tx_processed_receiver =
+            subscribe_to_orphan_tx_processed(&self.mempool_handle).await?;
+
         loop {
             tokio::select! {
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.expect("New tip sender was closed");
                     self.handle_new_tip(block_id).await?;
+                },
+
+                orphan_proc = orphan_tx_processed_receiver.recv() => {
+                    let orphan_proc = orphan_proc.expect("Orphan processed sender closed");
+                    self.handle_orphan_processed(&orphan_proc)?;
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
@@ -208,6 +216,38 @@ where
             .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![header])))
     }
 
+    fn handle_orphan_processed(&mut self, orphan_proc: &OrphanProcessed) -> Result<()> {
+        let tx_id = *orphan_proc.tx_id();
+        let origin = orphan_proc.origin();
+        match orphan_proc.result() {
+            Ok(()) => match origin {
+                TxOrigin::Peer(_) | TxOrigin::LocalP2p => {
+                    log::info!("Broadcasting former orphan {tx_id} originating in {origin}");
+                    self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(tx_id))?;
+                }
+                TxOrigin::LocalMempool | TxOrigin::PastBlock => {
+                    log::trace!("Not propagating processed orphan {tx_id} originating in {origin}");
+                }
+            },
+            Err(_) => match origin {
+                TxOrigin::Peer(peer_id) => {
+                    // Punish the original peer for submitting an invalid transaction according
+                    // to mempool ban score.
+                    let ban_score = orphan_proc.ban_score();
+                    if ban_score > 0 {
+                        let (sx, _rx) = crate::utils::oneshot_nofail::channel();
+                        let event = PeerManagerEvent::AdjustPeerScore(peer_id, ban_score, sx);
+                        self.peer_manager_sender
+                            .send(event)
+                            .map_err(|_| P2pError::ChannelClosed)?;
+                    }
+                }
+                TxOrigin::PastBlock | TxOrigin::LocalMempool | TxOrigin::LocalP2p => (),
+            },
+        }
+        Ok(())
+    }
+
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) {
         match event {
@@ -244,22 +284,50 @@ pub async fn subscribe_to_new_tip(
     Ok(receiver)
 }
 
+/// Returns a receiver for the mempool `OrphanProcessed` events.
+pub async fn subscribe_to_orphan_tx_processed(
+    mempool_handle: &MempoolHandle,
+) -> Result<UnboundedReceiver<OrphanProcessed>> {
+    let (sender, receiver) = mpsc::unbounded_channel();
+
+    let subscribe_func =
+        Arc::new(
+            move |mempool_event: mempool::event::MempoolEvent| match mempool_event {
+                mempool::event::MempoolEvent::OrphanProcessed(op) => {
+                    let _ = sender.send(op).log_err_pfx("The orphan processed receiver closed");
+                }
+                mempool::event::MempoolEvent::NewTip(_) => (),
+            },
+        );
+
+    mempool_handle
+        .call_mut(|this| this.subscribe_to_events(subscribe_func))
+        .await
+        .map_err(|_| P2pError::SubsystemFailure)?;
+
+    Ok(receiver)
+}
+
 /// Check the incoming transaction and propagate it to peer if it's valid
 // TODO: Do we want to return the TxStatus?
 pub async fn process_incoming_transaction(
     mempool: &MempoolHandle,
     messaging: &mut impl MessagingService,
     transaction: common::chain::SignedTransaction,
-) -> Result<()> {
+    origin: mempool::TxOrigin,
+) -> Result<mempool::TxStatus> {
     use mempool::TxStatus;
     let tx_id = common::primitives::Idable::get_id(transaction.transaction());
 
-    match mempool.call_mut(|m| m.add_transaction(transaction)).await?? {
+    let status = mempool.call_mut(move |m| m.add_transaction(transaction, origin)).await??;
+    match status {
         // Transaction accepted to local mempool, propagate it to the peers
-        TxStatus::InMempool => messaging.broadcast_message(SyncMessage::NewTransaction(tx_id)),
+        TxStatus::InMempool => messaging.broadcast_message(SyncMessage::NewTransaction(tx_id))?,
         // We don't know whether the orphan is valid, don't propagate at this point
-        TxStatus::InOrphanPool => Ok(()),
-    }
+        TxStatus::InOrphanPool => (),
+    };
+
+    Ok(status)
 }
 
 #[cfg(test)]

@@ -26,7 +26,7 @@ use logging::log;
 use utils::tap_error_log::LogError;
 use utxo::UtxosStorageRead;
 
-use super::{MemoryUsageEstimator, Mempool};
+use super::{MemoryUsageEstimator, Mempool, TxOrigin};
 
 /// An error that can happen in mempool on chain reorg
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -147,7 +147,7 @@ pub fn refresh_mempool<M: MemoryUsageEstimator>(
 
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
-        if let Err(e) = mempool.add_transaction(tx) {
+        if let Err(e) = mempool.add_transaction(tx, TxOrigin::PastBlock) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }

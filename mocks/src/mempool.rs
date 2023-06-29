@@ -23,8 +23,9 @@ use common::{
 };
 use mempool::{
     error::{Error, TxValidationError},
+    event::MempoolEvent,
     tx_accumulator::TransactionAccumulator,
-    MempoolEvent, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
+    MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
 use utils::atomics::AcqRelAtomicBool;
@@ -38,7 +39,6 @@ pub struct MempoolInterfaceMock {
     pub collect_txs_called: Arc<AcqRelAtomicBool>,
     pub collect_txs_should_error: Arc<AcqRelAtomicBool>,
     pub subscribe_to_events_called: Arc<AcqRelAtomicBool>,
-    pub subscribe_to_events_should_error: Arc<AcqRelAtomicBool>,
     pub run_called: Arc<AcqRelAtomicBool>,
     pub run_should_error: Arc<AcqRelAtomicBool>,
 }
@@ -59,7 +59,6 @@ impl MempoolInterfaceMock {
             collect_txs_called: Arc::new(AcqRelAtomicBool::new(false)),
             collect_txs_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             subscribe_to_events_called: Arc::new(AcqRelAtomicBool::new(false)),
-            subscribe_to_events_should_error: Arc::new(AcqRelAtomicBool::new(false)),
             run_called: Arc::new(AcqRelAtomicBool::new(false)),
             run_should_error: Arc::new(AcqRelAtomicBool::new(false)),
         }
@@ -71,7 +70,11 @@ const SUBSYSTEM_ERROR: Error =
 
 #[async_trait::async_trait]
 impl MempoolInterface for MempoolInterfaceMock {
-    fn add_transaction(&mut self, _tx: SignedTransaction) -> Result<TxStatus, Error> {
+    fn add_transaction(
+        &mut self,
+        _tx: SignedTransaction,
+        _origin: TxOrigin,
+    ) -> Result<TxStatus, Error> {
         self.add_transaction_called.store(true);
 
         if self.add_transaction_should_error.load() {
@@ -120,17 +123,8 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    fn subscribe_to_events(
-        &mut self,
-        _handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error> {
+    fn subscribe_to_events(&mut self, _handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
         self.subscribe_to_events_called.store(true);
-
-        if self.subscribe_to_events_should_error.load() {
-            Err(SUBSYSTEM_ERROR)
-        } else {
-            Ok(())
-        }
     }
 
     fn memory_usage(&self) -> usize {

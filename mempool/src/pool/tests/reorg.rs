@@ -48,7 +48,10 @@ async fn basic_reorg(#[case] seed: Seed) {
         .add_anyone_can_spend_output(10_000_000)
         .build();
     let tx1_id = tx1.transaction().get_id();
-    mempool.add_transaction(tx1.clone()).expect("adding tx1").assert_in_mempool();
+    mempool
+        .add_transaction(tx1.clone(), TxOrigin::TEST)
+        .expect("adding tx1")
+        .assert_in_mempool();
 
     // Add another transaction
     let tx2 = TransactionBuilder::new()
@@ -59,7 +62,10 @@ async fn basic_reorg(#[case] seed: Seed) {
         .add_anyone_can_spend_output(9_000_000)
         .build();
     let tx2_id = tx2.transaction().get_id();
-    mempool.add_transaction(tx2.clone()).expect("adding tx2").assert_in_mempool();
+    mempool
+        .add_transaction(tx2.clone(), TxOrigin::TEST)
+        .expect("adding tx2")
+        .assert_in_mempool();
 
     // Check the transactions are there
     assert!(mempool.contains_transaction(&tx1_id));
@@ -78,7 +84,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.new_tip_set(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1));
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 
@@ -93,7 +99,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block2");
-    mempool.new_tip_set(block2_id, BlockHeight::new(2));
+    mempool.on_new_tip(block2_id, BlockHeight::new(2));
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -108,7 +114,7 @@ async fn basic_reorg(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.new_tip_set(block4_id, BlockHeight::new(3));
+    mempool.on_new_tip(block4_id, BlockHeight::new(3));
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
@@ -133,7 +139,10 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
         .add_anyone_can_spend_output(10_000_000)
         .build();
     let tx1_id = tx1.transaction().get_id();
-    mempool.add_transaction(tx1.clone()).expect("adding tx1").assert_in_mempool();
+    mempool
+        .add_transaction(tx1.clone(), TxOrigin::TEST)
+        .expect("adding tx1")
+        .assert_in_mempool();
 
     // Add another transaction
     let tx2 = TransactionBuilder::new()
@@ -144,7 +153,10 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
         .add_anyone_can_spend_output(9_000_000)
         .build();
     let tx2_id = tx2.transaction().get_id();
-    mempool.add_transaction(tx2.clone()).expect("adding tx2").assert_in_mempool();
+    mempool
+        .add_transaction(tx2.clone(), TxOrigin::TEST)
+        .expect("adding tx2")
+        .assert_in_mempool();
 
     // Check the transactions are there
     assert!(mempool.contains_transaction(&tx1_id));
@@ -158,7 +170,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.new_tip_set(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1));
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -173,7 +185,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.new_tip_set(block3_id, BlockHeight::new(2));
+    mempool.on_new_tip(block3_id, BlockHeight::new(2));
     assert!(mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
