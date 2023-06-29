@@ -91,14 +91,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
-        // FIXME: should it just delegate to ChainstateRef::is_block_in_main_chain?
-        // (but it'll have to be added to ChainstateQuery too).
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_height_in_main_chain(&(*block_id).into())
+            .is_block_in_main_chain(&(*block_id).into())
             .map_err(ChainstateError::FailedToReadProperty)
-            .map(|ht| ht.is_some())
     }
 
     fn get_block_height_in_main_chain(
