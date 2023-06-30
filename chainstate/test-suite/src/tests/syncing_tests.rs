@@ -494,7 +494,7 @@ fn initial_block_download(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn orphan_block(#[case] seed: Seed) {
+fn header_check_for_orphan(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
