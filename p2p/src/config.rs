@@ -28,6 +28,7 @@ make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
+make_config_setting!(MaxClockDiff, Duration, Duration::from_secs(10));
 make_config_setting!(HeaderLimit, usize, 2000);
 make_config_setting!(MaxLocatorSize, usize, 101);
 make_config_setting!(RequestedBlocksLimit, usize, 500);
@@ -92,6 +93,9 @@ pub struct P2pConfig {
     pub ping_check_period: PingCheckPeriod,
     /// When a peer is detected as dead and disconnected
     pub ping_timeout: PingTimeout,
+    /// Maximum acceptable time difference between this node and the remote peer.
+    /// If a large difference is detected, the peer will be disconnected.
+    pub max_clock_diff: MaxClockDiff,
     /// A node type.
     pub node_type: NodeTypeSetting,
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.

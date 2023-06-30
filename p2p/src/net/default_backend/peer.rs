@@ -20,12 +20,12 @@ use tokio::{
     time::timeout,
 };
 
-use common::chain::ChainConfig;
+use common::chain::{block::timestamp::BlockTimestamp, ChainConfig};
 use logging::log;
 
 use crate::{
     config::P2pConfig,
-    error::{P2pError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError},
     message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
@@ -114,7 +114,21 @@ where
         }
     }
 
-    async fn handshake(&mut self) -> crate::Result<()> {
+    fn validate_peer_time(
+        p2p_config: &P2pConfig,
+        local_time: BlockTimestamp,
+        remote_time: BlockTimestamp,
+    ) -> crate::Result<()> {
+        let time_diff =
+            Duration::from_secs(local_time.as_int_seconds().abs_diff(remote_time.as_int_seconds()));
+        utils::ensure!(
+            time_diff <= *p2p_config.max_clock_diff,
+            P2pError::PeerError(PeerError::TimeDiff(time_diff))
+        );
+        Ok(())
+    }
+
+    async fn handshake(&mut self, local_time: BlockTimestamp) -> crate::Result<()> {
         match self.peer_role {
             PeerRole::Inbound => {
                 let types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -124,11 +138,14 @@ where
                     user_agent,
                     version,
                     receiver_address,
+                    current_time: remote_time,
                     handshake_nonce,
                 }) = self.socket.recv().await?
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
+
+                Self::validate_peer_time(&self.p2p_config, local_time, remote_time)?;
 
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
@@ -155,6 +172,7 @@ where
                             version: *self.chain_config.version(),
                             services: (*self.p2p_config.node_type).into(),
                             receiver_address: self.receiver_address.clone(),
+                            current_time: local_time,
                         },
                     ))
                     .await?;
@@ -168,6 +186,7 @@ where
                         user_agent: self.p2p_config.user_agent.clone(),
                         version: *self.chain_config.version(),
                         receiver_address: self.receiver_address.clone(),
+                        current_time: local_time,
                         handshake_nonce,
                     }))
                     .await?;
@@ -184,6 +203,8 @@ where
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
+
+                Self::validate_peer_time(&self.p2p_config, local_time, remote_time)?;
 
                 self.tx.send((
                     self.peer_id,
@@ -264,9 +285,9 @@ where
         Ok(())
     }
 
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self, local_time: BlockTimestamp) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
+        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake(local_time)).await;
         match handshake_res {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -357,7 +378,7 @@ mod tests {
         );
 
         let handle = tokio::spawn(async move {
-            peer.handshake().await.unwrap();
+            peer.handshake(BlockTimestamp::from_int_seconds(123456)).await.unwrap();
             peer
         });
 
@@ -371,6 +392,7 @@ mod tests {
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
+                current_time: BlockTimestamp::from_int_seconds(123456),
                 handshake_nonce: 123,
             }))
             .await
@@ -430,7 +452,7 @@ mod tests {
         );
 
         let handle = tokio::spawn(async move {
-            peer.handshake().await.unwrap();
+            peer.handshake(BlockTimestamp::from_int_seconds(123456)).await.unwrap();
             peer
         });
 
@@ -445,6 +467,7 @@ mod tests {
                     user_agent: p2p_config.user_agent.clone(),
                     services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     receiver_address: None,
+                    current_time: BlockTimestamp::from_int_seconds(123456),
                 }
             ))
             .await
@@ -506,7 +529,8 @@ mod tests {
             rx2,
         );
 
-        let handle = tokio::spawn(async move { peer.handshake().await });
+        let local_time = BlockTimestamp::from_int_seconds(123456);
+        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
@@ -518,6 +542,7 @@ mod tests {
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
+                current_time: local_time,
                 handshake_nonce: 123,
             }))
             .await
@@ -564,7 +589,8 @@ mod tests {
             rx2,
         );
 
-        let handle = tokio::spawn(async move { peer.handshake().await });
+        let local_time = BlockTimestamp::from_int_seconds(123456);
+        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());

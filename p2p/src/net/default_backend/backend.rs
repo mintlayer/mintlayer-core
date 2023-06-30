@@ -25,7 +25,10 @@ use tokio::{
     time::timeout,
 };
 
-use common::chain::ChainConfig;
+use common::{
+    chain::{block::timestamp::BlockTimestamp, ChainConfig},
+    time_getter::TimeGetter,
+};
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
@@ -93,6 +96,8 @@ pub struct Backend<T: TransportSocket> {
     /// A p2p specific configuration.
     p2p_config: Arc<P2pConfig>,
 
+    time_getter: TimeGetter,
+
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
 
@@ -136,6 +141,7 @@ where
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
@@ -150,6 +156,7 @@ where
             conn_tx,
             chain_config,
             p2p_config,
+            time_getter,
             sync_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
@@ -333,6 +340,7 @@ where
         let p2p_config = Arc::clone(&self.p2p_config);
         let shutdown = Arc::clone(&self.shutdown);
 
+        let local_time = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
         let handle = tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
                 remote_peer_id,
@@ -344,7 +352,7 @@ where
                 backend_tx,
                 peer_rx,
             );
-            match peer.run().await {
+            match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),

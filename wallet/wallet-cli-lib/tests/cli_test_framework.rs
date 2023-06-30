@@ -184,6 +184,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),

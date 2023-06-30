@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::Transaction,
+    chain::{block::timestamp::BlockTimestamp, Transaction},
     primitives::{semver::SemVer, user_agent::UserAgent, Id},
 };
 use serialization::{Decode, Encode};
@@ -86,6 +86,8 @@ pub enum HandshakeMessage {
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
 
+        current_time: BlockTimestamp,
+
         /// Random nonce that is only used to detect and drop self-connects
         handshake_nonce: HandshakeNonce,
     },
@@ -98,6 +100,8 @@ pub enum HandshakeMessage {
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
+
+        current_time: BlockTimestamp,
     },
 }
 

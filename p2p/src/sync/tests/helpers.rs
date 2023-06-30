@@ -470,6 +470,7 @@ impl NetworkingService for NetworkingServiceStub {
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
+        _: TimeGetter,
         _: Arc<SeqCstAtomicBool>,
         _: oneshot::Receiver<()>,
         _: mpsc::UnboundedReceiver<P2pEventHandler>,

@@ -123,6 +123,11 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_sync_stalling_timeout: Option<NonZeroU64>,
 
+    /// Maximum acceptable time difference between this node and the remote peer.
+    /// If a large difference is detected, the peer will be disconnected.
+    #[clap(long)]
+    pub p2p_max_clock_diff: Option<u64>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the
