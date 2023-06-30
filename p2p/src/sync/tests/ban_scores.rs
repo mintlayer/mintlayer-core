@@ -14,9 +14,17 @@
 // limitations under the License.
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
+use common::primitives::{Id, H256};
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
+use mempool::error::{MempoolPolicyError, TxValidationError};
+use tokio::sync::mpsc::unbounded_channel;
 
-use crate::error::P2pError;
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
+    sync::peer::Peer,
+    types::peer_id::PeerId,
+};
 
 #[test]
 fn ban_scores() {
@@ -31,4 +39,40 @@ fn ban_scores() {
         .ban_score(),
         100
     );
+}
+
+#[tokio::test]
+async fn peer_handle_result() {
+    let (peer_manager_sender, mut peer_manager_receiver) = unbounded_channel();
+    tokio::spawn(async move {
+        while let Some(event) = peer_manager_receiver.recv().await {
+            match event {
+                crate::PeerManagerEvent::AdjustPeerScore(_, _, score) => {
+                    score.send(Ok(()));
+                }
+                e => unreachable!("Unexpected event: {e:?}"),
+            }
+        }
+    });
+
+    // Test that the non-fatal errors are converted to Ok
+    for err in [
+        P2pError::PeerError(PeerError::PeerDoesntExist),
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders),
+        P2pError::ChainstateError(ChainstateError::ProcessBlockError(
+            BlockError::BlockAlreadyProcessed(Id::new(H256::zero())),
+        )),
+        P2pError::MempoolError(mempool::error::Error::Policy(
+            MempoolPolicyError::MempoolFull,
+        )),
+        P2pError::MempoolError(mempool::error::Error::Validity(TxValidationError::TipMoved)),
+    ] {
+        let handle_res = Peer::<DefaultNetworkingService<TcpTransportSocket>>::handle_result(
+            &peer_manager_sender,
+            PeerId::new(),
+            Err(err),
+        )
+        .await;
+        assert_eq!(handle_res, Ok(()));
+    }
 }

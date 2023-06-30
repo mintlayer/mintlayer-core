@@ -213,7 +213,7 @@ where
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        self.handle_result(res).await
+        Self::handle_result(&self.peer_manager_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -567,7 +567,11 @@ where
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
-    pub async fn handle_result(&mut self, result: Result<()>) -> Result<()> {
+    pub async fn handle_result(
+        peer_manager_sender: &UnboundedSender<PeerManagerEvent<T>>,
+        peer_id: PeerId,
+        result: Result<()>,
+    ) -> Result<()> {
         let error = match result {
             Ok(()) => return Ok(()),
             Err(e) => e,
@@ -578,45 +582,50 @@ where
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+            // The special handling of these mempool errors is not really necessary, because their ban score is 0
             P2pError::MempoolError(MempoolError::Policy(
                 MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
             )) => Ok(()),
-            // A protocol error - increase the ban score of a peer.
+
+            // A protocol error - increase the ban score of a peer if needed.
             e @ (P2pError::ProtocolError(_)
             | P2pError::MempoolError(_)
-            | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(_),
-            ))) => {
+            | P2pError::ChainstateError(_)) => {
                 let ban_score = e.ban_score();
                 if ban_score > 0 {
                     log::info!(
-                        "Adjusting the '{}' peer score by {}: {e:?}",
-                        self.id(),
+                        "Adjusting the '{}' peer score by {}: {:?}",
+                        peer_id,
                         ban_score,
+                        e,
                     );
 
                     let (sender, receiver) = oneshot_nofail::channel();
-                    self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                        self.id(),
-                        ban_score,
-                        sender,
+                    peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
+                        peer_id, ban_score, sender,
                     ))?;
                     receiver.await?.or_else(|e| match e {
                         P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
                         e => Err(e),
                     })
                 } else {
-                    Err(e)
+                    log::debug!(
+                        "Ignoring error with the ban score of 0 for the '{}' peer: {:?}",
+                        peer_id,
+                        e,
+                    );
+                    Ok(())
                 }
             }
-            // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
-            // manager.
+
+            // Some of these errors aren't technically fatal,
+            // but they shouldn't occur in the sync manager.
             e @ (P2pError::DialError(_)
             | P2pError::ConversionError(_)
             | P2pError::PeerError(_)
             | P2pError::NoiseHandshakeError(_)
-            | P2pError::InvalidConfigurationValue(_)
-            | P2pError::ChainstateError(_)) => Err(e),
+            | P2pError::InvalidConfigurationValue(_)) => panic!("Unexpected error {e:?}"),
+
             // Fatal errors, simply propagate them to stop the sync manager.
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
