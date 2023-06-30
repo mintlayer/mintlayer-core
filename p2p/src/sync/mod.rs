@@ -17,6 +17,7 @@
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
 mod peer;
+mod types;
 
 use std::collections::HashSet;
 
@@ -149,28 +150,20 @@ where
         let inserted = self.peers.insert(peer);
         assert!(inserted, "Registered duplicated peer: {peer}");
 
-        let messaging_handle = self.messaging_handle.clone();
-        let peer_manager_sender = self.peer_manager_sender.clone();
-        let chainstate_handle = self.chainstate_handle.clone();
-        let mempool_handle = self.mempool_handle.clone();
-        let p2p_config = Arc::clone(&self.p2p_config);
-        let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
-        let time_getter = self.time_getter.clone();
+        let mut peer = Peer::<T>::new(
+            peer,
+            remote_services,
+            Arc::clone(&self.p2p_config),
+            self.chainstate_handle.clone(),
+            self.mempool_handle.clone(),
+            self.peer_manager_sender.clone(),
+            sync_rx,
+            self.messaging_handle.clone(),
+            Arc::clone(&self.is_initial_block_download),
+            self.time_getter.clone(),
+        );
         tokio::spawn(async move {
-            Peer::<T>::new(
-                peer,
-                remote_services,
-                p2p_config,
-                chainstate_handle,
-                mempool_handle,
-                peer_manager_sender,
-                sync_rx,
-                messaging_handle,
-                is_initial_block_download,
-                time_getter,
-            )
-            .run()
-            .await;
+            peer.run().await;
         });
     }
 
