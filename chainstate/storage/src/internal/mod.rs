@@ -231,6 +231,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
 
         fn get_block_tree_by_height(
             &self,
+            start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
         fn get_accounting_undo(

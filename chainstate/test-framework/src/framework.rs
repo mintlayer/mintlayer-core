@@ -103,13 +103,27 @@ impl TestFramework {
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let id = block.get_id();
-        let block_index_result = self.chainstate.process_block(block, source)?;
-        let index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
-            GenBlockIndex::Genesis(..) => panic!("we have processed a block"),
+        let process_block_result = self.chainstate.process_block(block, source);
+
+        // Old block index statuses might have changed after block processing, so we need
+        // to reload them.
+        for index in &mut self.block_indexes {
+            *index = self
+                .chainstate
+                .get_block_index(index.block_id())?
+                .expect("Old block index must still be present");
+        }
+
+        // Handle the error only after the old indices have been updated.
+        let process_block_result = process_block_result?;
+
+        let new_index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
+            GenBlockIndex::Genesis(..) => panic!("we have processed the genesis block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
-        self.block_indexes.push(index);
-        Ok(block_index_result)
+        self.block_indexes.push(new_index);
+
+        Ok(process_block_result)
     }
 
     /// Creates and processes a given amount of blocks. Returns the id of the last produced block.
@@ -222,6 +236,10 @@ impl TestFramework {
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
+    }
+
+    pub fn make_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
+        block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
     }
 }
 

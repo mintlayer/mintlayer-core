@@ -57,15 +57,17 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
-            BlockError::BlockCommitError(_, _, _) => 0,
-            BlockError::BlockStatusCommitError(_, _, _) => 0,
+            BlockError::DbCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
+            BlockError::InvariantBrokenBlockIndexNotFound(_) => 0,
             BlockError::EpochSealError(err) => err.ban_score(),
+            BlockError::PropertyQueryError(_) => 0,
+            BlockError::BlockHeightTooBig(_) => 0,
         }
     }
 }

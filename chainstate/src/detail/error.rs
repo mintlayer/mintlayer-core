@@ -31,6 +31,7 @@ use common::{
 };
 use consensus::ConsensusVerificationError;
 
+use derive_more::Display;
 use thiserror::Error;
 use tx_verifier::transaction_verifier::{error::TxIndexError, storage::HasTxIndexDisabledError};
 
@@ -48,6 +49,20 @@ pub enum BlockError {
     BestBlockLoadError(PropertyQueryError),
     #[error("Failed to load block")]
     BlockLoadError(PropertyQueryError),
+    // FIXME: I know that this kind of error was frowned upon in the past, but is it that bad?
+    // Without it I'd have to create a bunch of very specific errors that would clutter this enum.
+    // Also, AFAICS PropertyQueryError is itself supposed to already have the details about the property;
+    // and if it's not detailed enough, then probably it should be extended?
+    // E.g. there is no specific error for "is_block_in_main_chain" failure, so it currently returns
+    // whatever "get_block_height_in_main_chain" returns. So probably, we should extend PropertyQueryError
+    // with something like BlockInMainChainCheckFailed and have "is_block_in_main_chain" convert
+    // one PropertyQueryError into another?
+    // On the other hand, the StorageError variant should probably be removed both from BlockError and PropertyQueryError.
+    #[error("Property query error: {0}")]
+    PropertyQueryError(PropertyQueryError),
+    // FIXME: fix inconsistent naming - here we have InvariantError and below it's InvariantBroken.
+    // Or alternatively, leave only one generic InvariantError and add a corresponding context enum that would
+    // catch the details.
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
@@ -62,12 +77,8 @@ pub enum BlockError {
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
     InvalidBlockAlreadyProcessed(Id<Block>),
-    #[error(
-        "Failed to commit block data to database for block {0} after {1} attempts with error {2}"
-    )]
-    BlockCommitError(Id<Block>, usize, chainstate_storage::Error),
-    #[error("Failed to commit block status update to database for block {0} after {1} attempts with error {2}")]
-    BlockStatusCommitError(Id<Block>, usize, chainstate_storage::Error),
+    #[error("Failed to commit to the DB after {0} attempts: {1}, context: {2}")]
+    DbCommitError(usize, chainstate_storage::Error, DbCommittingContext),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
     #[error("TransactionVerifier error: {0}")]
@@ -80,8 +91,25 @@ pub enum BlockError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Inconsistent db, block not found after connect: {0}")]
     InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
+    #[error("Inconsistent db, block index for block {0} not found")]
+    InvariantBrokenBlockIndexNotFound(Id<Block>),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
+    #[error("The block height {0} is too big")]
+    BlockHeightTooBig(BlockHeight),
+}
+
+// Note: this enum isn't supposed to represent a complete error; this is why its elements
+// don't include a lower-level error value like PropertyQueryError and it itself doesn't
+// implement the Error trait.
+#[derive(Debug, Display, PartialEq, Eq, Clone)]
+pub enum DbCommittingContext {
+    #[display(fmt = "committing block {}", _0)]
+    Block(Id<Block>),
+    #[display(fmt = "committing block status for block {}", _0)]
+    BlockStatus(Id<Block>),
+    #[display(fmt = "committing invalidated blocks statuses")]
+    InvalidatedBlockStatuses,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

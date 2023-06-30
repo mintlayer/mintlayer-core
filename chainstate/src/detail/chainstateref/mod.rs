@@ -14,13 +14,15 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use thiserror::Error;
 
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, BlockStatus,
-    EpochData, EpochDataCache, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    BlockValidationStage, EpochData, EpochDataCache, GenBlockIndex, GetAncestorError,
+    PropertyQueryError,
 };
 use common::{
     chain::{
@@ -469,7 +471,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<(), CheckBlockError> {
         let parent_block_index = self.get_previous_block_index_by_header(block_header)?;
         ensure!(
-            parent_block_index.status().is_valid(),
+            parent_block_index.status().is_ok(),
             CheckBlockError::InvalidParent(block_header.block_id())
         );
 
@@ -820,13 +822,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        let block_tree_map = self.db_tx.get_block_tree_by_height().log_err()?;
+    pub fn get_block_id_tree_top_as_list(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        let block_tree_map = self.db_tx.get_block_tree_by_height(start_from).log_err()?;
         let result = block_tree_map
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
         Ok(result)
+    }
+
+    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        self.get_block_id_tree_top_as_list(0.into())
     }
 
     /// Given a new block's header, obtain its previous block's block index; if not found,
@@ -902,7 +911,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &mut self,
         best_block_id: &Id<GenBlock>,
         new_block_index: &BlockIndex,
-    ) -> Result<(), BlockError> {
+    ) -> Result<(), ReorgError> {
         let new_chain = self
             .get_new_chain(new_block_index)
             .map_err(|e| {
@@ -937,13 +946,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         for block_index in new_chain {
             let block: WithId<Block> = self
                 .get_block_from_index(&block_index)
+                .map_err(BlockError::StorageError)
+                .and_then(|opt| {
+                    opt.ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
+                        *block_index.block_id(),
+                    ))
+                })
                 .log_err()?
-                .ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
-                    *block_index.block_id(),
-                ))?
                 .into();
 
-            self.connect_tip(&block_index, &block).log_err()?;
+            self.connect_tip(&block_index, &block)
+                .map_err(|err| ReorgError::ConnectBlockError(*block_index.block_id(), err))
+                .log_err()?;
             self.post_connect_tip(&block_index, block.as_ref()).log_err()?;
         }
 
@@ -1003,6 +1017,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         new_tip_block_index: &BlockIndex,
         new_tip: &WithId<Block>,
     ) -> Result<(), BlockError> {
+        debug_assert!(
+            new_tip_block_index.status().is_ok()
+                && new_tip_block_index.status().last_valid_stage()
+                    >= BlockValidationStage::CheckBlockOk
+        );
+        // FIXME: the block should already be at the CheckBlockOk stage at this moment,
+        // so this call to check_block can be removed.
         self.check_block(new_tip)?;
 
         let best_block_id =
@@ -1023,6 +1044,14 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.db_tx
             .set_best_block_id(&(*new_tip_block_index.block_id()).into())
             .log_err()?;
+
+        if new_tip_block_index.status().last_valid_stage() != BlockValidationStage::FullyChecked {
+            let mut new_status = new_tip_block_index.status();
+            new_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+            let new_block_index = new_tip_block_index.clone().with_status(new_status);
+            self.set_block_index(&new_block_index)?;
+        }
+
         Ok(())
     }
 
@@ -1067,17 +1096,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     pub fn activate_best_chain(
         &mut self,
         new_block_index: &BlockIndex,
-        best_block_id: &Id<GenBlock>,
-    ) -> Result<bool, BlockError> {
+    ) -> Result<bool, ReorgError> {
+        let best_block_id = self.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+
         // Chain trust is higher than the best block
         let current_best_block_index = self
-            .get_gen_block_index(best_block_id)
+            .get_gen_block_index(&best_block_id)
             .map_err(BlockError::BestBlockLoadError)
             .log_err()?
             .expect("Inconsistent DB");
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
-            self.reorganize(best_block_id, new_block_index).log_err()?;
+            self.reorganize(&best_block_id, new_block_index).log_err()?;
             return Ok(true);
         }
 
@@ -1090,6 +1120,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         }
 
         self.db_tx.add_block(block).map_err(BlockError::from).log_err()
+    }
+
+    pub fn delete_block(&mut self, id: &Id<Block>) -> Result<(), BlockError> {
+        self.db_tx.del_block(*id).map_err(BlockError::from).log_err()
     }
 
     pub fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
@@ -1158,4 +1192,16 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         consumed_epoch_data.flush(&mut self.db_tx)?;
         Ok(())
     }
+}
+
+// FIXME: need a better place for this enum (IMO it is too specific to be put to error.rs).
+// It may make sense to move all reorg-related methods and the enum to a separate file.
+// (Ideally though, IMO this file should be split into multiple pieces; probably, every set
+// of methods that return the same error type should go to their own separate file).
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum ReorgError {
+    #[error("Error connecting block {0}: {1}")]
+    ConnectBlockError(Id<Block>, BlockError),
+    #[error("Generic error during reorg: {0}")]
+    OtherError(#[from] BlockError),
 }

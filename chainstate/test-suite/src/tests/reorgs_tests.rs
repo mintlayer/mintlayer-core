@@ -146,24 +146,20 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
 fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     // # Attempt to spend a transaction created on a different fork
     //
-    // +-- 0x4273…c93c (H:7,M,B:10)
-    //      <= Try to create a new block after this that spend B10 and B3 in fork
+    // +-- 0x4273…c93c (H:7,M,B:9)
+    //      <= Try to create a new block that spends B9 and B3 in a fork
     // +-- 0xdf27…0fa5 (H:2,B:3)
     //          +-- 0x67fd…6419 (H:3,B:4)
     // > H - Height, M - main chain, B - block
     //
     // Reject a block with a spend from a re-org'ed out tx
     //
-    const NEW_CHAIN_START_ON: usize = 5;
-    const NEW_CHAIN_END_ON: usize = 9;
-    tf.create_chain(
-        &(*tf.index_at(NEW_CHAIN_START_ON).block_id()).into(),
-        1,
-        rng,
-    )
-    .unwrap();
-    let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON).block_id());
+    let block = tf.block(*tf.index_at(9).block_id());
     let spend_from = *tf.index_at(3).block_id();
+
+    assert!(!tf.is_block_in_main_chain(&spend_from));
+    assert!(tf.is_block_in_main_chain(&block.get_id()));
+
     let double_spend_block = tf
         .make_block_builder()
         .with_parent(block.get_id().into())
@@ -182,25 +178,35 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
 
 fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
     // # Try to create a fork that double-spends
+    // This is similar to check_spend_tx_in_other_fork, but double spending happens in the
+    // same branch.
     // +-- 0x6e45…e8e8 (H:0,P:0)
     //         +-- 0xe090…995e (H:1,M,P:1)
     //                 +-- 0x3562…2fb3 (H:2,M,P:2)
-    //                         +-- 0xc92d…04c7 (H:3,M,P:5)
-    //                                 +-- 0x9dbb…e52f (H:4,M,P:6)
+    //                     ... (there are quite a few blocks on the mainchain at this moment)
     //                 +-- 0xdf27…0fa5 (H:2,P:3)
     //                         +-- 0x67fd…6419 (H:3,P:4)
     // > H - Height, M - main chain, B - block
     //
     // Reject a chain with a double spend, even if it is longer
     //
-    let block = tf.block(*tf.block_indexes.last().unwrap().block_id());
-    let spend_from = *tf.index_at(6).block_id();
+    let parent = tf.index_at(4).clone();
+    let parent_id = parent.block_id();
+    let spend_from = tf.make_chain_block_id(parent.prev_block_id());
+
+    assert!(!tf.is_block_in_main_chain(parent_id));
+
+    let double_spend_block = tf
+        .make_block_builder()
+        .with_parent((*parent_id).into())
+        .add_double_spend_transaction((*parent_id).into(), spend_from, rng)
+        .build();
+    let block_id = double_spend_block.get_id();
+    tf.process_block(double_spend_block, BlockSource::Local).unwrap();
+
+    // Cause reorg on a bad block
     assert_eq!(
-        tf.make_block_builder()
-            .with_parent(block.get_id().into())
-            .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-            .build_and_process()
-            .unwrap_err(),
+        tf.create_chain(&block_id.into(), 10, rng).unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
             ConnectTransactionError::MissingOutputOrSpent
         ))

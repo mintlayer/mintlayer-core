@@ -99,7 +99,10 @@ pub trait BlockchainStorageRead:
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 
     /// Get block tree as height vs ids
-    fn get_block_tree_by_height(&self) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+    fn get_block_tree_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
@@ -141,6 +144,7 @@ pub trait BlockchainStorageWrite:
     fn add_block(&mut self, block: &Block) -> Result<()>;
 
     /// Remove block from the database
+    // FIXME: why is Id<Block> accepted by value, thought Id<GenBlock> above is accepted by ref?
     fn del_block(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Change tx indexing state flag
