@@ -76,7 +76,7 @@ where
         self.deref().get_best_block_id()
     }
 
-    fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
+    fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.deref().is_block_in_main_chain(block_id)
     }
 

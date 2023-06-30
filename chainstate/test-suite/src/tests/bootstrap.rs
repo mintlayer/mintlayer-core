@@ -32,9 +32,10 @@ fn check_height_order<C: ChainstateInterface>(blocks: &[Id<Block>], chainstate: 
     let mut last_height = 0;
     for block_id in blocks {
         let height = chainstate
-            .get_block_height_in_main_chain(&block_id.get().into())
+            .get_block_index(block_id)
             .expect("Database error")
-            .expect("We loaded this from chainstate");
+            .expect("Block index not found")
+            .block_height();
         let current_height: u64 = height.into();
         assert!(current_height >= last_height);
         last_height = current_height;

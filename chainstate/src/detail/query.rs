@@ -132,6 +132,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .map(Locator::new)
     }
 
+    pub fn is_block_in_main_chain(&self, id: &Id<GenBlock>) -> Result<bool, PropertyQueryError> {
+        self.chainstate_ref.is_block_in_main_chain(id)
+    }
+
     pub fn get_block_height_in_main_chain(
         &self,
         id: &Id<GenBlock>,

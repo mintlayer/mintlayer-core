@@ -219,6 +219,10 @@ impl TestFramework {
     pub fn into_chainstate(self) -> TestChainstate {
         self.chainstate
     }
+
+    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
+        self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
+    }
 }
 
 #[rstest]

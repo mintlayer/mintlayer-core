@@ -213,12 +213,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<bool, PropertyQueryError> {
-        let ht = match self.get_block_height_in_main_chain(block_id).log_err()? {
-            None => return Ok(false),
-            Some(ht) => ht,
-        };
-        let bid = self.get_block_id_by_height(&ht).log_err()?;
-        Ok(bid == Some(*block_id))
+        self.get_block_height_in_main_chain(block_id).log_err().map(|ht| ht.is_some())
     }
 
     /// Read previous block from storage and return its BlockIndex.
@@ -353,13 +348,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, PropertyQueryError> {
-        let id = match id.classify(self.chain_config) {
+        let gen_id = id;
+        let id = match gen_id.classify(self.chain_config) {
             GenBlockId::Block(id) => id,
             GenBlockId::Genesis(_) => return Ok(Some(BlockHeight::zero())),
         };
+
         let block_index = self.get_block_index(&id).log_err()?;
         let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id)).log_err()?;
-        if block_index.block_id() == &id {
+        let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
+
+        // Note: this function may be called when the chain is still empty, so we don't unwrap
+        // mainchain_block_id and wrap gen_id instead.
+        if mainchain_block_id.as_ref() == Some(gen_id) {
             Ok(Some(block_index.block_height()))
         } else {
             Ok(None)

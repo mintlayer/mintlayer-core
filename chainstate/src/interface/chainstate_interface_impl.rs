@@ -90,13 +90,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
+    fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_height_in_main_chain(&(*block_id).into())
+            .is_block_in_main_chain(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
-            .map(|ht| ht.is_some())
     }
 
     fn get_block_height_in_main_chain(
