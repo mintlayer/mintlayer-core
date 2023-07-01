@@ -19,10 +19,13 @@
 mod peer;
 mod types;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use futures::never::Never;
-use tokio::sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender};
+use tokio::{
+    sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
@@ -53,7 +56,7 @@ use crate::{
 /// and keeping up with updates to different branches of the blockchain.
 pub struct BlockSyncManager<T: NetworkingService> {
     /// The chain configuration.
-    _chain_config: Arc<ChainConfig>,
+    chain_config: Arc<ChainConfig>,
 
     /// The p2p configuration.
     p2p_config: Arc<P2pConfig>,
@@ -71,7 +74,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AcqRelAtomicBool>,
 
     /// The list of connected peers
-    peers: HashSet<PeerId>,
+    peers: HashMap<PeerId, JoinHandle<()>>,
 
     time_getter: TimeGetter,
 }
@@ -96,7 +99,7 @@ where
         time_getter: TimeGetter,
     ) -> Self {
         Self {
-            _chain_config: chain_config,
+            chain_config,
             p2p_config,
             messaging_handle,
             sync_event_receiver,
@@ -141,18 +144,16 @@ where
     /// Starts a task for the new peer.
     pub fn register_peer(
         &mut self,
-        peer: PeerId,
+        peer_id: PeerId,
         remote_services: Services,
         sync_rx: Receiver<SyncMessage>,
     ) {
-        log::debug!("Register peer {peer} to sync manager");
-
-        let inserted = self.peers.insert(peer);
-        assert!(inserted, "Registered duplicated peer: {peer}");
+        log::debug!("Register peer {peer_id} to sync manager");
 
         let mut peer = Peer::<T>::new(
-            peer,
+            peer_id,
             remote_services,
+            Arc::clone(&self.chain_config),
             Arc::clone(&self.p2p_config),
             self.chainstate_handle.clone(),
             self.mempool_handle.clone(),
@@ -162,16 +163,23 @@ where
             Arc::clone(&self.is_initial_block_download),
             self.time_getter.clone(),
         );
-        tokio::spawn(async move {
+        let peer_task = tokio::spawn(async move {
             peer.run().await;
         });
+
+        let prev_task = self.peers.insert(peer_id, peer_task);
+        assert!(prev_task.is_none(), "Registered duplicated peer: {peer_id}");
     }
 
     /// Stops the task of the given peer by closing the corresponding channel.
-    fn unregister_peer(&mut self, peer: PeerId) {
-        log::debug!("Unregister peer {peer} from sync manager");
-        let removed = self.peers.remove(&peer);
-        assert!(removed, "Unregistering unknown peer: {peer}");
+    fn unregister_peer(&mut self, peer_id: PeerId) {
+        log::debug!("Unregister peer {peer_id} from sync manager");
+        let peer_task = self
+            .peers
+            .remove(&peer_id)
+            .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer_id}"));
+        // Call `abort` because the peer task may be sleeping for a long time in the `sync_clock` function
+        peer_task.abort();
     }
 
     /// Announces the header of a new block to peers.

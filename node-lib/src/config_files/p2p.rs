@@ -69,7 +69,7 @@ pub struct P2pConfigFile {
     pub ban_threshold: Option<u32>,
     /// Duration of bans in seconds.
     pub ban_duration: Option<u64>,
-    /// Maximum acceptable time difference between this node and the remote peer.
+    /// Maximum acceptable time difference between this node and the remote peer (in seconds).
     /// If a large difference is detected, the peer will be disconnected.
     pub max_clock_diff: Option<u64>,
     /// The outbound connection timeout value in seconds.

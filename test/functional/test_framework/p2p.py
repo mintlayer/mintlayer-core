@@ -27,6 +27,7 @@ import struct
 import sys
 import threading
 import scalecodec
+import time
 
 from test_framework.messages import (
     CBlockHeader,
@@ -342,6 +343,7 @@ class P2PInterface(P2PConnection):
                         "patch": 0,
                     },
                     "receiver_address": None,
+                    "current_time": int(time.time()),
                     "handshake_nonce": 123,
                 }
             }
