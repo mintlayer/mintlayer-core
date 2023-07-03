@@ -31,7 +31,7 @@ use jsonrpsee::{
 use logging::log;
 
 pub use config::RpcConfig;
-pub use error::{handle_result, Error, Result};
+pub use error::{handle_result, Error, Result, Result2};
 
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;

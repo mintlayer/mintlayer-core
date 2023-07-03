@@ -24,40 +24,46 @@ use utils::tap_error_log::LogError;
 
 use crate::{MempoolMaxSize, TxStatus};
 
-#[derive(Clone, Debug, serde::Serialize)]
+use rpc::Result as RpcResult;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GetTxResponse {
     id: Id<Transaction>,
     status: TxStatus,
     transaction: HexEncoded<SignedTransaction>,
 }
 
-#[rpc::rpc(server, namespace = "mempool")]
+#[rpc::rpc(server, client, namespace = "mempool")]
 trait MempoolRpc {
     #[method(name = "contains_tx")]
-    async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool>;
+    async fn contains_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
     #[method(name = "contains_orphan_tx")]
-    async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool>;
+    async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> RpcResult<bool>;
 
     #[method(name = "get_transaction")]
-    async fn get_transaction(&self, tx_id: Id<Transaction>) -> rpc::Result<Option<GetTxResponse>>;
+    async fn get_transaction(&self, tx_id: Id<Transaction>) -> RpcResult<Option<GetTxResponse>>;
+
+    /// Get all mempool transaction IDs
+    #[method(name = "transactions")]
+    async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<TxStatus>;
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus>;
 
     #[method(name = "local_best_block_id")]
-    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>>;
+    async fn local_best_block_id(&self) -> RpcResult<Id<GenBlock>>;
 
     #[method(name = "memory_usage")]
-    async fn memory_usage(&self) -> rpc::Result<usize>;
+    async fn memory_usage(&self) -> RpcResult<usize>;
 
     #[method(name = "get_max_size")]
-    async fn get_max_size(&self) -> rpc::Result<usize>;
+    async fn get_max_size(&self) -> RpcResult<usize>;
 
     // TODO: We should accept more convenient ways of setting the size in addition to plain byte
     // count, e.g. "200MB" instead of 200000000
     #[method(name = "set_max_size")]
-    async fn set_max_size(&self, max_size: usize) -> rpc::Result<()>;
+    async fn set_max_size(&self, max_size: usize) -> RpcResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -68,6 +74,15 @@ impl MempoolRpcServer for super::MempoolHandle {
 
     async fn contains_orphan_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
         rpc::handle_result(self.call(move |this| this.contains_orphan_transaction(&tx_id)).await)
+    }
+
+    async fn get_all_transactions(&self) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>> {
+        rpc::handle_result(
+            self.call(move |this| -> Vec<HexEncoded<SignedTransaction>> {
+                this.get_all().into_iter().map(HexEncoded::new).collect()
+            })
+            .await,
+        )
     }
 
     async fn get_transaction(&self, tx_id: Id<Transaction>) -> rpc::Result<Option<GetTxResponse>> {

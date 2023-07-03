@@ -20,6 +20,7 @@ pub use jsonrpsee::core::Error;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
+pub type Result2<T> = core::result::Result<T, Error>;
 
 /// Handle RPC result
 ///

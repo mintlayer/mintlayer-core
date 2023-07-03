@@ -22,14 +22,14 @@ use common::{
 use consensus::GenerateBlockInputData;
 use mempool::MempoolHandle;
 use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
-use serialization::hex::HexError;
+use serialization::{hex::HexError, hex_encoded::HexEncoded};
 
 use crate::node_traits::NodeInterface;
 
 #[derive(Clone)]
 pub struct WalletHandlesClient {
     chainstate: ChainstateHandle,
-    _mempool: MempoolHandle,
+    mempool: MempoolHandle,
     block_prod: BlockProductionHandle,
     p2p: P2pHandle,
 }
@@ -46,6 +46,8 @@ pub enum WalletHandlesClientError {
     BlockProduction(#[from] BlockProductionError),
     #[error("Decode error: {0}")]
     Hex(#[from] HexError),
+    #[error("Mempool error: {0}")]
+    MempoolError(#[from] mempool::error::Error),
 }
 
 impl WalletHandlesClient {
@@ -57,7 +59,7 @@ impl WalletHandlesClient {
     ) -> Result<Self, WalletHandlesClientError> {
         let result = Self {
             chainstate,
-            _mempool: mempool,
+            mempool,
             block_prod,
             p2p,
         };
@@ -183,5 +185,16 @@ impl NodeInterface for WalletHandlesClient {
             .call_async_mut(move |this| this.remove_reserved_node(address))
             .await??;
         Ok(())
+    }
+
+    async fn get_all_mempool_transactions(
+        &self,
+    ) -> Result<Vec<HexEncoded<SignedTransaction>>, Self::Error> {
+        self.mempool
+            .call(|this| {
+                let res = this.get_all().into_iter().map(HexEncoded::new).collect();
+                Ok(res)
+            })
+            .await?
     }
 }

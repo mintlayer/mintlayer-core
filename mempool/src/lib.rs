@@ -40,7 +40,9 @@ pub enum MempoolEvent {
 }
 
 /// Result of adding transaction to the mempool
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize)]
+#[derive(
+    Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
 #[must_use = "Please check whether the tx was accepted to main mempool or orphan pool"]
 pub enum TxStatus {
     /// Transaction is in mempool
