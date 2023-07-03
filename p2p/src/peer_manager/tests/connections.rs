@@ -628,7 +628,7 @@ async fn connection_timeout_rpc_notified<T>(
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
+    let peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,

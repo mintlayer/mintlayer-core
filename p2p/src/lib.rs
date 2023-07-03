@@ -141,7 +141,7 @@ where
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
-        let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
+        let peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
@@ -164,7 +164,7 @@ where
             }
         });
 
-        let mut sync_manager = sync::BlockSyncManager::<T>::new(
+        let sync_manager = sync::BlockSyncManager::<T>::new(
             chain_config,
             p2p_config,
             messaging_handle.clone(),

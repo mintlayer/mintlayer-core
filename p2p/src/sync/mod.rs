@@ -110,7 +110,7 @@ where
     }
 
     /// Runs the sync manager event loop.
-    pub async fn run(&mut self) -> Result<Never> {
+    pub async fn run(mut self) -> Result<Never> {
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
