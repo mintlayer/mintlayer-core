@@ -511,7 +511,7 @@ fn wallet_accounts_creation() {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
 
-    let error = wallet.create_account().err().unwrap();
+    let error = wallet.create_account(None).err().unwrap();
     assert_eq!(error, WalletError::EmptyLastAccount);
 }
 
@@ -549,7 +549,10 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     wallet.encrypt_wallet(&password).unwrap();
     wallet.lock_wallet().unwrap();
 
-    let err = wallet.create_account();
+    let name = (1..10).map(|_| rng.gen::<char>()).collect();
+    let name = Some(name);
+
+    let err = wallet.create_account(None);
     assert_eq!(
         err,
         Err(WalletError::DatabaseError(
@@ -559,8 +562,9 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    let new_account_index = wallet.create_account().unwrap();
+    let (new_account_index, new_name) = wallet.create_account(name.clone()).unwrap();
     assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
+    assert_eq!(new_name, name);
     assert_eq!(wallet.number_of_accounts(), 2);
 }
 
@@ -1011,7 +1015,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     let db = create_wallet_in_memory().unwrap();
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
-    let err = wallet.create_account().err().unwrap();
+    let err = wallet.create_account(None).err().unwrap();
     assert_eq!(err, WalletError::EmptyLastAccount);
 
     let mut total_amount = Amount::ZERO;
@@ -1050,7 +1054,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     verify_wallet_balance(&chain_config, &wallet, total_amount);
 
     // create new account which is back on genesis
-    let new_account_index = wallet.create_account().unwrap();
+    let (new_account_index, _name) = wallet.create_account(None).unwrap();
     assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
 
     // sync new account with the new block

@@ -278,8 +278,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.sync_once().await
     }
 
-    pub fn create_account(&mut self) -> Result<U31, ControllerError<T>> {
-        self.wallet.create_account().map_err(ControllerError::WalletError)
+    pub fn create_account(
+        &mut self,
+        name: Option<String>,
+    ) -> Result<(U31, Option<String>), ControllerError<T>> {
+        self.wallet.create_account(name).map_err(ControllerError::WalletError)
     }
 
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {

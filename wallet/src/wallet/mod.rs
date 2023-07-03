@@ -153,7 +153,7 @@ impl<B: storage::Backend> Wallet<B> {
             unsynced_accounts: BTreeMap::new(),
         };
 
-        wallet.create_account()?;
+        wallet.create_account(None)?;
 
         Ok(wallet)
     }
@@ -226,7 +226,15 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.len() + self.unsynced_accounts.len()
     }
 
-    pub fn create_account(&mut self) -> WalletResult<U31> {
+    pub fn account_names(&self) -> Vec<Option<String>> {
+        self.accounts
+            .values()
+            .chain(self.unsynced_accounts.values())
+            .map(|acc| acc.name())
+            .collect_vec()
+    }
+
+    pub fn create_account(&mut self, name: Option<String>) -> WalletResult<(U31, Option<String>)> {
         ensure!(
             self.unsynced_accounts.is_empty(),
             WalletError::LastAccountNotInSync
@@ -256,6 +264,7 @@ impl<B: storage::Backend> Wallet<B> {
             Arc::clone(&self.chain_config),
             &mut db_tx,
             account_key_chain,
+            name.clone(),
         )?;
 
         db_tx.commit()?;
@@ -268,7 +277,7 @@ impl<B: storage::Backend> Wallet<B> {
             self.unsynced_accounts.insert(account.account_index(), account);
         }
 
-        Ok(next_account_index)
+        Ok((next_account_index, name))
     }
 
     pub fn database(&self) -> &Store<B> {

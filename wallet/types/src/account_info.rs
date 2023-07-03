@@ -35,6 +35,7 @@ pub struct AccountInfo {
     lookahead_size: u32,
     best_block_height: BlockHeight,
     best_block_id: Id<GenBlock>,
+    name: Option<String>,
 }
 
 impl AccountInfo {
@@ -43,6 +44,7 @@ impl AccountInfo {
         account_index: U31,
         account_key: ExtendedPublicKey,
         lookahead_size: u32,
+        name: Option<String>,
     ) -> Self {
         Self {
             account_index,
@@ -50,6 +52,7 @@ impl AccountInfo {
             lookahead_size,
             best_block_height: BlockHeight::zero(),
             best_block_id: chain_config.genesis_block_id(),
+            name,
         }
     }
 
@@ -71,6 +74,10 @@ impl AccountInfo {
 
     pub fn best_block_id(&self) -> Id<GenBlock> {
         self.best_block_id
+    }
+
+    pub fn name(&self) -> &Option<String> {
+        &self.name
     }
 
     pub fn update_best_block(
