@@ -549,9 +549,6 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     wallet.encrypt_wallet(&password).unwrap();
     wallet.lock_wallet().unwrap();
 
-    let name = (1..10).map(|_| rng.gen::<char>()).collect();
-    let name = Some(name);
-
     let err = wallet.create_account(None);
     assert_eq!(
         err,
@@ -560,12 +557,19 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
         ))
     );
 
+    let name: String = (0..rng.gen_range(0..10)).map(|_| rng.gen::<char>()).collect();
+
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    let (new_account_index, new_name) = wallet.create_account(name.clone()).unwrap();
-    assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
-    assert_eq!(new_name, name);
-    assert_eq!(wallet.number_of_accounts(), 2);
+    if name.is_empty() {
+        let err = wallet.create_account(Some(name));
+        assert_eq!(err, Err(WalletError::EmptyAccountName));
+    } else {
+        let (new_account_index, new_name) = wallet.create_account(Some(name.clone())).unwrap();
+        assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
+        assert_eq!(new_name.unwrap(), name);
+        assert_eq!(wallet.number_of_accounts(), 2);
+    }
 }
 
 #[rstest]

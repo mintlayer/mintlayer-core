@@ -71,6 +71,8 @@ pub enum WalletError {
     AccountAlreadyExists(U31),
     #[error("Cannot create a new account when last account is still empty")]
     EmptyLastAccount,
+    #[error("Cannot create a new account with an empty string name")]
+    EmptyAccountName,
     #[error("Cannot create a new account when last account is still not in sync")]
     LastAccountNotInSync,
     #[error("The maximum number of accounts has been exceeded: {0}")]
@@ -254,6 +256,11 @@ impl<B: storage::Backend> Wallet<B> {
                 }
             },
         )?;
+
+        ensure!(
+            name.as_ref().map_or(true, |name| !name.is_empty()),
+            WalletError::EmptyAccountName
+        );
 
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 
