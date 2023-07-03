@@ -61,4 +61,8 @@ pub struct ChainConfigOptions {
     /// The maximum smart contracts size ib block in bytes.
     #[clap(long)]
     pub chain_max_block_size_with_smart_contracts: Option<usize>,
+
+    /// PoS NetUpgrade override after Genesis
+    #[clap(long)]
+    pub chain_pos_netupgrades: Option<bool>,
 }
