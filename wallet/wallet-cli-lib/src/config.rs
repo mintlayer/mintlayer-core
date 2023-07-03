@@ -17,6 +17,7 @@ use std::{net::SocketAddr, path::PathBuf};
 
 use clap::Parser;
 use common::chain::config::ChainType;
+use crypto::key::hdkd::u31::U31;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -38,7 +39,7 @@ pub struct WalletCliArgs {
 
     /// Start staking after the start
     #[clap(long)]
-    pub start_staking: bool,
+    pub start_staking: Option<U31>,
 
     /// Optional RPC address
     #[clap(long)]

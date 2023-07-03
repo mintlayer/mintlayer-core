@@ -306,7 +306,7 @@ impl CliTestFramework {
         let wallet_options = WalletCliArgs {
             network: Network::Regtest,
             wallet_file: None,
-            start_staking: false,
+            start_staking: None,
             rpc_address: Some(self.rpc_address),
             rpc_cookie_file: None,
             rpc_username: Some(RPC_USERNAME.to_owned()),

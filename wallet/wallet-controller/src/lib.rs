@@ -70,7 +70,7 @@ pub struct Controller<T: NodeInterface> {
 
     wallet: DefaultWallet,
 
-    staking_started: bool,
+    staking_started: Option<U31>,
 }
 
 pub type RpcController = Controller<NodeRpcClient>;
@@ -82,7 +82,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             chain_config,
             rpc_client,
             wallet,
-            staking_started: false,
+            staking_started: None,
         }
     }
 
@@ -282,13 +282,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.create_account().map_err(ControllerError::WalletError)
     }
 
-    pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
-        self.staking_started = true;
+    pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        self.staking_started = Some(account_index);
         Ok(())
     }
 
     pub fn stop_staking(&mut self) -> Result<(), ControllerError<T>> {
-        self.staking_started = false;
+        self.staking_started = None;
         Ok(())
     }
 
@@ -310,8 +310,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 continue;
             }
 
-            if self.staking_started {
-                let generate_res = self.generate_block(DEFAULT_ACCOUNT_INDEX, None).await;
+            if let Some(account_index) = self.staking_started {
+                let generate_res = self.generate_block(account_index, None).await;
 
                 if let Ok(block) = generate_res {
                     log::info!(

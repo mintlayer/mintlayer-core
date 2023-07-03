@@ -74,7 +74,7 @@ pub enum WalletError {
     #[error("Cannot create a new account when last account is still not in sync")]
     LastAccountNotInSync,
     #[error("The maximum number of accounts has been exceeded: {0}")]
-    AbsoluteMaxNumAccountsExceeded(u32),
+    AbsoluteMaxNumAccountsExceeded(U31),
     #[error("No unsynced account")]
     NoUnsyncedAccount,
     #[error("Not implemented: {0}")]
@@ -187,7 +187,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
-        let unsynced_account = accounts
+        let unsynced_accounts = accounts
             .values()
             .tuple_windows()
             .find_map(|(acc1, acc2)| {
@@ -202,7 +202,7 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts,
             latest_median_time,
-            unsynced_accounts: unsynced_account,
+            unsynced_accounts,
         })
     }
 
@@ -237,9 +237,7 @@ impl<B: storage::Backend> Wallet<B> {
             |(last_account_index, last_account)| {
                 if last_account.has_transactions() {
                     last_account_index.plus_one().map_err(|_| {
-                        WalletError::AbsoluteMaxNumAccountsExceeded(
-                            last_account_index.into_u32() + 1,
-                        )
+                        WalletError::AbsoluteMaxNumAccountsExceeded(*last_account_index)
                     })
                 } else {
                     // Cannot create a new account if the latest created one has no transactions
@@ -283,10 +281,8 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw(None)?;
-        let account = self
-            .accounts
-            .get_mut(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let account =
+            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
         let value = f(account, &mut db_tx)?;
         // The in-memory wallet state has already changed, so rolling back
         // the DB transaction will make the wallet state inconsistent.
@@ -302,10 +298,8 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
-        let account = self
-            .accounts
-            .get_mut(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let account =
+            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
         let value = f(account, &mut db_tx)?;
         // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
         db_tx.commit().expect("RW transaction commit failed unexpectedly");
@@ -317,6 +311,20 @@ impl<B: storage::Backend> Wallet<B> {
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
             .map_err(|err| match self.unsynced_accounts.get(&account_index) {
+                Some(_) => WalletError::AccountNotSyncedWithIndex(account_index),
+                _ => err,
+            })
+    }
+
+    fn get_account_mut<'a>(
+        accounts: &'a mut BTreeMap<U31, Account>,
+        unsynced_accounts: &BTreeMap<U31, Account>,
+        account_index: U31,
+    ) -> WalletResult<&'a mut Account> {
+        accounts
+            .get_mut(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
+            .map_err(|err| match unsynced_accounts.get(&account_index) {
                 Some(_) => WalletError::AccountNotSyncedWithIndex(account_index),
                 _ => err,
             })

@@ -16,7 +16,7 @@
 pub mod log;
 
 use clap::Command;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
@@ -46,6 +46,13 @@ fn process_line(
 
     let command_output = super::run_command_blocking(event_tx, command)?;
 
+    to_line_output(command_output, line)
+}
+
+fn to_line_output(
+    command_output: ConsoleCommand,
+    line: &str,
+) -> Result<LineOutput, WalletCliError> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
         ConsoleCommand::SetStatus {
@@ -67,28 +74,47 @@ pub fn run(
     mut output: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
+    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
+    for res_rx in startup_command_futures {
+        let res = res_rx.blocking_recv().expect("Channel must be open")?;
+        let line_out = to_line_output(res, "startup command");
+        if let Some(value) = handle_response(line_out, &mut output, exit_on_error) {
+            return value;
+        }
+    }
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);
 
-        match res {
-            Ok(LineOutput::Print(text)) => {
-                output.print_line(&text);
-            }
-            Ok(LineOutput::None) => {}
-            Ok(LineOutput::Exit) => return Ok(()),
-
-            Err(err) => {
-                if exit_on_error {
-                    return Err(err);
-                }
-
-                output.print_error(err);
-            }
+        if let Some(value) = handle_response(res, &mut output, exit_on_error) {
+            return value;
         }
     }
 
     Ok(())
+}
+
+fn handle_response(
+    res: Result<LineOutput, WalletCliError>,
+    output: &mut impl ConsoleOutput,
+    exit_on_error: bool,
+) -> Option<Result<(), WalletCliError>> {
+    match res {
+        Ok(LineOutput::Print(text)) => {
+            output.print_line(&text);
+        }
+        Ok(LineOutput::None) => {}
+        Ok(LineOutput::Exit) => return Some(Ok(())),
+
+        Err(err) => {
+            if exit_on_error {
+                return Some(Err(err));
+            }
+
+            output.print_error(err);
+        }
+    }
+    None
 }

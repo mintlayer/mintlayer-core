@@ -82,8 +82,8 @@ pub enum WalletCommand {
     /// Returns the current best block height
     BestBlockHeight,
 
-    /// Get a block hash at height
-    BlockHash {
+    /// Get a block ID at height
+    BlockId {
         /// Block height
         height: BlockHeight,
     },
@@ -114,7 +114,10 @@ pub enum WalletCommand {
         account_index: U31,
     },
 
-    StartStaking,
+    /// Start staing using the specified account
+    StartStaking {
+        account_index: U31,
+    },
 
     StopStaking,
 
@@ -469,7 +472,7 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(height.to_string()))
             }
 
-            WalletCommand::BlockHash { height } => {
+            WalletCommand::BlockId { height } => {
                 let hash = rpc_client
                     .get_block_id_at_height(height)
                     .await
@@ -540,15 +543,15 @@ impl CommandHandler {
             WalletCommand::SelectAccount { account_index } => {
                 self.set_selected_account(account_index).map(|_| ConsoleCommand::SetStatus {
                     status: self.repl_status(),
-                    print_message: "Sucess".into(),
+                    print_message: "Success".into(),
                 })
             }
 
-            WalletCommand::StartStaking => {
+            WalletCommand::StartStaking { account_index } => {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .start_staking()
+                    .start_staking(account_index)
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }

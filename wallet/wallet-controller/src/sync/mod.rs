@@ -175,6 +175,7 @@ async fn fetch_and_sync<T: NodeInterface>(
     rpc_client: &T,
     wallet_sync: &mut impl FnMut(BlockHeight, Block) -> Result<(), ControllerError<T>>,
 ) -> Result<(), ControllerError<T>> {
+    // TODO: use chain trust instead of height
     utils::ensure!(
         chain_info.best_block_height >= wallet_block_height,
         ControllerError::NotEnoughBlockHeight(wallet_block_height, chain_info.best_block_height,)

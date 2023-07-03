@@ -106,24 +106,27 @@ pub async fn run(
 
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
+    let mut startup_command_futures = vec![];
     if let Some(wallet_path) = wallet_file {
-        let (res_tx, _res_rx) = tokio::sync::oneshot::channel();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
                 command: WalletCommand::OpenWallet { wallet_path },
                 res_tx,
             })
             .expect("should not fail");
+        startup_command_futures.push(res_rx);
     }
 
-    if start_staking {
-        let (res_tx, _res_rx) = tokio::sync::oneshot::channel();
+    if let Some(account_index) = start_staking {
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::StartStaking,
+                command: WalletCommand::StartStaking { account_index },
                 res_tx,
             })
             .expect("should not fail");
+        startup_command_futures.push(res_rx);
     }
 
     // Run a blocking loop in a separate thread
@@ -135,16 +138,22 @@ pub async fn run(
             logger,
             history_file,
             vi_mode,
+            startup_command_futures,
         ),
         Mode::NonInteractive => repl::non_interactive::run(
             console.clone(),
             console,
             event_tx,
             exit_on_error.unwrap_or(false),
+            startup_command_futures,
         ),
-        Mode::CommandsList { file_input } => {
-            repl::non_interactive::run(file_input, console, event_tx, exit_on_error.unwrap_or(true))
-        }
+        Mode::CommandsList { file_input } => repl::non_interactive::run(
+            file_input,
+            console,
+            event_tx,
+            exit_on_error.unwrap_or(true),
+            startup_command_futures,
+        ),
     });
 
     cli_event_loop::run(&chain_config, &rpc_client, controller_opt, event_rx).await;
