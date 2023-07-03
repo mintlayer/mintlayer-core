@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use common::address::Address;
+use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod well_known {
+    use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
 
     use super::Codec;
@@ -56,6 +57,7 @@ mod well_known {
 
     declare_entry!(StoreVersion: u32);
     declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
+    declare_entry!(MedianTime: BlockTimestamp);
 }
 
 #[derive(PartialEq, Clone)]
@@ -211,6 +213,10 @@ macro_rules! impl_read_ops {
                     .prefix_iter_decoded(account_id)
                     .map_err(crate::Error::from)
                     .map(Iterator::collect)
+            }
+
+            fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
+                self.read_value::<well_known::MedianTime>()
             }
         }
 
@@ -388,8 +394,13 @@ macro_rules! impl_write_ops {
             ) -> crate::Result<()> {
                 self.write::<db::DBPubKeys, _, _, _>(id, pub_key)
             }
+
             fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
+            }
+
+            fn set_median_time(&mut self, median_time: BlockTimestamp) -> crate::Result<()> {
+                self.write_value::<well_known::MedianTime>(&median_time)
             }
         }
 

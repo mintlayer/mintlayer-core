@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::ConsensusData;
 use serialization::{Decode, Encode};
 
@@ -24,7 +25,7 @@ use common::primitives::{BlockHeight, Id, Idable};
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]
-    Confirmed(BlockHeight),
+    Confirmed(BlockHeight, BlockTimestamp),
     /// Unconfirmed transaction in the mempool
     #[codec(index = 1)]
     InMempool,
@@ -34,6 +35,12 @@ pub enum TxState {
     /// Transaction that is not confirmed or conflicted and is not in the mempool.
     #[codec(index = 3)]
     Inactive,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+pub struct BlockInfo {
+    pub height: BlockHeight,
+    pub timestamp: BlockTimestamp,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
@@ -64,6 +71,8 @@ pub struct BlockData {
 
     height: BlockHeight,
 
+    timestamp: BlockTimestamp,
+
     kernel_inputs: Vec<TxInput>,
 
     reward: Vec<TxOutput>,
@@ -79,7 +88,7 @@ impl WalletTx {
 
     pub fn state(&self) -> TxState {
         match self {
-            WalletTx::Block(block) => TxState::Confirmed(block.height()),
+            WalletTx::Block(block) => TxState::Confirmed(block.height(), block.timestamp()),
             WalletTx::Tx(tx) => tx.state,
         }
     }
@@ -114,6 +123,7 @@ impl BlockData {
         BlockData {
             block_id: genesis.get_id().into(),
             height: BlockHeight::zero(),
+            timestamp: genesis.timestamp(),
             kernel_inputs: Vec::new(),
             reward: genesis.utxos().to_vec(),
         }
@@ -128,6 +138,7 @@ impl BlockData {
         BlockData {
             block_id: block.get_id().into(),
             height: block_height,
+            timestamp: block.timestamp(),
             kernel_inputs,
             reward: block.block_reward().outputs().to_vec(),
         }
@@ -139,6 +150,10 @@ impl BlockData {
 
     pub fn height(&self) -> BlockHeight {
         self.height
+    }
+
+    pub fn timestamp(&self) -> BlockTimestamp {
+        self.timestamp
     }
 
     pub fn kernel_inputs(&self) -> &[TxInput] {

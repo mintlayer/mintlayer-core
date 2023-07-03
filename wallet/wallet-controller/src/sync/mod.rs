@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use logging::log;
@@ -32,6 +32,8 @@ pub trait SyncingWallet {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()>;
+
+    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
@@ -45,6 +47,10 @@ impl SyncingWallet for DefaultWallet {
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
         self.scan_new_blocks(common_block_height, blocks)
+    }
+
+    fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
+        self.set_median_time(median_time)
     }
 }
 
@@ -116,6 +122,10 @@ pub async fn sync_once<T: NodeInterface>(
         let block_id = block.header().block_id();
         wallet
             .scan_blocks(common_block_height, vec![block])
+            .map_err(ControllerError::WalletError)?;
+
+        wallet
+            .update_median_time(chain_info.median_time)
             .map_err(ControllerError::WalletError)?;
 
         log::info!(

@@ -52,6 +52,43 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
     (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
 }
 
+fn gen_random_lock_then_transfer(
+    rng: &mut (impl Rng + CryptoRng),
+    amount: Amount,
+    pkh: PublicKeyHash,
+    lock_for_blocks: u64,
+    current_block_height: BlockHeight,
+    seconds_between_blocks: u64,
+    current_timestamp: BlockTimestamp,
+) -> TxOutput {
+    match rng.gen_range(0..4) {
+        0 => TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount),
+            Destination::Address(pkh),
+            OutputTimeLock::ForBlockCount(lock_for_blocks),
+        ),
+        1 => TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount),
+            Destination::Address(pkh),
+            OutputTimeLock::UntilHeight(current_block_height.checked_add(lock_for_blocks).unwrap()),
+        ),
+        2 => TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount),
+            Destination::Address(pkh),
+            OutputTimeLock::ForSeconds(seconds_between_blocks * lock_for_blocks),
+        ),
+        _ => TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount),
+            Destination::Address(pkh),
+            OutputTimeLock::UntilTime(
+                current_timestamp
+                    .add_int_seconds(seconds_between_blocks * lock_for_blocks)
+                    .unwrap(),
+            ),
+        ),
+    }
+}
+
 fn get_address(
     chain_config: &ChainConfig,
     mnemonic: &str,
@@ -810,4 +847,157 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             not_enough_tokens_to_transfer
         ))
     )
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn lock_then_transfer(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    let timestamp = chain_config.genesis_block().timestamp().add_int_seconds(10).unwrap();
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![
+            make_address_output(address.clone(), block1_amount).unwrap()
+        ]),
+    )
+    .unwrap();
+
+    let seconds_between_blocks = rng.gen_range(10..100);
+    let block1_id = block1.get_id();
+    // not important that it is not the actual median
+    wallet.set_median_time(timestamp).unwrap();
+    let timestamp = block1.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pkh = PublicKeyHash::try_from(address2.data(&chain_config).unwrap()).unwrap();
+
+    let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
+
+    let block_count_lock = rng.gen_range(1..10);
+    let amount_to_lock_then_transfer = Amount::from_atoms(rng.gen_range(1..amount_fraction));
+    let new_output = gen_random_lock_then_transfer(
+        &mut rng,
+        amount_to_lock_then_transfer,
+        pkh,
+        block_count_lock,
+        BlockHeight::new(2),
+        seconds_between_blocks,
+        timestamp,
+    );
+
+    let lock_then_transfer_transaction = wallet
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .unwrap();
+
+    let block2 = Block::new(
+        vec![lock_then_transfer_transaction],
+        block1_id.into(),
+        timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+    )
+    .unwrap();
+
+    // not important that it is not the actual median
+    wallet.set_median_time(timestamp).unwrap();
+    let mut timestamp = block2.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+
+    let currency_balances = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    let balance_without_locked_transer =
+        (((block1_amount * 2).unwrap() - amount_to_lock_then_transfer).unwrap()
+            - Amount::from_atoms(NETWORK_FEE))
+        .unwrap();
+
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        balance_without_locked_transer
+    );
+
+    // check that for block_count_lock, the amount is not included
+    for idx in 0..block_count_lock {
+        let currency_balances = wallet
+            .get_balance(
+                DEFAULT_ACCOUNT_INDEX,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+            )
+            .unwrap();
+        assert_eq!(
+            currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+            balance_without_locked_transer
+        );
+
+        let new_block = Block::new(
+            vec![],
+            chain_config.genesis_block_id(),
+            timestamp,
+            ConsensusData::None,
+            BlockReward::new(vec![]),
+        )
+        .unwrap();
+        // not important that it is not the actual median
+        wallet.set_median_time(timestamp).unwrap();
+        timestamp = new_block.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
+        wallet.scan_new_blocks(BlockHeight::new(2 + idx), vec![new_block]).unwrap();
+    }
+
+    // check that after block_count_lock, the amount is included
+    let currency_balances = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        (balance_without_locked_transer + amount_to_lock_then_transfer).unwrap()
+    );
 }

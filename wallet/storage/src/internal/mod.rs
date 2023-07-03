@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use common::address::Address;
+use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::key::extended::ExtendedPublicKey;
 
 use crate::{
@@ -223,6 +223,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
         fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
         fn get_public_key(&self, id: &AccountDerivationPathId) -> crate::Result<Option<ExtendedPublicKey>>;
         fn get_public_keys(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
+        fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>>;
     }
 }
 
@@ -239,6 +240,7 @@ impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
         fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()>;
         fn set_public_key(&mut self, id: &AccountDerivationPathId, content: &ExtendedPublicKey) -> crate::Result<()>;
         fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
+        fn set_median_time(&mut self, median_time: BlockTimestamp) -> crate::Result<()>;
     }
 }
 

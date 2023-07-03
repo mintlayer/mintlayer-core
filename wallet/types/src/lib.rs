@@ -22,4 +22,4 @@ pub mod wallet_tx;
 pub use account_id::{AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletTxId};
 pub use account_info::AccountInfo;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeyContent, RootKeyId};
-pub use wallet_tx::WalletTx;
+pub use wallet_tx::{BlockInfo, WalletTx};
