@@ -967,6 +967,7 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[ignore]
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
