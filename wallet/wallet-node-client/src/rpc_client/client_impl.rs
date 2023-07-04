@@ -33,9 +33,6 @@ impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
-        MempoolRpcClient::local_best_block_id(&self.http_client)
-            .await
-            .map_err(NodeRpcError::ResponseError)?;
         ChainstateRpcClient::info(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)

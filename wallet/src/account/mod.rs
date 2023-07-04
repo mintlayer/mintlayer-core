@@ -207,6 +207,7 @@ impl Account {
         let amount_to_be_paied_in_currency_with_fees = (amount_to_be_paied_in_currency_with_fees
             + total_fees_not_payed)
             .ok_or(WalletError::OutputAmountOverflow)?;
+
         let selection_result = select_coins(
             utxos,
             amount_to_be_paied_in_currency_with_fees,
@@ -701,7 +702,7 @@ impl Account {
         Ok(())
     }
 
-    pub fn scan_new_unconfirmed_transactions(&mut self, transactions: &Vec<SignedTransaction>) {
+    pub fn scan_new_unconfirmed_transactions(&mut self, transactions: &[SignedTransaction]) {
         let mut not_added = vec![];
         for signed_tx in transactions {
             let wallet_tx = WalletTx::Tx(TxData::new(
@@ -738,7 +739,7 @@ impl Account {
     }
 
     pub fn has_transactions(&self) -> bool {
-        !self.output_cache.txs().is_empty()
+        self.output_cache.txs_with_unconfirmed().next().is_some()
     }
 
     pub fn name(&self) -> &Option<String> {

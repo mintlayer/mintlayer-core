@@ -177,7 +177,7 @@ impl OutputCache {
         &self,
         outpoint: &UtxoOutPoint,
         output: &TxOutput,
-        transaction_block_info: &BlockInfo,
+        transaction_block_info: &Option<BlockInfo>,
         current_block_info: &BlockInfo,
     ) -> bool {
         !self.consumed.contains(outpoint)
@@ -188,7 +188,7 @@ impl OutputCache {
         &self,
         outpoint: &UtxoOutPoint,
         output: &TxOutput,
-        transaction_block_info: &BlockInfo,
+        transaction_block_info: &Option<BlockInfo>,
         current_block_info: &BlockInfo,
     ) -> bool {
         !self.consumed.contains(outpoint)
@@ -197,7 +197,7 @@ impl OutputCache {
     }
 
     pub fn add_unconfirmed_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
-        self.unconfirmed_txs.add_tx(tx_id.into_item_id(), tx)
+        self.unconfirmed_txs.add_tx(tx_id.into_item_id(), tx);
     }
 
     pub fn utxos_with_token_ids(
@@ -208,8 +208,8 @@ impl OutputCache {
 
         for tx in self.txs.values() {
             let tx_block_info = match tx.state() {
-                TxState::Confirmed(height, timestamp) => BlockInfo { height, timestamp },
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => continue,
+                TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
+                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
             };
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
@@ -238,8 +238,8 @@ impl OutputCache {
 
         for tx in self.txs.values().chain(self.unconfirmed_txs.txs.values()) {
             let tx_block_info = match tx.state() {
-                TxState::Confirmed(height, timestamp) => BlockInfo { height, timestamp },
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => continue,
+                TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
+                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
             };
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
@@ -269,20 +269,25 @@ impl OutputCache {
 fn valid_timelock(
     output: &TxOutput,
     current_block_info: &BlockInfo,
-    transaction_block_info: &BlockInfo,
+    transaction_block_info: &Option<BlockInfo>,
 ) -> bool {
     output.timelock().map_or(true, |timelock| match timelock {
         OutputTimeLock::UntilHeight(height) => *height <= current_block_info.height,
         OutputTimeLock::UntilTime(time) => *time <= current_block_info.timestamp,
         OutputTimeLock::ForBlockCount(block_count) => {
             (*block_count).try_into().map_or(false, |block_count: i64| {
-                (transaction_block_info.height + BlockDistance::new(block_count))
+                transaction_block_info
+                    .as_ref()
+                    .and_then(|info| info.height + BlockDistance::new(block_count))
                     .map_or(false, |height| height <= current_block_info.height)
             })
         }
-        OutputTimeLock::ForSeconds(for_seconds) => transaction_block_info
-            .timestamp
-            .add_int_seconds(*for_seconds)
-            .map_or(false, |time| time <= current_block_info.timestamp),
+        OutputTimeLock::ForSeconds(for_seconds) => {
+            transaction_block_info.as_ref().map_or(false, |info| {
+                info.timestamp
+                    .add_int_seconds(*for_seconds)
+                    .map_or(false, |time| time <= current_block_info.timestamp)
+            })
+        }
     })
 }

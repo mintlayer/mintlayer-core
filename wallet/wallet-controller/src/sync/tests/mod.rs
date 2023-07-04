@@ -113,6 +113,10 @@ impl SyncingWallet for MockWallet {
     ) -> WalletResult<()> {
         Err(wallet::WalletError::NoUnsyncedAccount)
     }
+
+    fn scan_mempool(&mut self, _transactions: &[SignedTransaction]) -> WalletResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
