@@ -322,7 +322,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        let net_upgrades = NetUpgrades::unit_tests_with_pos();
+        let net_upgrades = NetUpgrades::regtest_with_pos();
         builder = builder.net_upgrades(net_upgrades);
     }
 

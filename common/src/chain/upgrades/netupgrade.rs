@@ -32,19 +32,15 @@ impl NetUpgrades<UpgradeVersion> {
             }),
         )])
     }
-}
 
-impl NetUpgrades<UpgradeVersion> {
     pub fn unit_tests() -> Self {
         Self(vec![(
             BlockHeight::zero(),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
         )])
     }
-}
 
-impl NetUpgrades<UpgradeVersion> {
-    pub fn unit_tests_with_pos() -> Self {
+    pub fn regtest_with_pos() -> Self {
         Self(vec![
             (
                 BlockHeight::zero(),
