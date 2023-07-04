@@ -263,7 +263,7 @@ where
         Ok(())
     }
 
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
         let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
         match handshake_res {

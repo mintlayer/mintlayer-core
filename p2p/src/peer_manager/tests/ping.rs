@@ -79,7 +79,7 @@ async fn ping_timeout() {
         conn_rx,
     );
 
-    let mut peer_manager = PeerManager::new(
+    let peer_manager = PeerManager::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

@@ -1210,7 +1210,7 @@ where
         }
     }
 
-    pub async fn run(&mut self) -> crate::Result<Never> {
+    pub async fn run(mut self) -> crate::Result<Never> {
         self.run_internal(None).await
     }
 }
