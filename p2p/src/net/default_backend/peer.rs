@@ -119,6 +119,10 @@ where
         local_time: Duration,
         remote_time: Duration,
     ) -> crate::Result<()> {
+        // TODO: If the node's clock is wrong and we disconnect peers,
+        // it can be trivial to isolate the node by connecting malicious nodes
+        // with the same invalid clock (while honest nodes can't connect).
+        // After that, the node is open to all kinds of attacks.
         let time_diff =
             std::cmp::max(local_time, remote_time) - std::cmp::min(local_time, remote_time);
         utils::ensure!(

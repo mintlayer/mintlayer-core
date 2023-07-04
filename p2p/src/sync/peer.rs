@@ -317,27 +317,31 @@ where
         Ok(())
     }
 
+    /// Delays the processing of a new block until it can be accepted by the chainstate (but not more than `max_clock_diff`).
+    /// This is needed to allow the local or remote node to have slightly inaccurate clocks.
+    /// Without it, even a 1 second difference can break block synchronization
+    /// because one side may see the new block as invalid.
+    async fn wait_for_clock_diff(&self, block_timestamp: Duration) {
+        let max_block_timestamp =
+            self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
+        if block_timestamp > max_block_timestamp {
+            let clock_diff = max_block_timestamp - block_timestamp;
+            let sleep_time = std::cmp::min(clock_diff, *self.p2p_config.max_clock_diff);
+            log::debug!(
+                "Block timestamp from the future ({} seconds), peer_id: {}",
+                sleep_time.as_secs(),
+                self.id(),
+            );
+            tokio::time::sleep(sleep_time).await;
+        }
+    }
+
     async fn handle_header_list(&mut self, headers: Vec<SignedBlockHeader>) -> Result<()> {
         log::debug!("Headers list from peer {}", self.id());
 
         if let Some(last_header) = headers.last() {
-            // Delays the processing of a new block until it can be accepted by the chainstate (but not more than `max_clock_diff`).
-            // This is needed to allow the local or remote node to have slightly inaccurate clocks.
-            // Without it, even a 1 second difference can break block synchronization
-            // because one side may see the new block as invalid.
-            let block_timestamp = last_header.timestamp().as_duration_since_epoch();
-            let max_block_timestamp =
-                self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
-            if block_timestamp > max_block_timestamp {
-                let clock_diff = max_block_timestamp - block_timestamp;
-                let sleep_time = std::cmp::min(clock_diff, *self.p2p_config.max_clock_diff);
-                log::debug!(
-                    "Block timestamp from the future ({} seconds), peer_id: {}",
-                    sleep_time.as_secs(),
-                    self.id(),
-                );
-                tokio::time::sleep(sleep_time).await;
-            }
+            self.wait_for_clock_diff(last_header.timestamp().as_duration_since_epoch())
+                .await;
         }
 
         if !self.known_headers.is_empty() {
