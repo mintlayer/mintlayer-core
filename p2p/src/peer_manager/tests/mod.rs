@@ -67,7 +67,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn, _, _, _) = T::start(
+    let backend = T::start(
         transport,
         vec![addr],
         Arc::clone(&chain_config),
@@ -83,7 +83,7 @@ where
     let peer_manager = PeerManager::<T, _>::new(
         chain_config,
         p2p_config,
-        conn,
+        backend.connectivity,
         rx,
         time_getter,
         peerdb_inmemory_store(),

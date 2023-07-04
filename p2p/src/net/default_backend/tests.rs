@@ -40,7 +40,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend1 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -54,7 +54,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let backend2 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -66,16 +66,16 @@ where
     .await
     .unwrap();
 
-    let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    let addr = backend2.connectivity.local_addresses();
+    backend1.connectivity.connect(addr[0].clone()).unwrap();
 
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
         peer_info,
         receiver_address: _,
-    }) = conn1.poll_next().await
+    }) = backend1.connectivity.poll_next().await
     {
-        assert_eq!(address, conn2.local_addresses()[0]);
+        assert_eq!(address, backend2.connectivity.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, *config.version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
@@ -111,7 +111,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend1 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -125,7 +125,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend2 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -137,9 +137,9 @@ where
     .await
     .unwrap();
 
-    let bind_address = conn2.local_addresses();
-    conn1.connect(bind_address[0].clone()).unwrap();
-    let res2 = conn2.poll_next().await;
+    let bind_address = backend2.connectivity.local_addresses();
+    backend1.connectivity.connect(bind_address[0].clone()).unwrap();
+    let res2 = backend2.connectivity.poll_next().await;
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
             address: _,
@@ -180,7 +180,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend1 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -194,7 +194,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend2 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         config,
@@ -206,8 +206,11 @@ where
     .await
     .unwrap();
 
-    conn1.connect(conn2.local_addresses()[0].clone()).unwrap();
-    let res2 = conn2.poll_next().await;
+    backend1
+        .connectivity
+        .connect(backend2.connectivity.local_addresses()[0].clone())
+        .unwrap();
+    let res2 = backend2.connectivity.poll_next().await;
 
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
@@ -215,7 +218,7 @@ where
             peer_info,
             receiver_address: _,
         } => {
-            conn2.disconnect(peer_info.peer_id).unwrap();
+            backend2.connectivity.disconnect(peer_info.peer_id).unwrap();
         }
         _ => panic!("invalid event received, expected incoming connection"),
     }
@@ -247,7 +250,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend1 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -261,7 +264,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let backend2 = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -274,27 +277,29 @@ where
     .unwrap();
 
     // Try connect to self
-    let addr = conn1.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    let addr = backend1.connectivity.local_addresses();
+    backend1.connectivity.connect(addr[0].clone()).unwrap();
 
     // ConnectionError should be reported
-    if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
-        assert_eq!(address, conn1.local_addresses()[0]);
+    if let Ok(ConnectivityEvent::ConnectionError { address, error }) =
+        backend1.connectivity.poll_next().await
+    {
+        assert_eq!(address, backend1.connectivity.local_addresses()[0]);
         assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
     } else {
         panic!("invalid event received");
     }
 
     // Check that we can still connect normally after
-    let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    let addr = backend2.connectivity.local_addresses();
+    backend1.connectivity.connect(addr[0].clone()).unwrap();
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
         peer_info,
         receiver_address: _,
-    }) = conn1.poll_next().await
+    }) = backend1.connectivity.poll_next().await
     {
-        assert_eq!(address, conn2.local_addresses()[0]);
+        assert_eq!(address, backend2.connectivity.local_addresses()[0]);
         assert_eq!(peer_info.protocol, NETWORK_PROTOCOL_CURRENT);
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, *config.version());
@@ -338,7 +343,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
+    let mut backend = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![],
         Arc::clone(&config),
@@ -351,9 +356,12 @@ where
     .unwrap();
 
     // Try to connect to some broken peer
-    conn.connect(addr[0].clone()).unwrap();
+    backend.connectivity.connect(addr[0].clone()).unwrap();
     // `ConnectionError` should be reported
-    let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
+    let event = timeout(Duration::from_secs(60), backend.connectivity.poll_next())
+        .await
+        .unwrap()
+        .unwrap();
 
     match event {
         ConnectivityEvent::ConnectionError { address, error: _ } => {

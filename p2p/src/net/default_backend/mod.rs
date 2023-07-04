@@ -21,10 +21,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 use logging::log;
 use utils::atomics::SeqCstAtomicBool;
@@ -42,7 +39,10 @@ use crate::{
     P2pConfig, P2pEventHandler,
 };
 
-use super::types::services::Service;
+use super::{types::services::Service, NetworkingServiceJoinHandle};
+
+/// Buffer size of the p2p event broadcast channel.
+const P2P_EVENT_CHANNEL_SIZE: usize = 20;
 
 #[derive(Debug)]
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
@@ -117,17 +117,19 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
-        JoinHandle<()>,
-    )> {
+    ) -> crate::Result<
+        NetworkingServiceJoinHandle<
+            Self::ConnectivityHandle,
+            Self::MessagingHandle,
+            Self::SyncingEventReceiver,
+        >,
+    > {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
         let (sync_tx, sync_rx) = mpsc::unbounded_channel();
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
+        let (p2p_tx, _) = broadcast::channel(P2P_EVENT_CHANNEL_SIZE);
 
         let backend = backend::Backend::<T>::new(
             transport,
@@ -137,6 +139,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             cmd_rx,
             conn_tx,
             sync_tx,
+            p2p_tx.clone(),
             Arc::clone(&shutdown),
             shutdown_receiver,
             subscribers_receiver,
@@ -154,12 +157,13 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             }
         });
 
-        Ok((
-            ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
-            MessagingHandle::new(cmd_tx),
-            Self::SyncingEventReceiver { sync_rx },
-            backend_task,
-        ))
+        Ok(NetworkingServiceJoinHandle {
+            connectivity: ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
+            messaging: MessagingHandle::new(cmd_tx),
+            syncing_event_receiver: Self::SyncingEventReceiver { sync_rx },
+            p2p_event_topic: p2p_tx.into(),
+            handle: backend_task,
+        })
     }
 }
 

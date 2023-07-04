@@ -73,7 +73,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (connectivity, _messaging_handle, _sync, _) = N::start(
+    let backend = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -85,7 +85,7 @@ where
     .await
     .unwrap();
 
-    let addresses = connectivity.local_addresses().to_vec();
+    let addresses = backend.connectivity.local_addresses().to_vec();
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let res = N::start(
@@ -127,7 +127,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service1, _, _, _) = N::start(
+    let mut backend1 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -141,7 +141,7 @@ where
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service2, _, _, _) = N::start(
+    let mut backend2 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -153,9 +153,9 @@ where
     .await
     .unwrap();
 
-    let conn_addr = service1.local_addresses().to_vec();
-    service2.connect(conn_addr[0].clone()).unwrap();
-    service1.poll_next().await.unwrap();
+    let conn_addr = backend1.connectivity.local_addresses().to_vec();
+    backend2.connectivity.connect(conn_addr[0].clone()).unwrap();
+    backend1.connectivity.poll_next().await.unwrap();
 
     shutdown.store(true);
     let _ = shutdown_sender_2.send(());

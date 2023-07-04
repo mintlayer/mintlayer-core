@@ -120,7 +120,7 @@ where
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
+        let backend = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -144,7 +144,7 @@ where
         let peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
-            conn,
+            backend.connectivity,
             rx_peer_manager,
             time_getter.clone(),
             peerdb_storage,
@@ -167,8 +167,8 @@ where
         let sync_manager = sync::BlockSyncManager::<T>::new(
             chain_config,
             p2p_config,
-            messaging_handle.clone(),
-            sync_event_receiver,
+            backend.messaging.clone(),
+            backend.syncing_event_receiver,
             chainstate_handle,
             mempool_handle.clone(),
             tx_peer_manager.clone(),
@@ -192,10 +192,10 @@ where
         Ok(Self {
             tx_peer_manager,
             mempool_handle,
-            messaging_handle,
+            messaging_handle: backend.messaging,
             shutdown,
             backend_shutdown_sender,
-            backend_task,
+            backend_task: backend.handle,
             peer_manager_task,
             sync_manager_task,
             subscribers_sender,

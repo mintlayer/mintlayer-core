@@ -59,7 +59,7 @@ where
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-    let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
+    let mut backend1 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -74,8 +74,8 @@ where
     let sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        messaging_handle,
-        sync_event_receiver,
+        backend1.messaging,
+        backend1.syncing_event_receiver,
         chainstate,
         mempool,
         tx_peer_manager,
@@ -84,7 +84,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
+    let mut backend2 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -97,7 +97,8 @@ where
     .unwrap();
 
     let (_address, _peer_info1, peer_info2) =
-        connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
+        connect_and_accept_services::<N>(&mut backend1.connectivity, &mut backend2.connectivity)
+            .await;
 
     // Create a block with an invalid timestamp.
     let block = Block::new(
@@ -113,7 +114,7 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
-        let (peer, mut sync_rx) = match sync2.poll_next().await.unwrap() {
+        let (peer, mut sync_rx) = match backend2.syncing_event_receiver.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,
                 services: _,
@@ -125,10 +126,12 @@ where
             SyncMessage::HeaderListRequest(_) => {}
             e => panic!("Unexpected event type: {e:?}"),
         };
-        messaging_handle_2
+        backend2
+            .messaging
             .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
             .unwrap();
-        messaging_handle_2
+        backend2
+            .messaging
             .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
                 .header()
                 .clone()])))

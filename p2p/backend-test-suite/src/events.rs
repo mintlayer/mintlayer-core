@@ -49,7 +49,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service1, _, _sync, _) = N::start(
+    let mut backend1 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -69,7 +69,7 @@ where
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service2, _, _sync, _) = N::start(
+    let mut backend2 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -82,7 +82,9 @@ where
     .unwrap();
 
     assert_eq!(events_receiver.try_recv(), Err(TryRecvError::Empty));
-    let (_, _, info) = connect_and_accept_services::<N>(&mut service1, &mut service2).await;
+    let (_, _, info) =
+        connect_and_accept_services::<N>(&mut backend1.connectivity, &mut backend2.connectivity)
+            .await;
 
     assert_eq!(
         timeout(Duration::from_secs(5), events_receiver.recv()).await.unwrap(),
@@ -94,7 +96,7 @@ where
         })
     );
 
-    service1.disconnect(info.peer_id).unwrap();
+    backend1.connectivity.disconnect(info.peer_id).unwrap();
     assert_eq!(
         timeout(Duration::from_secs(5), events_receiver.recv()).await.unwrap(),
         Some(P2pEvent::PeerDisconnected(info.peer_id))

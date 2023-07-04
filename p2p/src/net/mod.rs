@@ -30,7 +30,8 @@ use crate::{
     config,
     message::{PeerManagerMessage, SyncMessage},
     types::peer_id::PeerId,
-    P2pEventHandler,
+    utils::broadcast::Topic,
+    P2pEvent, P2pEventHandler,
 };
 
 use self::default_backend::transport::TransportAddress;
@@ -88,12 +89,35 @@ pub trait NetworkingService {
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
-        JoinHandle<()>,
-    )>;
+    ) -> crate::Result<
+        NetworkingServiceJoinHandle<
+            Self::ConnectivityHandle,
+            Self::MessagingHandle,
+            Self::SyncingEventReceiver,
+        >,
+    >;
+}
+
+#[derive(Debug)]
+pub struct NetworkingServiceJoinHandle<ConnectivityHandle, MessagingHandle, SyncingEventReceiver>
+where
+    SyncingEventReceiver: Send,
+    MessagingHandle: Send + Sync + Clone,
+    SyncingEventReceiver: Send,
+{
+    /// A handle for sending/receiving connectivity-related events.
+    pub connectivity: ConnectivityHandle,
+
+    /// A handle for sending messages and announcements to peers.
+    pub messaging: MessagingHandle,
+
+    /// A receiver for syncing events.
+    pub syncing_event_receiver: SyncingEventReceiver,
+
+    /// A topic for p2p events.
+    pub p2p_event_topic: Topic<P2pEvent>,
+
+    pub handle: JoinHandle<()>,
 }
 
 /// [ConnectivityService] provides an interface through which objects can send

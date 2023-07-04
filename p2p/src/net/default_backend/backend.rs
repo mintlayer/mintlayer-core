@@ -21,7 +21,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot},
     time::timeout,
 };
 
@@ -115,6 +115,9 @@ pub struct Backend<T: TransportSocket> {
     /// TX channel for sending syncing events
     sync_tx: mpsc::UnboundedSender<SyncingEvent>,
 
+    /// TX channel for broadcasting p2p events
+    p2p_tx: broadcast::Sender<P2pEvent>,
+
     /// List of incoming commands to the backend; we put them in a queue
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
@@ -139,6 +142,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
+        p2p_tx: broadcast::Sender<P2pEvent>,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
@@ -151,6 +155,7 @@ where
             chain_config,
             p2p_config,
             sync_tx,
+            p2p_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
@@ -213,10 +218,14 @@ where
             },
             &self.shutdown,
         );
-        self.events_controller.broadcast(P2pEvent::PeerConnected {
-            id: peer_id,
-            services: peer.services,
-        });
+        Self::broadcast_p2p_event(
+            &self.events_controller,
+            &self.p2p_tx,
+            P2pEvent::PeerConnected {
+                id: peer_id,
+                services: peer.services,
+            },
+        );
 
         Ok(())
     }
@@ -435,7 +444,11 @@ where
                 SyncingEvent::Disconnected { peer_id },
                 &self.shutdown,
             );
-            self.events_controller.broadcast(P2pEvent::PeerDisconnected(peer_id));
+            Self::broadcast_p2p_event(
+                &self.events_controller,
+                &self.p2p_tx,
+                P2pEvent::PeerDisconnected(peer_id),
+            );
         }
 
         // Terminate the peer's event loop as soon as possible.
@@ -618,6 +631,15 @@ where
             Err(_) if shutdown.load() => {}
             Err(_) => log::error!("sending sync event from the backend failed unexpectedly"),
         }
+    }
+
+    fn broadcast_p2p_event(
+        events_controller: &EventsController<P2pEvent>,
+        p2p_tx: &broadcast::Sender<P2pEvent>,
+        event: P2pEvent,
+    ) {
+        events_controller.broadcast(event.clone());
+        let _ = p2p_tx.send(event);
     }
 }
 

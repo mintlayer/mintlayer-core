@@ -544,7 +544,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn, _, _, _) = T::start(
+    let mut backend = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
@@ -557,9 +557,9 @@ where
     .unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
-    conn.connect(addr2).expect("dial to succeed");
+    backend.connectivity.connect(addr2).expect("dial to succeed");
 
-    match timeout(Duration::from_secs(1), conn.poll_next()).await {
+    match timeout(Duration::from_secs(1), backend.connectivity.poll_next()).await {
         Ok(res) => assert!(std::matches!(
             res,
             Ok(net::types::ConnectivityEvent::ConnectionError {
@@ -615,7 +615,7 @@ async fn connection_timeout_rpc_notified<T>(
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn, _, _, _) = T::start(
+    let backend = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
@@ -631,7 +631,7 @@ async fn connection_timeout_rpc_notified<T>(
     let peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        conn,
+        backend.connectivity,
         rx,
         Default::default(),
         peerdb_inmemory_store(),

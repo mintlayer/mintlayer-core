@@ -25,10 +25,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot};
 
 use common::{
     chain::ChainConfig,
@@ -41,7 +38,7 @@ use p2p::{
     net::{
         default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
-        ConnectivityService, NetworkingService, SyncingEventReceiver,
+        ConnectivityService, NetworkingService, NetworkingServiceJoinHandle, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
     types::peer_id::PeerId,
@@ -129,12 +126,13 @@ impl NetworkingService for MockNetworkingService {
         _shutdown: Arc<SeqCstAtomicBool>,
         _shutdown_receiver: oneshot::Receiver<()>,
         _subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
-    ) -> p2p::Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
-        JoinHandle<()>,
-    )> {
+    ) -> p2p::Result<
+        NetworkingServiceJoinHandle<
+            Self::ConnectivityHandle,
+            Self::MessagingHandle,
+            Self::SyncingEventReceiver,
+        >,
+    > {
         unreachable!()
     }
 }

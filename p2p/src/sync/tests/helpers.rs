@@ -56,7 +56,10 @@ use utils::atomics::SeqCstAtomicBool;
 use crate::{
     config::NodeType,
     message::{SyncMessage, TransactionResponse},
-    net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    net::{
+        default_backend::transport::TcpTransportSocket, types::SyncingEvent,
+        NetworkingServiceJoinHandle,
+    },
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -473,12 +476,13 @@ impl NetworkingService for NetworkingServiceStub {
         _: Arc<SeqCstAtomicBool>,
         _: oneshot::Receiver<()>,
         _: mpsc::UnboundedReceiver<P2pEventHandler>,
-    ) -> Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
-        JoinHandle<()>,
-    )> {
+    ) -> Result<
+        NetworkingServiceJoinHandle<
+            Self::ConnectivityHandle,
+            Self::MessagingHandle,
+            Self::SyncingEventReceiver,
+        >,
+    > {
         panic!("Stub service shouldn't be used directly");
     }
 }

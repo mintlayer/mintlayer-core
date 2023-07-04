@@ -48,7 +48,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
+    let mut backend1 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -62,7 +62,7 @@ where
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
+    let mut backend2 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -74,7 +74,7 @@ where
     .await
     .unwrap();
 
-    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
+    connect_and_accept_services::<N>(&mut backend1.connectivity, &mut backend2.connectivity).await;
 
     let block = Block::new(
         vec![],
@@ -84,13 +84,14 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    messaging_handle1
+    backend1
+        .messaging
         .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
         .unwrap();
 
-    let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
+    let mut sync_rx_2 = match backend2.syncing_event_receiver.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
@@ -118,13 +119,14 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    messaging_handle2
+    backend2
+        .messaging
         .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
         .unwrap();
 
-    let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
+    let mut sync_rx_1 = match backend1.syncing_event_receiver.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
@@ -184,7 +186,7 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
+    let mut backend1 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -198,7 +200,7 @@ where
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
+    let mut backend2 = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -210,7 +212,7 @@ where
     .await
     .unwrap();
 
-    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
+    connect_and_accept_services::<N>(&mut backend1.connectivity, &mut backend2.connectivity).await;
 
     let block = Block::new(
         vec![],
@@ -220,7 +222,8 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    messaging_handle1
+    backend1
+        .messaging
         .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))

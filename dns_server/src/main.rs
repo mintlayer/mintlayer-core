@@ -78,7 +78,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-    let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
+    let backend = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),
@@ -113,8 +113,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         time_getter,
         crawler_config,
         chain_config,
-        conn,
-        sync,
+        backend.connectivity,
+        backend.syncing_event_receiver,
         storage,
         dns_server_cmd_tx,
     )?;
