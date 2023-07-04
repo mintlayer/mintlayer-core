@@ -180,8 +180,10 @@ impl ExtendedVRFPrivateKey {
         seed: &[u8],
         keykind: VRFKeyKind,
     ) -> Result<ExtendedVRFPrivateKey, DerivationError> {
-        // Create a new mac with the appropriate BIP39 constant
-        let mut mac = new_hmac_sha_512(b"Bitcoin seed");
+        // Create a new mac with the appropriate BIP32 constant
+        // Have a different constant from the Secp256k1 so that in case it is leaked the VRF key
+        // will remain safe
+        let mut mac = new_hmac_sha_512(b"Bitcoin VRF seed");
 
         mac.update(seed);
 

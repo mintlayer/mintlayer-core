@@ -65,7 +65,7 @@ fn to_key_and_chain_code(
 
 impl Secp256k1ExtendedPrivateKey {
     pub fn new_master(seed: &[u8]) -> Result<Secp256k1ExtendedPrivateKey, DerivationError> {
-        // Create a new mac with the appropriate BIP39 constant
+        // Create a new mac with the appropriate BIP32 constant
         let mut mac = new_hmac_sha_512(b"Bitcoin seed");
 
         mac.update(seed);

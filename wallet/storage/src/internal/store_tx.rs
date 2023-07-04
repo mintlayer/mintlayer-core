@@ -168,7 +168,10 @@ macro_rules! impl_read_ops {
                     .map_err(crate::Error::from)
                     .map(Iterator::count)
                     .and_then(|count| {
-                        ensure!(count == 1, crate::Error::WalletWithoutARootKey);
+                        ensure!(
+                            count == 1,
+                            crate::Error::WalletSanityErrorInvalidRootKeyCount(count)
+                        );
                         Ok(())
                     })
             }

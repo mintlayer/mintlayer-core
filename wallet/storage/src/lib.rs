@@ -44,8 +44,8 @@ pub enum Error {
     WalletAlreadyUnlocked,
     #[error("Cannot lock the wallet without setting a password")]
     WalletLockedWithoutAPassword,
-    #[error("Wallet file without a root key")]
-    WalletWithoutARootKey,
+    #[error("Wallet file corrupted root keys expected 1 got {0}")]
+    WalletSanityErrorInvalidRootKeyCount(usize),
 }
 
 /// Possibly failing result of wallet storage query

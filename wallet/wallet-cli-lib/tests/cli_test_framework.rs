@@ -116,7 +116,7 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "00d88105442d4af7dd6c3464c44d1ef7a1b0df363279742dd2139573f58c7c6153",
+        "0020b95f66e824fc0df1ff13ba63d6727e013e1ea465cc37c2415a69cc408cf375",
     );
 
     let mint_output = TxOutput::Transfer(
