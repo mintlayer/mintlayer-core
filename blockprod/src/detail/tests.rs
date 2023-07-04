@@ -1001,7 +1001,7 @@ mod produce_block {
             )
         };
 
-        let blocks_to_generate = rng.gen_range(20..=100);
+        let blocks_to_generate = rng.gen_range(100..=1000);
 
         let override_chain_config = {
             let genesis_block = Genesis::new(
@@ -1046,7 +1046,7 @@ mod produce_block {
                     UpgradeVersion::ConsensusUpgrade(consensus_types[next_consensus_type].clone()),
                 ));
 
-                next_height_consensus_change += rng.gen_range(1..10);
+                next_height_consensus_change += rng.gen_range(1..50);
             }
 
             let net_upgrades =
