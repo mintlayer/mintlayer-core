@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Transaction},
+    chain::Transaction,
     primitives::{semver::SemVer, user_agent::UserAgent, Id},
 };
 use serialization::{Decode, Encode};
@@ -43,6 +45,24 @@ pub enum Command<A> {
 /// Random nonce sent in outbound handshake.
 /// Used to detect and drop self connections.
 pub type HandshakeNonce = u64;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct P2pTimestamp(#[codec(compact)] u64);
+
+impl P2pTimestamp {
+    #[cfg(test)]
+    pub fn from_int_seconds(timestamp: u64) -> Self {
+        Self(timestamp)
+    }
+
+    pub fn from_duration_since_epoch(duration: Duration) -> Self {
+        Self(duration.as_secs())
+    }
+
+    pub fn as_duration_since_epoch(&self) -> Duration {
+        Duration::from_secs(self.0)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
@@ -86,7 +106,7 @@ pub enum HandshakeMessage {
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
 
-        current_time: BlockTimestamp,
+        current_time: P2pTimestamp,
 
         /// Random nonce that is only used to detect and drop self-connects
         handshake_nonce: HandshakeNonce,
@@ -101,7 +121,7 @@ pub enum HandshakeMessage {
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
 
-        current_time: BlockTimestamp,
+        current_time: P2pTimestamp,
     },
 }
 

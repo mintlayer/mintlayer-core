@@ -25,10 +25,7 @@ use tokio::{
     time::timeout,
 };
 
-use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig},
-    time_getter::TimeGetter,
-};
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
@@ -52,7 +49,11 @@ use crate::{
     P2pEvent, P2pEventHandler,
 };
 
-use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
+use super::{
+    peer::PeerRole,
+    transport::TransportAddress,
+    types::{HandshakeNonce, P2pTimestamp},
+};
 
 /// Buffer size of the channel to the SyncManager peer task.
 /// How many unprocessed messages can be sent before the peer's event loop is blocked.
@@ -348,7 +349,7 @@ where
             peer_rx,
         );
         let shutdown = Arc::clone(&self.shutdown);
-        let local_time = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
+        let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
         let handle = tokio::spawn(async move {
             match peer.run(local_time).await {
                 Ok(()) => {}
