@@ -119,7 +119,7 @@ impl SyncManagerHandle {
             events_receiver: messaging_receiver,
         };
 
-        let mut sync = BlockSyncManager::new(
+        let sync = BlockSyncManager::new(
             chain_config,
             p2p_config,
             messaging_handle,

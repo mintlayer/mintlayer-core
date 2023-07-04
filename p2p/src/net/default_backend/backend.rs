@@ -268,7 +268,7 @@ where
     }
 
     /// Runs the backend events loop.
-    pub async fn run(&mut self) -> crate::Result<Never> {
+    pub async fn run(mut self) -> crate::Result<Never> {
         loop {
             tokio::select! {
                 // Select from the channels in the specified order
@@ -280,7 +280,7 @@ where
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
-                    callback(self)?;
+                    callback(&mut self)?;
                 },
                 // Handle peer events.
                 event = self.peer_chan.1.recv() => {
@@ -336,22 +336,20 @@ where
         };
 
         let backend_tx = self.peer_chan.0.clone();
-        let chain_config = Arc::clone(&self.chain_config);
-        let p2p_config = Arc::clone(&self.p2p_config);
-        let shutdown = Arc::clone(&self.shutdown);
 
+        let peer = peer::Peer::<T>::new(
+            remote_peer_id,
+            peer_role,
+            Arc::clone(&self.chain_config),
+            Arc::clone(&self.p2p_config),
+            socket,
+            receiver_address,
+            backend_tx,
+            peer_rx,
+        );
+        let shutdown = Arc::clone(&self.shutdown);
         let local_time = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
         let handle = tokio::spawn(async move {
-            let mut peer = peer::Peer::<T>::new(
-                remote_peer_id,
-                peer_role,
-                chain_config,
-                p2p_config,
-                socket,
-                receiver_address,
-                backend_tx,
-                peer_rx,
-            );
             match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}

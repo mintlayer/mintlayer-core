@@ -74,7 +74,7 @@ where
     .await
     .unwrap();
 
-    let mut sync1 = BlockSyncManager::<N>::new(
+    let sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         messaging_handle,
