@@ -228,7 +228,7 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.len() + self.unsynced_accounts.len()
     }
 
-    pub fn account_names(&self) -> Vec<Option<String>> {
+    pub fn account_names(&self) -> Vec<&Option<String>> {
         self.accounts
             .values()
             .chain(self.unsynced_accounts.values())

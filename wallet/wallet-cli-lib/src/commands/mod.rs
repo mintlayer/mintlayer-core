@@ -116,10 +116,8 @@ pub enum WalletCommand {
         account_index: U31,
     },
 
-    /// Start staing using the specified account
-    StartStaking {
-        account_index: U31,
-    },
+    /// Start staking
+    StartStaking,
 
     StopStaking,
 
@@ -363,7 +361,7 @@ impl CommandHandler {
                 )
                 .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names();
+                let account_names = wallet.account_names().into_iter().cloned().collect();
                 *controller_opt = Some(RpcController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
@@ -393,7 +391,7 @@ impl CommandHandler {
                 let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
                     .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names();
+                let account_names = wallet.account_names().into_iter().cloned().collect();
                 *controller_opt = Some(RpcController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
@@ -564,11 +562,13 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::StartStaking { account_index } => {
+            WalletCommand::StartStaking => {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .start_staking(account_index)
+                    .start_staking(
+                        self.selected_account().ok_or(WalletCliError::NoSelectedAccount)?,
+                    )
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }

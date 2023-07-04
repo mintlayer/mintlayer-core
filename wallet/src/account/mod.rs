@@ -671,8 +671,8 @@ impl Account {
         !self.output_cache.txs().is_empty()
     }
 
-    pub fn name(&self) -> Option<String> {
-        self.account_info.name().clone()
+    pub fn name(&self) -> &Option<String> {
+        self.account_info.name()
     }
 }
 

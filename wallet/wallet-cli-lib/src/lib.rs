@@ -118,11 +118,11 @@ pub async fn run(
         startup_command_futures.push(res_rx);
     }
 
-    if let Some(account_index) = start_staking {
+    if start_staking {
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::StartStaking { account_index },
+                command: WalletCommand::StartStaking,
                 res_tx,
             })
             .expect("should not fail");
