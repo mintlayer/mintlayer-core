@@ -521,9 +521,7 @@ mod produce_block {
 
                 match result {
                     Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::PropertyQueryError(
-                            PropertyQueryError::BestBlockIndexNotFound,
-                        ),
+                        ConsensusCreationError::BestBlockIndexNotFound,
                     )) => {}
                     _ => panic!("Unexpected return value"),
                 }
