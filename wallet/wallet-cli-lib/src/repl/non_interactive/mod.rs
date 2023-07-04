@@ -76,15 +76,16 @@ pub fn run(
     exit_on_error: bool,
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
 ) -> Result<(), WalletCliError> {
-    let repl_command = get_repl_command();
-
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open")?;
         let line_out = to_line_output(res, "startup command");
-        if let Some(value) = handle_response(line_out, &mut output, exit_on_error) {
+        if let Some(value) = handle_response(line_out, &mut output, true) {
             return value;
         }
     }
+
+    let repl_command = get_repl_command();
+
     while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);
 

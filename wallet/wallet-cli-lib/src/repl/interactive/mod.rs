@@ -136,9 +136,6 @@ pub fn run(
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
-    console.print_line("Use 'help' to see all available commands.");
-    console.print_line("Use 'exit' or Ctrl-D to quit.");
-
     let mut line_editor = create_line_editor(
         logger.printer().clone(),
         repl_command.clone(),
@@ -156,11 +153,14 @@ pub fn run(
             &mut console,
             &mut prompt,
             &mut line_editor,
-            exit_on_error,
+            true,
         ) {
             return value;
         }
     }
+
+    console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     loop {
         logger.set_print_directly(false);
