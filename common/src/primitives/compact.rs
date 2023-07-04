@@ -20,17 +20,6 @@ use std::ops::Shl;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Encode, Decode)]
 pub struct Compact(pub u32);
 
-impl Compact {
-    pub fn highest_value() -> Self {
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF])
-            .into()
-    }
-
-    pub fn lowest_value() -> Self {
-        Uint256([0, 0, 0, 0]).into()
-    }
-}
-
 impl std::fmt::Debug for Compact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Compact(0x{:08x})", self.0)

@@ -26,8 +26,9 @@ use common::{
         ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
         RequiredConsensus, TxOutput, UpgradeVersion,
     },
-    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Compact, Id, H256},
+    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
+    Uint256,
 };
 use consensus::{
     ConsensusCreationError, ConsensusPoSError, ConsensusPoWError, PoSGenerateBlockInputData,
@@ -737,7 +738,7 @@ mod produce_block {
                         // Make difficulty impossible so the cancel from
                         // the mock job manager is always seen before
                         // solving the block
-                        initial_difficulty: Compact::lowest_value(),
+                        initial_difficulty: Uint256::ZERO.into(),
                     }),
                 ),
             ])
@@ -854,7 +855,7 @@ mod produce_block {
                 (
                     BlockHeight::new(1),
                     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                        initial_difficulty: Compact::highest_value(),
+                        initial_difficulty: Uint256::MAX.into(),
                     }),
                 ),
             ])
@@ -1021,10 +1022,10 @@ mod produce_block {
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,
                 ConsensusUpgrade::PoW {
-                    initial_difficulty: Compact::highest_value(),
+                    initial_difficulty: Uint256::MAX.into(),
                 },
                 ConsensusUpgrade::PoS {
-                    initial_difficulty: Compact::highest_value(),
+                    initial_difficulty: Uint256::MAX.into(),
                     config: create_unittest_pos_config(),
                 },
             ];
