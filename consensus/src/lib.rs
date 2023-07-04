@@ -65,6 +65,8 @@ pub use crate::{
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusCreationError {
+    #[error("Best block index not found")]
+    BestBlockIndexNotFound,
     #[error("Mining error: {0}")]
     MiningError(#[from] ConsensusPoWError),
     #[error("Mining stopped")]
