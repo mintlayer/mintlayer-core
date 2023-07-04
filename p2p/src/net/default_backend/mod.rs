@@ -143,7 +143,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         );
         let backend_task = tokio::spawn(async move {
             match backend.run().await {
-                Ok(_) => unreachable!(),
+                Ok(never) => match never {},
                 Err(P2pError::ChannelClosed) if shutdown.load() => {
                     log::info!("Backend is shut down");
                 }
