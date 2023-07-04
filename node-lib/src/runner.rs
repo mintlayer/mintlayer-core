@@ -31,10 +31,9 @@ use chainstate::rpc::ChainstateRpcServer;
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular},
-        create_testnet_pos_config, initial_difficulty, ConsensusUpgrade, NetUpgrades,
-        UpgradeVersion,
+        NetUpgrades,
     },
-    primitives::{semver::SemVer, BlockHeight},
+    primitives::semver::SemVer,
 };
 use logging::log;
 
@@ -323,23 +322,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        let pos_net_upgrades = vec![
-            (
-                BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            ),
-            (
-                BlockHeight::new(1),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
-                    config: create_testnet_pos_config(),
-                }),
-            ),
-        ];
-
-        let net_upgrades =
-            NetUpgrades::initialize(pos_net_upgrades).expect("PoS NetUpgrades are valid");
-
+        let net_upgrades = NetUpgrades::unit_tests_with_pos();
         builder = builder.net_upgrades(net_upgrades);
     }
 

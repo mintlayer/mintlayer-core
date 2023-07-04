@@ -17,7 +17,7 @@ use std::ops::Range;
 
 use crate::chain::config::ChainType;
 use crate::chain::pow::limit;
-use crate::chain::PoSChainConfig;
+use crate::chain::{create_unittest_pos_config, initial_difficulty, PoSChainConfig};
 use crate::primitives::{BlockHeight, Compact};
 
 #[derive(Debug, Clone)]
@@ -40,6 +40,24 @@ impl NetUpgrades<UpgradeVersion> {
             BlockHeight::zero(),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
         )])
+    }
+}
+
+impl NetUpgrades<UpgradeVersion> {
+    pub fn unit_tests_with_pos() -> Self {
+        Self(vec![
+            (
+                BlockHeight::zero(),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+            ),
+            (
+                BlockHeight::new(1),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
+                    config: create_unittest_pos_config(),
+                }),
+            ),
+        ])
     }
 }
 
