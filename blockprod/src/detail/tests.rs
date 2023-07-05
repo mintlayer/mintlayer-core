@@ -1068,7 +1068,7 @@ mod produce_block {
                     shutdown_trigger.initiate();
                 });
 
-                let block_production = BlockProduction::new(
+                let mut block_production = BlockProduction::new(
                     chain_config.clone(),
                     chainstate.clone(),
                     mempool,
@@ -1111,7 +1111,10 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
                         RequiredConsensus::PoS(_) => {
@@ -1134,9 +1137,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoW input data for PoS consensus
 
@@ -1154,9 +1156,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoS input data for PoS consensus
 
@@ -1167,7 +1168,10 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
                             let result = assert_process_block(&chainstate, new_block).await;
 
                             // Update kernel input parameters for future PoS blocks
@@ -1204,9 +1208,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoS input data for PoW consensus
 
@@ -1224,9 +1227,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoW input data for PoW consensus
 
@@ -1237,8 +1239,11 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
-                            assert_process_block(&chainstate, new_block).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
+                            assert_process_block(&chainstate, new_block.clone()).await;
                         }
                     }
                 }
