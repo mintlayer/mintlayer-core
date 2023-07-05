@@ -58,7 +58,7 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --locked
       - name: Run tests
         run: cargo test --release --workspace
       # This test is ignored, so it needs to run separately.
@@ -93,7 +93,7 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --locked
       - name: Run tests
         run: cargo test --release --workspace
       # This test is ignored, so it needs to run separately.
@@ -128,7 +128,7 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --locked
       - name: Run tests
         run: cargo test --release --workspace
       # This test is ignored, so it needs to run separately.
