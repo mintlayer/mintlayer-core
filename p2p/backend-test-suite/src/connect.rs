@@ -17,6 +17,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
+use common::time_getter::TimeGetter;
 use tokio::sync::{mpsc, oneshot};
 
 use p2p::testing_utils::{test_p2p_config, TestTransportMaker};
@@ -42,11 +43,13 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
+    let time_getter = TimeGetter::default();
     N::start(
         T::make_transport(),
         vec![T::make_address()],
         config,
         p2p_config,
+        time_getter,
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -73,11 +76,13 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
+    let time_getter = TimeGetter::default();
     let (connectivity, _messaging_handle, _sync, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -93,6 +98,7 @@ where
         addresses,
         config,
         Arc::clone(&p2p_config),
+        time_getter,
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -127,11 +133,13 @@ where
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
+    let time_getter = TimeGetter::default();
     let (mut service1, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -146,6 +154,7 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        time_getter,
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,

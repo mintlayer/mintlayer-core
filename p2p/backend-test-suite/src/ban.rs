@@ -59,11 +59,14 @@ where
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
+    let time_getter = TimeGetter::default();
+
     let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -79,7 +82,7 @@ where
         chainstate,
         mempool,
         tx_peer_manager,
-        TimeGetter::default(),
+        time_getter.clone(),
     );
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -89,6 +92,7 @@ where
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        time_getter,
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,

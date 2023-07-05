@@ -72,6 +72,7 @@ where
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,

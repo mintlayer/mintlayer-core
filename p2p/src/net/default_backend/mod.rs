@@ -21,6 +21,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
+use common::time_getter::TimeGetter;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -114,6 +115,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
@@ -134,6 +136,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             socket,
             chain_config,
             Arc::clone(&p2p_config),
+            time_getter.clone(),
             cmd_rx,
             conn_tx,
             sync_tx,

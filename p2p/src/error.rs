@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
@@ -75,6 +77,8 @@ pub enum PeerError {
     TooManyPeers,
     #[error("Connection to address {0} already pending")]
     Pending(String),
+    #[error("Time difference is too large: {0:?}")]
+    TimeDiff(Duration),
 }
 
 /// Errors related to establishing a connection with a remote peer

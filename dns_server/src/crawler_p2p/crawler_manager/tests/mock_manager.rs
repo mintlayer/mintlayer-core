@@ -33,6 +33,7 @@ use tokio::{
 use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
+    time_getter::TimeGetter,
 };
 use p2p::{
     config::{NodeType, P2pConfig},
@@ -126,6 +127,7 @@ impl NetworkingService for MockNetworkingService {
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
+        _time_getter: TimeGetter,
         _shutdown: Arc<SeqCstAtomicBool>,
         _shutdown_receiver: oneshot::Receiver<()>,
         _subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
