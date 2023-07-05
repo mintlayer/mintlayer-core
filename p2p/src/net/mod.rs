@@ -74,7 +74,7 @@ pub trait NetworkingService {
     type ConnectivityHandle: Send;
 
     /// A handle for sending messages and announcements to peers.
-    type MessagingHandle: Send + Sync + Clone;
+    type MessagingHandle: Send + Sync;
 
     /// A receiver for syncing events.
     type SyncingEventReceiver: Send;
