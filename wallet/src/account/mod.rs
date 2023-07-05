@@ -596,11 +596,12 @@ impl Account {
     }
 
     /// Store a block or tx in the DB if any of the inputs or outputs belong to this wallet
+    /// returns true if tx was added false otherwise
     fn add_wallet_tx_if_relevant(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         tx: WalletTx,
-    ) -> WalletResult<()> {
+    ) -> WalletResult<bool> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
             TxInput::Utxo(outpoint) => self
                 .output_cache
@@ -613,26 +614,9 @@ impl Account {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
             self.output_cache.add_tx(id, tx);
-        }
-        Ok(())
-    }
-
-    fn add_wallet_unconfirmed_tx_if_relevant(&mut self, tx: WalletTx) -> bool {
-        let relevant_inputs = tx.inputs().iter().any(|input| match input {
-            TxInput::Utxo(outpoint) => self
-                .output_cache
-                .get_txo_with_unconfirmed(outpoint)
-                .map_or(false, |txo| self.is_mine_or_watched(txo)),
-            TxInput::Account(_) => false,
-        });
-        let relevant_outputs = tx.outputs().iter().any(|txo| self.is_mine_or_watched(txo));
-
-        if relevant_inputs || relevant_outputs {
-            let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
-            self.output_cache.add_unconfirmed_tx(id, tx);
-            true
+            Ok(true)
         } else {
-            false
+            Ok(false)
         }
     }
 
@@ -689,7 +673,11 @@ impl Account {
         Ok(())
     }
 
-    pub fn scan_new_unconfirmed_transactions(&mut self, transactions: &[SignedTransaction]) {
+    pub fn scan_new_unconfirmed_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
         let mut not_added = vec![];
         for signed_tx in transactions {
             let wallet_tx = WalletTx::Tx(TxData::new(
@@ -703,7 +691,7 @@ impl Account {
             // if we haven't processed the previous tx before it.
             // This can only happen for the last one in the chain, as any other tx will have an
             // output belonging to this account.
-            if !self.add_wallet_unconfirmed_tx_if_relevant(wallet_tx) {
+            if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
                 not_added.push(signed_tx);
             }
         }
@@ -715,8 +703,10 @@ impl Account {
                 TxState::InMempool,
             ));
 
-            self.add_wallet_unconfirmed_tx_if_relevant(wallet_tx);
+            self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
         }
+
+        Ok(())
     }
 
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {

@@ -495,8 +495,10 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
     pub fn scan_mempool(&mut self, transactions: &[SignedTransaction]) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
         for account in self.accounts.values_mut() {
-            account.scan_new_unconfirmed_transactions(transactions);
+            account.scan_new_unconfirmed_transactions(transactions, &mut db_tx)?;
         }
 
         Ok(())

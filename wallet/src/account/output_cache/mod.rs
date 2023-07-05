@@ -25,68 +25,6 @@ use common::{
 };
 use wallet_types::{wallet_tx::TxState, AccountWalletTxId, BlockInfo, WalletTx};
 
-struct UnconfirmedTxs {
-    txs: BTreeMap<OutPointSourceId, WalletTx>,
-    consumed: BTreeSet<UtxoOutPoint>,
-    dependencies: BTreeMap<OutPointSourceId, Vec<OutPointSourceId>>,
-}
-
-impl UnconfirmedTxs {
-    fn empty() -> Self {
-        UnconfirmedTxs {
-            txs: BTreeMap::new(),
-            consumed: BTreeSet::new(),
-            dependencies: BTreeMap::new(),
-        }
-    }
-
-    fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) {
-        for input in tx.inputs() {
-            match input {
-                TxInput::Utxo(outpoint) => {
-                    self.consumed.insert(outpoint.clone());
-                    self.dependencies
-                        .entry(outpoint.tx_id())
-                        .and_modify(|tx_ids| tx_ids.push(tx_id.clone()))
-                        .or_insert_with(|| vec![tx_id.clone()]);
-                }
-                TxInput::Account(_) => {
-                    unimplemented!()
-                }
-            }
-        }
-        self.txs.insert(tx_id, tx);
-    }
-
-    fn confirm_tx(&mut self, tx_id: &OutPointSourceId) {
-        self.txs.remove(tx_id);
-    }
-
-    fn remove_tx(&mut self, tx_id: &AccountWalletTxId) {
-        let mut to_remove = vec![tx_id.item_id().clone()];
-        while let Some(tx_id) = to_remove.pop() {
-            let tx_opt = self.txs.remove(&tx_id);
-            if let Some(tx) = tx_opt {
-                for input in tx.inputs() {
-                    match input {
-                        TxInput::Utxo(outpoint) => {
-                            self.consumed.remove(outpoint);
-                        }
-                        TxInput::Account(_) => {
-                            unimplemented!()
-                        }
-                    }
-                }
-            }
-
-            // TODO: keep those as conflicting?
-            if let Some(mut dependencie) = self.dependencies.remove(&tx_id) {
-                to_remove.append(&mut dependencie);
-            }
-        }
-    }
-}
-
 /// A helper structure for the UTXO search.
 ///
 /// All transactions and blocks from the DB are cached here. If a transaction
@@ -101,7 +39,7 @@ impl UnconfirmedTxs {
 pub struct OutputCache {
     txs: BTreeMap<OutPointSourceId, WalletTx>,
     consumed: BTreeSet<UtxoOutPoint>,
-    unconfirmed_txs: UnconfirmedTxs,
+    unconfirmed_consumed: BTreeSet<UtxoOutPoint>,
 }
 
 impl OutputCache {
@@ -109,7 +47,7 @@ impl OutputCache {
         Self {
             txs: BTreeMap::new(),
             consumed: BTreeSet::new(),
-            unconfirmed_txs: UnconfirmedTxs::empty(),
+            unconfirmed_consumed: BTreeSet::new(),
         }
     }
 
@@ -124,7 +62,7 @@ impl OutputCache {
     pub fn txs_with_unconfirmed(
         &self,
     ) -> impl Iterator<Item = (&OutPointSourceId, &WalletTx)> + '_ {
-        self.txs.iter().chain(self.unconfirmed_txs.txs.iter())
+        self.txs.iter()
     }
 
     pub fn get_txo(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {
@@ -133,18 +71,20 @@ impl OutputCache {
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
     }
 
-    pub fn get_txo_with_unconfirmed(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {
-        self.txs
-            .get(&outpoint.tx_id())
-            .or_else(|| self.unconfirmed_txs.txs.get(&outpoint.tx_id()))
-            .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
-    }
-
     pub fn add_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
+        let is_unconfirmed = match tx.state() {
+            TxState::InMempool => true,
+            TxState::Confirmed(_, _) | TxState::Conflicted(_) | TxState::Inactive => false,
+        };
+
         for input in tx.inputs() {
             match input {
                 TxInput::Utxo(outpoint) => {
-                    self.consumed.insert(outpoint.clone());
+                    if is_unconfirmed {
+                        self.unconfirmed_consumed.insert(outpoint.clone());
+                    } else {
+                        self.consumed.insert(outpoint.clone());
+                    }
                 }
                 TxInput::Account(_) => {
                     unimplemented!()
@@ -152,7 +92,6 @@ impl OutputCache {
             }
         }
 
-        self.unconfirmed_txs.confirm_tx(tx_id.item_id());
         self.txs.insert(tx_id.into_item_id(), tx);
     }
 
@@ -163,6 +102,7 @@ impl OutputCache {
                 match input {
                     TxInput::Utxo(outpoint) => {
                         self.consumed.remove(outpoint);
+                        self.unconfirmed_consumed.remove(outpoint);
                     }
                     TxInput::Account(_) => {
                         unimplemented!()
@@ -170,8 +110,6 @@ impl OutputCache {
                 }
             }
         }
-
-        self.unconfirmed_txs.remove_tx(tx_id);
     }
 
     fn valid_utxo(
@@ -183,12 +121,8 @@ impl OutputCache {
         with_unconfirmed: bool,
     ) -> bool {
         !self.consumed.contains(outpoint)
-            && (!with_unconfirmed || !self.unconfirmed_txs.consumed.contains(outpoint))
+            && (!with_unconfirmed || !self.unconfirmed_consumed.contains(outpoint))
             && valid_timelock(output, current_block_info, transaction_block_info)
-    }
-
-    pub fn add_unconfirmed_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
-        self.unconfirmed_txs.add_tx(tx_id.into_item_id(), tx);
     }
 
     pub fn utxos_with_token_ids(
@@ -198,16 +132,16 @@ impl OutputCache {
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let mut utxos = BTreeMap::new();
 
-        let txs = self.txs.values().chain(
-            with_unconfirmed
-                .then_some(self.unconfirmed_txs.txs.values())
-                .unwrap_or_default(),
-        );
-
-        for tx in txs {
+        for tx in self.txs.values() {
             let tx_block_info = match tx.state() {
                 TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
+                TxState::InMempool => {
+                    if !with_unconfirmed {
+                        continue;
+                    }
+                    None
+                }
+                TxState::Inactive | TxState::Conflicted(_) => continue,
             };
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
