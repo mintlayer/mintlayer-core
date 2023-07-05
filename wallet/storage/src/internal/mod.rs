@@ -66,7 +66,10 @@ impl<B: storage::Backend> Store<B> {
     pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
         let mut tx = self.transaction_rw_unlocked(None).map_err(crate::Error::from)?;
         let sym_key = match new_password {
-            None => None,
+            None => {
+                tx.del_encryption_kdf_challenge()?;
+                None
+            }
             Some(pass) => {
                 let (sym_key, kdf_challenge) = password_to_sym_key(pass)?;
                 tx.set_encryption_kdf_challenge(&kdf_challenge).map_err(crate::Error::from)?;

@@ -127,6 +127,7 @@ pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageW
 /// Modifying operations on persistent wallet data for encryption
 pub trait WalletStorageEncryptionWrite {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
+    fn del_encryption_kdf_challenge(&mut self) -> Result<()>;
     fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
 }
 
