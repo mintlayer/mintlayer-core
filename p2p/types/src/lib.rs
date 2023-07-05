@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod global_ip;
 pub mod ip_address;
 pub mod peer_address;
 pub mod peer_id;
+
+pub use global_ip::IsGlobalIp;

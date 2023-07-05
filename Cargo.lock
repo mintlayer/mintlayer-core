@@ -3896,6 +3896,7 @@ dependencies = [
  "once_cell",
  "p2p-backend-test-suite",
  "p2p-test-utils",
+ "p2p-types",
  "parity-scale-codec",
  "portpicker",
  "rpc",
@@ -3952,6 +3953,15 @@ dependencies = [
  "test-utils",
  "tokio",
  "utils",
+]
+
+[[package]]
+name = "p2p-types"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "serde",
+ "serialization",
 ]
 
 [[package]]
