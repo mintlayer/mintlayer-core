@@ -1000,7 +1000,7 @@ mod produce_block {
             )
         };
 
-        let blocks_to_generate = rng.gen_range(20..=1000);
+        let blocks_to_generate = rng.gen_range(100..=1000);
 
         let override_chain_config = {
             let genesis_block = Genesis::new(
