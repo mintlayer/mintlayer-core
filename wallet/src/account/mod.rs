@@ -146,9 +146,10 @@ impl Account {
         let network_fee = Amount::from_atoms(10000);
 
         let utxos_by_currency = group_utxos_for_input(
-            self.get_utxos_with_unconfirmed(
+            self.get_utxos(
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 median_time,
+                true,
             )
             .into_iter(),
             |(_, (tx_output, _))| tx_output,
@@ -347,6 +348,7 @@ impl Account {
         let utxos = self.get_utxos(
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
             median_time,
+            false,
         );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
@@ -535,7 +537,7 @@ impl Account {
         median_time: BlockTimestamp,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time).into_iter(),
+            self.get_utxos(utxo_types, median_time, false).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -551,29 +553,14 @@ impl Account {
         &self,
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
-        let mut all_outputs = self.output_cache.utxos_with_token_ids(current_block_info);
-        all_outputs.retain(|_outpoint, (txo, _token_id)| {
-            self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
-        });
-        all_outputs
-    }
-
-    pub fn get_utxos_with_unconfirmed(
-        &self,
-        utxo_types: UtxoTypes,
-        median_time: BlockTimestamp,
+        with_unconfirmed: bool,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
         let mut all_outputs =
-            self.output_cache.utxos_with_token_ids_with_unconfirmed(current_block_info);
+            self.output_cache.utxos_with_token_ids(current_block_info, with_unconfirmed);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -711,8 +698,9 @@ impl Account {
             ));
 
             // in the case when 2 unconfirmed txs depend on each other, and the last one spends
-            // utxos that belong to this account it is not possible to determine if that tx is for
-            // this account or not if we haven't processed the previous tx before it.
+            // utxos that belong to this account (but has no outputs associated with this account)
+            // it is not possible to determine if that tx is for this account or not
+            // if we haven't processed the previous tx before it.
             // This can only happen for the last one in the chain, as any other tx will have an
             // output belonging to this account.
             if !self.add_wallet_unconfirmed_tx_if_relevant(wallet_tx) {

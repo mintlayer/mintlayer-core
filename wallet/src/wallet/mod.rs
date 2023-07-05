@@ -361,7 +361,7 @@ impl<B: storage::Backend> Wallet<B> {
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self.get_account(account_index)?;
-        let utxos = account.get_utxos(utxo_types, self.latest_median_time);
+        let utxos = account.get_utxos(utxo_types, self.latest_median_time, false);
         let utxos = utxos
             .into_iter()
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))

@@ -79,6 +79,7 @@ impl UnconfirmedTxs {
                 }
             }
 
+            // TODO: keep those as conflicting?
             if let Some(mut dependencie) = self.dependencies.remove(&tx_id) {
                 to_remove.append(&mut dependencie);
             }
@@ -179,20 +180,10 @@ impl OutputCache {
         output: &TxOutput,
         transaction_block_info: &Option<BlockInfo>,
         current_block_info: &BlockInfo,
+        with_unconfirmed: bool,
     ) -> bool {
         !self.consumed.contains(outpoint)
-            && valid_timelock(output, current_block_info, transaction_block_info)
-    }
-
-    fn valid_unconfirmed_utxo(
-        &self,
-        outpoint: &UtxoOutPoint,
-        output: &TxOutput,
-        transaction_block_info: &Option<BlockInfo>,
-        current_block_info: &BlockInfo,
-    ) -> bool {
-        !self.consumed.contains(outpoint)
-            && !self.unconfirmed_txs.consumed.contains(outpoint)
+            && (!with_unconfirmed || !self.unconfirmed_txs.consumed.contains(outpoint))
             && valid_timelock(output, current_block_info, transaction_block_info)
     }
 
@@ -203,51 +194,29 @@ impl OutputCache {
     pub fn utxos_with_token_ids(
         &self,
         current_block_info: BlockInfo,
+        with_unconfirmed: bool,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let mut utxos = BTreeMap::new();
 
-        for tx in self.txs.values() {
+        let txs = self.txs.values().chain(
+            with_unconfirmed
+                .then_some(self.unconfirmed_txs.txs.values())
+                .unwrap_or_default(),
+        );
+
+        for tx in txs {
             let tx_block_info = match tx.state() {
                 TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
                 TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
             };
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
-                if self.valid_utxo(&outpoint, output, &tx_block_info, &current_block_info) {
-                    let token_id = if output.is_token_or_nft_issuance() {
-                        match tx {
-                            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
-                            WalletTx::Block(_) => None,
-                        }
-                    } else {
-                        None
-                    };
-                    utxos.insert(outpoint, (output, token_id));
-                }
-            }
-        }
-
-        utxos
-    }
-
-    pub fn utxos_with_token_ids_with_unconfirmed(
-        &self,
-        current_block_info: BlockInfo,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        let mut utxos = BTreeMap::new();
-
-        for tx in self.txs.values().chain(self.unconfirmed_txs.txs.values()) {
-            let tx_block_info = match tx.state() {
-                TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
-            };
-            for (index, output) in tx.outputs().iter().enumerate() {
-                let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
-                if self.valid_unconfirmed_utxo(
+                if self.valid_utxo(
                     &outpoint,
                     output,
                     &tx_block_info,
                     &current_block_info,
+                    with_unconfirmed,
                 ) {
                     let token_id = if output.is_token_or_nft_issuance() {
                         match tx {
@@ -266,6 +235,7 @@ impl OutputCache {
     }
 }
 
+// TODO: similar code from tx verifier
 fn valid_timelock(
     output: &TxOutput,
     current_block_info: &BlockInfo,
