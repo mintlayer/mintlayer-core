@@ -570,7 +570,7 @@ pub fn regtest_genesis_values() -> (
     )
 }
 
-pub fn create_regtest_pos_genesis() -> Genesis {
+pub fn create_regtest_pos_genesis(premine_destination: Destination) -> Genesis {
     let (
         genesis_pool_id,
         genesis_stake_pool_data,
@@ -583,10 +583,15 @@ pub fn create_regtest_pos_genesis() -> Genesis {
     let create_genesis_pool_txoutput =
         TxOutput::CreateStakePool(genesis_pool_id, genesis_stake_pool_data);
 
+    let premine_output = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000_000_000)),
+        premine_destination,
+    );
+
     Genesis::new(
         String::new(),
         BlockTimestamp::from_int_seconds(1639975460),
-        vec![create_genesis_pool_txoutput],
+        vec![premine_output, create_genesis_pool_txoutput],
     )
 }
 

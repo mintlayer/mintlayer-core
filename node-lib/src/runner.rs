@@ -34,7 +34,7 @@ use common::{
             create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig, ChainType,
             EmissionScheduleTabular,
         },
-        NetUpgrades,
+        Destination, NetUpgrades,
     },
     primitives::semver::SemVer,
 };
@@ -327,7 +327,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     if chain_pos_netupgrades.unwrap_or(false) {
         builder = builder
             .net_upgrades(NetUpgrades::regtest_with_pos())
-            .genesis_custom(create_regtest_pos_genesis());
+            .genesis_custom(create_regtest_pos_genesis(Destination::AnyoneCanSpend));
     }
 
     Ok(builder.build())
