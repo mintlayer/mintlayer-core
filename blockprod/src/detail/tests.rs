@@ -51,7 +51,7 @@ use utils::once_destructor::OnceDestructor;
 
 use crate::{
     detail::{
-        job_manager::{tests::MockJobManager, JobManagerError},
+        job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
         GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool,
@@ -1086,6 +1086,9 @@ mod produce_block {
                     prepare_thread_pool(1),
                 )
                 .expect("Error initializing blockprod");
+
+                let no_chainstate_job_manager = Box::new(JobManagerImpl::new(None));
+                block_production.set_job_manager(no_chainstate_job_manager);
 
                 let mut kernel_input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
