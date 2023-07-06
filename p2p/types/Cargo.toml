@@ -1,0 +1,13 @@
+[package]
+name = "p2p-types"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+serialization = { path = "../../serialization/" }
+
+parity-scale-codec.workspace = true
+serde.workspace = true

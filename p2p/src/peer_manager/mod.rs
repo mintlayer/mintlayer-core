@@ -16,7 +16,6 @@
 //! Peer manager
 
 pub mod address_groups;
-pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
 mod peers_eviction;
