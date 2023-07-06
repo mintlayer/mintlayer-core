@@ -93,6 +93,7 @@ impl Account {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
         key_chain: AccountKeyChain,
+        name: Option<String>,
     ) -> WalletResult<Account> {
         let account_id = key_chain.get_account_id();
 
@@ -101,6 +102,7 @@ impl Account {
             key_chain.account_index(),
             key_chain.account_public_key().clone(),
             key_chain.lookahead_size(),
+            name,
         );
 
         db_tx.set_account(&account_id, &account_info)?;
@@ -663,6 +665,14 @@ impl Account {
             self.account_info.best_block_id(),
             self.account_info.best_block_height(),
         )
+    }
+
+    pub fn has_transactions(&self) -> bool {
+        !self.output_cache.txs().is_empty()
+    }
+
+    pub fn name(&self) -> &Option<String> {
+        self.account_info.name()
     }
 }
 

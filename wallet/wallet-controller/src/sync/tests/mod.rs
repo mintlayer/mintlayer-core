@@ -100,6 +100,18 @@ impl SyncingWallet for MockWallet {
         self.latest_median_time = median_time;
         Ok(())
     }
+
+    fn best_block_unsynced_acc(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
+        None
+    }
+
+    fn scan_blocks_unsynced_acc(
+        &mut self,
+        _common_block_height: BlockHeight,
+        _blocks: Vec<Block>,
+    ) -> WalletResult<()> {
+        Err(wallet::WalletError::NoUnsyncedAccount)
+    }
 }
 
 #[derive(Clone)]

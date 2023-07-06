@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 
+use crypto::key::hdkd::u31::U31;
 use utils::cookie::LoadCookieError;
 
 #[derive(thiserror::Error, Debug)]
@@ -43,4 +44,8 @@ pub enum WalletCliError {
     WalletFileAlreadyOpen,
     #[error("Please open or create wallet file first")]
     NoWallet,
+    #[error("Please select an account to use")]
+    NoSelectedAccount,
+    #[error("Account not found for index: {0}")]
+    AccountNotFound(U31),
 }
