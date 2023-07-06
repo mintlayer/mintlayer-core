@@ -1025,7 +1025,7 @@ mod produce_block {
                 2000.into(),
                 2000.into(),
                 5,
-                PerThousand::new(0).expect("must be valid"),
+                PerThousand::new(1).expect("must be valid"),
             )
             .expect("Valid PoS config values");
 
