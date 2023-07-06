@@ -30,8 +30,11 @@ use paste::paste;
 use chainstate::rpc::ChainstateRpcServer;
 use common::{
     chain::{
-        config::{Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular},
-        NetUpgrades,
+        config::{
+            create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig, ChainType,
+            EmissionScheduleTabular,
+        },
+        Destination, NetUpgrades,
     },
     primitives::semver::SemVer,
 };
@@ -322,8 +325,9 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        let net_upgrades = NetUpgrades::regtest_with_pos();
-        builder = builder.net_upgrades(net_upgrades);
+        builder = builder
+            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .genesis_custom(create_regtest_pos_genesis(Destination::AnyoneCanSpend));
     }
 
     Ok(builder.build())

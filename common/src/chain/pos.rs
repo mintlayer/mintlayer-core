@@ -129,6 +129,18 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
     }
 }
 
+pub fn create_regtest_pos_config() -> PoSChainConfig {
+    PoSChainConfig {
+        target_limit: Uint256::MAX,
+        target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
+        reward_maturity_distance: 2000.into(),
+        decommission_maturity_distance: 2000.into(),
+        spend_share_maturity_distance: 2000.into(),
+        block_count_to_average_for_blocktime: 5,
+        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+    }
+}
+
 pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
     match chain_type {
         // TODO: Decide what to use on Mainnet.
