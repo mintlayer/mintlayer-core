@@ -13,18 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{num::NonZeroU64, sync::Arc, time::Duration};
 
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
-        create_unittest_pos_config,
         stakelock::StakePoolData,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput, UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
+        PoSChainConfig, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -1019,6 +1018,17 @@ mod produce_block {
                 vec![kernel_input_utxo.clone()],
             );
 
+            let easy_pos_config = PoSChainConfig::new(
+                Uint256::MAX,
+                NonZeroU64::new(2 * 60).expect("cannot be 0").into(),
+                2000.into(),
+                2000.into(),
+                2000.into(),
+                5,
+                PerThousand::new(0).expect("must be valid"),
+            )
+            .expect("Valid PoS config values");
+
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,
                 ConsensusUpgrade::PoW {
@@ -1026,7 +1036,7 @@ mod produce_block {
                 },
                 ConsensusUpgrade::PoS {
                     initial_difficulty: Uint256::MAX.into(),
-                    config: create_unittest_pos_config(),
+                    config: easy_pos_config,
                 },
             ];
 
