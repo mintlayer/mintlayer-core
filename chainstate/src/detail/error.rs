@@ -45,30 +45,8 @@ pub enum BlockError {
     CheckBlockFailed(#[from] CheckBlockError),
     #[error("Failed to update the internal blockchain state: {0}")]
     StateUpdateFailed(#[from] ConnectTransactionError),
-    #[error("Failed to load best block")]
-    BestBlockLoadError(PropertyQueryError),
-    #[error("Failed to load block")]
-    BlockLoadError(PropertyQueryError),
-    // FIXME: I know that this kind of error was frowned upon in the past, but is it that bad?
-    // Without it I'd have to create a bunch of very specific errors that would clutter this enum.
-    // Also, AFAICS PropertyQueryError is itself supposed to already have the details about the property;
-    // and if it's not detailed enough, then probably it should be extended?
-    // E.g. there is no specific error for "is_block_in_main_chain" failure, so it currently returns
-    // whatever "get_block_height_in_main_chain" returns. So probably, we should extend PropertyQueryError
-    // with something like BlockInMainChainCheckFailed and have "is_block_in_main_chain" convert
-    // one PropertyQueryError into another?
-    // On the other hand, the StorageError variant should probably be removed both from BlockError and PropertyQueryError.
-    #[error("Property query error: {0}")]
-    PropertyQueryError(PropertyQueryError),
-    // FIXME: fix inconsistent naming - here we have InvariantError and below it's InvariantBroken.
-    // Or alternatively, leave only one generic InvariantError and add a corresponding context enum that would
-    // catch the details.
-    #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
-    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
-    #[error("Invariant error: Attempted to connected block that isn't on the tip")]
-    InvariantErrorInvalidTip,
-    #[error("The previous block not found")]
-    PrevBlockNotFound,
+    #[error("The previous block not found when adding new block {0}")]
+    PrevBlockNotFoundForNewBlock(Id<Block>),
     #[error("Block at height {0} not found")]
     BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
@@ -89,14 +67,32 @@ pub enum BlockError {
     TxIndexConstructionError(#[from] TxIndexError),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
-    #[error("Inconsistent db, block not found after connect: {0}")]
-    InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
-    #[error("Inconsistent db, block index for block {0} not found")]
-    InvariantBrokenBlockIndexNotFound(Id<Block>),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
     #[error("The block height {0} is too big")]
     BlockHeightTooBig(BlockHeight),
+
+    #[error("Failed to obtain best block id")]
+    BestBlockIdQueryError(PropertyQueryError),
+    #[error("Failed to determine if the block {0} is in mainchain")]
+    IsBlockInMainChainQueryError(PropertyQueryError, Id<GenBlock>),
+    #[error("Failed to obtain block tree starting at height {0}")]
+    BlockIdTreeTopQueryError(PropertyQueryError, BlockHeight),
+    #[error("Failed to obtain block index for block {0}")]
+    BlockIndexQueryError(PropertyQueryError, Id<GenBlock>),
+
+    #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
+    InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
+    #[error("Invariant error: Attempted to connected block {0} that isn't on the tip")]
+    InvariantErrorInvalidTip(Id<GenBlock>),
+    #[error("Inconsistent db, block not found after connect: {0}")]
+    InvariantErrorBlockNotFoundAfterConnect(Id<GenBlock>),
+    #[error("Inconsistent db, block index for block {0} not found")]
+    InvariantErrorBlockIndexNotFound(Id<GenBlock>),
+    #[error("Couldn't find block index for the best block {0}")]
+    InvariantErrorBestBlockIndexNotFound(Id<GenBlock>),
+    #[error("Attempt to connect invalid block {0}")]
+    InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
 }
 
 // Note: this enum isn't supposed to represent a complete error; this is why its elements
@@ -128,8 +124,6 @@ pub enum CheckBlockError {
     WitnessMerkleRootMismatch,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<GenBlock>, Id<Block>),
-    #[error("Previous block with id {0} retrieval error starting from block {1}")]
-    PrevBlockRetrievalError(PropertyQueryError, Id<GenBlock>, Id<Block>),
     #[error("Block {0} not found in database")]
     BlockNotFound(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]

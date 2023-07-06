@@ -287,8 +287,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// a BlockError and return it.
     /// On each iteration, before doing anything else, call `on_new_attempt`
     /// (this can be used for logging).
-    // FIXME: move it somewhere else (i.e. into a different file; it could a part
-    // of the same struct or a free function)
     fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, Err>(
         &mut self,
         mut main_action: MainAction,
@@ -332,13 +330,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let result = chainstate_ref.check_block(block);
         if result.is_err() {
-            // FIXME: "technical" errors (e.g. a DB error) should probably not lead
-            // to permanent block invalidation. The same applies to the other unconditional
+            // TODO: "technical" errors (e.g. a DB error) should not lead to permanent
+            // block invalidation. The same applies to the other unconditional
             // call of "set_validation_failed" below.
-            // But just checking the result of check_block or activate_best_chain doesn't
-            // feel very reliable; perhaps we should refactor those functions to return the
-            // correctness check result via the Ok part of the result, and use Err only for
-            // "technical" errors?
+            // See https://github.com/mintlayer/mintlayer-core/issues/1033 (item #3).
             block_status.set_validation_failed();
         }
 
@@ -396,7 +391,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 };
             }
 
-            chainstate_ref.new_block_index(&block, BlockStatus::new()).log_err()?
+            chainstate_ref
+                .create_block_index_for_new_block(&block, BlockStatus::new())
+                .log_err()?
         };
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool
@@ -444,7 +441,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         };
 
         // Update the block status; note that this is needed even if we're going to call
-        // invalidate_side_chain_block below, because it expects that all block indices
+        // invalidate_stale_block below, because it expects that all block indices
         // already exist (also, it will update this block's status, indicating that it has
         // a bad parent).
         {
@@ -472,26 +469,28 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(first_invalid_block_id) = first_invalid_block_id {
             // Again, we ignore the result here.
-            let _result = self.invalidate_side_chain_block(&first_invalid_block_id).log_err();
+            let _result = self.invalidate_stale_block(&first_invalid_block_id).log_err();
         }
 
         Err(err)
     }
 
-    fn invalidate_side_chain_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
+    fn invalidate_stale_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
         let block_indices_to_invalidate = {
             let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
             assert!(!chainstate_ref
                 .is_block_in_main_chain(&(*block_id).into())
-                .map_err(BlockError::PropertyQueryError)
+                .map_err(|err| BlockError::IsBlockInMainChainQueryError(err, (*block_id).into()))
                 .log_err()?);
 
             let block_index = get_existing_block_index(&chainstate_ref, block_id).log_err()?;
             let next_block_height = get_next_block_height(block_index.block_height()).log_err()?;
 
+            // TODO: get_block_id_tree_top_as_list here is an expensive call, because
+            // under the hood it'll iterate over all block indices in the DB.
             let maybe_descendant_block_ids = chainstate_ref
                 .get_block_id_tree_top_as_list(next_block_height)
-                .map_err(BlockError::PropertyQueryError)?;
+                .map_err(|err| BlockError::BlockIdTreeTopQueryError(err, next_block_height))?;
 
             let mut block_indices_to_invalidate = Vec::new();
             let mut seen_invalid_block_ids = BTreeSet::new();
@@ -528,21 +527,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
                     let block_index = block_index.clone().with_status(status);
                     chainstate_ref.set_block_index(&block_index)?;
-
-                    // FIXME: is it a good idea to remove blocks at this point though?
-                    // (note that because of this line some tests now run much longer than before).
-                    // Probably we should have a separate "garbage collecting" step that
-                    // would remove bad blocks (and probably outdated indices of bad blocks too).
-                    // In any case, block removal should be in a separate db transaction with
-                    // very few commit attempts (probably just 1) and delete_block's errors
-                    // should be ignored.
-                    chainstate_ref.delete_block(block_index.block_id())?;
                 }
 
                 Ok(())
             },
             |attempt_number| {
-                log::info!("Processing invalid block {block_id}, attempt #{attempt_number}");
+                log::info!("Invalidating block {block_id}, attempt #{attempt_number}");
             },
             |attempts_count, db_err| {
                 BlockError::DbCommitError(
@@ -806,10 +796,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 }
 
-// FIXME: this enum looks too specific to move it to error.rs, but this file is also not
-// a good place for it. Perhaps it's better to move it together with the integrate_block
-// function to a separate file. Or perhaps everything related to block processing
-// can be moved to another file.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 enum BlockIntegrationError {
     #[error("Reorg error during block integration: {0}; resulting block status is {1}; first bad block id is {2}")]
@@ -831,8 +817,6 @@ where
     move |err| BlockIntegrationError::OtherValidationError(err.into(), status)
 }
 
-// FIXME: the purpose of the functions below is mostly to produce an adequate BlockError
-// in each case. Perhaps we can add a separate module for such functions? (block_error_utils?)
 fn get_block_index<S, V>(
     chainstate_ref: &chainstateref::ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -841,7 +825,9 @@ where
     S: BlockchainStorageRead,
     V: TransactionVerificationStrategy,
 {
-    chainstate_ref.get_block_index(block_id).map_err(BlockError::BlockLoadError)
+    chainstate_ref
+        .get_block_index(block_id)
+        .map_err(|err| BlockError::BlockIndexQueryError(err, (*block_id).into()))
 }
 
 fn get_existing_block_index<S, V>(
@@ -852,8 +838,9 @@ where
     S: BlockchainStorageRead,
     V: TransactionVerificationStrategy,
 {
-    get_block_index(chainstate_ref, block_id)?
-        .ok_or(BlockError::InvariantBrokenBlockIndexNotFound(*block_id))
+    get_block_index(chainstate_ref, block_id)?.ok_or(BlockError::InvariantErrorBlockIndexNotFound(
+        (*block_id).into(),
+    ))
 }
 
 fn get_next_block_height(height: BlockHeight) -> Result<BlockHeight, BlockError> {

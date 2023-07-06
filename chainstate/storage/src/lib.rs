@@ -144,7 +144,6 @@ pub trait BlockchainStorageWrite:
     fn add_block(&mut self, block: &Block) -> Result<()>;
 
     /// Remove block from the database
-    // FIXME: why is Id<Block> accepted by value, thought Id<GenBlock> above is accepted by ref?
     fn del_block(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Change tx indexing state flag

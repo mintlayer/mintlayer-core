@@ -43,11 +43,12 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
-        // FULLY_CHECKED
-        let status = BlockStatus::FULLY_CHECKED;
+        // new_fully_checked
+        let status = BlockStatus::new_fully_checked();
         assert_eq!(
             status.last_valid_stage(),
             BlockValidationStage::FullyChecked
@@ -56,6 +57,7 @@ fn test_status_struct() {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
@@ -71,6 +73,7 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
 
         status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
         assert_eq!(
@@ -81,11 +84,12 @@ fn test_status_struct() {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
         // set_validation_failed
-        let mut status = BlockStatus::FULLY_CHECKED;
+        let mut status = BlockStatus::new_fully_checked();
         status.set_validation_failed();
         assert_eq!(
             status.last_valid_stage(),
@@ -95,11 +99,12 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
         // set_has_invalid_parent
-        let mut status = BlockStatus::FULLY_CHECKED;
+        let mut status = BlockStatus::new_fully_checked();
         status.set_has_invalid_parent();
         assert_eq!(
             status.last_valid_stage(),
@@ -109,6 +114,7 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
     }
 }
 
@@ -359,26 +365,15 @@ fn test_process_block_final_stage_delayed_failure(#[case] seed: Seed) {
         assert!(!tf.is_block_in_main_chain(&block4_id));
         assert!(!tf.is_block_in_main_chain(&block5_id));
 
-        assert_block_data_exists(&tf, &block1_id, true);
-        assert_block_data_exists(&tf, &block2_id, true);
-        assert_block_data_exists(&tf, &block3_id, true);
-        assert_block_data_exists(&tf, &block4_id, true);
-        assert_block_data_exists(&tf, &block5_id, true);
-
         // This will trigger a reorg that should fail.
         tf.create_chain(&block4_id.into(), 2, &mut rng).unwrap_err();
 
-        // FIXME: currently, successful validation that occurred during a failed reorg is not
-        // recorded. Though it's possible to make "reorganize" return the start of the new chain
-        // on error (or to refactor it to accept a new chain), the idea of marking certain blocks
-        // as fully valid after a reorg has failed might look error prone. Is it worth implementing it?
-        // -- end of FIXME --
-        // Block1, which was the only correct one on the side-chain, is now fully valid.
-        // let block1_status = get_block_status(&tf, &block1_id);
-        // assert_fully_valid_block(block1_status);
-
-        // Still, it's not on the mainchain, because the reorg wasn't successful.
+        // Block1 is still not on the mainchain, because the reorg wasn't successful.
         assert!(!tf.is_block_in_main_chain(&block1_id));
+        // And it still has the CheckBlockOk status even though it should have been successfully
+        // validated, because successful validations that occur during a failed reorg are
+        // currently not recorded.
+        assert_ok_block_at_stage(block1_status, BlockValidationStage::CheckBlockOk);
 
         // Block2 is now marked as invalid.
         let block2_status = get_block_status(&tf, &block2_id);
@@ -392,13 +387,6 @@ fn test_process_block_final_stage_delayed_failure(#[case] seed: Seed) {
         assert_block_with_bad_parent_at_stage(block4_status, BlockValidationStage::CheckBlockOk);
         let block5_status = get_block_status(&tf, &block5_id);
         assert_block_with_bad_parent_at_stage(block5_status, BlockValidationStage::CheckBlockOk);
-
-        // Only the valid block is still present in the DB.
-        assert_block_data_exists(&tf, &block1_id, true);
-        assert_block_data_exists(&tf, &block2_id, false);
-        assert_block_data_exists(&tf, &block3_id, false);
-        assert_block_data_exists(&tf, &block4_id, false);
-        assert_block_data_exists(&tf, &block5_id, false);
     });
 }
 
