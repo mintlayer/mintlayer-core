@@ -96,7 +96,7 @@ pub struct NewJobEvent {
 }
 
 pub struct JobManager {
-    chainstate_handle: ChainstateHandle,
+    chainstate_handle: Option<ChainstateHandle>,
     get_job_count_sender: UnboundedSender<oneshot::Sender<usize>>,
     new_job_sender: UnboundedSender<NewJobEvent>,
     stop_job_sender: UnboundedSender<(Option<JobKey>, oneshot::Sender<usize>)>,
@@ -134,7 +134,7 @@ pub struct JobManagerImpl {
 }
 
 impl JobManagerImpl {
-    pub fn new(chainstate_handle: ChainstateHandle) -> Self {
+    pub fn new(chainstate_handle: Option<ChainstateHandle>) -> Self {
         Self {
             job_manager: JobManager::new(chainstate_handle),
         }
@@ -178,7 +178,7 @@ fn event_then<T>(ev: Option<T>, f: impl FnOnce(T)) {
 }
 
 impl JobManager {
-    pub fn new(chainstate_handle: ChainstateHandle) -> JobManager {
+    pub fn new(chainstate_handle: Option<ChainstateHandle>) -> JobManager {
         let (chainstate_sender, chainstate_receiver) = mpsc::unbounded_channel::<Id<GenBlock>>();
         let (get_job_count_sender, get_job_count_receiver) = mpsc::unbounded_channel();
         let (new_job_sender, new_job_receiver) = mpsc::unbounded_channel::<NewJobEvent>();
@@ -186,14 +186,17 @@ impl JobManager {
         let (shutdown_sender, shutdown_receiver) = mpsc::unbounded_channel();
 
         let mut job_manager = JobManager {
-            chainstate_handle,
+            chainstate_handle: chainstate_handle.clone(),
             get_job_count_sender,
             new_job_sender,
             stop_job_sender,
             shutdown_sender,
         };
 
-        job_manager.subscribe_to_chainstate(chainstate_sender);
+        if chainstate_handle.is_some() {
+            job_manager.subscribe_to_chainstate(chainstate_sender);
+        }
+
         job_manager.run(
             chainstate_receiver,
             get_job_count_receiver,
@@ -238,7 +241,10 @@ impl JobManager {
     }
 
     fn subscribe_to_chainstate(&self, chainstate_sender: UnboundedSender<Id<GenBlock>>) {
-        let chainstate_handle = self.chainstate_handle.clone();
+        let chainstate_handle = match &self.chainstate_handle {
+            Some(handle) => handle.clone(),
+            None => return,
+        };
 
         tokio::spawn(async move {
             chainstate_handle

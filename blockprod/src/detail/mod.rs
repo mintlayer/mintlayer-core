@@ -74,7 +74,7 @@ impl BlockProduction {
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
-        let job_manager_handle = Box::new(JobManagerImpl::new(chainstate_handle.clone()));
+        let job_manager_handle = Box::new(JobManagerImpl::new(Some(chainstate_handle.clone())));
 
         let block_production = Self {
             chain_config,
