@@ -703,6 +703,97 @@ fn lock_wallet_fail_empty_password() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = (block1_amount - Amount::from_atoms(NETWORK_FEE)).unwrap();
+
+    let stake_pool_transaction =
+        wallet.create_stake_pool_tx(DEFAULT_ACCOUNT_INDEX, pool_amount, None).unwrap();
+    let block2 = Block::new(
+        vec![stake_pool_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+
+    let currency_balances = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
+            UtxoState::Confirmed.into(),
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        pool_amount
+    );
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());

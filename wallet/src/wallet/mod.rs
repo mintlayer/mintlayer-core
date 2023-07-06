@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ use common::address::Address;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
-    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
+    Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TransactionCreationError,
     TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
@@ -397,6 +397,11 @@ impl<B: storage::Backend> Wallet<B> {
         let account =
             Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
         account.abandon_transaction(tx_id)
+    }
+
+    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<BTreeSet<PoolId>> {
+        let pool_ids = self.get_account(account_index)?.get_pool_ids();
+        Ok(pool_ids)
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {

@@ -42,7 +42,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
@@ -278,6 +278,10 @@ impl Account {
     ) -> WalletResult<VRFPublicKey> {
         let vrf_keys = self.get_vrf_key(db_tx)?;
         Ok(vrf_keys.1)
+    }
+
+    pub fn get_pool_ids(&self) -> BTreeSet<PoolId> {
+        self.output_cache.pool_ids()
     }
 
     pub fn create_stake_pool_tx(

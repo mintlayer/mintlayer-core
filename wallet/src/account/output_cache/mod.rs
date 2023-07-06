@@ -18,7 +18,7 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{token_id, TokenId},
-        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Id},
 };
@@ -74,6 +74,29 @@ impl OutputCache {
         self.txs
             .get(&outpoint.tx_id())
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
+    }
+
+    pub fn pool_ids(&self) -> BTreeSet<PoolId> {
+        self.txs
+            .values()
+            .filter(|tx| match tx.state() {
+                TxState::Confirmed(_, _) => true,
+                TxState::Inactive
+                | TxState::InMempool
+                | TxState::Conflicted(_)
+                | TxState::Abandoned => false,
+            })
+            .flat_map(|tx| tx.outputs())
+            .filter_map(|output| match output {
+                TxOutput::CreateStakePool(pool_id, _)
+                | TxOutput::ProduceBlockFromStake(_, pool_id) => Some(*pool_id),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => None,
+            })
+            .collect()
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) {

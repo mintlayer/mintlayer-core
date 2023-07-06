@@ -22,7 +22,7 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -30,7 +30,7 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use consensus::GenerateBlockInputData;
@@ -221,6 +221,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet
             .get_new_public_key(account_index)
             .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_pool_ids(&self, account_index: U31) -> Result<BTreeSet<PoolId>, ControllerError<T>> {
+        self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)
     }
 
     pub fn get_vrf_public_key(

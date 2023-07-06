@@ -170,6 +170,9 @@ pub enum WalletCommand {
     /// List the pending transactions that can be abandoned
     ListPendingTransactions,
 
+    /// List available Pool Ids
+    ListPoolIds,
+
     /// Generate a new unused address
     NewAddress,
 
@@ -765,6 +768,15 @@ impl CommandHandler {
             WalletCommand::NodeVersion => {
                 let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print(version))
+            }
+
+            WalletCommand::ListPoolIds => {
+                let pool_ids = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .get_pool_ids(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(format!("{pool_ids:#?}")))
             }
 
             WalletCommand::NodeShutdown => {
