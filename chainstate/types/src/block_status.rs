@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bitvec::prelude::*;
 use derive_more::Display;
 use enum_iterator::Sequence;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use serialization::{Decode, Encode, Error as CodecError, Input, Output};
+use serialization::{Decode, Encode};
 use std::ops::Range;
 
 /// Block validation steps are always performed in the same order, which is represented by this enum.
@@ -30,7 +29,7 @@ pub enum BlockValidationStage {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Decode, Encode)]
-pub struct BlockStatus(BlockStatusInternal);
+pub struct BlockStatus(u64);
 
 impl BlockStatus {
     pub fn new_at_stage(stage: BlockValidationStage) -> Self {
@@ -44,7 +43,7 @@ impl BlockStatus {
     }
 
     pub fn new() -> Self {
-        Self(BlockStatusInternal::new())
+        Self(0)
     }
 
     /// Advance the last successful validation stage to the specified value.
@@ -55,16 +54,13 @@ impl BlockStatus {
     }
 
     pub fn last_valid_stage(&self) -> BlockValidationStage {
-        let val = self.0.get_field(BlockStatusField::ValidationStage);
+        let val = self.get_field(BlockStatusBitArea::ValidationStage);
         BlockValidationStage::from_u64(val).expect("Corrupted BlockValidationStage")
     }
 
     // Note: it's better to keep this function private if possible.
     fn set_last_valid_stage(&mut self, stage: BlockValidationStage) {
-        self.0.set_field(
-            BlockStatusField::ValidationStage,
-            stage as BlockStatusEffectiveType,
-        );
+        self.set_field(BlockStatusBitArea::ValidationStage, stage as u64)
     }
 
     pub fn is_fully_valid(&self) -> bool {
@@ -76,25 +72,44 @@ impl BlockStatus {
     }
 
     pub fn set_validation_failed(&mut self) {
-        self.0.set_flag(BlockStatusField::ValidationFailedBit, true);
+        self.set_field(BlockStatusBitArea::ValidationFailedBit, 1)
     }
 
     pub fn validation_failed(&self) -> bool {
-        self.0.get_flag(BlockStatusField::ValidationFailedBit)
+        self.get_field(BlockStatusBitArea::ValidationFailedBit) != 0
     }
 
     pub fn set_has_invalid_parent(&mut self) {
-        self.0.set_flag(BlockStatusField::InvalidParentBit, true);
+        self.set_field(BlockStatusBitArea::InvalidParentBit, 1)
     }
 
     pub fn has_invalid_parent(&self) -> bool {
-        self.0.get_flag(BlockStatusField::InvalidParentBit)
+        self.get_field(BlockStatusBitArea::InvalidParentBit) != 0
     }
 
     // Note: this is needed for testing only.
-    pub fn reserved_bits(&self) -> BlockStatusEffectiveType {
-        self.0.get_field(BlockStatusField::ReservedArea1)
-            | self.0.get_field(BlockStatusField::ReservedArea2)
+    pub fn reserved_bits(&self) -> u64 {
+        self.get_field(BlockStatusBitArea::ReservedArea)
+    }
+
+    fn bit_range_of(bits: BlockStatusBitArea) -> Range<usize> {
+        bits as usize..bits.next().expect("Can't determine field's end") as usize
+    }
+
+    fn get_field(&self, bits: BlockStatusBitArea) -> u64 {
+        let range = Self::bit_range_of(bits);
+        let lsb_mask = (1 << range.len()) - 1;
+
+        (self.0 >> range.start) & lsb_mask
+    }
+
+    fn set_field(&mut self, bits: BlockStatusBitArea, val: u64) {
+        let range = Self::bit_range_of(bits);
+        let lsb_mask = (1 << range.len()) - 1;
+        let mask = lsb_mask << range.start;
+
+        assert!(val <= lsb_mask);
+        self.0 = (self.0 & !mask) | (val << range.start);
     }
 }
 
@@ -110,88 +125,12 @@ impl std::fmt::Display for BlockStatus {
     }
 }
 
-// Each value here represents the bit number where the corresponding field starts.
-// I.e. the validation stage is in the lowest byte, flags are in the highest byte and the rest
-// is reserved for future use.
+// Each value here represents the bit index where the corresponding field starts.
 #[derive(Sequence, Clone, Copy)]
-enum BlockStatusField {
+enum BlockStatusBitArea {
     ValidationStage = 0,
-    ReservedArea1 = 8,
-    ValidationFailedBit = 56,
-    InvalidParentBit = 57,
-    ReservedArea2,
+    ValidationFailedBit = 8,
+    InvalidParentBit,
+    ReservedArea,
     End = 64,
-}
-
-const BLOCK_STATUS_BIT_LEN: usize = BlockStatusField::End as usize;
-type BlockStatusEffectiveType = u64;
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-struct BlockStatusInternal(BitArr!(for BLOCK_STATUS_BIT_LEN, in u8, Lsb0));
-
-impl BlockStatusInternal {
-    fn from_num(value: BlockStatusEffectiveType) -> BlockStatusInternal {
-        let mut array = BitArray::ZERO;
-        array[0..BLOCK_STATUS_BIT_LEN].store(value);
-        BlockStatusInternal(array)
-    }
-
-    fn new() -> BlockStatusInternal {
-        BlockStatusInternal(BitArray::ZERO)
-    }
-
-    fn range_of(field: BlockStatusField) -> Range<usize> {
-        field as usize..field.next().expect("Can't determine field's end") as usize
-    }
-
-    fn set_field(&mut self, field: BlockStatusField, val: BlockStatusEffectiveType) {
-        self.set_bit_range(Self::range_of(field), val);
-    }
-
-    fn get_field(&self, field: BlockStatusField) -> BlockStatusEffectiveType {
-        self.get_bit_range(Self::range_of(field))
-    }
-
-    fn set_flag(&mut self, field: BlockStatusField, val: bool) {
-        let range = Self::range_of(field);
-        assert!(range.len() == 1);
-        self.set_bit_range(range, val as BlockStatusEffectiveType);
-    }
-
-    fn get_flag(&self, field: BlockStatusField) -> bool {
-        let range = Self::range_of(field);
-        assert!(range.len() == 1);
-        self.get_bit_range(Self::range_of(field)) != 0
-    }
-
-    // Note: serialization will treat BlockStatusInternal an an opaque u64
-    // (see implementations of Encode and Decode below), so when accessing bit ranges
-    // we must specify endianness explicitly (i.e. use store_le/load_le instead of
-    // just load/store).
-
-    fn set_bit_range(&mut self, range: Range<usize>, val: BlockStatusEffectiveType) {
-        assert!(range.end <= BLOCK_STATUS_BIT_LEN);
-        // Note: "store" functions just truncate the input if it's too big.
-        assert!(range.len() == BLOCK_STATUS_BIT_LEN || val < (1 << range.len()));
-        self.0[range].store_le(val);
-    }
-
-    fn get_bit_range(&self, range: Range<usize>) -> BlockStatusEffectiveType {
-        assert!(range.end <= BLOCK_STATUS_BIT_LEN);
-        self.0[range].load_le()
-    }
-}
-
-impl Encode for BlockStatusInternal {
-    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
-        self.0.load::<BlockStatusEffectiveType>().encode_to(dest)
-    }
-}
-
-impl Decode for BlockStatusInternal {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        Ok(BlockStatusInternal::from_num(
-            BlockStatusEffectiveType::decode(input)?,
-        ))
-    }
 }
