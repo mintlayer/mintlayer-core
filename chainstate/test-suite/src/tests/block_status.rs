@@ -43,7 +43,6 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
@@ -57,7 +56,6 @@ fn test_status_struct() {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
@@ -73,7 +71,6 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
 
         status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
         assert_eq!(
@@ -84,7 +81,6 @@ fn test_status_struct() {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
@@ -99,7 +95,6 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(status.validation_failed());
         assert!(!status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
     }
 
     {
@@ -114,7 +109,6 @@ fn test_status_struct() {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(status.has_invalid_parent());
-        assert_eq!(status.reserved_bits(), 0);
     }
 }
 
