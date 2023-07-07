@@ -13,18 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{num::NonZeroU64, sync::Arc, time::Duration};
 
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
-        create_unittest_pos_config,
         stakelock::StakePoolData,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput, UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
+        PoSChainConfig, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -52,7 +51,7 @@ use utils::once_destructor::OnceDestructor;
 
 use crate::{
     detail::{
-        job_manager::{tests::MockJobManager, JobManagerError},
+        job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
         GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool,
@@ -1019,6 +1018,17 @@ mod produce_block {
                 vec![kernel_input_utxo.clone()],
             );
 
+            let easy_pos_config = PoSChainConfig::new(
+                Uint256::MAX,
+                NonZeroU64::new(2 * 60).expect("cannot be 0").into(),
+                2000.into(),
+                2000.into(),
+                2000.into(),
+                5,
+                PerThousand::new(1).expect("must be valid"),
+            )
+            .expect("Valid PoS config values");
+
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,
                 ConsensusUpgrade::PoW {
@@ -1026,7 +1036,7 @@ mod produce_block {
                 },
                 ConsensusUpgrade::PoS {
                     initial_difficulty: Uint256::MAX.into(),
-                    config: create_unittest_pos_config(),
+                    config: easy_pos_config,
                 },
             ];
 
@@ -1068,7 +1078,7 @@ mod produce_block {
                     shutdown_trigger.initiate();
                 });
 
-                let block_production = BlockProduction::new(
+                let mut block_production = BlockProduction::new(
                     chain_config.clone(),
                     chainstate.clone(),
                     mempool,
@@ -1076,6 +1086,9 @@ mod produce_block {
                     prepare_thread_pool(1),
                 )
                 .expect("Error initializing blockprod");
+
+                let no_chainstate_job_manager = Box::new(JobManagerImpl::new(None));
+                block_production.set_job_manager(no_chainstate_job_manager);
 
                 let mut kernel_input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
@@ -1111,7 +1124,10 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
                         RequiredConsensus::PoS(_) => {
@@ -1134,9 +1150,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoW input data for PoS consensus
 
@@ -1154,9 +1169,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoS input data for PoS consensus
 
@@ -1167,7 +1181,10 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
                             let result = assert_process_block(&chainstate, new_block).await;
 
                             // Update kernel input parameters for future PoS blocks
@@ -1204,9 +1221,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoS input data for PoW consensus
 
@@ -1224,9 +1240,8 @@ mod produce_block {
                             }
 
                             // TODO: until duplicate job keys is fixed
-                            // in produce_block(), manually wait until
-                            // the job manager has cleaned up
-                            assert_job_count(&block_production, 0).await;
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
 
                             // Try PoW input data for PoW consensus
 
@@ -1237,8 +1252,11 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_job_count(&block_production, 0).await;
-                            assert_process_block(&chainstate, new_block).await;
+                            // TODO: until duplicate job keys is fixed
+                            // (Issue #1003), manually stop all jobs
+                            _ = block_production.stop_all_jobs().await;
+
+                            assert_process_block(&chainstate, new_block.clone()).await;
                         }
                     }
                 }
