@@ -111,6 +111,8 @@ impl std::fmt::Display for BlockStatus {
 }
 
 // Each value here represents the bit number where the corresponding field starts.
+// I.e. the validation stage is in the lowest byte, flags are in the highest byte and the rest
+// is reserved for future use.
 #[derive(Sequence, Clone, Copy)]
 enum BlockStatusField {
     ValidationStage = 0,
