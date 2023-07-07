@@ -17,6 +17,7 @@ mod output_cache;
 mod utxo_selector;
 
 use common::chain::block::timestamp::BlockTimestamp;
+use common::primitives::id::WithId;
 use common::Uint256;
 pub use utxo_selector::UtxoSelectorError;
 
@@ -31,8 +32,8 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, TxInput, TxOutput,
-    UtxoOutPoint,
+    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -48,7 +49,7 @@ use wallet_storage::{
     StoreTxRo, StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
+use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
 
@@ -149,7 +150,7 @@ impl Account {
             self.get_utxos(
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 median_time,
-                true,
+                UtxoState::Confirmed | UtxoState::InMempool,
             )
             .into_iter(),
             |(_, (tx_output, _))| tx_output,
@@ -348,7 +349,7 @@ impl Account {
         let utxos = self.get_utxos(
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
             median_time,
-            false,
+            UtxoState::Confirmed.into(),
         );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
@@ -534,10 +535,11 @@ impl Account {
     pub fn get_balance(
         &self,
         utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
         median_time: BlockTimestamp,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time, false).into_iter(),
+            self.get_utxos(utxo_types, median_time, utxo_states).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -553,14 +555,14 @@ impl Account {
         &self,
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
-        with_unconfirmed: bool,
+        utxo_states: UtxoStates,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
         let mut all_outputs =
-            self.output_cache.utxos_with_token_ids(current_block_info, with_unconfirmed);
+            self.output_cache.utxos_with_token_ids(current_block_info, utxo_states);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -583,13 +585,16 @@ impl Account {
                         None
                     }
                 }
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
+                TxState::Inactive
+                | TxState::Conflicted(_)
+                | TxState::InMempool
+                | TxState::Abandoned => None,
             })
             .collect::<Vec<_>>();
 
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
-            self.output_cache.remove_tx(&tx_id);
+            self.output_cache.remove_tx(&tx_id.into_item_id());
         }
 
         Ok(())
@@ -613,7 +618,7 @@ impl Account {
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
-            self.output_cache.add_tx(id, tx);
+            self.output_cache.add_tx(id.into_item_id(), tx);
             Ok(true)
         } else {
             Ok(false)
@@ -722,6 +727,14 @@ impl Account {
 
     pub fn name(&self) -> &Option<String> {
         self.account_info.name()
+    }
+
+    pub fn get_abandonable_transactions(&self) -> Vec<&WithId<Transaction>> {
+        self.output_cache.get_abandonable_transactions()
+    }
+
+    pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
+        self.output_cache.abandon_transaction(tx_id)
     }
 }
 

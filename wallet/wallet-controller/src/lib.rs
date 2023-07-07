@@ -30,8 +30,8 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, SignedTransaction, TxOutput, UtxoOutPoint},
-    primitives::{Amount, BlockHeight, Idable},
+    chain::{Block, ChainConfig, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -46,7 +46,7 @@ pub use node_comm::{
 use wallet::{account::Currency, send_request::make_address_output, DefaultWallet};
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    utxo_types::{UtxoType, UtxoTypes},
+    utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -171,11 +171,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn get_balance(
         &self,
         account_index: U31,
+        utxo_states: UtxoStates,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(
                 account_index,
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
+                utxo_states,
             )
             .map_err(ControllerError::WalletError)
     }
@@ -184,9 +186,29 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
     ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(account_index, utxo_types)
+            .get_utxos(account_index, utxo_types, utxo_states)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_abandonable_transactions(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<&WithId<Transaction>>, ControllerError<T>> {
+        self.wallet
+            .get_abandonable_transactions(account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn abandon_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .abandon_transaction(account_index, tx_id)
             .map_err(ControllerError::WalletError)
     }
 

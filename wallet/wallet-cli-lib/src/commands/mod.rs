@@ -20,8 +20,8 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, PoolId, SignedTransaction},
-    primitives::{Amount, BlockHeight, H256},
+    chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction},
+    primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
@@ -32,7 +32,7 @@ use wallet_controller::{
 
 use crate::errors::WalletCliError;
 
-use self::helper_types::CliUtxoTypes;
+use self::helper_types::{CliUtxoStates, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -145,18 +145,31 @@ pub enum WalletCommand {
         transaction: HexEncoded<SignedTransaction>,
     },
 
+    /// Abandon an unconfirmed transaction, and make the consumed inputs available to be used again
+    AbandonTransaction {
+        transaction_id: HexEncoded<Id<Transaction>>,
+    },
+
     /// Rescan
     Rescan,
 
     SyncWallet,
 
-    GetBalance,
+    GetBalance {
+        #[arg(default_values_t = vec![CliUtxoStates::Confirmed])]
+        utxo_states: Vec<CliUtxoStates>,
+    },
 
     // TODO: add option to show unconfirmed utxos
     ListUtxo {
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
+        #[arg(default_values_t = vec![CliUtxoStates::Confirmed])]
+        utxo_states: Vec<CliUtxoStates>,
     },
+
+    /// List the unconfirmed transactions that can be abandoned
+    ListAbandonableTransactions,
 
     /// Generate a new unused address
     NewAddress,
@@ -614,6 +627,20 @@ impl CommandHandler {
                 ))
             }
 
+            WalletCommand::AbandonTransaction { transaction_id } => {
+                controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .abandon_transaction(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        transaction_id.take(),
+                    )
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "The transaction was marked as abandoned successfully".to_owned(),
+                ))
+            }
+
             WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
             WalletCommand::SyncWallet => {
@@ -626,11 +653,14 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::GetBalance => {
+            WalletCommand::GetBalance { utxo_states } => {
                 let coin_balance = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .get_balance(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .get_balance(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        CliUtxoStates::to_wallet_states(utxo_states),
+                    )
                     .map_err(WalletCliError::Controller)?
                     .get(&Currency::Coin)
                     .copied()
@@ -641,13 +671,28 @@ impl CommandHandler {
                 )))
             }
 
-            WalletCommand::ListUtxo { utxo_type } => {
+            WalletCommand::ListUtxo {
+                utxo_type,
+                utxo_states,
+            } => {
                 let utxos = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .get_utxos(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         utxo_type.to_wallet_types(),
+                        CliUtxoStates::to_wallet_states(utxo_states),
+                    )
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
+            }
+
+            WalletCommand::ListAbandonableTransactions => {
+                let utxos = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .get_abandonable_transactions(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                     )
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))

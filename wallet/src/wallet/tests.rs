@@ -41,7 +41,10 @@ use itertools::Itertools;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::WalletStorageEncryptionRead;
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoType};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    utxo_types::{UtxoState, UtxoType},
+};
 
 // TODO: Many of these tests require randomization...
 
@@ -122,6 +125,7 @@ fn verify_wallet_balance(
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -136,6 +140,7 @@ fn verify_wallet_balance(
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -260,6 +265,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -275,6 +281,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -294,6 +301,7 @@ fn wallet_balance_block_reward() {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -588,6 +596,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -623,6 +632,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -704,6 +714,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -740,6 +751,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -786,6 +798,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap();
     assert_eq!(
@@ -833,6 +846,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap();
     assert_eq!(
@@ -897,6 +911,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -938,6 +953,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -990,6 +1006,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap();
     assert_eq!(
@@ -1003,6 +1020,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
             .get_balance(
                 DEFAULT_ACCOUNT_INDEX,
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed.into(),
             )
             .unwrap();
         assert_eq!(
@@ -1029,6 +1047,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap();
     assert_eq!(
@@ -1093,7 +1112,14 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     // sync new account with the new block
     for block in blocks {
         // not yet synced
-        let err = wallet.get_balance(new_account_index, UtxoType::Transfer.into()).err().unwrap();
+        let err = wallet
+            .get_balance(
+                new_account_index,
+                UtxoType::Transfer.into(),
+                UtxoState::Confirmed.into(),
+            )
+            .err()
+            .unwrap();
         assert_eq!(
             err,
             WalletError::AccountNotSyncedWithIndex(new_account_index)
@@ -1107,6 +1133,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
         .get_balance(
             new_account_index,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1118,7 +1145,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn locked_wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
+fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
@@ -1155,6 +1182,7 @@ fn locked_wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1217,6 +1245,7 @@ fn locked_wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1239,6 +1268,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1272,6 +1302,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1379,7 +1410,36 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         ),
     );
 
-    wallet
+    let transaction = wallet
         .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
         .unwrap();
+
+    let transaction_id = transaction.transaction().get_id();
+    wallet.scan_mempool(&[transaction]).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::from_atoms(amount_to_keep));
 }

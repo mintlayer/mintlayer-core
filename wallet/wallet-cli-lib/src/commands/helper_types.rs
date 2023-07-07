@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use clap::ValueEnum;
-use wallet_controller::{UtxoType, UtxoTypes};
+use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -39,6 +39,44 @@ impl CliUtxoTypes {
             CliUtxoTypes::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake.into(),
             CliUtxoTypes::CreateDelegationId => UtxoType::CreateDelegationId.into(),
             CliUtxoTypes::DelegateStaking => UtxoType::DelegateStaking.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliUtxoStates {
+    Confirmed,
+    Conflicted,
+    InMempool,
+    Inactive,
+    Abandoned,
+}
+
+impl ToString for CliUtxoStates {
+    fn to_string(&self) -> String {
+        "".into()
+    }
+}
+
+impl CliUtxoStates {
+    pub fn to_wallet_type(self) -> UtxoState {
+        match self {
+            CliUtxoStates::Confirmed => UtxoState::Confirmed,
+            CliUtxoStates::Conflicted => UtxoState::Conflicted,
+            CliUtxoStates::InMempool => UtxoState::InMempool,
+            CliUtxoStates::Inactive => UtxoState::Inactive,
+            CliUtxoStates::Abandoned => UtxoState::Abandoned,
+        }
+    }
+
+    pub fn to_wallet_states(value: Vec<CliUtxoStates>) -> UtxoStates {
+        if let Some((first_state, rest)) = value.split_first() {
+            rest.iter().map(|s| s.to_wallet_type()).fold(
+                first_state.to_wallet_type().into(),
+                |acc: UtxoStates, x: UtxoState| acc | x,
+            )
+        } else {
+            UtxoState::Confirmed.into()
         }
     }
 }

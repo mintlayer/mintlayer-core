@@ -29,6 +29,7 @@ use common::chain::{
     Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
     TxOutput, UtxoOutPoint,
 };
+use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
@@ -41,7 +42,8 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageWriteLocked,
 };
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
-use wallet_types::utxo_types::UtxoTypes;
+use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
+use wallet_types::wallet_tx::TxState;
 use wallet_types::{AccountId, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -101,6 +103,10 @@ pub enum WalletError {
     NoUtxos,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
+    #[error("Cannot abandon a transaction in {0} state")]
+    CannotAbandonTransaction(TxState),
+    #[error("Transaction with Id {0} not found")]
+    CannotFindTransactionWithId(Id<Transaction>),
 }
 
 /// Result type used for the wallet
@@ -350,23 +356,47 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
-        self.get_account(account_index)?
-            .get_balance(utxo_types, self.latest_median_time)
+        self.get_account(account_index)?.get_balance(
+            utxo_types,
+            utxo_states,
+            self.latest_median_time,
+        )
     }
 
     pub fn get_utxos(
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self.get_account(account_index)?;
-        let utxos = account.get_utxos(utxo_types, self.latest_median_time, false);
+        let utxos = account.get_utxos(utxo_types, self.latest_median_time, utxo_states);
         let utxos = utxos
             .into_iter()
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
             .collect();
         Ok(utxos)
+    }
+
+    pub fn get_abandonable_transactions(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Vec<&WithId<Transaction>>> {
+        let account = self.get_account(account_index)?;
+        let transactions = account.get_abandonable_transactions();
+        Ok(transactions)
+    }
+
+    pub fn abandon_transaction(
+        &mut self,
+        account_index: U31,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<()> {
+        let account =
+            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
+        account.abandon_transaction(tx_id)
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
