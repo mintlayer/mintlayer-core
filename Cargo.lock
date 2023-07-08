@@ -755,7 +755,6 @@ dependencies = [
 name = "chainstate-types"
 version = "0.1.0"
 dependencies = [
- "bitvec",
  "common",
  "crypto",
  "derive_more",

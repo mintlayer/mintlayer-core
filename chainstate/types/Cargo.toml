@@ -14,7 +14,6 @@ logging = { path = '../../logging' }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage/" }
 
-bitvec.workspace = true
 derive_more.workspace = true
 enum-iterator.workspace = true
 generic-array.workspace = true

@@ -63,12 +63,14 @@ impl BlockStatus {
         self.set_field(BlockStatusBitArea::ValidationStage, stage as u64)
     }
 
-    pub fn is_fully_valid(&self) -> bool {
-        self.last_valid_stage() == BlockValidationStage::FullyChecked && self.is_ok()
-    }
-
+    /// Return true, if the block hasn't been marked as invalid *yet*.
     pub fn is_ok(&self) -> bool {
         !(self.validation_failed() || self.has_invalid_parent())
+    }
+
+    /// Return true, if the block is actually valid.
+    pub fn is_fully_valid(&self) -> bool {
+        self.last_valid_stage() == BlockValidationStage::FullyChecked && self.is_ok()
     }
 
     pub fn set_validation_failed(&mut self) {
@@ -87,8 +89,8 @@ impl BlockStatus {
         self.get_field(BlockStatusBitArea::InvalidParentBit) != 0
     }
 
-    // Note: this is needed for testing only.
-    pub fn reserved_bits(&self) -> u64 {
+    #[cfg(test)]
+    fn reserved_bits(&self) -> u64 {
         self.get_field(BlockStatusBitArea::ReservedArea)
     }
 
@@ -125,7 +127,9 @@ impl std::fmt::Display for BlockStatus {
     }
 }
 
-// Each value here represents the bit index where the corresponding field starts.
+// Each value here represents the bit index where the corresponding field starts; the end of the
+// field will be the start of the next one. E.g. below "validation stage" will occupy bits [0, 8),
+// "validation failed bit" will occupy bits [8, 9) (i.e. the single 8th bit) etc.
 #[derive(Sequence, Clone, Copy)]
 enum BlockStatusBitArea {
     ValidationStage = 0,
@@ -133,4 +137,211 @@ enum BlockStatusBitArea {
     InvalidParentBit,
     ReservedArea,
     End = 64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::catch_unwind;
+
+    #[test]
+    fn test_bit_range_of() {
+        // FIXME: each of the asserts below is below 100 characters in length, so they could be
+        // written in 4 lines of code, which IMO would make the test more readable overall.
+        // But rustfmt turned it into 16 lines, because it has different maximums depending
+        // on the kind of the line. The question is, are there any benefits to such behavior?
+        // I personally only see one big drawback - it results in too much vertical space being
+        // eaten up for no good reason, which makes functions appear longer and harder to read.
+        // Rustfmt has an option that controls this, "use_small_heuristics"; when set to "Max"
+        // it basically sets all those "code-specific" maximums to 100%.
+        // I suggest that we give it a try.
+        assert_eq!(
+            BlockStatus::bit_range_of(BlockStatusBitArea::ValidationStage),
+            0..8
+        );
+        assert_eq!(
+            BlockStatus::bit_range_of(BlockStatusBitArea::ValidationFailedBit),
+            8..9
+        );
+        assert_eq!(
+            BlockStatus::bit_range_of(BlockStatusBitArea::InvalidParentBit),
+            9..10
+        );
+        assert_eq!(
+            BlockStatus::bit_range_of(BlockStatusBitArea::ReservedArea),
+            10..64
+        );
+
+        assert!(catch_unwind(|| BlockStatus::bit_range_of(BlockStatusBitArea::End)).is_err());
+    }
+
+    #[allow(clippy::unusual_byte_groupings)]
+    #[test]
+    fn test_get_field() {
+        let pattern = 0b11110000_10101010_11001100;
+        let status = BlockStatus(pattern);
+        assert_eq!(status.0, pattern);
+        assert_eq!(
+            status.get_field(BlockStatusBitArea::ValidationStage),
+            0b11001100
+        );
+        assert_eq!(status.get_field(BlockStatusBitArea::ValidationFailedBit), 0);
+        assert_eq!(status.get_field(BlockStatusBitArea::InvalidParentBit), 1);
+        assert_eq!(
+            status.get_field(BlockStatusBitArea::ReservedArea),
+            0b11110000_101010
+        );
+
+        let status = BlockStatus(pattern << 1);
+        assert_eq!(status.0, pattern << 1);
+        assert_eq!(
+            status.get_field(BlockStatusBitArea::ValidationStage),
+            0b10011000
+        );
+        assert_eq!(status.get_field(BlockStatusBitArea::ValidationFailedBit), 1);
+        assert_eq!(status.get_field(BlockStatusBitArea::InvalidParentBit), 0);
+        assert_eq!(
+            status.get_field(BlockStatusBitArea::ReservedArea),
+            0b11110000_1010101
+        );
+    }
+
+    #[allow(clippy::unusual_byte_groupings)]
+    #[test]
+    fn test_set_field() {
+        let mut status = BlockStatus(0);
+        assert_eq!(status.0, 0);
+
+        status.set_field(BlockStatusBitArea::ValidationStage, 0b11001100);
+        assert_eq!(status.0, 0b11001100);
+
+        status.set_field(BlockStatusBitArea::ValidationFailedBit, 1);
+        assert_eq!(status.0, 0b1_11001100);
+
+        status.set_field(BlockStatusBitArea::InvalidParentBit, 1);
+        assert_eq!(status.0, 0b11_11001100);
+
+        status.set_field(
+            BlockStatusBitArea::ReservedArea,
+            0b10101010_10101010_10101010_10101010_10101010_10101010_101010,
+        );
+        assert_eq!(
+            status.0,
+            0b10101010_10101010_10101010_10101010_10101010_10101010_101010_11_11001100
+        );
+    }
+
+    #[allow(clippy::unusual_byte_groupings)]
+    #[test]
+    fn test_set_field_panic_if_value_too_big() {
+        assert!(catch_unwind(|| {
+            let mut status = BlockStatus(0);
+            status.set_field(BlockStatusBitArea::ValidationStage, 0b1_00000000);
+        })
+        .is_err());
+
+        assert!(catch_unwind(|| {
+            let mut status = BlockStatus(0);
+            status.set_field(BlockStatusBitArea::ValidationFailedBit, 2);
+        })
+        .is_err());
+
+        assert!(catch_unwind(|| {
+            let mut status = BlockStatus(0);
+            status.set_field(BlockStatusBitArea::InvalidParentBit, 2);
+        })
+        .is_err());
+
+        assert!(catch_unwind(|| {
+            let mut status = BlockStatus(0);
+            status.set_field(
+                BlockStatusBitArea::ReservedArea,
+                // This is the value from test_set_field but with an additional 1 an the end.
+                0b10101010_10101010_10101010_10101010_10101010_10101010_1010101,
+            );
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn test_default_state() {
+        let status = BlockStatus::new();
+        assert_eq!(status.last_valid_stage(), BlockValidationStage::Unchecked);
+        assert!(status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_new_fully_checked() {
+        let status = BlockStatus::new_fully_checked();
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(status.is_ok());
+        assert!(status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_advance_validation_stage_to() {
+        let mut status = BlockStatus::new();
+
+        status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::CheckBlockOk
+        );
+        assert!(status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+
+        status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(status.is_ok());
+        assert!(status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_set_validation_failed() {
+        let mut status = BlockStatus::new_fully_checked();
+        status.set_validation_failed();
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(!status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_set_has_invalid_parent() {
+        let mut status = BlockStatus::new_fully_checked();
+        status.set_has_invalid_parent();
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(!status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(status.has_invalid_parent());
+        assert_eq!(status.reserved_bits(), 0);
+    }
 }

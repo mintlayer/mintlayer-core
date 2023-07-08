@@ -464,7 +464,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    // Return Ok(()) if the specified block has a valid parent and an error otherwise.
+    /// Return Ok(()) if the specified block has a valid parent and an error otherwise.
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
