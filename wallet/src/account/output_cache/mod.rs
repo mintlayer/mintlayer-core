@@ -79,11 +79,11 @@ impl OutputCache {
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) {
         let is_unconfirmed = match tx.state() {
-            TxState::InMempool => true,
-            TxState::Confirmed(_, _)
+            TxState::Inactive
+            | TxState::InMempool
             | TxState::Conflicted(_)
-            | TxState::Abandoned
-            | TxState::Inactive => false,
+            | TxState::Abandoned => true,
+            TxState::Confirmed(_, _) => false,
         };
         if is_unconfirmed {
             self.unconfirmed_descendants.insert(tx_id.clone(), BTreeSet::new());
@@ -194,10 +194,10 @@ impl OutputCache {
             .filter_map(|tx| match tx {
                 WalletTx::Block(_) => None,
                 WalletTx::Tx(tx) => match tx.state() {
-                    TxState::InMempool => Some(tx.get_transaction_with_id()),
+                    TxState::Inactive => Some(tx.get_transaction_with_id()),
                     TxState::Confirmed(_, _)
                     | TxState::Conflicted(_)
-                    | TxState::Inactive
+                    | TxState::InMempool
                     | TxState::Abandoned => None,
                 },
             })
@@ -217,7 +217,7 @@ impl OutputCache {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
                     WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
                     WalletTx::Tx(tx) => match tx.state() {
-                        TxState::InMempool => {
+                        TxState::Inactive => {
                             tx.set_state(TxState::Abandoned);
                             for input in tx.get_transaction().inputs() {
                                 match input {

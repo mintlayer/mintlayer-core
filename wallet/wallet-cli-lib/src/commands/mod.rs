@@ -32,7 +32,7 @@ use wallet_controller::{
 
 use crate::errors::WalletCliError;
 
-use self::helper_types::{CliUtxoStates, CliUtxoTypes};
+use self::helper_types::{CliUtxoState, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -156,16 +156,15 @@ pub enum WalletCommand {
     SyncWallet,
 
     GetBalance {
-        #[arg(default_values_t = vec![CliUtxoStates::Confirmed])]
-        utxo_states: Vec<CliUtxoStates>,
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
     },
 
-    // TODO: add option to show unconfirmed utxos
     ListUtxo {
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
-        #[arg(default_values_t = vec![CliUtxoStates::Confirmed])]
-        utxo_states: Vec<CliUtxoStates>,
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
     },
 
     /// List the unconfirmed transactions that can be abandoned
@@ -659,7 +658,7 @@ impl CommandHandler {
                     .ok_or(WalletCliError::NoWallet)?
                     .get_balance(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        CliUtxoStates::to_wallet_states(utxo_states),
+                        CliUtxoState::to_wallet_states(utxo_states),
                     )
                     .map_err(WalletCliError::Controller)?
                     .get(&Currency::Coin)
@@ -681,7 +680,7 @@ impl CommandHandler {
                     .get_utxos(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         utxo_type.to_wallet_types(),
-                        CliUtxoStates::to_wallet_states(utxo_states),
+                        CliUtxoState::to_wallet_states(utxo_states),
                     )
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))

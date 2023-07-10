@@ -1276,10 +1276,16 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, Amount::ZERO);
 
+    let num_transactions_to_scan_from_mempool = rng.gen_range(1..5);
+
+    let total_num_transactions: u32 = num_transactions_to_scan_from_mempool + 1;
+
     // Generate a new block which sends reward to the wallet
-    // with enough coins for 4 transactions
-    let block1_amount =
-        Amount::from_atoms(rng.gen_range((NETWORK_FEE + 1) * 4..NETWORK_FEE * 4 + 10000));
+    // with enough coins for the total transactions
+    let block1_amount = Amount::from_atoms(rng.gen_range(
+        (NETWORK_FEE + 1) * (total_num_transactions as u128)
+            ..=(NETWORK_FEE + 1) * (total_num_transactions as u128) + 10000,
+    ));
     let address = get_address(
         &chain_config,
         MNEMONIC,
@@ -1311,12 +1317,11 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     // create 3 transactions that depend on each other
-
     let mut used_inputs = BTreeSet::new();
     let mut transactions = vec![];
     let mut total_amount = block1_amount;
 
-    for idx in 1..3 {
+    for idx in 1..(num_transactions_to_scan_from_mempool - 1) {
         let amount_to_transfer = (total_amount - Amount::from_atoms(NETWORK_FEE)).unwrap();
 
         let address = get_address(
@@ -1338,12 +1343,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         }
 
         transactions.push(transaction);
-        wallet.scan_mempool(transactions.as_slice()).unwrap();
         total_amount = amount_to_transfer;
     }
 
-    assert!(total_amount.into_atoms() > NETWORK_FEE * 2);
-    let amount_to_keep = rng.gen_range(NETWORK_FEE + 1..(total_amount.into_atoms() - NETWORK_FEE));
+    assert!(total_amount.into_atoms() > (NETWORK_FEE + 1) * 2);
+    let amount_to_keep =
+        rng.gen_range((NETWORK_FEE + 1)..=(total_amount.into_atoms() - NETWORK_FEE));
     let amount_to_transfer =
         (total_amount - Amount::from_atoms(amount_to_keep + NETWORK_FEE)).unwrap();
 
@@ -1415,13 +1420,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .unwrap();
 
     let transaction_id = transaction.transaction().get_id();
-    wallet.scan_mempool(&[transaction]).unwrap();
 
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed | UtxoState::InMempool,
+            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
         )
         .unwrap()
         .get(&Currency::Coin)
@@ -1435,11 +1439,169 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
             UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed | UtxoState::InMempool,
+            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
         )
         .unwrap()
         .get(&Currency::Coin)
         .copied()
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, Amount::from_atoms(amount_to_keep));
+
+    // if we add it back from the mempool it should return even if abandoned
+    wallet.scan_mempool(&[transaction]).unwrap();
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_abandone_transactions(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    let total_num_transactions: u32 = rng.gen_range(1..5);
+
+    // Generate a new block which sends reward to the wallet
+    // with enough coins for the total transactions
+    let block1_amount = Amount::from_atoms(rng.gen_range(
+        (NETWORK_FEE + 1) * (total_num_transactions as u128)
+            ..=(NETWORK_FEE + 1) * (total_num_transactions as u128) + 10000,
+    ));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    // create multiple transactions that depend on each other
+    let mut used_inputs = BTreeSet::new();
+    let mut transactions = vec![];
+    let mut total_amount = block1_amount;
+
+    for idx in 0..total_num_transactions {
+        let amount_to_transfer = (total_amount - Amount::from_atoms(NETWORK_FEE)).unwrap();
+
+        let address = get_address(
+            &chain_config,
+            MNEMONIC,
+            DEFAULT_ACCOUNT_INDEX,
+            KeyPurpose::ReceiveFunds,
+            (idx + 1).try_into().unwrap(),
+        );
+        let new_output = make_address_output(address, amount_to_transfer).unwrap();
+
+        let transaction = wallet
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .unwrap();
+
+        for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
+            // assert the utxos used in this transaction have not been used before
+            assert!(used_inputs.insert(utxo.clone()));
+        }
+
+        transactions.push((transaction, total_amount));
+        total_amount = amount_to_transfer;
+    }
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, total_amount);
+
+    let abandonable_transactions =
+        wallet.get_abandonable_transactions(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    assert_eq!(abandonable_transactions.len(), transactions.len());
+
+    let txs_to_abandone = rng.gen_range(0..total_num_transactions) as usize;
+    let (txs_to_keep, txs_to_abandone) = transactions.split_at(txs_to_abandone);
+
+    assert!(!txs_to_abandone.is_empty());
+
+    let transaction_id = txs_to_abandone.first().unwrap().0.transaction().get_id();
+    wallet.abandon_transaction(DEFAULT_ACCOUNT_INDEX, transaction_id).unwrap();
+
+    let coins_after_abandon = txs_to_abandone.first().unwrap().1;
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, coins_after_abandon);
+
+    let txs_to_keep: Vec<_> = txs_to_keep.iter().map(|(tx, _)| tx.clone()).collect();
+    wallet.scan_mempool(txs_to_keep.as_slice()).unwrap();
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed | UtxoState::InMempool,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, coins_after_abandon);
 }

@@ -150,7 +150,7 @@ impl Account {
             self.get_utxos(
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 median_time,
-                UtxoState::Confirmed | UtxoState::InMempool,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
             )
             .into_iter(),
             |(_, (tx_output, _))| tx_output,
@@ -681,13 +681,14 @@ impl Account {
     pub fn scan_new_unconfirmed_transactions(
         &mut self,
         transactions: &[SignedTransaction],
+        tx_state: TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
         for signed_tx in transactions {
             let wallet_tx = WalletTx::Tx(TxData::new(
                 signed_tx.transaction().clone().into(),
-                TxState::InMempool,
+                tx_state,
             ));
 
             // in the case when 2 unconfirmed txs depend on each other, and the last one spends

@@ -245,9 +245,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.rpc_client
             .submit_transaction(tx.clone())
             .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        self.wallet.scan_mempool(&[tx]).map_err(ControllerError::WalletError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn create_stake_pool_tx(
@@ -263,9 +261,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.rpc_client
             .submit_transaction(tx.clone())
             .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        self.wallet.scan_mempool(&[tx]).map_err(ControllerError::WalletError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn generate_block(

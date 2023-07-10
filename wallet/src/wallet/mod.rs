@@ -424,7 +424,12 @@ impl<B: storage::Backend> Wallet<B> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.process_send_request(db_tx, request, latest_median_time)
+            let tx = account.process_send_request(db_tx, request, latest_median_time)?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+
+            let [tx] = txs;
+            Ok(tx)
         })
     }
 
@@ -436,7 +441,14 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)
+            let tx =
+                account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)?;
+
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+
+            let [tx] = txs;
+            Ok(tx)
         })
     }
 
@@ -528,7 +540,11 @@ impl<B: storage::Backend> Wallet<B> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            account.scan_new_unconfirmed_transactions(transactions, &mut db_tx)?;
+            account.scan_new_unconfirmed_transactions(
+                transactions,
+                TxState::InMempool,
+                &mut db_tx,
+            )?;
         }
 
         Ok(())
