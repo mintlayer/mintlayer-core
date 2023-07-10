@@ -96,11 +96,7 @@ impl P2pRpcServer for super::P2pHandle {
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus> {
-        rpc::handle_result(
-            self.call_async_mut(move |this| {
-                this.submit_transaction(tx.take(), mempool::TxOrigin::LocalP2p)
-            })
-            .await,
-        )
+        let res = self.call_async_mut(move |this| this.submit_transaction(tx.take())).await;
+        rpc::handle_result(res)
     }
 }

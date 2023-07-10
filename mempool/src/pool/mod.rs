@@ -860,25 +860,19 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     None => continue,
                     Some(orphan) => orphan,
                 };
-                let origin = orphan.origin();
 
                 match self.add_transaction_entry(orphan) {
                     Ok(TxStatus::InMempool) => {
+                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
                         let former_orphan =
                             self.store.get_entry(&orphan_tx_id).expect("just added");
                         work_queue.extend(self.orphans.ready_children_of(former_orphan.tx_entry()));
-
-                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
-                        let event = event::OrphanProcessed::accepted(orphan_tx_id, origin);
-                        self.events_controller.broadcast(event.into());
                     }
                     Ok(TxStatus::InOrphanPool) => {
                         log::debug!("Orphan tx {orphan_tx_id} stays in the orphan pool");
                     }
                     Err(err) => {
                         log::info!("Orphan transaction {orphan_tx_id} no longer validates: {err}");
-                        let event = event::OrphanProcessed::rejected(orphan_tx_id, err, origin);
-                        self.events_controller.broadcast(event.into());
                     }
                 }
             }
@@ -891,23 +885,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("Adding transaction {:?}", tx.tx_id());
         log::trace!("Adding transaction {tx:?}");
 
-        match self.validate_transaction(tx).log_err_pfx("Transaction rejected")? {
-            ValidationOutcome::Valid {
+        let tx_id = *tx.tx_id();
+        let origin = tx.origin();
+
+        match self.validate_transaction(tx).log_err_pfx("Transaction rejected") {
+            Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
                 delta,
-            } => {
+            }) => {
                 if ENABLE_RBF {
                     self.store.drop_conflicts(conflicts);
                 }
                 tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
                 self.finalize_tx(transaction)?;
                 self.store.assert_valid();
+
+                let event = event::TransactionProcessed::accepted(tx_id, origin);
+                self.events_controller.broadcast(event.into());
+
                 Ok(TxStatus::InMempool)
             }
-            ValidationOutcome::Orphan { transaction } => {
+            Ok(ValidationOutcome::Orphan { transaction }) => {
                 self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?;
                 Ok(TxStatus::InOrphanPool)
+            }
+            Err(err) => {
+                let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
+                self.events_controller.broadcast(event.into());
+                Err(err)
             }
         }
     }

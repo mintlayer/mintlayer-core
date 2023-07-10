@@ -23,15 +23,15 @@ use crate::{
     TxOrigin,
 };
 
-/// Event triggered when an orphan has been fully validated
+/// Event triggered when a transaction has been fully validated
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct OrphanProcessed {
+pub struct TransactionProcessed {
     tx_id: Id<Transaction>,
     origin: TxOrigin,
     result: crate::Result<()>,
 }
 
-impl OrphanProcessed {
+impl TransactionProcessed {
     fn new(tx_id: Id<Transaction>, origin: TxOrigin, result: crate::Result<()>) -> Self {
         Self {
             tx_id,
@@ -94,12 +94,12 @@ impl NewTip {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MempoolEvent {
     NewTip(NewTip),
-    OrphanProcessed(OrphanProcessed),
+    TransactionProcessed(TransactionProcessed),
 }
 
-impl From<OrphanProcessed> for MempoolEvent {
-    fn from(event: OrphanProcessed) -> Self {
-        Self::OrphanProcessed(event)
+impl From<TransactionProcessed> for MempoolEvent {
+    fn from(event: TransactionProcessed) -> Self {
+        Self::TransactionProcessed(event)
     }
 }
 

@@ -148,10 +148,7 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
         // TODO: Should this return mempool::TxStatus?
-        let _ = self
-            .p2p
-            .call_async_mut(move |this| this.submit_transaction(tx, mempool::TxOrigin::LocalP2p))
-            .await??;
+        let _ = self.p2p.call_async_mut(move |this| this.submit_transaction(tx)).await??;
         Ok(())
     }
 

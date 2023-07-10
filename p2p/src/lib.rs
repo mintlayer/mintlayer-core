@@ -81,7 +81,6 @@ struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
-    messaging_handle: T::MessagingHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
 
@@ -169,7 +168,7 @@ where
         let sync_manager = sync::BlockSyncManager::<T>::new(
             chain_config,
             p2p_config,
-            messaging_handle.clone(),
+            messaging_handle,
             sync_event_receiver,
             chainstate_handle,
             mempool_handle.clone(),
@@ -194,7 +193,6 @@ where
         Ok(Self {
             tx_peer_manager,
             mempool_handle,
-            messaging_handle,
             shutdown,
             backend_shutdown_sender,
             backend_task,
