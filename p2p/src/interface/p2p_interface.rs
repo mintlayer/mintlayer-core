@@ -34,7 +34,6 @@ pub trait P2pInterface: Send + Sync {
     async fn submit_transaction(
         &mut self,
         tx: SignedTransaction,
-        origin: mempool::TxOrigin,
     ) -> crate::Result<mempool::TxStatus>;
 
     fn subscribe_to_events(
