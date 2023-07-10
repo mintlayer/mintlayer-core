@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -44,7 +44,7 @@ use wallet_storage::{
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
-use wallet_types::{AccountId, KeyPurpose};
+use wallet_types::{AccountId, BlockInfo, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -399,7 +399,7 @@ impl<B: storage::Backend> Wallet<B> {
         account.abandon_transaction(tx_id)
     }
 
-    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<BTreeSet<PoolId>> {
+    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, BlockInfo)>> {
         let pool_ids = self.get_account(account_index)?.get_pool_ids();
         Ok(pool_ids)
     }

@@ -22,7 +22,7 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -38,6 +38,8 @@ use crypto::{
     key::{hdkd::u31::U31, PublicKey},
     vrf::VRFPublicKey,
 };
+use futures::stream::FuturesUnordered;
+use futures::TryStreamExt;
 use logging::log;
 use mempool_types::TxStatus;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
@@ -45,6 +47,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{account::Currency, send_request::make_address_output, DefaultWallet};
+use wallet_types::BlockInfo;
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
@@ -223,8 +226,32 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_pool_ids(&self, account_index: U31) -> Result<BTreeSet<PoolId>, ControllerError<T>> {
-        self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)
+    async fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+        block_info: BlockInfo,
+    ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
+        self.rpc_client
+            .get_stake_pool_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .and_then(|balance| balance.ok_or(ControllerError::SyncError("".into())))
+            .map(|balance| (pool_id, block_info, balance))
+    }
+
+    pub async fn get_pool_ids(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
+        let pools =
+            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+
+        let tasks: FuturesUnordered<_> = pools
+            .into_iter()
+            .map(|(pool_id, block_info)| self.get_pool_data(pool_id, block_info))
+            .collect();
+
+        tasks.try_collect().await
     }
 
     pub fn get_vrf_public_key(

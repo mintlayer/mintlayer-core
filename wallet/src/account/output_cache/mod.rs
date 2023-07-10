@@ -45,6 +45,7 @@ pub struct OutputCache {
     txs: BTreeMap<OutPointSourceId, WalletTx>,
     consumed: BTreeMap<UtxoOutPoint, TxState>,
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+    pools: BTreeMap<PoolId, (UtxoOutPoint, BlockInfo)>,
 }
 
 impl OutputCache {
@@ -53,6 +54,7 @@ impl OutputCache {
             txs: BTreeMap::new(),
             consumed: BTreeMap::new(),
             unconfirmed_descendants: BTreeMap::new(),
+            pools: BTreeMap::new(),
         }
     }
 
@@ -76,25 +78,11 @@ impl OutputCache {
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
     }
 
-    pub fn pool_ids(&self) -> BTreeSet<PoolId> {
-        self.txs
-            .values()
-            .filter(|tx| match tx.state() {
-                TxState::Confirmed(_, _) => true,
-                TxState::Inactive
-                | TxState::InMempool
-                | TxState::Conflicted(_)
-                | TxState::Abandoned => false,
-            })
-            .flat_map(|tx| tx.outputs())
-            .filter_map(|output| match output {
-                TxOutput::CreateStakePool(pool_id, _)
-                | TxOutput::ProduceBlockFromStake(_, pool_id) => Some(*pool_id),
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::Burn(_)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => None,
+    pub fn pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+        self.pools
+            .iter()
+            .filter_map(|(pool_id, (outpoint, block_info))| {
+                (!self.consumed.contains_key(outpoint)).then_some((*pool_id, *block_info))
             })
             .collect()
     }
@@ -128,6 +116,33 @@ impl OutputCache {
             }
         }
 
+        let tx_block_info = match tx.state() {
+            TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
+            TxState::Inactive
+            | TxState::Conflicted(_)
+            | TxState::InMempool
+            | TxState::Abandoned => None,
+        };
+        if let Some(block_info) = tx_block_info {
+            for (idx, output) in tx.outputs().iter().enumerate() {
+                match output {
+                    TxOutput::ProduceBlockFromStake(_, pool_id)
+                    | TxOutput::CreateStakePool(pool_id, _) => {
+                        self.pools
+                            .entry(*pool_id)
+                            .and_modify(|entry| entry.0 = UtxoOutPoint::new(tx.id(), idx as u32))
+                            .or_insert_with(|| {
+                                (UtxoOutPoint::new(tx.id(), idx as u32), block_info)
+                            });
+                    }
+                    TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _) => {}
+                };
+            }
+        }
         self.txs.insert(tx_id, tx);
     }
 

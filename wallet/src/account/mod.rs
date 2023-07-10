@@ -42,7 +42,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
@@ -280,7 +280,7 @@ impl Account {
         Ok(vrf_keys.1)
     }
 
-    pub fn get_pool_ids(&self) -> BTreeSet<PoolId> {
+    pub fn get_pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
         self.output_cache.pool_ids()
     }
 

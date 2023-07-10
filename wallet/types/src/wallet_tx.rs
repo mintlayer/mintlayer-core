@@ -58,7 +58,7 @@ impl Display for TxState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Decode, Encode)]
 pub struct BlockInfo {
     pub height: BlockHeight,
     pub timestamp: BlockTimestamp,

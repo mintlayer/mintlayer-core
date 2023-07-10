@@ -775,6 +775,7 @@ impl CommandHandler {
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .get_pool_ids(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{pool_ids:#?}")))
             }
