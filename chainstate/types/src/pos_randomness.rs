@@ -14,14 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp},
-        config::EpochIndex,
-        Block, ChainConfig,
-    },
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, Block, ChainConfig},
     primitives::{Id, H256},
 };
-use crypto::vrf::VRFPublicKey;
+use crypto::vrf::{VRFPublicKey, VRFReturn};
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
@@ -49,13 +45,13 @@ impl PoSRandomness {
         epoch_index: EpochIndex,
         block_timestamp: BlockTimestamp,
         seal_randomness: &PoSRandomness,
-        pos_data: &PoSData,
+        vrf_data: &VRFReturn,
         vrf_pub_key: &VRFPublicKey,
     ) -> Result<Self, PoSRandomnessError> {
         let hash: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
             &seal_randomness.value(),
-            pos_data.vrf_data(),
+            vrf_data,
             vrf_pub_key,
             block_timestamp,
         )?;

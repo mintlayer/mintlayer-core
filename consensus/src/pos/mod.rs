@@ -73,7 +73,7 @@ pub fn check_pos_hash(
         epoch_index,
         block_timestamp,
         random_seed,
-        pos_data,
+        pos_data.vrf_data(),
         vrf_pub_key,
     )?
     .value()
