@@ -49,6 +49,7 @@ pub struct TestFrameworkBuilder {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     time_getter: Option<TimeGetter>,
     tx_verification_strategy: TxVerificationStrategy,
+    initial_time_since_genesis: u64,
 }
 
 impl TestFrameworkBuilder {
@@ -68,6 +69,7 @@ impl TestFrameworkBuilder {
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
         let tx_verification_strategy = TxVerificationStrategy::Default;
+        let initial_time_since_genesis = 0;
 
         TestFrameworkBuilder {
             chain_config,
@@ -76,6 +78,7 @@ impl TestFrameworkBuilder {
             custom_orphan_error_hook: None,
             time_getter,
             tx_verification_strategy,
+            initial_time_since_genesis,
         }
     }
 
@@ -94,6 +97,11 @@ impl TestFrameworkBuilder {
         self
     }
 
+    pub fn with_max_tip_age(mut self, max_tip_age: chainstate::MaxTipAge) -> Self {
+        self.chainstate_config.max_tip_age = max_tip_age;
+        self
+    }
+
     pub fn with_orphan_error_hook(mut self, hook: Arc<OrphanErrorHandler>) -> Self {
         self.custom_orphan_error_hook = Some(hook);
         self
@@ -109,6 +117,11 @@ impl TestFrameworkBuilder {
         self
     }
 
+    pub fn with_initial_time_since_genesis(mut self, initial_time_since_genesis: u64) -> Self {
+        self.initial_time_since_genesis = initial_time_since_genesis;
+        self
+    }
+
     /// Create the TimeGetter of the TestFramework, with the following logic:
     /// The default TimeGetter of the TestFramework simply loads the value of time from an atomic u64
     /// If a custom TimeGetter is supplied, then this value won't exist
@@ -116,6 +129,7 @@ impl TestFrameworkBuilder {
         let time_value = Arc::new(SeqCstAtomicU64::new(
             self.chain_config.genesis_block().timestamp().as_int_seconds(),
         ));
+        time_value.fetch_add(self.initial_time_since_genesis);
 
         let default_time_getter = mocked_time_getter_seconds(Arc::clone(&time_value));
 

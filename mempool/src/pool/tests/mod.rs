@@ -18,6 +18,7 @@ use crate::config::MempoolMaxSize;
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
+    MaxTipAge,
 };
 use common::{
     chain::{
@@ -183,13 +184,18 @@ async fn tx_no_inputs() {
 
 // TODO this is copy-pasted from libp2p's test utils. This function should be extracted to an
 // external crate to avoid code duplication
-pub async fn start_chainstate_with_config(
+pub async fn start_chainstate_with_config_and_max_tip_age(
     chain_config: Arc<ChainConfig>,
+    max_tip_age: MaxTipAge,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
+    let chainstate_config = ChainstateConfig {
+        max_tip_age,
+        ..ChainstateConfig::new()
+    };
     let chainstate = make_chainstate(
         chain_config,
-        ChainstateConfig::new(),
+        chainstate_config,
         storage,
         DefaultTransactionVerificationStrategy::new(),
         None,
@@ -197,6 +203,12 @@ pub async fn start_chainstate_with_config(
     )
     .unwrap();
     start_chainstate(chainstate).await
+}
+
+pub async fn start_chainstate_with_config(
+    chain_config: Arc<ChainConfig>,
+) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
+    start_chainstate_with_config_and_max_tip_age(chain_config, MaxTipAge::CENTURY).await
 }
 
 async fn setup() -> Mempool<StoreMemoryUsageEstimator> {

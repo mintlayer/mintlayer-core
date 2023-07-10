@@ -130,6 +130,21 @@ fn fetch_disconnected_txs<M>(
 pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
+    let is_ibd = mempool
+        .blocking_chainstate_handle()
+        .call(|cs| cs.is_initial_block_download())
+        .expect("Cannot connect to chainstate");
+    if is_ibd {
+        log::debug!("Not updating mempool tx verifier during IBD");
+
+        // We still need to update the current tx_verifier tip
+        let mut old_transactions = mempool.reset();
+        if old_transactions.next().is_some() {
+            log::warn!("Discarding mempool transactions during IBD");
+        }
+        return;
+    }
+
     let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
         .log_err_pfx("Fetching disconnected transactions on a reorg");
 

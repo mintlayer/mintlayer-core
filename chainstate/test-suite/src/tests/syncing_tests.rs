@@ -467,9 +467,10 @@ fn initial_block_download(#[case] seed: Seed) {
                 tx_index_enabled: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
             })
+            .with_initial_time_since_genesis(2)
             .build();
 
-        // Only genesis block, so is_initial_block_download should return true.
+        // We are two seconds after genesis timestamp, so in the IBD state
         assert!(tf.chainstate.is_initial_block_download());
 
         // Create a block with an "old" timestamp.

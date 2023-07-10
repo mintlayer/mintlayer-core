@@ -355,6 +355,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     ) -> Result<VerificationOutcome, TxValidationError> {
         let chainstate_handle = self.blocking_chainstate_handle();
 
+        let is_ibd = chainstate_handle.call(|chainstate| chainstate.is_initial_block_download())?;
+        ensure!(!is_ibd, TxValidationError::AddedDuringIBD);
+
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
