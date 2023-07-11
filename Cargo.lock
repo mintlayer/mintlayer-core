@@ -6478,6 +6478,7 @@ dependencies = [
  "consensus",
  "crypto",
  "logging",
+ "mempool-types",
  "node-comm",
  "rstest",
  "serialization",

@@ -11,6 +11,7 @@ common = { path = "../../common" }
 consensus = { path = "../../consensus" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+mempool-types = { path = "../../mempool/types" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }

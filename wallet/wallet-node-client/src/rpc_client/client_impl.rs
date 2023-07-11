@@ -20,6 +20,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
+use mempool::TxStatus;
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex_encoded::HexEncoded;
 
@@ -102,12 +103,11 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        // TODO: Should this return tx status?
-        let _ = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<TxStatus, Self::Error> {
+        let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
             .await
             .map_err(NodeRpcError::ResponseError)?;
-        Ok(())
+        Ok(status)
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
