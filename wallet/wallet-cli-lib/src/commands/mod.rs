@@ -604,7 +604,8 @@ impl CommandHandler {
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                rpc_client
+                // TODO: Take status into account
+                let _status = rpc_client
                     .submit_transaction(transaction.take())
                     .await
                     .map_err(WalletCliError::RpcError)?;
@@ -682,7 +683,8 @@ impl CommandHandler {
             WalletCommand::SendToAddress { address, amount } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                controller_opt
+                // TODO: Take status into account
+                let _status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address(
@@ -701,7 +703,8 @@ impl CommandHandler {
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
-                controller_opt
+                // TODO: Take status into account
+                let _status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_stake_pool_tx(
