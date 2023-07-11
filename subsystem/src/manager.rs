@@ -37,11 +37,8 @@ pub struct ManagerConfig {
 
 impl ManagerConfig {
     /// Default shutdown timeout.
-    const DEFAULT_SHUTDOWN_TIMEOUT: Option<Duration> = if cfg!(all(feature = "time", not(loom))) {
-        Some(Duration::from_secs(30))
-    } else {
-        None
-    };
+    const DEFAULT_SHUTDOWN_TIMEOUT: Option<Duration> =
+        if cfg!(all(feature = "time", not(loom))) { Some(Duration::from_secs(30)) } else { None };
 
     /// New config using given subsystem name. Other options are default.
     pub fn named(name: &'static str) -> Self {

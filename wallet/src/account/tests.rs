@@ -123,11 +123,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let utxos: Vec<TxOutput> = amounts
         .iter()
         .map(|a| {
-            let purpose = if rng.gen_bool(0.5) {
-                ReceiveFunds
-            } else {
-                Change
-            };
+            let purpose = if rng.gen_bool(0.5) { ReceiveFunds } else { Change };
 
             TxOutput::Transfer(
                 OutputValue::Coin(*a),

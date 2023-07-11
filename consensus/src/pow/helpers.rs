@@ -78,11 +78,7 @@ pub fn calculate_new_target(
     let mut new_target = old_target * actual_timespan;
     new_target = new_target / target_timespan;
 
-    new_target = if new_target > difficulty_limit {
-        difficulty_limit
-    } else {
-        new_target
-    };
+    new_target = if new_target > difficulty_limit { difficulty_limit } else { new_target };
 
     Ok(Compact::from(new_target))
 }

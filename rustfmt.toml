@@ -2,7 +2,6 @@ max_width = 100
 hard_tabs = false
 tab_spaces = 4
 use_small_heuristics = "Max"
-single_line_if_else_max_width = 50
 newline_style = "Unix"
 edition = "2021"
 

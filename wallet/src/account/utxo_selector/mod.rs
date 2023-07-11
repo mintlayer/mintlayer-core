@@ -396,11 +396,8 @@ fn approximate_best_subset(
                 //that the rng is fast. We do not use a constant random sequence,
                 //because there may be some privacy improvement by making
                 //the selection random.
-                let rand_bool = if n_pass == 0 {
-                    rng.gen::<bool>()
-                } else {
-                    !current_solution_included[i]
-                };
+                let rand_bool =
+                    if n_pass == 0 { rng.gen::<bool>() } else { !current_solution_included[i] };
 
                 if rand_bool {
                     total = (total + group.get_effective_value(pay_fees))

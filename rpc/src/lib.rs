@@ -77,17 +77,11 @@ impl Builder {
     ///
     /// If `creds` is set, basic HTTP authentication is required.
     pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> Self {
-        let http_bind_address = if *rpc_config.http_enabled {
-            Some(*rpc_config.http_bind_address)
-        } else {
-            None
-        };
+        let http_bind_address =
+            if *rpc_config.http_enabled { Some(*rpc_config.http_bind_address) } else { None };
 
-        let ws_bind_address = if *rpc_config.ws_enabled {
-            Some(*rpc_config.ws_bind_address)
-        } else {
-            None
-        };
+        let ws_bind_address =
+            if *rpc_config.ws_enabled { Some(*rpc_config.ws_bind_address) } else { None };
 
         Self { http_bind_address, ws_bind_address, methods: Methods::new(), creds }
             .register(RpcInfo.into_rpc())

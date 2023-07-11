@@ -325,11 +325,7 @@ async fn resend_own_addresses() {
         // New peer connection is requested
         while !matches!(cmd_rx.try_recv().unwrap(), Command::Connect { address: _ }) {}
 
-        let own_ip = if peer_index % 2 == 0 {
-            outbound_address_1
-        } else {
-            outbound_address_2
-        };
+        let own_ip = if peer_index % 2 == 0 { outbound_address_1 } else { outbound_address_2 };
 
         pm.accept_connection(peer_address, Role::Outbound, peer_info, Some(own_ip.into()));
     }

@@ -80,11 +80,8 @@ impl SignedAmount {
         }
 
         let signed_amount = unsigned_amount.into_signed()?;
-        let signed_atoms = if negative {
-            -signed_amount.into_atoms()
-        } else {
-            signed_amount.into_atoms()
-        };
+        let signed_atoms =
+            if negative { -signed_amount.into_atoms() } else { signed_amount.into_atoms() };
         Some(Self::from_atoms(signed_atoms))
     }
 }

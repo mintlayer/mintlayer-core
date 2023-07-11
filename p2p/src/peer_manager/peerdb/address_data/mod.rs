@@ -159,11 +159,7 @@ impl AddressData {
     }
 
     fn next_connect_delay(fail_count: u32, reserved: bool) -> Duration {
-        let max_delay = if reserved {
-            MAX_DELAY_RESERVED
-        } else {
-            MAX_DELAY_REACHABLE
-        };
+        let max_delay = if reserved { MAX_DELAY_RESERVED } else { MAX_DELAY_REACHABLE };
 
         // 10, 20, 40, 80... seconds
         std::cmp::min(
