@@ -28,6 +28,8 @@ use std::{
     time::Duration,
 };
 
+use utils::tap_error_log::LogError;
+
 use common::{
     address::Address,
     chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
@@ -226,7 +228,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    async fn get_pool_data(
+    async fn get_pool_info(
         &self,
         pool_id: PoolId,
         block_info: BlockInfo,
@@ -235,8 +237,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .get_stake_pool_balance(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)
-            .and_then(|balance| balance.ok_or(ControllerError::SyncError("".into())))
+            .and_then(|balance| {
+                balance.ok_or(ControllerError::SyncError(format!(
+                    "Pool id {} from wallet not found in node",
+                    pool_id
+                )))
+            })
             .map(|balance| (pool_id, block_info, balance))
+            .log_err()
     }
 
     pub async fn get_pool_ids(
@@ -248,7 +256,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
-            .map(|(pool_id, block_info)| self.get_pool_data(pool_id, block_info))
+            .map(|(pool_id, block_info)| self.get_pool_info(pool_id, block_info))
             .collect();
 
         tasks.try_collect().await

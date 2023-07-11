@@ -32,7 +32,7 @@ use wallet_controller::{
 
 use crate::errors::WalletCliError;
 
-use self::helper_types::{CliUtxoState, CliUtxoTypes};
+use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -771,13 +771,18 @@ impl CommandHandler {
             }
 
             WalletCommand::ListPoolIds => {
-                let pool_ids = controller_opt
+                let pool_ids: Vec<_> = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .get_pool_ids(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                     .await
-                    .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print(format!("{pool_ids:#?}")))
+                    .map_err(WalletCliError::Controller)?
+                    .into_iter()
+                    .map(|(pool_id, block_info, balance)| {
+                        format_pool_info(pool_id, balance, block_info.height, block_info.timestamp)
+                    })
+                    .collect();
+                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
             }
 
             WalletCommand::NodeShutdown => {

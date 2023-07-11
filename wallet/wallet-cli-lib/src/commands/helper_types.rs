@@ -18,6 +18,11 @@ use std::fmt::Display;
 use clap::ValueEnum;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
+use common::{
+    chain::{block::timestamp::BlockTimestamp, PoolId},
+    primitives::{Amount, BlockHeight},
+};
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
     All,
@@ -88,4 +93,19 @@ impl CliUtxoState {
             UtxoState::Confirmed.into()
         }
     }
+}
+
+pub fn format_pool_info(
+    pool_id: PoolId,
+    balance: Amount,
+    block_height: BlockHeight,
+    block_timestamp: BlockTimestamp,
+) -> String {
+    format!(
+        "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
+        pool_id,
+        balance.into_atoms(),
+        block_height,
+        block_timestamp
+    )
 }
