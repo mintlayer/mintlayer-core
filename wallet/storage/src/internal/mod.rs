@@ -218,7 +218,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
-        fn exactly_one_root_key(&self) -> crate::Result<bool>;
+        fn check_root_keys_sanity(&self) -> crate::Result<()>;
         fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
         fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
         fn get_public_key(&self, id: &AccountDerivationPathId) -> crate::Result<Option<ExtendedPublicKey>>;

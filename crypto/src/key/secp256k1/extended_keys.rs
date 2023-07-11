@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key::hdkd::chain_code::CHAINCODE_LENGTH;
 use crate::key::hdkd::derivation_path::DerivationPath;
 use crate::key::hdkd::{
     chain_code::ChainCode,
@@ -22,14 +21,13 @@ use crate::key::hdkd::{
 };
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use crate::random::{CryptoRng, Rng};
-use generic_array::{sequence::Split, typenum::U32, GenericArray};
+use crate::util::{self, new_hmac_sha_512};
 use hmac::{Hmac, Mac};
 use secp256k1;
 use secp256k1::SECP256K1;
 use serialization::{Decode, Encode};
 use sha2::Sha512;
 use std::cmp::Ordering;
-use zeroize::Zeroize;
 
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
 /// the private key at one of the nodes of this tree.
@@ -42,10 +40,6 @@ pub struct Secp256k1ExtendedPrivateKey {
     chain_code: ChainCode,
     /// The private key to be used to derive child keys of this node using BIP32 rules
     private_key: Secp256k1PrivateKey,
-}
-
-fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
-    Hmac::<Sha512>::new_from_slice(key).expect("HMAC can take key of any size")
 }
 
 impl PartialOrd for Secp256k1ExtendedPrivateKey {
@@ -63,32 +57,15 @@ impl Ord for Secp256k1ExtendedPrivateKey {
 fn to_key_and_chain_code(
     mac: Hmac<Sha512>,
 ) -> Result<(secp256k1::SecretKey, ChainCode), DerivationError> {
-    // Finalize the hmac
-    let mut result = mac.finalize().into_bytes();
-
-    // Split in to two 32 byte arrays
-    let (mut secret_key_bytes, mut chain_code_bytes): (
-        GenericArray<u8, U32>,
-        GenericArray<u8, U32>,
-    ) = result.split();
-    result.zeroize();
-
-    // Create the secret key key
-    let secret_key = secp256k1::SecretKey::from_slice(&secret_key_bytes)
-        .map_err(|_| DerivationError::KeyDerivationError)?;
-    secret_key_bytes.zeroize();
-
-    // Chain code
-    let chain_code: [u8; CHAINCODE_LENGTH] = chain_code_bytes.into();
-    let chain_code = ChainCode::from(chain_code);
-    chain_code_bytes.zeroize();
-
-    Ok((secret_key, chain_code))
+    util::to_key_and_chain_code(mac, |secret_key_bytes| {
+        secp256k1::SecretKey::from_slice(secret_key_bytes)
+            .map_err(|_| DerivationError::KeyDerivationError)
+    })
 }
 
 impl Secp256k1ExtendedPrivateKey {
     pub fn new_master(seed: &[u8]) -> Result<Secp256k1ExtendedPrivateKey, DerivationError> {
-        // Create a new mac with the appropriate BIP39 constant
+        // Create a new mac with the appropriate BIP32 constant
         let mut mac = new_hmac_sha_512(b"Bitcoin seed");
 
         mac.update(seed);
@@ -273,7 +250,6 @@ mod test {
     use bip39::Mnemonic;
     use rstest::rstest;
     use std::str::FromStr;
-    use test_utils::random::{make_seedable_rng, Seed};
     use test_utils::{assert_encoded_eq, decode_from_hex};
 
     #[test]
@@ -410,19 +386,5 @@ mod test {
         let pk = pk.unwrap();
         assert_encoded_eq(&path, path_encoded);
         assert_encoded_eq(&pk, format!("{path_encoded}{chaincode}{public}").as_str());
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    /// Test to prove that hmac-sha512 can be used with keys of any size, since there's an expect in it
-    fn mac_key_of_any_size(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let key_size = rng.gen_range(0..=1000);
-
-        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
-
-        let _hmac = new_hmac_sha_512(&key);
     }
 }

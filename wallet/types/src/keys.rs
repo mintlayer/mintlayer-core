@@ -14,9 +14,10 @@
 // limitations under the License.
 
 use crate::keys::KeyPurpose::{Change, ReceiveFunds};
-use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
+use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
+use crypto::vrf::ExtendedVRFPrivateKey;
 use serialization::{Decode, Encode};
 
 /// The index of the receiving key hierarchy
@@ -118,40 +119,15 @@ impl KeychainUsageState {
     }
 }
 
-/// The key id is described by it's public key
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct RootKeyId(ExtendedPublicKey);
+/// Just an empty struct used as key for the DB table
+/// It only represents a single value as there can be only one root key
+#[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct RootKeyConstant;
 
-impl RootKeyId {
-    pub fn into_key(self) -> ExtendedPublicKey {
-        self.0
-    }
-}
-
-impl From<ExtendedPublicKey> for RootKeyId {
-    fn from(key: ExtendedPublicKey) -> Self {
-        Self(key)
-    }
-}
-
-/// The useful content of this key e.g. a private key or an address depending on the usage
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct RootKeyContent(ExtendedPrivateKey);
-
-impl RootKeyContent {
-    pub fn into_key(self) -> ExtendedPrivateKey {
-        self.0
-    }
-
-    pub fn as_key(&self) -> &ExtendedPrivateKey {
-        &self.0
-    }
-}
-
-impl From<ExtendedPrivateKey> for RootKeyContent {
-    fn from(key: ExtendedPrivateKey) -> Self {
-        Self(key)
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct RootKeys {
+    pub root_key: ExtendedPrivateKey,
+    pub root_vrf_key: ExtendedVRFPrivateKey,
 }
 
 #[cfg(test)]
