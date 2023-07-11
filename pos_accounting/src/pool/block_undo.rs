@@ -114,15 +114,12 @@ impl AccountingBlockUndo {
     }
 
     pub fn combine(&mut self, other: AccountingBlockUndo) -> Result<(), AccountingBlockUndoError> {
-        other
-            .tx_undos
-            .into_iter()
-            .try_for_each(|(id, u)| match self.tx_undos.entry(id) {
-                Entry::Vacant(e) => {
-                    e.insert(u);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(id)),
-            })
+        other.tx_undos.into_iter().try_for_each(|(id, u)| match self.tx_undos.entry(id) {
+            Entry::Vacant(e) => {
+                e.insert(u);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(id)),
+        })
     }
 }

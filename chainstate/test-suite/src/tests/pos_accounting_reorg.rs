@@ -61,9 +61,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             2, // sealed is behind the tip by 2 epochs
         ];
 
-        for (epoch_length, sealed_epoch_distance_from_tip) in epoch_length_params
-            .into_iter()
-            .cartesian_product(sealed_epoch_distance_from_tip_params)
+        for (epoch_length, sealed_epoch_distance_from_tip) in
+            epoch_length_params.into_iter().cartesian_product(sealed_epoch_distance_from_tip_params)
         {
             let storage = Store::new_empty().unwrap();
             let mut rng = make_seedable_rng(seed);
@@ -260,13 +259,11 @@ fn long_chain_reorg(#[case] seed: Seed) {
             .create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng, &staking_sk, &vrf_sk)
             .unwrap();
 
-        let old_tip = tf
-            .create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
-            .unwrap();
+        let old_tip =
+            tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk).unwrap();
 
-        let new_tip = tf
-            .create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
-            .unwrap();
+        let new_tip =
+            tf.create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk).unwrap();
 
         assert_ne!(old_tip, new_tip);
         assert_eq!(new_tip, tf.best_block_id());

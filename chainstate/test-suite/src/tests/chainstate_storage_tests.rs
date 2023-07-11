@@ -73,10 +73,8 @@ fn store_coin(#[case] seed: Seed) {
 
         if *tf.chainstate.get_chainstate_config().tx_index_enabled {
             // tx index is stored
-            let tx_index = db_tx
-                .get_mainchain_tx_index(&tx_utxo_outpoint.tx_id())
-                .expect("ok")
-                .expect("some");
+            let tx_index =
+                db_tx.get_mainchain_tx_index(&tx_utxo_outpoint.tx_id()).expect("ok").expect("some");
             let tx_pos = match tx_index.position() {
                 SpendablePosition::Transaction(tx_pos) => tx_pos,
                 SpendablePosition::BlockReward(_) => unreachable!(),
@@ -226,11 +224,8 @@ fn reorg_store_coin(#[case] seed: Seed) {
         let tx_2_id = tx_2.transaction().get_id();
         let tx_2_utxo_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
 
-        let block_2 = tf
-            .make_block_builder()
-            .add_transaction(tx_2)
-            .with_parent(genesis_id.into())
-            .build();
+        let block_2 =
+            tf.make_block_builder().add_transaction(tx_2).with_parent(genesis_id.into()).build();
         let block_2_id = block_2.get_id();
         tf.process_block(block_2, BlockSource::Local).unwrap();
 
@@ -249,11 +244,8 @@ fn reorg_store_coin(#[case] seed: Seed) {
         let tx_3_id = tx_3.transaction().get_id();
         let tx_3_utxo_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
 
-        let block_3 = tf
-            .make_block_builder()
-            .add_transaction(tx_3)
-            .with_parent(block_2_id.into())
-            .build();
+        let block_3 =
+            tf.make_block_builder().add_transaction(tx_3).with_parent(block_2_id.into()).build();
         let block_3_id = block_3.get_id();
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
@@ -281,11 +273,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx
-                    .get_mainchain_tx_by_position(tx_2_pos)
-                    .expect("ok")
-                    .expect("some")
-                    .get_id(),
+                db_tx.get_mainchain_tx_by_position(tx_2_pos).expect("ok").expect("some").get_id(),
                 tx_2_id
             );
             // tx index from block_3 is stored
@@ -298,11 +286,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx
-                    .get_mainchain_tx_by_position(tx_3_pos)
-                    .expect("ok")
-                    .expect("some")
-                    .get_id(),
+                db_tx.get_mainchain_tx_by_position(tx_3_pos).expect("ok").expect("some").get_id(),
                 tx_3_id
             );
         } else {
@@ -429,11 +413,8 @@ fn reorg_store_token(#[case] seed: Seed) {
         let tx_3_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
         let token_3_id = token_id(tx_3.transaction()).unwrap();
 
-        let block_3 = tf
-            .make_block_builder()
-            .add_transaction(tx_3)
-            .with_parent(block_2_id.into())
-            .build();
+        let block_3 =
+            tf.make_block_builder().add_transaction(tx_3).with_parent(block_2_id.into()).build();
         let block_3_id = block_3.get_id();
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
@@ -456,11 +437,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx
-                    .get_mainchain_tx_by_position(tx_2_pos)
-                    .expect("ok")
-                    .expect("some")
-                    .get_id(),
+                db_tx.get_mainchain_tx_by_position(tx_2_pos).expect("ok").expect("some").get_id(),
                 tx_2_id
             );
             // tx index from block_3 is stored
@@ -471,11 +448,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx
-                    .get_mainchain_tx_by_position(tx_3_pos)
-                    .expect("ok")
-                    .expect("some")
-                    .get_id(),
+                db_tx.get_mainchain_tx_by_position(tx_3_pos).expect("ok").expect("some").get_id(),
                 tx_3_id
             );
         }

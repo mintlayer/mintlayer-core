@@ -98,10 +98,7 @@ impl BlockProduction {
     }
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
-        self.job_manager_handle
-            .stop_all_jobs()
-            .await
-            .map_err(BlockProductionError::JobManagerError)
+        self.job_manager_handle.stop_all_jobs().await.map_err(BlockProductionError::JobManagerError)
     }
 
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {

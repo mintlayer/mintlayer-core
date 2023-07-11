@@ -31,11 +31,8 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
     starting_block: &Id<GenBlock>,
 ) -> BlockTimestamp {
     let iter = BlockIndexHistoryIterator::new(*starting_block, block_index_handle);
-    let time_values = iter
-        .take(MEDIAN_TIME_SPAN)
-        .map(|bi| bi.block_timestamp())
-        .sorted()
-        .collect::<Vec<_>>();
+    let time_values =
+        iter.take(MEDIAN_TIME_SPAN).map(|bi| bi.block_timestamp()).sorted().collect::<Vec<_>>();
 
     time_values[time_values.len() / 2]
 }

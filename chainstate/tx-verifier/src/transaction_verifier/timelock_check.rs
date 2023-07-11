@@ -61,9 +61,8 @@ fn check_timelock(
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
         OutputTimeLock::UntilTime(t) => spending_time >= t,
         OutputTimeLock::ForBlockCount(d) => {
-            let d: i64 = (*d)
-                .try_into()
-                .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
+            let d: i64 =
+                (*d).try_into().map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
             let d = BlockDistance::from(d);
             *spend_height
                 >= (source_block_height + d)

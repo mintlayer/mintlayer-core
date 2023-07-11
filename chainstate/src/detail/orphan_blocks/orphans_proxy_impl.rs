@@ -29,9 +29,7 @@ impl OrphanBlocksRef for OrphansProxy {
 
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
         let block_id = *block_id;
-        self.call(move |o| o.is_already_an_orphan(&block_id))
-            .recv()
-            .expect(RECV_ERR_MSG)
+        self.call(move |o| o.is_already_an_orphan(&block_id)).recv().expect(RECV_ERR_MSG)
     }
 }
 
@@ -46,8 +44,6 @@ impl OrphanBlocksMut for OrphansProxy {
 
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>> {
         let block_id = *block_id;
-        self.call_mut(move |o| o.take_all_children_of(&block_id))
-            .recv()
-            .expect(RECV_ERR_MSG)
+        self.call_mut(move |o| o.take_all_children_of(&block_id)).recv().expect(RECV_ERR_MSG)
     }
 }

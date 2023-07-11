@@ -96,10 +96,8 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .operations(TransactionSource::Chain(block_id))
         .increase_pool_pledge_amount(pool_id, total_owner_reward)?;
 
-    let undos = delegation_undos
-        .into_iter()
-        .chain(std::iter::once(increase_pool_balance_undo))
-        .collect();
+    let undos =
+        delegation_undos.into_iter().chain(std::iter::once(increase_pool_balance_undo)).collect();
 
     Ok(AccountingBlockRewardUndo::new(undos))
 }
@@ -110,9 +108,9 @@ fn calculate_pool_owner_reward(
     mpt: PerThousand,
 ) -> Option<Amount> {
     let pool_owner_reward = match total_reward - cost_per_block {
-        Some(v) => (v * mpt.value().into())
-            .and_then(|v| v / 1000)
-            .and_then(|v| v + cost_per_block)?,
+        Some(v) => {
+            (v * mpt.value().into()).and_then(|v| v / 1000).and_then(|v| v + cost_per_block)?
+        }
         // if cost per block > total reward then give the reward to pool owner
         None => total_reward,
     };
@@ -501,11 +499,7 @@ mod tests {
         let expected_pool_balance = (original_pool_balance + reward).unwrap();
         assert_eq!(
             expected_pool_balance,
-            accounting_adapter
-                .accounting_delta()
-                .get_pool_balance(pool_id)
-                .unwrap()
-                .unwrap()
+            accounting_adapter.accounting_delta().get_pool_balance(pool_id).unwrap().unwrap()
         );
 
         let (consumed_data, _) = accounting_adapter.consume();

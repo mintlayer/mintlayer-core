@@ -66,10 +66,7 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
-        Ok(self
-            .get_pool_data(pool_id)?
-            .ok_or_else(|| self.parent.get_pool_data(pool_id))
-            .is_ok())
+        Ok(self.get_pool_data(pool_id)?.ok_or_else(|| self.parent.get_pool_data(pool_id)).is_ok())
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {

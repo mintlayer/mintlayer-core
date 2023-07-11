@@ -314,8 +314,7 @@ mod tests {
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript.into(), &vrf_data).expect("Valid VRF check failed");
     }
 
     #[rstest]
@@ -346,8 +345,7 @@ mod tests {
         let mut mutated_transcript: Transcript = transcript.into();
         mutated_transcript.append_u64(b"Forgery", 1337);
 
-        pk.verify_vrf_data(mutated_transcript, &vrf_data)
-            .expect_err("Invalid VRF check succeeded");
+        pk.verify_vrf_data(mutated_transcript, &vrf_data).expect_err("Invalid VRF check succeeded");
     }
 
     #[rstest]
@@ -377,8 +375,7 @@ mod tests {
 
         let (_sk2, pk2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        pk2.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect_err("Invalid VRF check succeeded");
+        pk2.verify_vrf_data(transcript.into(), &vrf_data).expect_err("Invalid VRF check succeeded");
     }
 
     #[test]
@@ -412,7 +409,6 @@ mod tests {
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript.into(), &vrf_data).expect("Valid VRF check failed");
     }
 }

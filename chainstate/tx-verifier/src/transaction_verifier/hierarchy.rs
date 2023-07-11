@@ -313,27 +313,21 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter
-            .accounting_delta()
-            .get_delegation_balance(delegation_id)
+        self.accounting_delta_adapter.accounting_delta().get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.accounting_delta_adapter
-            .accounting_delta()
-            .get_delegation_data(delegation_id)
+        self.accounting_delta_adapter.accounting_delta().get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.accounting_delta_adapter
-            .accounting_delta()
-            .get_pool_delegations_shares(pool_id)
+        self.accounting_delta_adapter.accounting_delta().get_pool_delegations_shares(pool_id)
     }
 
     fn get_pool_delegation_share(

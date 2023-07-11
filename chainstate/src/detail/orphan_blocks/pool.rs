@@ -104,10 +104,7 @@ impl OrphanBlocksPool {
         let rc_block = Rc::new(block);
         self.orphan_by_id.insert(block_id, rc_block.clone());
         self.orphan_ids.push(block_id);
-        self.orphan_by_prev_id
-            .entry(rc_block.prev_block_id())
-            .or_default()
-            .push(rc_block.clone());
+        self.orphan_by_prev_id.entry(rc_block.prev_block_id()).or_default().push(rc_block.clone());
         Ok(())
     }
 
@@ -598,10 +595,8 @@ mod tests {
         }
 
         // collect all children of sim_blocks's prev_id
-        let sim_parent_id = sim_blocks
-            .first()
-            .expect("this should return the first element")
-            .prev_block_id();
+        let sim_parent_id =
+            sim_blocks.first().expect("this should return the first element").prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 
@@ -672,10 +667,8 @@ mod tests {
         }
 
         // collect all children of sim_blocks's prev_id
-        let sim_parent_id = sim_blocks
-            .first()
-            .expect("this should return the first element")
-            .prev_block_id();
+        let sim_parent_id =
+            sim_blocks.first().expect("this should return the first element").prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 

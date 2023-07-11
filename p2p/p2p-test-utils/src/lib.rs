@@ -96,9 +96,8 @@ pub struct P2pBasicTestTimeGetter {
 
 impl P2pBasicTestTimeGetter {
     pub fn new() -> Self {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap();
+        let current_time =
+            std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
         let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
         Self { current_time_millis }
     }

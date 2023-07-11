@@ -42,9 +42,8 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
@@ -60,12 +59,9 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let blocks = iter::repeat(block.get_id())
-        .take(*p2p_config.max_request_blocks_count + 1)
-        .collect();
-    handle
-        .send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(blocks)))
-        .await;
+    let blocks =
+        iter::repeat(block.get_id()).take(*p2p_config.max_request_blocks_count + 1).collect();
+    handle.send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(blocks))).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -86,9 +82,8 @@ async fn unknown_blocks(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let unknown_blocks: Vec<Id<Block>> =
@@ -126,9 +121,8 @@ async fn valid_request(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Import several blocks.
     let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(&mut tf, num_blocks);
@@ -146,9 +140,7 @@ async fn valid_request(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let ids = blocks.iter().map(|b| b.get_id()).collect();
-    handle
-        .send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(ids)))
-        .await;
+    handle.send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(ids))).await;
 
     for block in blocks {
         let (sent_to, message) = handle.message().await;
@@ -170,9 +162,8 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();

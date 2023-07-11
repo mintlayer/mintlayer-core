@@ -867,10 +867,8 @@ where
         peer_id: PeerId,
         addresses: Vec<PeerAddress>,
     ) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        let peer =
+            self.peers.get_mut(&peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         ensure!(
             addresses.len() <= MAX_ADDRESS_COUNT,
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)

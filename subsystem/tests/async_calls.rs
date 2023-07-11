@@ -51,10 +51,7 @@ impl Counter {
     async fn bump(&mut self) -> Result<u64, CallError> {
         self.count += 1;
         let message = format!("Bumped counter to {}", self.count);
-        self.logger
-            .call(move |logger| logger.write(&message))
-            .await
-            .map(|()| self.count)
+        self.logger.call(move |logger| logger.write(&message)).await.map(|()| self.count)
     }
 }
 

@@ -170,9 +170,8 @@ mod tests {
         inputs_utxos_count: usize,
         rng: &mut (impl Rng + CryptoRng),
     ) {
-        let inputs = (0..inputs_count)
-            .map(|_| generate_random_invalid_input(rng))
-            .collect::<Vec<_>>();
+        let inputs =
+            (0..inputs_count).map(|_| generate_random_invalid_input(rng)).collect::<Vec<_>>();
 
         let inputs_utxos = (0..inputs_utxos_count)
             .map(|_| generate_random_invalid_output(rng))

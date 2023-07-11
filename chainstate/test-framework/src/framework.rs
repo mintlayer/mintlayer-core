@@ -180,10 +180,7 @@ impl TestFramework {
     /// Returns a block identifier for the specified height.
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
-        self.chainstate
-            .get_block_id_from_height(&BlockHeight::from(height))
-            .unwrap()
-            .unwrap()
+        self.chainstate.get_block_id_from_height(&BlockHeight::from(height)).unwrap().unwrap()
     }
 
     /// Returns the list of outputs from the selected block.

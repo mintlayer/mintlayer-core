@@ -154,10 +154,7 @@ fn add_block_with_2_stake_pools(
         .build();
     let outpoint2 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
-    tf.make_block_builder()
-        .with_transactions(vec![tx1, tx2])
-        .build_and_process()
-        .unwrap();
+    tf.make_block_builder().with_transactions(vec![tx1, tx2]).build_and_process().unwrap();
 
     tf.progress_time_seconds_since_epoch(1);
 

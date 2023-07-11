@@ -101,9 +101,8 @@ fn get_address(
     let mut address_path = make_account_path(chain_config, account_index).into_vec();
     address_path.push(purpose.get_deterministic_index());
     address_path.push(ChildNumber::from_normal(address_index));
-    let address_priv_key = root_key
-        .derive_absolute_path(&DerivationPath::try_from(address_path).unwrap())
-        .unwrap();
+    let address_priv_key =
+        root_key.derive_absolute_path(&DerivationPath::try_from(address_path).unwrap()).unwrap();
     Address::from_public_key(chain_config, &address_priv_key.to_public_key().into_public_key())
         .unwrap()
 }
@@ -586,9 +585,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
     if rng.gen::<bool>() {
-        wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-            .unwrap();
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output]).unwrap();
     } else {
         // check if we remove the password it should fail to lock
         wallet.encrypt_wallet(&None).unwrap();
@@ -608,9 +605,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .unwrap()
             .is_none());
 
-        wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-            .unwrap();
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output]).unwrap();
     }
 }
 
@@ -692,9 +687,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         Destination::Address(pkh),
     );
 
-    let token_issuance_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-        .unwrap();
+    let token_issuance_transaction =
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output]).unwrap();
 
     let block2 = Block::new(
         vec![token_issuance_transaction],
@@ -737,9 +731,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         Destination::Address(some_other_address),
     );
 
-    let transfer_tokens_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-        .unwrap();
+    let transfer_tokens_transaction =
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output]).unwrap();
 
     let block3 = Block::new(
         vec![transfer_tokens_transaction],
@@ -766,9 +759,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         })
         .collect_vec();
     assert!(token_balances.len() <= 1);
-    let token_amount = token_balances
-        .first()
-        .map_or(Amount::ZERO, |(_token_id, token_amount)| *token_amount);
+    let token_amount =
+        token_balances.first().map_or(Amount::ZERO, |(_token_id, token_amount)| *token_amount);
     assert_eq!(token_amount, (token_amount_to_issue - tokens_to_transfer).expect(""));
 
     let not_enough_tokens_to_transfer =
@@ -869,9 +861,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
         timestamp,
     );
 
-    let lock_then_transfer_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-        .unwrap();
+    let lock_then_transfer_transaction =
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output]).unwrap();
 
     let block2 = Block::new(
         vec![lock_then_transfer_transaction],

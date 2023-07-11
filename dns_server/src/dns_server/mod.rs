@@ -264,16 +264,10 @@ fn handle_command(auth: &AuthorityImpl, command: DnsServerCommand) {
             auth.ip6.lock().expect("mutex must be valid (add ipv6)").push(ip);
         }
         DnsServerCommand::DelAddress(IpAddr::V4(ip)) => {
-            auth.ip4
-                .lock()
-                .expect("mutex must be valid (remove ipv4)")
-                .retain(|val| *val != ip);
+            auth.ip4.lock().expect("mutex must be valid (remove ipv4)").retain(|val| *val != ip);
         }
         DnsServerCommand::DelAddress(IpAddr::V6(ip)) => {
-            auth.ip6
-                .lock()
-                .expect("mutex must be valid (remove ipv6)")
-                .retain(|val| *val != ip);
+            auth.ip6.lock().expect("mutex must be valid (remove ipv6)").retain(|val| *val != ip);
         }
     };
 }

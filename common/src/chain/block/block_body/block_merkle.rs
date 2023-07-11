@@ -49,9 +49,8 @@ fn calcualte_generic_merkle_tree(
 ) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
     let rewards_hash = id::hash_encoded(&body.reward);
 
-    let hashes: Vec<H256> = std::iter::once(rewards_hash)
-        .chain(body.transactions.iter().map(tx_hasher))
-        .collect();
+    let hashes: Vec<H256> =
+        std::iter::once(rewards_hash).chain(body.transactions.iter().map(tx_hasher)).collect();
     let tree = MerkleTree::<H256, MerkleHasher>::from_leaves(hashes)?;
     Ok(tree)
 }

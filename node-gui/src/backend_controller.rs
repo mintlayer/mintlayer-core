@@ -28,9 +28,7 @@ pub struct NodeBackendController {
 
 impl Debug for NodeBackendController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeInitializationData")
-            .field("chain_config", &self.chain_config)
-            .finish()
+        f.debug_struct("NodeInitializationData").field("chain_config", &self.chain_config).finish()
     }
 }
 

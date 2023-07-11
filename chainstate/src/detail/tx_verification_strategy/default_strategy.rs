@@ -96,9 +96,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             })
             .log_err()?;
 
-        tx_verifier
-            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
-            .log_err()?;
+        tx_verifier.check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy)).log_err()?;
 
         tx_verifier
             .connect_block_reward(

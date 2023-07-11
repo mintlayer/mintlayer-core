@@ -97,9 +97,7 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
     let mut current_cache_outputs =
         populate_cache_with_undo(rng, &mut current_cache, iterations_per_cache, all_outputs);
     all_outputs.utxo_outpoints.append(&mut current_cache_outputs.utxo_outpoints);
-    all_outputs
-        .outpoints_with_undo
-        .append(&mut current_cache_outputs.outpoints_with_undo);
+    all_outputs.outpoints_with_undo.append(&mut current_cache_outputs.outpoints_with_undo);
 
     // create the child
     let child_cache_op =
@@ -141,9 +139,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                         false,
                     )
                     .unwrap();
-                result
-                    .utxo_outpoints
-                    .push(UtxoOutPoint::new(OutPointSourceId::from(block_id), 0));
+                result.utxo_outpoints.push(UtxoOutPoint::new(OutPointSourceId::from(block_id), 0));
             } else {
                 //spend random utxo in a transaction
 

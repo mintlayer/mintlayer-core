@@ -74,8 +74,7 @@ impl PoSAccountingDeltaData {
         self.pool_delegation_shares
             .undo_merge_delta_amounts(undo_data.pool_delegation_shares_undo)?;
 
-        self.delegation_balances
-            .undo_merge_delta_amounts(undo_data.delegation_balances_undo)?;
+        self.delegation_balances.undo_merge_delta_amounts(undo_data.delegation_balances_undo)?;
 
         self.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
 

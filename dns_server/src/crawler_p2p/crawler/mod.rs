@@ -238,10 +238,8 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
             is_compatible
         );
 
-        let address_data = self
-            .addresses
-            .get_mut(&address)
-            .expect("address must be known (create_outbound_peer)");
+        let address_data =
+            self.addresses.get_mut(&address).expect("address must be known (create_outbound_peer)");
 
         if is_compatible {
             Self::change_address_state(

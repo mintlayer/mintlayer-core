@@ -63,36 +63,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<common::chain::TxMainChainIndex>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.get_mainchain_tx_index(tx_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_token_aux_data(token_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.get_token_aux_data(token_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.get_accounting_undo(id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_account_nonce_count(
         &self,
         account: AccountType,
     ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
-        self.db_tx
-            .get_account_nonce_count(account)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.get_account_nonce_count(account).map_err(TransactionVerifierStorageError::from)
     }
 }
 
@@ -163,9 +155,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         &mut self,
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .del_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.del_mainchain_tx_index(tx_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn set_token_aux_data(
@@ -173,18 +163,14 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .set_token_aux_data(token_id, data)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.set_token_aux_data(token_id, data).map_err(TransactionVerifierStorageError::from)
     }
 
     fn del_token_aux_data(
         &mut self,
         token_id: &TokenId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .del_token_aux_data(token_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.del_token_aux_data(token_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn set_token_id(
@@ -201,9 +187,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         &mut self,
         issuance_tx_id: &Id<Transaction>,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .del_token_id(issuance_tx_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.del_token_id(issuance_tx_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn set_utxo_undo_data(
@@ -213,10 +197,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
-            TransactionSource::Chain(id) => self
-                .db_tx
-                .set_undo_data(id, undo)
-                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Chain(id) => {
+                self.db_tx.set_undo_data(id, undo).map_err(TransactionVerifierStorageError::from)
+            }
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")
             }
@@ -318,9 +301,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         &mut self,
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.db_tx
-            .del_account_nonce_count(account)
-            .map_err(TransactionVerifierStorageError::from)
+        self.db_tx.del_account_nonce_count(account).map_err(TransactionVerifierStorageError::from)
     }
 }
 

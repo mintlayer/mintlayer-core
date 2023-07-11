@@ -63,9 +63,8 @@ use utxo::UtxoSource;
 fn invalid_block_reward_types(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let chain_config = ConfigBuilder::test_chain()
-            .empty_consensus_reward_maturity_distance(50.into())
-            .build();
+        let chain_config =
+            ConfigBuilder::test_chain().empty_consensus_reward_maturity_distance(50.into()).build();
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
         let coins = OutputValue::Coin(Amount::from_atoms(10));
@@ -176,11 +175,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         );
 
         // Case 6: reward is locked for less than the required number of blocks
-        let reward_lock_distance: i64 = tf
-            .chainstate
-            .get_chain_config()
-            .empty_consensus_reward_maturity_distance()
-            .into();
+        let reward_lock_distance: i64 =
+            tf.chainstate.get_chain_config().empty_consensus_reward_maturity_distance().into();
 
         let block = tf
             .make_block_builder()
@@ -235,11 +231,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         ));
 
         // Case 8: the correct, working case
-        let reward_lock_distance: i64 = tf
-            .chainstate
-            .get_chain_config()
-            .empty_consensus_reward_maturity_distance()
-            .into();
+        let reward_lock_distance: i64 =
+            tf.chainstate.get_chain_config().empty_consensus_reward_maturity_distance().into();
 
         let block = tf
             .make_block_builder()
@@ -297,11 +290,8 @@ fn orphans_chains(#[case] seed: Seed) {
         let last_block_index =
             tf.process_block(missing_block, BlockSource::Local).unwrap().unwrap();
         assert_eq!(last_block_index.block_height(), (MAX_ORPHANS_COUNT_IN_TEST as u64).into());
-        let current_best = tf
-            .best_block_id()
-            .classify(tf.chainstate.get_chain_config())
-            .chain_block_id()
-            .unwrap();
+        let current_best =
+            tf.best_block_id().classify(tf.chainstate.get_chain_config()).chain_block_id().unwrap();
         assert_eq!(
             tf.block_index(&current_best.into()).block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
@@ -440,11 +430,8 @@ fn straight_chain(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let genesis_index = tf
-            .chainstate
-            .get_gen_block_index(&tf.genesis().get_id().into())
-            .unwrap()
-            .unwrap();
+        let genesis_index =
+            tf.chainstate.get_gen_block_index(&tf.genesis().get_id().into()).unwrap().unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
         assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);
@@ -619,9 +606,8 @@ fn last_common_ancestor(#[case] seed: Seed) {
     let last_block_in_first_chain = tf.best_block_index();
 
     // Second branch of fork
-    let last_block_in_second_chain = tf
-        .create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT, &mut rng)
-        .unwrap();
+    let last_block_in_second_chain =
+        tf.create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT, &mut rng).unwrap();
     let last_block_in_second_chain = tf.block_index(&last_block_in_second_chain);
 
     assert_eq!(
@@ -715,8 +701,7 @@ fn consensus_type(#[case] seed: Seed) {
     ));
 
     // Create 4 more blocks with Consensus Now
-    tf.create_chain(&tf.genesis().get_id().into(), 4, &mut rng)
-        .expect("chain creation");
+    tf.create_chain(&tf.genesis().get_id().into(), 4, &mut rng).expect("chain creation");
 
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
@@ -794,8 +779,7 @@ fn consensus_type(#[case] seed: Seed) {
     ));
 
     // Create blocks 10-14 without consensus data as required by net_upgrades
-    tf.create_chain(&prev_block.get_id().into(), 5, &mut rng)
-        .expect("chain creation");
+    tf.create_chain(&prev_block.get_id().into(), 5, &mut rng).expect("chain creation");
 
     // At height 15 we are again proof of work, ignoring consensus should fail
     let prev_block = tf.block(*tf.index_at(14).block_id());

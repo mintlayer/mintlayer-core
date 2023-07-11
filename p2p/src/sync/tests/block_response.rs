@@ -39,9 +39,8 @@ async fn unrequested_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block = tf.make_block_builder().build();
 
     let mut handle = SyncManagerHandle::builder()
@@ -53,9 +52,7 @@ async fn unrequested_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
-        .await;
+    handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block))).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -76,9 +73,8 @@ async fn valid_response(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(&mut tf, num_blocks);
 
@@ -92,9 +88,7 @@ async fn valid_response(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -140,9 +134,8 @@ async fn disconnect(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block = tf.make_block_builder().build();
 
     let p2p_config = Arc::new(P2pConfig {

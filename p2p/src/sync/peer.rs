@@ -337,8 +337,7 @@ where
         log::debug!("Headers list from peer {}", self.id());
 
         if let Some(last_header) = headers.last() {
-            self.wait_for_clock_diff(last_header.timestamp().as_duration_since_epoch())
-                .await;
+            self.wait_for_clock_diff(last_header.timestamp().as_duration_since_epoch()).await;
         }
 
         if !self.known_headers.is_empty() {
@@ -387,12 +386,7 @@ where
             // This is OK because of the `headers.is_empty()` check above.
             .expect("Headers shouldn't be empty")
             .prev_block_id();
-        if self
-            .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&prev_id))
-            .await??
-            .is_none()
-        {
+        if self.chainstate_handle.call(move |c| c.get_gen_block_index(&prev_id)).await??.is_none() {
             // It is possible to receive a new block announcement that isn't connected to our chain.
             if headers.len() == 1 {
                 // In order to prevent spam from malicious peers we have the `unconnected_headers`
@@ -413,10 +407,8 @@ where
         }
 
         let is_max_headers = headers.len() == *self.p2p_config.msg_header_count_limit;
-        let headers = self
-            .chainstate_handle
-            .call(|c| c.filter_already_existing_blocks(headers))
-            .await??;
+        let headers =
+            self.chainstate_handle.call(|c| c.filter_already_existing_blocks(headers)).await??;
         if headers.is_empty() {
             // A peer can have more headers if we have received the maximum amount of them.
             if is_max_headers {
@@ -435,9 +427,7 @@ where
             // This is OK because of the `headers.is_empty()` check above.
             .expect("Headers shouldn't be empty")
             .clone();
-        self.chainstate_handle
-            .call(|c| c.preliminary_header_check(first_header))
-            .await??;
+        self.chainstate_handle.call(|c| c.preliminary_header_check(first_header)).await??;
         self.unconnected_headers = 0;
 
         self.request_blocks(headers)
@@ -510,8 +500,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.messaging_handle
-            .send_message(self.id(), SyncMessage::TransactionResponse(res))?;
+        self.messaging_handle.send_message(self.id(), SyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -573,8 +562,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.messaging_handle
-                .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
+            self.messaging_handle.send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 

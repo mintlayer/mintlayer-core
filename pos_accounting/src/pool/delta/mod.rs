@@ -125,10 +125,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     }
 
     fn add_balance_to_pool(&mut self, pool_id: PoolId, amount_to_add: Amount) -> Result<(), Error> {
-        self.data
-            .pool_balances
-            .add_unsigned(pool_id, amount_to_add)
-            .map_err(Error::AccountingError)
+        self.data.pool_balances.add_unsigned(pool_id, amount_to_add).map_err(Error::AccountingError)
     }
 
     fn sub_balance_from_pool(
@@ -136,10 +133,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
-        self.data
-            .pool_balances
-            .sub_unsigned(pool_id, amount_to_add)
-            .map_err(Error::AccountingError)
+        self.data.pool_balances.sub_unsigned(pool_id, amount_to_add).map_err(Error::AccountingError)
     }
 
     fn add_delegation_to_pool_share(

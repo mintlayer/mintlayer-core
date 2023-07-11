@@ -99,23 +99,15 @@ fn prefix_iteration() {
             values
         };
         let dbtx = store.transaction_ro().unwrap();
-        let items: Vec<_> = dbtx
-            .get::<Map2, _>()
-            .prefix_iter(&())
-            .unwrap()
-            .map(|(k, v)| (k, v.decode()))
-            .collect();
+        let items: Vec<_> =
+            dbtx.get::<Map2, _>().prefix_iter(&()).unwrap().map(|(k, v)| (k, v.decode())).collect();
         assert_eq!(items, test_values_sorted);
         dbtx.close();
 
         // Iterate over all decoded values
         let dbtx = store.transaction_ro().unwrap();
-        let items: Vec<_> = dbtx
-            .get::<Map2, _>()
-            .prefix_iter_decoded(&())
-            .unwrap()
-            .map(|(k, v)| (k, v))
-            .collect();
+        let items: Vec<_> =
+            dbtx.get::<Map2, _>().prefix_iter_decoded(&()).unwrap().map(|(k, v)| (k, v)).collect();
         assert_eq!(items, test_values_sorted);
         dbtx.close();
     });

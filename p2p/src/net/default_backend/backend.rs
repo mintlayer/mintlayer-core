@@ -199,10 +199,8 @@ where
 
     /// Allow peer to start reading network messages
     fn accept_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        let peer =
+            self.peers.get_mut(&peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         let (sync_tx, sync_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
         peer.tx.send(Event::Accepted { sync_tx })?;
@@ -223,19 +221,15 @@ where
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        self.peers
-            .get(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        self.peers.get(&peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         self.destroy_peer(peer_id)
     }
 
     /// Sends a message the remote peer. Might fail if the peer is already disconnected.
     fn send_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .get_mut(&peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        let peer =
+            self.peers.get_mut(&peer).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         Ok(peer.tx.send(Event::SendMessage(Box::new(message)))?)
     }
 
@@ -407,10 +401,8 @@ where
     /// Peer should not be in pending state.
     fn destroy_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
         // Make sure the peer exists so that `ConnectionClosed` is sent only once
-        let peer = self
-            .peers
-            .remove(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        let peer =
+            self.peers.remove(&peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         if peer.was_accepted.test() {
             Self::send_sync_event(

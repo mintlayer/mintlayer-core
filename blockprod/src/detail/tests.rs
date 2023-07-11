@@ -356,9 +356,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn overflow_max_blocktimestamp() {
-        let override_chain_config = Builder::new(ChainType::Regtest)
-            .max_future_block_time_offset(Duration::MAX)
-            .build();
+        let override_chain_config =
+            Builder::new(ChainType::Regtest).max_future_block_time_offset(Duration::MAX).build();
 
         let (manager, chain_config, chainstate, mempool) =
             setup_blockprod_test(Some(override_chain_config));
@@ -1563,10 +1562,7 @@ mod stop_all_jobs {
         let return_value = make_seedable_rng(seed).gen();
         let expected_value = return_value;
 
-        mock_job_manager
-            .expect_stop_all_jobs()
-            .times(1)
-            .returning(move || Ok(return_value));
+        mock_job_manager.expect_stop_all_jobs().times(1).returning(move || Ok(return_value));
 
         block_production.set_job_manager(mock_job_manager);
 

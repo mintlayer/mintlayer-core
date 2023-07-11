@@ -184,9 +184,7 @@ where
     }
 
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
-        Ok(self
-            .cmd_tx
-            .send(types::Command::SendMessage { peer, message: message.into() })?)
+        Ok(self.cmd_tx.send(types::Command::SendMessage { peer, message: message.into() })?)
     }
 
     fn local_addresses(&self) -> &[S::Address] {

@@ -363,9 +363,9 @@ where
             .get_account_nonce_count(account.into())
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
         {
-            Some(nonce) => nonce
-                .increment()
-                .ok_or(ConnectTransactionError::FailedToIncrementAccountNonce)?,
+            Some(nonce) => {
+                nonce.increment().ok_or(ConnectTransactionError::FailedToIncrementAccountNonce)?
+            }
             None => AccountNonce::new(0),
         };
         ensure!(
@@ -377,8 +377,7 @@ where
             )
         );
         // store new nonce
-        self.account_nonce
-            .insert(account.into(), CachedOperation::Write(account_input.nonce()));
+        self.account_nonce.insert(account.into(), CachedOperation::Write(account_input.nonce()));
 
         match account {
             AccountSpending::Delegation(delegation_id, withdraw_amount) => {
@@ -807,9 +806,7 @@ where
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
         let block_undo_fetcher = |id: Id<Block>| {
-            self.storage
-                .get_undo_data(id)
-                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+            self.storage.get_undo_data(id).map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         match tx_source {
             TransactionSource::Chain(block_id) => {
@@ -848,9 +845,7 @@ where
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
         let block_undo_fetcher = |id: Id<Block>| {
-            self.storage
-                .get_undo_data(id)
-                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+            self.storage.get_undo_data(id).map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         let tx_undo = self.utxo_block_undo.take_tx_undo(
             tx_source,
@@ -914,9 +909,7 @@ where
         let tx_source = TransactionSource::Chain(block.get_id());
 
         let block_undo_fetcher = |id: Id<Block>| {
-            self.storage
-                .get_undo_data(id)
-                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+            self.storage.get_undo_data(id).map_err(|_| ConnectTransactionError::UndoFetchFailure)
         };
         let reward_undo =
             self.utxo_block_undo.take_block_reward_undo(&tx_source, block_undo_fetcher)?;

@@ -80,10 +80,8 @@ impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
         map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::PrefixIter<'_>> {
-        let cursor = self
-            .tx
-            .open_ro_cursor(self.backend.dbs[map_id])
-            .or_else(error::process_with_err)?;
+        let cursor =
+            self.tx.open_ro_cursor(self.backend.dbs[map_id]).or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
             cursor.into_iter_start()
         } else {

@@ -37,10 +37,7 @@ fn single_proof_one_leaf() {
     let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(p0.branch().len(), 0);
 
-    assert!(p0
-        .into_values()
-        .verify(leaves[leaf_index as usize], t.root())
-        .passed_trivially());
+    assert!(p0.into_values().verify(leaves[leaf_index as usize], t.root()).passed_trivially());
 }
 
 #[rstest]
@@ -86,10 +83,7 @@ fn single_proof_eight_leaves(
     let p = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), branch);
 
-    assert!(p
-        .into_values()
-        .verify(leaves[leaf_index as usize], t.root())
-        .passed_decisively());
+    assert!(p.into_values().verify(leaves[leaf_index as usize], t.root()).passed_decisively());
 }
 
 #[rstest]

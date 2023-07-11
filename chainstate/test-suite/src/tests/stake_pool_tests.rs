@@ -604,10 +604,6 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             SignedTransaction::new(tx, vec![InputWitness::Standard(decommission_sig)]).unwrap()
         };
 
-        tf.make_block_builder()
-            .add_transaction(tx2)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap().unwrap();
     });
 }

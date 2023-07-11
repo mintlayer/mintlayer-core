@@ -103,10 +103,8 @@ impl LeafKeySoftChain {
             .iter()
             .map(|(idx, xpub)| (xpub.clone().into_public_key(), *idx))
             .collect();
-        let public_key_hashes_to_index: BTreeMap<PublicKeyHash, ChildNumber> = public_keys_to_index
-            .iter()
-            .map(|(pk, idx)| (PublicKeyHash::from(pk), *idx))
-            .collect();
+        let public_key_hashes_to_index: BTreeMap<PublicKeyHash, ChildNumber> =
+            public_keys_to_index.iter().map(|(pk, idx)| (PublicKeyHash::from(pk), *idx)).collect();
 
         Ok(Self {
             chain_config,
@@ -267,11 +265,7 @@ impl LeafKeySoftChain {
         }
 
         // Derive the key
-        Ok(self
-            .parent_pubkey
-            .clone()
-            .take()
-            .derive_child(ChildNumber::from_normal(key_index))?)
+        Ok(self.parent_pubkey.clone().take().derive_child(ChildNumber::from_normal(key_index))?)
     }
 
     /// Derives and adds a key to his key chain. This does not affect the last used and issued state
@@ -304,12 +298,10 @@ impl LeafKeySoftChain {
         db_tx.set_address(&account_path_id, &address)?;
 
         // Add key and address the maps
-        self.derived_public_keys
-            .insert(ChildNumber::from_normal(key_index), derived_key.clone());
+        self.derived_public_keys.insert(ChildNumber::from_normal(key_index), derived_key.clone());
         self.addresses.insert(ChildNumber::from_normal(key_index), address);
         self.public_key_to_index.insert(public_key, ChildNumber::from_normal(key_index));
-        self.public_key_hash_to_index
-            .insert(public_key_hash, ChildNumber::from_normal(key_index));
+        self.public_key_hash_to_index.insert(public_key_hash, ChildNumber::from_normal(key_index));
 
         Ok(derived_key)
     }

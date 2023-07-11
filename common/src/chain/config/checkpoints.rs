@@ -52,11 +52,8 @@ impl Checkpoints {
         }
 
         // Otherwise, find the closest checkpoint before the given height
-        let cp_before = self
-            .checkpoints
-            .range(..height)
-            .next_back()
-            .expect("Genesis must be there, at least.");
+        let cp_before =
+            self.checkpoints.range(..height).next_back().expect("Genesis must be there, at least.");
         (*cp_before.0, (*cp_before.1))
     }
 }

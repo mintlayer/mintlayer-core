@@ -121,9 +121,8 @@ impl<'f> BlockBuilder<'f> {
 
     /// Returns regular transaction output(s) if any, otherwise returns block reward outputs
     fn filter_outputs(outputs: BlockOutputs) -> BlockOutputs {
-        let has_tx_outputs = outputs
-            .iter()
-            .any(|(output, _)| matches!(output, OutPointSourceId::Transaction(_)));
+        let has_tx_outputs =
+            outputs.iter().any(|(output, _)| matches!(output, OutPointSourceId::Transaction(_)));
         outputs
             .into_iter()
             .filter(|(output, _)| {

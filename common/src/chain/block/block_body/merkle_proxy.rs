@@ -89,11 +89,7 @@ impl<T: tag::MerkleTreeTag> WrappedMerkleTree<T> {
     }
 
     fn internal_block_reward_leaf(&self) -> H256 {
-        *self
-            .merkle_tree
-            .node_from_bottom(0, 0)
-            .expect("Block reward leaf must exist")
-            .hash()
+        *self.merkle_tree.node_from_bottom(0, 0).expect("Block reward leaf must exist").hash()
     }
 
     fn internal_transaction_leaf(&self, index: usize) -> Option<H256> {

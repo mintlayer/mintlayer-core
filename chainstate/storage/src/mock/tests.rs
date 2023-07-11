@@ -50,16 +50,8 @@ fn basic_fail() {
 fn two_updates_second_fails() {
     let mut store = MockStore::new();
     let mut seq = mockall::Sequence::new();
-    store
-        .expect_set_best_block_id()
-        .times(1)
-        .in_sequence(&mut seq)
-        .return_const(Ok(()));
-    store
-        .expect_set_best_block_id()
-        .times(1)
-        .in_sequence(&mut seq)
-        .return_const(Err(TXFAIL));
+    store.expect_set_best_block_id().times(1).in_sequence(&mut seq).return_const(Ok(()));
+    store.expect_set_best_block_id().times(1).in_sequence(&mut seq).return_const(Err(TXFAIL));
 
     assert!(store.set_best_block_id(&Id::new(HASH1)).is_ok());
     assert!(store.set_best_block_id(&Id::new(HASH2)).is_err());
@@ -88,10 +80,7 @@ fn mock_transaction() {
     store.expect_transaction_rw().returning(|_| {
         let mut mock_tx = MockStoreTxRw::new();
         mock_tx.expect_get_storage_version().return_const(Ok(3));
-        mock_tx
-            .expect_set_storage_version()
-            .with(mockall::predicate::eq(4))
-            .return_const(Ok(()));
+        mock_tx.expect_set_storage_version().with(mockall::predicate::eq(4)).return_const(Ok(()));
         mock_tx.expect_commit().times(1).return_const(Ok(()));
         Ok(mock_tx)
     });

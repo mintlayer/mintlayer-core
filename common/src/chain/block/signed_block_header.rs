@@ -95,9 +95,8 @@ impl SignedBlockHeader {
         &mut self,
         consensus_data: ConsensusData,
     ) -> Result<(), SignedHeaderError> {
-        self.header_mut()
-            .ok_or(SignedHeaderError::AttemptedMutatingSignedHeader)?
-            .consensus_data = consensus_data;
+        self.header_mut().ok_or(SignedHeaderError::AttemptedMutatingSignedHeader)?.consensus_data =
+            consensus_data;
         Ok(())
     }
 

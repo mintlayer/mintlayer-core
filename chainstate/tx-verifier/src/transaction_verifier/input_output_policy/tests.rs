@@ -625,10 +625,8 @@ fn reward_one_to_none(#[case] seed: Seed) {
 
     let valid_kernels = [stake_pool(), produce_block()];
 
-    let input = get_random_outputs_combination(&mut rng, &valid_kernels, 1)
-        .into_iter()
-        .next()
-        .unwrap();
+    let input =
+        get_random_outputs_combination(&mut rng, &valid_kernels, 1).into_iter().next().unwrap();
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));

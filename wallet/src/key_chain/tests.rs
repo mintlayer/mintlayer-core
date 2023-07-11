@@ -72,9 +72,8 @@ fn key_chain_creation(
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
 
-    let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let mut key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     key_chain.top_up_all(&mut db_tx).unwrap();
     db_tx.commit().unwrap();
 
@@ -129,9 +128,8 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None)
             .unwrap();
-    let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let mut key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     db_tx.commit().unwrap();
 
     let id = key_chain.get_account_id();
@@ -199,9 +197,8 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(Arc::clone(&chain_config), &mut db_tx, MNEMONIC, None)
             .unwrap();
-    let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     let id = key_chain.get_account_id();
     db_tx.commit().unwrap();
 
@@ -254,9 +251,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     }
 
     // Mark the last key as used
-    assert!(key_chain
-        .mark_public_key_as_used(&mut db_tx, &issued_key.into_public_key())
-        .unwrap());
+    assert!(key_chain.mark_public_key_as_used(&mut db_tx, &issued_key.into_public_key()).unwrap());
 
     {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);

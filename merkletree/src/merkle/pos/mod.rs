@@ -76,9 +76,8 @@ impl NodePosition {
     pub fn position(&self) -> (u32, u32) {
         assert!(self.abs_index() < self.tree_size.get(), "Index must be within the tree size");
 
-        let level_from_top = (self.tree_size.get() - self.abs_index() + 1)
-            .next_power_of_two()
-            .trailing_zeros();
+        let level_from_top =
+            (self.tree_size.get() - self.abs_index() + 1).next_power_of_two().trailing_zeros();
 
         let level = self.tree_size.level_count().get() - level_from_top;
         let level_start = self.tree_size.level_start(level).expect("Abs index is valid");

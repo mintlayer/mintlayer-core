@@ -70,9 +70,7 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAcc
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Error> {
-        self.store
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Error::from)
+        self.store.get_pool_delegation_share(pool_id, delegation_id).map_err(Error::from)
     }
 }
 

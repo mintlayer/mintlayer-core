@@ -29,10 +29,7 @@ fn gen_leaves(n: u32) -> Vec<HashedData> {
 }
 
 fn indices_to_map(leaves_indices: &[u32], leaves: &[HashedData]) -> BTreeMap<u32, HashedData> {
-    leaves_indices
-        .iter()
-        .map(|i| (*i, leaves[*i as usize]))
-        .collect::<BTreeMap<_, _>>()
+    leaves_indices.iter().map(|i| (*i, leaves[*i as usize])).collect::<BTreeMap<_, _>>()
 }
 
 #[test]
@@ -120,11 +117,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nodes
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof
-            .proof_leaves()
-            .iter()
-            .map(|leaf| leaf.abs_index())
-            .collect::<Vec<_>>(),
+        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
         input
     );
     assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
@@ -154,11 +147,7 @@ fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[u32], #[case] node
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof
-            .proof_leaves()
-            .iter()
-            .map(|leaf| leaf.abs_index())
-            .collect::<Vec<_>>(),
+        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
         input
     );
     assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
@@ -446,11 +435,7 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nod
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof
-            .proof_leaves()
-            .iter()
-            .map(|leaf| leaf.abs_index())
-            .collect::<Vec<_>>(),
+        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
         input
     );
     assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
@@ -496,10 +481,7 @@ fn multi_proof_verification_leaves_empty(#[case] leaf_count: u32) {
     // we provide something  in the creation because it doesn't work with empty leaves, yet we test verification with it
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[0]).unwrap();
     assert_eq!(
-        multi_proof
-            .into_values()
-            .verify(indices_to_map(&[], &leaves), t.root())
-            .unwrap_err(),
+        multi_proof.into_values().verify(indices_to_map(&[], &leaves), t.root()).unwrap_err(),
         MerkleProofVerificationError::LeavesContainerProvidedIsEmpty,
         "Failed for indices: {:?}",
         &[0]
@@ -569,11 +551,7 @@ fn multi_proof_verification_one_leaf() {
     let leaves_hashes_map = indices_to_map(&leaves_indices, &leaves);
 
     assert!(
-        multi_proof
-            .into_values()
-            .verify(leaves_hashes_map, t.root())
-            .unwrap()
-            .passed_trivially(),
+        multi_proof.into_values().verify(leaves_hashes_map, t.root()).unwrap().passed_trivially(),
         "Failed for indices: {:?}",
         leaves_indices
     );
@@ -721,10 +699,7 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[u32]| {
-        leaves_indices
-            .iter()
-            .map(|i| (*i, leaves[*i as usize]))
-            .collect::<BTreeMap<_, _>>()
+        leaves_indices.iter().map(|i| (*i, leaves[*i as usize])).collect::<BTreeMap<_, _>>()
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
@@ -782,10 +757,7 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[u32]| {
-        leaves_indices
-            .iter()
-            .map(|i| (*i, leaves[*i as usize]))
-            .collect::<BTreeMap<_, _>>()
+        leaves_indices.iter().map(|i| (*i, leaves[*i as usize])).collect::<BTreeMap<_, _>>()
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)

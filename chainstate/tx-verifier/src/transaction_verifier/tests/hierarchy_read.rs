@@ -56,11 +56,7 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         .with(eq(outpoint0.clone()))
         .times(2)
         .return_const(Ok(Some(utxo0.clone())));
-    store
-        .expect_get_utxo()
-        .with(eq(outpoint2.clone()))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_utxo().with(eq(outpoint2.clone())).times(1).return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier =
@@ -136,11 +132,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         .with(eq(block_undo_id_0))
         .times(2)
         .return_const(Ok(Some(block_undo_0.clone())));
-    store
-        .expect_get_undo_data()
-        .with(eq(block_undo_id_2))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_undo_data().with(eq(block_undo_id_2)).times(1).return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier =
@@ -280,11 +272,7 @@ fn hierarchy_test_tokens(#[case] seed: Seed) {
         .with(eq(token_data_0.issuance_tx().get_id()))
         .times(2)
         .return_const(Ok(Some(token_id_0)));
-    store
-        .expect_get_token_aux_data()
-        .with(eq(token_id_2))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_token_aux_data().with(eq(token_id_2)).times(1).return_const(Ok(None));
     store
         .expect_get_token_id_from_issuance_tx()
         .with(eq(token_data_2.issuance_tx().get_id()))
@@ -437,16 +425,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         .with(eq(pool_id_0))
         .times(2)
         .return_const(Ok(Some(pool_balance0)));
-    store
-        .expect_get_pool_balance()
-        .with(eq(pool_id_1))
-        .times(3)
-        .return_const(Ok(None));
-    store
-        .expect_get_pool_balance()
-        .with(eq(pool_id_2))
-        .times(3)
-        .return_const(Ok(None));
+    store.expect_get_pool_balance().with(eq(pool_id_1)).times(3).return_const(Ok(None));
+    store.expect_get_pool_balance().with(eq(pool_id_2)).times(3).return_const(Ok(None));
 
     store
         .expect_get_pool_data()
@@ -456,16 +436,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
     store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
 
-    store
-        .expect_get_accounting_undo()
-        .with(eq(block_undo_id_0))
-        .times(2)
-        .return_const(Ok(None));
-    store
-        .expect_get_accounting_undo()
-        .with(eq(block_undo_id_2))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_accounting_undo().with(eq(block_undo_id_0)).times(2).return_const(Ok(None));
+    store.expect_get_accounting_undo().with(eq(block_undo_id_2)).times(1).return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier =
@@ -569,11 +541,7 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
         .with(eq(account0))
         .times(2)
         .return_const(Ok(Some(nonce0)));
-    store
-        .expect_get_account_nonce_count()
-        .with(eq(account2))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_account_nonce_count().with(eq(account2)).times(1).return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier =

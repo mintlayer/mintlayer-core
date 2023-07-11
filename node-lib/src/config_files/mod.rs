@@ -174,18 +174,15 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         cookie_file,
     } = config;
 
-    let http_bind_address = options
-        .http_rpc_addr
-        .unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
+    let http_bind_address =
+        options.http_rpc_addr.unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
     let http_enabled = options
         .http_rpc_enabled
         .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
-    let ws_bind_address = options
-        .ws_rpc_addr
-        .unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
-    let ws_enabled = options
-        .ws_rpc_enabled
-        .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
+    let ws_bind_address =
+        options.ws_rpc_addr.unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
+    let ws_enabled =
+        options.ws_rpc_enabled.unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
     let username = username.or(options.rpc_username.clone());
     let password = password.or(options.rpc_password.clone());
     let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());

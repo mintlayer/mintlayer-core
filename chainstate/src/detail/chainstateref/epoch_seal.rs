@@ -86,9 +86,7 @@ fn advance_epoch_seal<S: BlockchainStorageWrite>(
         let epoch_undo = db.batch_write_delta(epoch_delta).map_err(BlockError::from).log_err()?;
 
         // store undo delta for sealed epoch
-        db_tx
-            .set_accounting_epoch_undo_delta(epoch_index_to_seal, &epoch_undo)
-            .log_err()?;
+        db_tx.set_accounting_epoch_undo_delta(epoch_index_to_seal, &epoch_undo).log_err()?;
     }
 
     Ok(())
@@ -156,11 +154,8 @@ where
     S: EpochStorageRead,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
-    let reward_output = block
-        .block_reward()
-        .outputs()
-        .get(0)
-        .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
+    let reward_output =
+        block.block_reward().outputs().get(0).ok_or(SpendStakeError::NoBlockRewardOutputs)?;
 
     let vrf_pub_key = match reward_output {
         TxOutput::Transfer(_, _)

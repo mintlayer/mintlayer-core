@@ -450,10 +450,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBIssuanceTxVsTokenId, _>()
-            .del(&issuance_tx_id)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBIssuanceTxVsTokenId, _>().del(&issuance_tx_id).map_err(Into::into)
     }
 
     fn set_accounting_undo_data(
@@ -477,10 +474,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingEpochDelta, _>()
-            .del(epoch_index)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingEpochDelta, _>().del(epoch_index).map_err(Into::into)
     }
 
     fn set_accounting_epoch_undo_delta(
@@ -492,10 +486,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingEpochDeltaUndo, _>()
-            .del(epoch_index)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingEpochDeltaUndo, _>().del(epoch_index).map_err(Into::into)
     }
 
     fn set_account_nonce_count(
@@ -549,10 +540,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
     }
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolBalancesTip, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingPoolBalancesTip, _>().del(pool_id).map_err(Into::into)
     }
 
     fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
@@ -560,10 +548,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
     }
 
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDataTip, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingPoolDataTip, _>().del(pool_id).map_err(Into::into)
     }
 
     fn set_delegation_balance(
@@ -626,10 +611,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
     }
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolBalancesSealed, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingPoolBalancesSealed, _>().del(pool_id).map_err(Into::into)
     }
 
     fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
@@ -637,10 +619,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
     }
 
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDataSealed, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingPoolDataSealed, _>().del(pool_id).map_err(Into::into)
     }
 
     fn set_delegation_balance(

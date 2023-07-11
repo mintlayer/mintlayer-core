@@ -95,9 +95,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         assert!(verifier
             .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
             .unwrap());
-        verifier
-            .disconnect_transaction(&TransactionSource::Chain(block_id), tx)
-            .unwrap();
+        verifier.disconnect_transaction(&TransactionSource::Chain(block_id), tx).unwrap();
     });
 }
 
@@ -122,12 +120,8 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .build();
         let tx0_id = tx0.transaction().get_id();
 
-        let best_block = tf
-            .make_block_builder()
-            .add_transaction(tx0)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let best_block =
+            tf.make_block_builder().add_transaction(tx0).build_and_process().unwrap().unwrap();
 
         let mut verifier =
             TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
@@ -145,9 +139,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             ))
             .build();
 
-        verifier
-            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp(), None)
-            .unwrap();
+        verifier.connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp(), None).unwrap();
 
         // create and connect a tx from mempool based on previous tx from mempool
         let tx2 = TransactionBuilder::new()
@@ -161,9 +153,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             ))
             .build();
 
-        verifier
-            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp(), None)
-            .unwrap();
+        verifier.connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp(), None).unwrap();
 
         {
             // derived verifier that didn't connect a tx should not be able to disconnect it

@@ -141,10 +141,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRwUnlocked = StoreTxRwUnlocked<'tx, B>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoLocked> {
-        self.storage
-            .transaction_ro()
-            .map_err(crate::Error::from)
-            .map(|tx| StoreTxRo::new(tx))
+        self.storage.transaction_ro().map_err(crate::Error::from).map(|tx| StoreTxRo::new(tx))
     }
 
     fn transaction_ro_unlocked<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoUnlocked> {
@@ -162,10 +159,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRwLocked> {
-        self.storage
-            .transaction_rw(size)
-            .map_err(crate::Error::from)
-            .map(|tx| StoreTxRw::new(tx))
+        self.storage.transaction_rw(size).map_err(crate::Error::from).map(|tx| StoreTxRw::new(tx))
     }
 
     fn transaction_rw_unlocked<'st: 'tx>(

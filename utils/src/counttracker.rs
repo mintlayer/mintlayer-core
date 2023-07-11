@@ -49,8 +49,7 @@ where
     <T as Atomic>::Type: Zero,
 {
     fn drop(&mut self) {
-        self.source
-            .fetch_sub(<T as Atomic>::Type::one(), std::sync::atomic::Ordering::Release);
+        self.source.fetch_sub(<T as Atomic>::Type::one(), std::sync::atomic::Ordering::Release);
     }
 }
 

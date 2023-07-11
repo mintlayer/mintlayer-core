@@ -37,9 +37,8 @@ fn check_mine_methods(#[case] public: &str) {
 
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
-    let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let mut key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     key_chain.top_up_all(&mut db_tx).unwrap();
     db_tx.commit().unwrap();
 

@@ -73,10 +73,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_utxo_undo_data()
         .with(eq(TransactionSource::Chain(block_1_id)), eq(block_1_undo.clone()))
@@ -139,10 +136,7 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_1.clone()))
@@ -207,10 +201,7 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -286,16 +277,8 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
-    store
-        .expect_get_utxo()
-        .with(eq(outpoint1.clone()))
-        .times(1)
-        .return_const(Ok(Some(utxo1)));
-    store
-        .expect_get_utxo()
-        .with(eq(outpoint2.clone()))
-        .times(1)
-        .return_const(Ok(Some(utxo2)));
+    store.expect_get_utxo().with(eq(outpoint1.clone())).times(1).return_const(Ok(Some(utxo1)));
+    store.expect_get_utxo().with(eq(outpoint2.clone())).times(1).return_const(Ok(Some(utxo2)));
 
     store
         .expect_del_utxo_undo_data()
@@ -308,10 +291,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -359,20 +339,9 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
-    store
-        .expect_del_mainchain_tx_index()
-        .with(eq(outpoint1.clone()))
-        .times(1)
-        .return_const(Ok(()));
-    store
-        .expect_del_mainchain_tx_index()
-        .with(eq(outpoint2.clone()))
-        .times(1)
-        .return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_del_mainchain_tx_index().with(eq(outpoint1.clone())).times(1).return_const(Ok(()));
+    store.expect_del_mainchain_tx_index().with(eq(outpoint2.clone())).times(1).return_const(Ok(()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -420,20 +389,9 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
-    store
-        .expect_del_token_aux_data()
-        .with(eq(token_id_1))
-        .times(1)
-        .return_const(Ok(()));
-    store
-        .expect_del_token_aux_data()
-        .with(eq(token_id_2))
-        .times(1)
-        .return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_del_token_aux_data().with(eq(token_id_1)).times(1).return_const(Ok(()));
+    store.expect_del_token_aux_data().with(eq(token_id_2)).times(1).return_const(Ok(()));
     store.expect_del_token_id().with(eq(tx_id_1)).times(1).return_const(Ok(()));
     store.expect_del_token_id().with(eq(tx_id_2)).times(1).return_const(Ok(()));
 
@@ -481,10 +439,7 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -555,10 +510,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -608,10 +560,7 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_2.clone()))
@@ -670,10 +619,7 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -744,21 +690,10 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
-    store
-        .expect_get_pool_balance()
-        .with(eq(pool_id_1))
-        .times(1)
-        .return_const(Ok(None));
-    store
-        .expect_get_pool_balance()
-        .with(eq(pool_id_2))
-        .times(1)
-        .return_const(Ok(None));
+    store.expect_get_pool_balance().with(eq(pool_id_1)).times(1).return_const(Ok(None));
+    store.expect_get_pool_balance().with(eq(pool_id_2)).times(1).return_const(Ok(None));
 
     store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
     store.expect_get_pool_data().with(eq(pool_id_2)).times(1).return_const(Ok(None));
@@ -812,10 +747,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
     store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
@@ -900,10 +832,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
 
     store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
@@ -973,10 +902,7 @@ fn nonce_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_account_nonce_count()
         .with(eq(account1), eq(nonce1))
@@ -1026,20 +952,9 @@ fn nonce_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store
-        .expect_batch_write_delta()
-        .times(1)
-        .return_const(Ok(DeltaMergeUndo::new()));
-    store
-        .expect_del_account_nonce_count()
-        .with(eq(account0))
-        .times(1)
-        .return_const(Ok(()));
-    store
-        .expect_del_account_nonce_count()
-        .with(eq(account1))
-        .times(1)
-        .return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(DeltaMergeUndo::new()));
+    store.expect_del_account_nonce_count().with(eq(account0)).times(1).return_const(Ok(()));
+    store.expect_del_account_nonce_count().with(eq(account1)).times(1).return_const(Ok(()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));

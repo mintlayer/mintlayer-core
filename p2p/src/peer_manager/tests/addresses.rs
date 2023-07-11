@@ -348,10 +348,8 @@ async fn resend_own_addresses() {
     // PeerManager should resend own addresses
     let mut listening_addresses = listening_addresses.into_iter().collect::<BTreeSet<_>>();
     while !listening_addresses.is_empty() {
-        let event = tokio::time::timeout(Duration::from_secs(60), cmd_rx.recv())
-            .await
-            .unwrap()
-            .unwrap();
+        let event =
+            tokio::time::timeout(Duration::from_secs(60), cmd_rx.recv()).await.unwrap().unwrap();
 
         if let Command::SendMessage {
             peer: _,

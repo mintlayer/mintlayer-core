@@ -46,9 +46,8 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
 
@@ -80,10 +79,8 @@ async fn unknown_prev_block(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_timestamp() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut handle =
+        SyncManagerHandle::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -126,10 +123,8 @@ async fn invalid_consensus_data() {
             .net_upgrades(NetUpgrades::new(ChainType::Mainnet))
             .build(),
     );
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut handle =
+        SyncManagerHandle::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -171,9 +166,8 @@ async fn unconnected_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block = tf.make_block_builder().build();
     let orphan_block = tf.make_block_builder().with_parent(block.get_id().into()).build();
 
@@ -248,9 +242,8 @@ async fn valid_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block = tf.make_block_builder().build();
 
     let mut handle = SyncManagerHandle::builder()

@@ -55,9 +55,9 @@ pub enum NodeType {
 impl From<NodeType> for Services {
     fn from(t: NodeType) -> Self {
         match t {
-            NodeType::Full => [Service::Blocks, Service::Transactions, Service::PeerAddresses]
-                .as_slice()
-                .into(),
+            NodeType::Full => {
+                [Service::Blocks, Service::Transactions, Service::PeerAddresses].as_slice().into()
+            }
             NodeType::BlocksOnly => [Service::Blocks].as_slice().into(),
             NodeType::DnsServer => [Service::PeerAddresses].as_slice().into(),
             NodeType::Inactive => [].as_slice().into(),

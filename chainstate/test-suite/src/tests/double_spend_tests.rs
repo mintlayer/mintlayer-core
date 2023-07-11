@@ -131,10 +131,8 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
         let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
-        let block = tf
-            .make_block_builder()
-            .with_transactions(vec![first_tx, second_tx, third_tx])
-            .build();
+        let block =
+            tf.make_block_builder().with_transactions(vec![first_tx, second_tx, third_tx]).build();
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),

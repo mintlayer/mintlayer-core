@@ -327,9 +327,7 @@ pub fn create_chain_config_with_staking_pool(
     );
 
     let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
-    ConfigBuilder::new(ChainType::Regtest)
-        .net_upgrades(net_upgrades)
-        .genesis_custom(genesis)
+    ConfigBuilder::new(ChainType::Regtest).net_upgrades(net_upgrades).genesis_custom(genesis)
 }
 
 pub fn produce_kernel_signature(

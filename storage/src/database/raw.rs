@@ -72,9 +72,7 @@ impl<Sch: Schema> DbMapId<Sch> {
 
     /// Get index info
     pub fn info(&self) -> storage_core::DbMapDesc {
-        Sch::desc_iter()
-            .nth(self.idx.as_usize())
-            .expect("index to be in range due to schema")
+        Sch::desc_iter().nth(self.idx.as_usize()).expect("index to be in range due to schema")
     }
 
     /// Get map name at this index

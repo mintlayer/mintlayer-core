@@ -70,36 +70,28 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
-        self.storage
-            .get_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.storage.get_mainchain_tx_index(tx_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
-        self.storage
-            .get_token_aux_data(token_id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.storage.get_token_aux_data(token_id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
     ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
-        self.storage
-            .get_accounting_undo(id)
-            .map_err(TransactionVerifierStorageError::from)
+        self.storage.get_accounting_undo(id).map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_account_nonce_count(
         &self,
         account: AccountType,
     ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
-        self.storage
-            .get_account_nonce_count(account)
-            .map_err(TransactionVerifierStorageError::from)
+        self.storage.get_account_nonce_count(account).map_err(TransactionVerifierStorageError::from)
     }
 }
 

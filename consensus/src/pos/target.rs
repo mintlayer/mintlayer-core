@@ -56,17 +56,15 @@ where
     let timespan_start_height =
         std::cmp::max(net_version_range.start, block_height_to_stare_averaging);
 
-    let time_span_start = get_ancestor(block_index, timespan_start_height)?
-        .block_timestamp()
-        .as_int_seconds();
+    let time_span_start =
+        get_ancestor(block_index, timespan_start_height)?.block_timestamp().as_int_seconds();
     let current_block_time = block_index.block_timestamp().as_int_seconds();
 
     let timespan_difference = current_block_time
         .checked_sub(time_span_start)
         .ok_or(ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime)?;
-    let blocks_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
-        .expect("cannot be negative")
-        .into();
+    let blocks_in_timespan: i64 =
+        (block_index.block_height() - timespan_start_height).expect("cannot be negative").into();
 
     let average = timespan_difference / blocks_in_timespan as u64;
 
@@ -281,10 +279,7 @@ mod tests {
         }
 
         pub fn get_block_index_by_height(&self, height: BlockHeight) -> Option<&BlockIndex> {
-            self.blocks
-                .iter()
-                .find(|(block_height, _)| height == *block_height)
-                .map(|(_, b)| b)
+            self.blocks.iter().find(|(block_height, _)| height == *block_height).map(|(_, b)| b)
         }
     }
 

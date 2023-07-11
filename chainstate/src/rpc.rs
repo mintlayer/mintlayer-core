@@ -107,9 +107,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {
-        let res = self
-            .call_mut(move |this| this.process_block(block.take(), BlockSource::Local))
-            .await;
+        let res =
+            self.call_mut(move |this| this.process_block(block.take(), BlockSource::Local)).await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
         rpc::handle_result(res)
@@ -158,8 +157,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             std::io::BufWriter::new(Box::new(file_obj));
 
         rpc::handle_result(
-            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
-                .await,
+            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans)).await,
         )
     }
 

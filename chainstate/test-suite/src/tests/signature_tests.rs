@@ -95,10 +95,7 @@ fn signed_tx(#[case] seed: Seed) {
                 .expect("invalid witness count")
         };
 
-        tf.make_block_builder()
-            .with_transactions(vec![tx_1, tx_2])
-            .build_and_process()
-            .unwrap();
+        tf.make_block_builder().with_transactions(vec![tx_1, tx_2]).build_and_process().unwrap();
     });
 }
 
@@ -196,10 +193,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 .expect("invalid witness count")
         };
 
-        tf.make_block_builder()
-            .with_transactions(vec![tx_1, tx_2])
-            .build_and_process()
-            .unwrap();
+        tf.make_block_builder().with_transactions(vec![tx_1, tx_2]).build_and_process().unwrap();
     });
 }
 

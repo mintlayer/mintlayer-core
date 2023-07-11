@@ -28,11 +28,7 @@ use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
 fn get_block_status(tf: &TestFramework, block_id: &Id<Block>) -> BlockStatus {
-    tf.chainstate
-        .get_block_index(block_id)
-        .unwrap()
-        .expect("block index must be present")
-        .status()
+    tf.chainstate.get_block_index(block_id).unwrap().expect("block index must be present").status()
 }
 
 fn some_coins(rng: &mut (impl Rng + CryptoRng)) -> OutputValue {

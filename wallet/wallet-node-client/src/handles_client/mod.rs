@@ -96,10 +96,8 @@ impl NodeInterface for WalletHandlesClient {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        let result = self
-            .chainstate
-            .call(move |this| this.get_block_id_from_height(&height))
-            .await??;
+        let result =
+            self.chainstate.call(move |this| this.get_block_id_from_height(&height)).await??;
         Ok(result)
     }
 
@@ -174,9 +172,7 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
     async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
-        self.p2p
-            .call_async_mut(move |this| this.remove_reserved_node(address))
-            .await??;
+        self.p2p.call_async_mut(move |this| this.remove_reserved_node(address)).await??;
         Ok(())
     }
 }

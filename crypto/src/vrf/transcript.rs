@@ -92,10 +92,8 @@ mod tests {
 
         // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
-        let mut g2 = assembled_transcript
-            .0
-            .build_rng()
-            .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+        let mut g2 =
+            assembled_transcript.0.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
 
         for _ in 0..100 {
             assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());

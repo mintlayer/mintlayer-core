@@ -179,9 +179,7 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Disconnected` event.
     pub fn disconnect_peer(&mut self, peer: PeerId) {
-        self.sync_event_sender
-            .send(SyncingEvent::Disconnected { peer_id: peer })
-            .unwrap();
+        self.sync_event_sender.send(SyncingEvent::Disconnected { peer_id: peer }).unwrap();
         self.connected_peers.lock().unwrap().remove(&peer);
     }
 
@@ -242,9 +240,7 @@ impl SyncManagerHandle {
 
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
-            .await
-            .unwrap_err();
+        time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv()).await.unwrap_err();
     }
 
     /// Panics if the sync manager sends an event (message or announcement).
@@ -278,11 +274,7 @@ impl SyncManagerHandle {
 
 pub async fn sync_managers_in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
     let best_blocks = futures::future::join_all(managers.iter().map(|manager| async {
-        manager
-            .chainstate()
-            .call(|this| this.get_best_block_id().unwrap())
-            .await
-            .unwrap()
+        manager.chainstate().call(|this| this.get_best_block_id().unwrap()).await.unwrap()
     }))
     .await;
     best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
@@ -300,9 +292,7 @@ pub async fn try_sync_managers_once(
         // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
         let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
         let requested_txid = get_random_hash(rng).into();
-        manager
-            .send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
-            .await;
+        manager.send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid)).await;
 
         if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
             // There should be no peer scoring or disconnections
@@ -346,9 +336,7 @@ pub async fn sync_managers(rng: &mut impl Rng, managers: &mut [&mut SyncManagerH
         }
     };
 
-    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper)
-        .await
-        .unwrap();
+    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper).await.unwrap();
 }
 
 pub struct SyncManagerHandleBuilder {

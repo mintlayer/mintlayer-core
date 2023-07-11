@@ -23,11 +23,8 @@ fn main() {
         let test_root = test_root.clone();
         move || {
             // Each test case gets its own subdirectory to avoid clashes
-            let db_file_path = test_root
-                .fresh_test_dir("unknown")
-                .as_ref()
-                .to_path_buf()
-                .join("database.sqlite");
+            let db_file_path =
+                test_root.fresh_test_dir("unknown").as_ref().to_path_buf().join("database.sqlite");
             Sqlite::new(db_file_path).with_options(storage_sqlite::Options { disable_fsync: true })
         }
     };

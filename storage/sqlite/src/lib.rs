@@ -73,10 +73,8 @@ impl<'m> DbTx<'m> {
     }
 
     fn commit_transaction(&self) -> storage_core::Result<()> {
-        let _res = self
-            .connection
-            .execute("COMMIT TRANSACTION", ())
-            .map_err(process_sqlite_error)?;
+        let _res =
+            self.connection.execute("COMMIT TRANSACTION", ()).map_err(process_sqlite_error)?;
         Ok(())
     }
 }

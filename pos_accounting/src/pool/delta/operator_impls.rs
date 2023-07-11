@@ -69,9 +69,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
     }
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error> {
-        let last_data = self
-            .get_pool_data(pool_id)?
-            .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
+        let last_data =
+            self.get_pool_data(pool_id)?.ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
         let last_amount = self
             .get_pool_balance(pool_id)?
@@ -95,9 +94,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_data = self
-            .get_pool_data(pool_id)?
-            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
+        let pool_data =
+            self.get_pool_data(pool_id)?.ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
@@ -304,9 +302,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         self.get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        self.data
-            .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, *undo_data)?;
+        self.data.delegation_data.undo_merge_delta_data_element(undo.delegation_id, *undo_data)?;
 
         Ok(())
     }
@@ -321,9 +317,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
             return Err(Error::DelegationDeletionFailedBalanceNonZero);
         }
 
-        self.data
-            .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, undo_data)?;
+        self.data.delegation_data.undo_merge_delta_data_element(undo.delegation_id, undo_data)?;
 
         Ok(())
     }

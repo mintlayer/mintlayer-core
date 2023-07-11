@@ -183,10 +183,7 @@ impl Options {
 
     /// Returns a path to the config file
     pub fn config_path(&self, chain_type: ChainType) -> PathBuf {
-        self.data_dir
-            .clone()
-            .unwrap_or_else(|| default_data_dir(chain_type))
-            .join(CONFIG_NAME)
+        self.data_dir.clone().unwrap_or_else(|| default_data_dir(chain_type)).join(CONFIG_NAME)
     }
 }
 

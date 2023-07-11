@@ -139,9 +139,7 @@ pub mod test {
         let mut collection =
             DeltaAmountCollection { data: BTreeMap::from([('a', SignedAmount::from_atoms(2))]) };
 
-        collection
-            .merge_delta_amount_element('a', SignedAmount::from_atoms(-1))
-            .unwrap();
+        collection.merge_delta_amount_element('a', SignedAmount::from_atoms(-1)).unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(collection.data.get(&'a').unwrap(), &SignedAmount::from_atoms(1))
     }
@@ -169,9 +167,7 @@ pub mod test {
         let mut collection =
             DeltaAmountCollection { data: BTreeMap::from([('a', SignedAmount::from_atoms(1))]) };
 
-        collection
-            .merge_delta_amount_element('a', SignedAmount::from_atoms(-1))
-            .unwrap();
+        collection.merge_delta_amount_element('a', SignedAmount::from_atoms(-1)).unwrap();
         assert!(collection.data.is_empty());
     }
 

@@ -104,11 +104,8 @@ type KeyChainResult<T> = Result<T, KeyChainError>;
 /// Create a deterministic path for an account identified by the `account_index`
 pub fn make_account_path(chain_config: &ChainConfig, account_index: U31) -> DerivationPath {
     // The path is m/44'/<coin_type>'/<account_index>'
-    let path = vec![
-        BIP44_PATH,
-        chain_config.bip44_coin_type(),
-        ChildNumber::from_hardened(account_index),
-    ];
+    let path =
+        vec![BIP44_PATH, chain_config.bip44_coin_type(), ChildNumber::from_hardened(account_index)];
     debug_assert!(path.iter().all(ChildNumber::is_hardened));
     path.try_into().expect("Path creation should not fail")
 }

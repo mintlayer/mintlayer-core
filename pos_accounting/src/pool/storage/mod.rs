@@ -287,10 +287,8 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         delegation_id: DelegationId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
-        let current_amount = self
-            .store
-            .get_pool_delegation_share(pool_id, delegation_id)?
-            .unwrap_or(Amount::ZERO);
+        let current_amount =
+            self.store.get_pool_delegation_share(pool_id, delegation_id)?.unwrap_or(Amount::ZERO);
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
         self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;

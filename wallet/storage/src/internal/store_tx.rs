@@ -371,10 +371,7 @@ macro_rules! impl_write_ops {
             }
 
             fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()> {
-                self.storage
-                    .get_mut::<db::DBKeychainUsageStates, _>()
-                    .del(id)
-                    .map_err(Into::into)
+                self.storage.get_mut::<db::DBKeychainUsageStates, _>().del(id).map_err(Into::into)
             }
 
             fn set_public_key(
@@ -419,8 +416,7 @@ impl_write_ops!(StoreTxRwUnlocked);
 
 impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocked<'st, B> {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
-        self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
-            .map_err(Into::into)
+        self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt).map_err(Into::into)
     }
     fn del_encryption_kdf_challenge(&mut self) -> crate::Result<()> {
         self.delete_value::<well_known::EncryptionKeyKdfChallenge>().map_err(Into::into)
@@ -455,10 +451,7 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
     }
 
     fn del_root_key(&mut self) -> crate::Result<()> {
-        self.storage
-            .get_mut::<db::DBRootKeys, _>()
-            .del(&RootKeyConstant {})
-            .map_err(Into::into)
+        self.storage.get_mut::<db::DBRootKeys, _>().del(&RootKeyConstant {}).map_err(Into::into)
     }
 }
 

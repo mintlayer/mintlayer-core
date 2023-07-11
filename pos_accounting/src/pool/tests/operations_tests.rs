@@ -296,9 +296,7 @@ fn spend_share_unknown_id(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta
-                .spend_share_from_delegation_id(delegation_id, delegated_amount)
-                .unwrap_err(),
+            delta.spend_share_from_delegation_id(delegation_id, delegated_amount).unwrap_err(),
             Error::InvariantErrorDelegationUndoFailedDataNotFound
         );
     }

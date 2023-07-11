@@ -195,10 +195,7 @@ impl Script {
 
     /// Generates P2PK-type of scriptPubkey
     pub fn new_p2pk(pubkey: &[u8]) -> Script {
-        Builder::new()
-            .push_slice(pubkey)
-            .push_opcode(opcodes::all::OP_CHECKSIG)
-            .into_script()
+        Builder::new().push_slice(pubkey).push_opcode(opcodes::all::OP_CHECKSIG).into_script()
     }
 
     /// Generates P2PKH-type of scriptPubkey
@@ -223,10 +220,7 @@ impl Script {
 
     /// Generates OP_RETURN-type of scriptPubkey for a given data
     pub fn new_op_return(data: &[u8]) -> Script {
-        Builder::new()
-            .push_opcode(opcodes::all::OP_RETURN)
-            .push_slice(data)
-            .into_script()
+        Builder::new().push_opcode(opcodes::all::OP_RETURN).push_slice(data).into_script()
     }
 
     /// The length in bytes of the script
@@ -851,26 +845,20 @@ mod test {
         let equal2 = Builder::from(vec![0x87]).push_verify().into_script();
         assert_eq!(format!("{equal2:x}"), "88");
 
-        let numequal = Builder::new()
-            .push_opcode(opcodes::all::OP_NUMEQUAL)
-            .push_verify()
-            .into_script();
+        let numequal =
+            Builder::new().push_opcode(opcodes::all::OP_NUMEQUAL).push_verify().into_script();
         assert_eq!(format!("{numequal:x}"), "9d");
         let numequal2 = Builder::from(vec![0x9c]).push_verify().into_script();
         assert_eq!(format!("{numequal2:x}"), "9d");
 
-        let checksig = Builder::new()
-            .push_opcode(opcodes::all::OP_CHECKSIG)
-            .push_verify()
-            .into_script();
+        let checksig =
+            Builder::new().push_opcode(opcodes::all::OP_CHECKSIG).push_verify().into_script();
         assert_eq!(format!("{checksig:x}"), "ad");
         let checksig2 = Builder::from(vec![0xac]).push_verify().into_script();
         assert_eq!(format!("{checksig2:x}"), "ad");
 
-        let checkmultisig = Builder::new()
-            .push_opcode(opcodes::all::OP_CHECKMULTISIG)
-            .push_verify()
-            .into_script();
+        let checkmultisig =
+            Builder::new().push_opcode(opcodes::all::OP_CHECKMULTISIG).push_verify().into_script();
         assert_eq!(format!("{checkmultisig:x}"), "af");
         let checkmultisig2 = Builder::from(vec![0xae]).push_verify().into_script();
         assert_eq!(format!("{checkmultisig2:x}"), "af");

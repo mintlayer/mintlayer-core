@@ -338,8 +338,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
-        self.get_account(account_index)?
-            .get_balance(utxo_types, self.latest_median_time)
+        self.get_account(account_index)?.get_balance(utxo_types, self.latest_median_time)
     }
 
     pub fn get_utxos(
@@ -349,10 +348,8 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(utxo_types, self.latest_median_time);
-        let utxos = utxos
-            .into_iter()
-            .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
-            .collect();
+        let utxos =
+            utxos.into_iter().map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone())).collect();
         Ok(utxos)
     }
 
@@ -402,8 +399,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?
-            .get_pos_gen_block_data(&db_tx, self.latest_median_time)
+        self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, self.latest_median_time)
     }
 
     /// Returns the last scanned block hash and height.
@@ -453,28 +449,18 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
-        let account = self
-            .unsynced_accounts
-            .values_mut()
-            .next()
-            .ok_or(WalletError::NoUnsyncedAccount)?;
+        let account =
+            self.unsynced_accounts.values_mut().next().ok_or(WalletError::NoUnsyncedAccount)?;
 
         account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
 
         db_tx.commit()?;
 
-        let synced_best_block_height = self
-            .accounts
-            .values()
-            .next()
-            .ok_or(WalletError::WalletNotInitialized)?
-            .best_block()
-            .1;
+        let synced_best_block_height =
+            self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?.best_block().1;
 
         if account.best_block().1 == synced_best_block_height {
-            self.unsynced_accounts
-                .pop_first()
-                .map(|(index, acc)| self.accounts.insert(index, acc));
+            self.unsynced_accounts.pop_first().map(|(index, acc)| self.accounts.insert(index, acc));
         }
 
         Ok(())

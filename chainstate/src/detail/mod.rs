@@ -165,15 +165,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             time_getter,
         );
 
-        chainstate
-            .process_tx_index_enabled_flag()
-            .map_err(crate::ChainstateError::from)?;
+        chainstate.process_tx_index_enabled_flag().map_err(crate::ChainstateError::from)?;
 
         if best_block_id.is_none() {
-            chainstate
-                .process_genesis()
-                .map_err(ChainstateError::ProcessBlockError)
-                .log_err()?;
+            chainstate.process_genesis().map_err(ChainstateError::ProcessBlockError).log_err()?;
         } else {
             chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
         }
@@ -216,9 +211,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let block1_id = dbtx
             .get_block_id_by_height(&BlockHeight::new(1))?
             .ok_or(InitializationError::Block1Missing)?;
-        let block1 = dbtx
-            .get_block(Id::new(block1_id.get()))?
-            .ok_or(InitializationError::Block1Missing)?;
+        let block1 =
+            dbtx.get_block(Id::new(block1_id.get()))?.ok_or(InitializationError::Block1Missing)?;
         let stored_genesis_id = block1.prev_block_id();
 
         // Check storage genesis ID matches chain config genesis ID
@@ -232,11 +226,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Check that transaction index state is consistent between DB and config.
     fn process_tx_index_enabled_flag(&mut self) -> Result<(), BlockError> {
-        let mut db_tx = self
-            .chainstate_storage
-            .transaction_rw(None)
-            .map_err(BlockError::from)
-            .log_err()?;
+        let mut db_tx =
+            self.chainstate_storage.transaction_rw(None).map_err(BlockError::from).log_err()?;
 
         let tx_index_enabled = db_tx
             .get_is_mainchain_tx_index_enabled()
@@ -533,15 +524,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
-        let mut db_tx = self
-            .chainstate_storage
-            .transaction_rw(None)
-            .map_err(BlockError::from)
-            .log_err()?;
-        db_tx
-            .set_best_block_id(&genesis_id)
-            .map_err(BlockError::StorageError)
-            .log_err()?;
+        let mut db_tx =
+            self.chainstate_storage.transaction_rw(None).map_err(BlockError::from).log_err()?;
+        db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError).log_err()?;
         db_tx
             .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
             .map_err(BlockError::StorageError)

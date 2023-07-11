@@ -53,9 +53,9 @@ pub fn set(now: Duration) -> Result<(), std::num::TryFromIntError> {
 pub fn get_time() -> Duration {
     match get_mocked_time() {
         Some(mocked_time) => mocked_time,
-        None => SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards"),
+        None => {
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("Time went backwards")
+        }
     }
 }
 

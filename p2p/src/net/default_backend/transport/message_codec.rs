@@ -129,9 +129,7 @@ mod tests {
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
-        EncoderDecoder::new(rng.gen_range(64..128))
-            .encode(message.clone(), &mut buf)
-            .unwrap();
+        EncoderDecoder::new(rng.gen_range(64..128)).encode(message.clone(), &mut buf).unwrap();
         assert!(buf.len() > HEADER_LEN);
         let message_length = buf.len() - HEADER_LEN;
 
@@ -156,9 +154,7 @@ mod tests {
             .into(),
         });
         let mut encoded = BytesMut::new();
-        EncoderDecoder::new(rng.gen_range(126..512))
-            .encode(message, &mut encoded)
-            .unwrap();
+        EncoderDecoder::new(rng.gen_range(126..512)).encode(message, &mut encoded).unwrap();
 
         let mut decoder = EncoderDecoder::new(rng.gen_range(0..(encoded.len() - HEADER_LEN)));
         assert_eq!(

@@ -74,12 +74,8 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
         let block = tf.block(*block_index.block_id());
         assert_eq!(
             get_output_value(&block.transactions()[0].outputs()[0]).unwrap(),
@@ -266,12 +262,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let first_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
 
         let block = tf.block(*block_index.block_id());
         let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
@@ -317,12 +309,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let second_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
 
         let block = tf.block(*block_index.block_id());
         let _ = token_id(block.transactions()[0].transaction()).unwrap();
@@ -409,12 +397,8 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
         assert_eq!(

@@ -69,8 +69,7 @@ fn create_pool(
         UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))), 0);
     let pool_data = create_pool_data(rng, destination, pledged_amount);
     let pool_id = make_pool_id(&outpoint);
-    op.create_pool(pool_id, pool_data.clone())
-        .map(|undo| (pool_id, pool_data, undo))
+    op.create_pool(pool_id, pool_data.clone()).map(|undo| (pool_id, pool_data, undo))
 }
 
 fn create_delegation_id(

@@ -156,18 +156,16 @@ impl<T: Ord> NetUpgrades<T> {
     }
 
     pub fn height_range(&self, version: &T) -> Option<Range<BlockHeight>> {
-        self.0
-            .iter()
-            .enumerate()
-            .find(|(_, (_, elem_version))| elem_version == version)
-            .map(|(idx, &(start_h, _))| {
+        self.0.iter().enumerate().find(|(_, (_, elem_version))| elem_version == version).map(
+            |(idx, &(start_h, _))| {
                 let end_h = if (idx + 1) < self.0.len() {
                     self.0[idx + 1].0
                 } else {
                     BlockHeight::max()
                 };
                 start_h..end_h
-            })
+            },
+        )
     }
 
     pub fn version_at_height(&self, height: BlockHeight) -> Option<&(BlockHeight, T)> {

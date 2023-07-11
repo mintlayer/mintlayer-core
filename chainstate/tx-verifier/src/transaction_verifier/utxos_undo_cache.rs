@@ -113,9 +113,7 @@ impl UtxosBlockUndoCache {
         if block_undo.has_children_of(tx_id) {
             Err(ConnectTransactionError::TxUndoWithDependency(*tx_id))
         } else {
-            block_undo
-                .take_tx_undo(tx_id)
-                .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id))
+            block_undo.take_tx_undo(tx_id).ok_or(ConnectTransactionError::MissingTxUndo(*tx_id))
         }
     }
 

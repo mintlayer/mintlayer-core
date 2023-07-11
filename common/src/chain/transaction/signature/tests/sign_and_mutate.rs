@@ -291,13 +291,8 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let mutations = [
-        add_output,
-        mutate_output,
-        remove_first_output,
-        remove_middle_output,
-        remove_last_output,
-    ];
+    let mutations =
+        [add_output, mutate_output, remove_first_output, remove_middle_output, remove_last_output];
     check_mutations(
         &chain_config,
         &mut rng,
@@ -345,13 +340,8 @@ fn mutate_none(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let mutations = [
-        add_input,
-        mutate_first_input,
-        remove_first_input,
-        remove_middle_input,
-        remove_last_input,
-    ];
+    let mutations =
+        [add_input, mutate_first_input, remove_first_input, remove_middle_input, remove_last_input];
     check_mutations(
         &chain_config,
         &mut rng,
@@ -362,13 +352,8 @@ fn mutate_none(#[case] seed: Seed) {
         Err(TransactionSigError::SignatureVerificationFailed),
     );
 
-    let mutations = [
-        add_output,
-        mutate_output,
-        remove_first_output,
-        remove_middle_output,
-        remove_last_output,
-    ];
+    let mutations =
+        [add_output, mutate_output, remove_first_output, remove_middle_output, remove_last_output];
     check_mutations(&chain_config, &mut rng, &tx, &inputs_utxos, &destination, mutations, Ok(()));
 }
 

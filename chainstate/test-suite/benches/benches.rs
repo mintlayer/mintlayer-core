@@ -81,13 +81,11 @@ pub fn pos_reorg(c: &mut Criterion) {
         .create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng, &staking_sk, &vrf_sk)
         .unwrap();
 
-    tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)
-        .unwrap();
+    tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk).unwrap();
 
     c.bench_function("PoS reorg", |b| {
         b.iter(|| {
-            tf.create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk)
-                .unwrap();
+            tf.create_chain_pos(&common_block_id, 101, &mut rng, &staking_sk, &vrf_sk).unwrap();
         })
     });
 }

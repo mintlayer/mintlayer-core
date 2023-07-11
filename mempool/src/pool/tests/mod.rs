@@ -848,10 +848,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // Add first child
     mock_usage.expect_estimate_memory_usage().times(2).return_const(0usize);
     // Add second child, triggering the trimming process
-    mock_usage
-        .expect_estimate_memory_usage()
-        .times(1)
-        .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
+    mock_usage.expect_estimate_memory_usage().times(1).return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
     // After removing one entry, cause the code to exit the loop by showing a small usage
     mock_usage.expect_estimate_memory_usage().return_const(0usize);
 
@@ -1286,12 +1283,8 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 }
 
 fn check_txs_sorted_by_ancestor_score<E>(mempool: &Mempool<E>) {
-    let txs_by_ancestor_score = mempool
-        .store
-        .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
-        .collect::<Vec<_>>();
+    let txs_by_ancestor_score =
+        mempool.store.txs_by_descendant_score.values().flat_map(Deref::deref).collect::<Vec<_>>();
     for i in 0..(txs_by_ancestor_score.len() - 1) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_ancestor_score.get(i).unwrap();
@@ -1403,12 +1396,8 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 }
 
 fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
-    let txs_by_descendant_score = mempool
-        .store
-        .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
-        .collect::<Vec<_>>();
+    let txs_by_descendant_score =
+        mempool.store.txs_by_descendant_score.values().flat_map(Deref::deref).collect::<Vec<_>>();
     for i in 0..(txs_by_descendant_score.len() - 1) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
@@ -1433,10 +1422,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
 
     let mut mock_usage = MockMemoryUsageEstimator::new();
-    mock_usage
-        .expect_estimate_memory_usage()
-        .times(1)
-        .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
+    mock_usage.expect_estimate_memory_usage().times(1).return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chainstate = tf.chainstate();
     let config = Arc::clone(chainstate.get_chain_config());

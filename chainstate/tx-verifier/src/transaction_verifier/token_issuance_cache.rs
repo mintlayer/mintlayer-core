@@ -181,8 +181,7 @@ impl TokenIssuanceCache {
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> Result<(), TokensError> {
-        self.txid_vs_tokenid
-            .insert(*issuance_tx_id, CachedTokenIndexOp::Write(*token_id));
+        self.txid_vs_tokenid.insert(*issuance_tx_id, CachedTokenIndexOp::Write(*token_id));
         Ok(())
     }
 

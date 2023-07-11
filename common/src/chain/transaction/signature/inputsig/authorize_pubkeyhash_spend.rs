@@ -65,9 +65,8 @@ pub fn sign_address_spending(
         return Err(TransactionSigError::PublicKeyToAddressMismatch);
     }
     let msg = sighash.encode();
-    let signature = private_key
-        .sign_message(&msg)
-        .map_err(TransactionSigError::ProducingSignatureFailed)?;
+    let signature =
+        private_key.sign_message(&msg).map_err(TransactionSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
 }

@@ -27,9 +27,7 @@ impl<T: Arbitrary + Clone + 'static> Arbitrary for DataDelta<T> {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        any::<(Option<T>, Option<T>)>()
-            .prop_map(|(x0, x1)| DataDelta::new(x0, x1))
-            .boxed()
+        any::<(Option<T>, Option<T>)>().prop_map(|(x0, x1)| DataDelta::new(x0, x1)).boxed()
     }
 }
 
@@ -115,9 +113,7 @@ fn merge_delta_into_empty_collection(#[case] delta: DataDelta<char>) {
 #[case(new_delta(Some('a'), Some('b')))]
 fn merge_delta_undo_into_empty_collection(#[case] delta: DataDelta<char>) {
     let mut collection: DeltaDataCollection<i32, char> = DeltaDataCollection::new();
-    collection
-        .undo_merge_delta_data_element(0, DataDeltaUndo::new(delta.clone()))
-        .unwrap();
+    collection.undo_merge_delta_data_element(0, DataDeltaUndo::new(delta.clone())).unwrap();
 
     assert_eq!(collection.data.len(), 1);
     assert_eq!(collection.data.into_iter().next().unwrap().1, delta);

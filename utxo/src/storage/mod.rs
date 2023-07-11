@@ -75,9 +75,7 @@ impl<S: UtxosStorageWrite> UtxosDB<S> {
 
         let consumed_utxos_cache = utxos_cache.consume();
 
-        utxos_db
-            .batch_write(consumed_utxos_cache)
-            .expect("Writing genesis utxos failed");
+        utxos_db.batch_write(consumed_utxos_cache).expect("Writing genesis utxos failed");
     }
 }
 

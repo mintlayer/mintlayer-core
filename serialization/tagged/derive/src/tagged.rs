@@ -74,9 +74,8 @@ pub fn derive_tagged(ast: &syn::DeriveInput) -> TokenStream {
         }
     };
 
-    let where_clause = tag_type
-        .map(|ty| quote!(where #ty: ::serialization::tagged::Tagged))
-        .unwrap_or_default();
+    let where_clause =
+        tag_type.map(|ty| quote!(where #ty: ::serialization::tagged::Tagged)).unwrap_or_default();
 
     quote! {
         const _: () = {

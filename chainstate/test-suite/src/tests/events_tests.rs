@@ -144,9 +144,8 @@ fn orphan_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_orphan_error_hook(orphan_error_hook)
-            .build();
+        let mut tf =
+            TestFramework::builder(&mut rng).with_orphan_error_hook(orphan_error_hook).build();
 
         let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.subscribers().is_empty());
@@ -171,9 +170,8 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_orphan_error_hook(orphan_error_hook)
-            .build();
+        let mut tf =
+            TestFramework::builder(&mut rng).with_orphan_error_hook(orphan_error_hook).build();
 
         let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.subscribers().is_empty());

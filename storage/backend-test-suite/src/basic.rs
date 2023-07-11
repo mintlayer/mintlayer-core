@@ -144,12 +144,7 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
 
     // Check for a non-existent prefix
     assert_eq!(
-        store
-            .transaction_ro()
-            .unwrap()
-            .prefix_iter(MAPID.0, b"foo".to_vec())
-            .unwrap()
-            .next(),
+        store.transaction_ro().unwrap().prefix_iter(MAPID.0, b"foo".to_vec()).unwrap().next(),
         None,
     );
 
@@ -174,9 +169,8 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
 // Check for items that are supposed to be present
 fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
     let entries = dbtx.prefix_iter(MAPID.0, prefix).unwrap();
-    let expected = expected
-        .iter()
-        .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
+    let expected =
+        expected.iter().map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
     assert!(entries.eq(expected));
 }
 

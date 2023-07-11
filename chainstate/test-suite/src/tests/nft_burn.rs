@@ -55,12 +55,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
 
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
@@ -142,12 +138,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
 
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
@@ -160,12 +152,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             ))
             .build();
         let first_burn_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        let block_index = tf
-            .make_block_builder()
-            .add_transaction(tx)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_index =
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap().unwrap();
         let block = tf.block(*block_index.block_id());
         assert!(tf
             .outputs_from_genblock(block.get_id().into())

@@ -189,15 +189,12 @@ mod test {
     fn derive_secp256k1schnorr(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, _) = ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
-        let sk1 = sk
-            .clone()
-            .derive_child(ChildNumber::from_hardened(1.try_into().unwrap()))
-            .unwrap();
+        let sk1 =
+            sk.clone().derive_child(ChildNumber::from_hardened(1.try_into().unwrap())).unwrap();
         let sk2 = sk1.derive_child(ChildNumber::from_hardened(2.try_into().unwrap())).unwrap();
         let sk3 = sk2.derive_child(ChildNumber::from_hardened(3.try_into().unwrap())).unwrap();
-        let sk3_alt = sk
-            .derive_absolute_path(&DerivationPath::from_str("m/1h/2h/3h").unwrap())
-            .unwrap();
+        let sk3_alt =
+            sk.derive_absolute_path(&DerivationPath::from_str("m/1h/2h/3h").unwrap()).unwrap();
         assert_eq!(sk3, sk3_alt);
         let sk4 = sk3.derive_child(ChildNumber::from_normal(4.try_into().unwrap())).unwrap();
         let sk4_alt = sk3_alt

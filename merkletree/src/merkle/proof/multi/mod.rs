@@ -129,17 +129,12 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
         let mut computed_from_prev_level = vec![];
         let mut proof = vec![];
 
-        let single_proofs_branches = single_proofs
-            .clone()
-            .into_iter()
-            .map(|sp| sp.branch().to_vec())
-            .collect::<Vec<_>>();
+        let single_proofs_branches =
+            single_proofs.clone().into_iter().map(|sp| sp.branch().to_vec()).collect::<Vec<_>>();
 
         // We expect all proofs to have the same branch lengths
         if !single_proofs_branches.is_empty()
-            && !single_proofs_branches
-                .iter()
-                .all(|v| v.len() == single_proofs_branches[0].len())
+            && !single_proofs_branches.iter().all(|v| v.len() == single_proofs_branches[0].len())
         {
             panic!("Proofs of the same tree are all expected to have the same length")
         }

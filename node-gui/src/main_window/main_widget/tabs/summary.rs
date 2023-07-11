@@ -175,9 +175,8 @@ impl Tab for SummaryTab {
 
         let grid = Grid::with_columns(2);
         let grid = grid.push(Text::new("Best block id ")).push(Text::new(best_id.to_string()));
-        let grid = grid
-            .push(Text::new("Best block height "))
-            .push(Text::new(best_height.to_string()));
+        let grid =
+            grid.push(Text::new("Best block height ")).push(Text::new(best_height.to_string()));
 
         let main_widget: Element<'_, Self::Message> = Column::new()
             .spacing(15)

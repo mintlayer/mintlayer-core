@@ -225,9 +225,7 @@ fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> Tran
 
     let outputs = {
         let output_count = 1 + (rng.next_u32() as usize) % 10;
-        (0..output_count)
-            .map(|_| generate_random_invalid_output(rng))
-            .collect::<Vec<_>>()
+        (0..output_count).map(|_| generate_random_invalid_output(rng)).collect::<Vec<_>>()
     };
 
     let flags = rng.gen::<u128>();
@@ -238,9 +236,7 @@ fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> Tran
 fn generate_random_invalid_block(rng: &mut (impl Rng + CryptoRng)) -> Block {
     let transactions = {
         let transaction_count = rng.next_u32() % 20;
-        (0..transaction_count)
-            .map(|_| generate_random_invalid_transaction(rng))
-            .collect::<Vec<_>>()
+        (0..transaction_count).map(|_| generate_random_invalid_transaction(rng)).collect::<Vec<_>>()
     };
     let transactions = transactions
         .into_iter()

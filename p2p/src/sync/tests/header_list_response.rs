@@ -39,9 +39,8 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let block = tf.make_block_builder().build();
 
     let p2p_config = Arc::new(test_p2p_config());
@@ -55,12 +54,9 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let headers = iter::repeat(block.header().clone())
-        .take(*p2p_config.msg_header_count_limit + 1)
-        .collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    let headers =
+        iter::repeat(block.header().clone()).take(*p2p_config.msg_header_count_limit + 1).collect();
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -81,9 +77,8 @@ async fn unordered_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Skip the header in the middle.
     let headers = create_n_blocks(&mut tf, 3)
         .into_iter()
@@ -101,9 +96,7 @@ async fn unordered_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -121,14 +114,10 @@ async fn disconnected_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let headers = create_n_blocks(&mut tf, 3)
-        .into_iter()
-        .skip(1)
-        .map(|b| b.header().clone())
-        .collect();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
+    let headers =
+        create_n_blocks(&mut tf, 3).into_iter().skip(1).map(|b| b.header().clone()).collect();
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -139,9 +128,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -159,9 +146,8 @@ async fn valid_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     let blocks = create_n_blocks(&mut tf, 3);
 
     let mut handle = SyncManagerHandle::builder()
@@ -174,9 +160,7 @@ async fn valid_headers(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -218,10 +202,8 @@ async fn disconnect() {
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Duration::from_millis(100).into(),
     });
-    let mut handle = SyncManagerHandle::builder()
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .build()
-        .await;
+    let mut handle =
+        SyncManagerHandle::builder().with_p2p_config(Arc::clone(&p2p_config)).build().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;

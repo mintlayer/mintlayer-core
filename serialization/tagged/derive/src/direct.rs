@@ -61,13 +61,7 @@ impl<'a> VariantInfo<'a> {
     }
 
     fn first_ty(&self) -> &'_ syn::Type {
-        &self
-            .variant
-            .fields
-            .iter()
-            .next()
-            .expect("Each variant has to have at least 1 field")
-            .ty
+        &self.variant.fields.iter().next().expect("Each variant has to have at least 1 field").ty
     }
 }
 

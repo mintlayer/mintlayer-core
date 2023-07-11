@@ -45,9 +45,8 @@ async fn invalid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
@@ -64,9 +63,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -92,18 +89,14 @@ async fn invalid_transaction(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut handle =
+        SyncManagerHandle::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     handle.assert_no_event().await;
     handle.assert_no_peer_manager_event().await;
@@ -120,9 +113,8 @@ async fn no_transaction_service(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
@@ -161,9 +153,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -184,9 +174,8 @@ async fn too_many_announcements(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
@@ -225,9 +214,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -248,9 +235,8 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
@@ -266,17 +252,13 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(message, SyncMessage::TransactionRequest(tx.transaction().get_id()));
 
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -300,9 +282,8 @@ async fn valid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
+    let mut tf =
+        TestFramework::builder(&mut rng).with_chain_config(chain_config.as_ref().clone()).build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
@@ -318,9 +299,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-        .await;
+    handle.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);

@@ -34,8 +34,7 @@ impl<'a, I: Input> Peekable<'a, I> {
 
     /// Peek the next byte
     pub fn peek(&mut self) -> Result<u8, crate::Error> {
-        self.init
-            .map_or_else(|| self.inner.read_byte().map(|b| *self.init.insert(b)), Ok)
+        self.init.map_or_else(|| self.inner.read_byte().map(|b| *self.init.insert(b)), Ok)
     }
 }
 

@@ -138,9 +138,7 @@ mod tests {
 
         let outputs = {
             let output_count = 1 + (rng.next_u32() as usize) % 10;
-            (0..output_count)
-                .map(|_| generate_random_invalid_output(rng))
-                .collect::<Vec<_>>()
+            (0..output_count).map(|_| generate_random_invalid_output(rng)).collect::<Vec<_>>()
         };
 
         let flags = rng.gen::<u128>();
@@ -152,9 +150,8 @@ mod tests {
 
     fn generate_random_invalid_block_reward(rng: &mut (impl Rng + CryptoRng)) -> BlockReward {
         let output_count = (rng.next_u32() as usize) % 10;
-        let outputs = (0..output_count)
-            .map(|_| generate_random_invalid_output(rng))
-            .collect::<Vec<_>>();
+        let outputs =
+            (0..output_count).map(|_| generate_random_invalid_output(rng)).collect::<Vec<_>>();
         BlockReward::new(outputs)
     }
 
@@ -165,9 +162,8 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let reward = generate_random_invalid_block_reward(&mut rng);
-        let transactions = (0..=10)
-            .map(|_| generate_random_invalid_transaction(&mut rng))
-            .collect::<Vec<_>>();
+        let transactions =
+            (0..=10).map(|_| generate_random_invalid_transaction(&mut rng)).collect::<Vec<_>>();
 
         let block_body = BlockBody::new(reward.clone(), transactions.clone());
 
@@ -176,14 +172,11 @@ mod tests {
         let transaction_witness_hashes =
             transactions.iter().map(|tx| tx.serialized_hash()).collect::<Vec<_>>();
 
-        let transaction_ids = transactions
-            .iter()
-            .map(|tx| tx.transaction().get_id().get())
-            .collect::<Vec<_>>();
+        let transaction_ids =
+            transactions.iter().map(|tx| tx.transaction().get_id().get()).collect::<Vec<_>>();
 
-        let expected_merkle_leaves = std::iter::once(block_reward_witness_hash)
-            .chain(transaction_ids)
-            .collect::<Vec<_>>();
+        let expected_merkle_leaves =
+            std::iter::once(block_reward_witness_hash).chain(transaction_ids).collect::<Vec<_>>();
         let expected_witness_merkle_leaves = std::iter::once(block_reward_witness_hash)
             .chain(transaction_witness_hashes)
             .collect::<Vec<_>>();

@@ -145,9 +145,8 @@ mod tests {
 
     #[test]
     fn final_weights_resolvable() {
-        let int_weights = (0..(VEC_SIZE as usize))
-            .map(|t| get_weight_for_timeslot(t as u64))
-            .collect::<Vec<_>>();
+        let int_weights =
+            (0..(VEC_SIZE as usize)).map(|t| get_weight_for_timeslot(t as u64)).collect::<Vec<_>>();
 
         let diffs = int_weights
             .iter()

@@ -308,10 +308,8 @@ mod tests {
             ws_enabled: ws.into(),
         };
 
-        let rpc = Builder::new(rpc_config, None)
-            .register(SubsystemRpcImpl.into_rpc())
-            .build()
-            .await?;
+        let rpc =
+            Builder::new(rpc_config, None).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
         if http {
             let url = format!("http://{}", rpc.http_address().unwrap());

@@ -64,9 +64,7 @@ pub type BlockProductionHandle = subsystem::Handle<Box<dyn BlockProductionInterf
 
 fn prepare_thread_pool(thread_count: u16) -> Arc<slave_pool::ThreadPool> {
     let mining_thread_pool = Arc::new(slave_pool::ThreadPool::new());
-    mining_thread_pool
-        .set_threads(thread_count)
-        .expect("Event thread-pool starting failed");
+    mining_thread_pool.set_threads(thread_count).expect("Event thread-pool starting failed");
     mining_thread_pool
 }
 

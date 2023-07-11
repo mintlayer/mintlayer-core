@@ -83,8 +83,6 @@ fn run_command_blocking(
     command: WalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError> {
     let (res_tx, res_rx) = tokio::sync::oneshot::channel();
-    event_tx
-        .send(Event::HandleCommand { command, res_tx })
-        .expect("Channel must be open");
+    event_tx.send(Event::HandleCommand { command, res_tx }).expect("Channel must be open");
     res_rx.blocking_recv().expect("Channel must be open")
 }

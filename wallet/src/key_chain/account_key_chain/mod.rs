@@ -79,9 +79,7 @@ impl AccountKeyChain {
             chain_config.clone(),
             account_id,
             KeyPurpose::Change,
-            account_pubkey
-                .clone()
-                .derive_child(KeyPurpose::Change.get_deterministic_index())?,
+            account_pubkey.clone().derive_child(KeyPurpose::Change.get_deterministic_index())?,
         );
         change_key_chain.save_usage_state(db_tx)?;
 
@@ -250,9 +248,7 @@ impl AccountKeyChain {
 
     // Return true if the provided destination belongs to this key chain
     pub fn is_destination_mine(&self, destination: &Destination) -> bool {
-        KeyPurpose::ALL
-            .iter()
-            .any(|p| self.get_leaf_key_chain(*p).is_destination_mine(destination))
+        KeyPurpose::ALL.iter().any(|p| self.get_leaf_key_chain(*p).is_destination_mine(destination))
     }
 
     // Return true if the provided public key belongs to this key chain

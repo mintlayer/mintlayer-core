@@ -196,9 +196,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block1_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block1_index.block_height()),
             expected_epoch_index
         );
         let block2_index = tf
@@ -208,9 +206,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block2_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block2_index.block_height()),
             expected_epoch_index
         );
 
@@ -255,10 +251,8 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch_delta = storage
-            .get_accounting_epoch_delta(expected_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch_delta =
+            storage.get_accounting_epoch_delta(expected_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch_delta, expected_epoch_delta);
 
         assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
@@ -310,9 +304,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block1_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block1_index.block_height()),
             block1_epoch_index
         );
         let block2_index = tf
@@ -322,9 +314,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block2_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block2_index.block_height()),
             block2_epoch_index
         );
 
@@ -361,10 +351,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch1_delta = storage
-            .get_accounting_epoch_delta(block1_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch1_delta =
+            storage.get_accounting_epoch_delta(block1_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
         let expected_epoch2_delta = pos_accounting::PoSAccountingDeltaData {
@@ -379,10 +367,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch2_delta = storage
-            .get_accounting_epoch_delta(block2_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch2_delta =
+            storage.get_accounting_epoch_delta(block2_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
         assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
@@ -439,9 +425,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block1_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block1_index.block_height()),
             block1_epoch_index
         );
         let block2_index = tf
@@ -451,9 +435,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block2_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block2_index.block_height()),
             block2_epoch_index
         );
 
@@ -496,10 +478,8 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch1_delta = storage
-            .get_accounting_epoch_delta(block1_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch1_delta =
+            storage.get_accounting_epoch_delta(block1_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
         let expected_epoch2_delta = pos_accounting::PoSAccountingDeltaData {
@@ -514,10 +494,8 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch2_delta = storage
-            .get_accounting_epoch_delta(block2_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch2_delta =
+            storage.get_accounting_epoch_delta(block2_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
         assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
@@ -564,9 +542,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block1_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block1_index.block_height()),
             block1_epoch_index
         );
 
@@ -594,10 +570,8 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let epoch1_delta = storage
-            .get_accounting_epoch_delta(block1_epoch_index)
-            .expect("ok")
-            .expect("some");
+        let epoch1_delta =
+            storage.get_accounting_epoch_delta(block1_epoch_index).expect("ok").expect("some");
         assert_eq!(epoch1_delta, expected_epoch1_delta);
 
         assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
@@ -646,9 +620,7 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(
-            tf.chainstate
-                .get_chain_config()
-                .epoch_index_from_height(&block1_index.block_height()),
+            tf.chainstate.get_chain_config().epoch_index_from_height(&block1_index.block_height()),
             block1_epoch_index
         );
 

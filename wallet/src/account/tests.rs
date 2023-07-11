@@ -45,9 +45,8 @@ fn account_addresses() {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
 
     let mut account = Account::new(config, &mut db_tx, key_chain, None).unwrap();
     db_tx.commit().unwrap();
@@ -74,9 +73,8 @@ fn account_addresses_lookahead() {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     let mut account = Account::new(config, &mut db_tx, key_chain, None).unwrap();
 
     assert_eq!(account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(), None);
@@ -112,9 +110,8 @@ fn sign_transaction(#[case] seed: Seed) {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
+    let key_chain =
+        master_key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX).unwrap();
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
 
     let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))

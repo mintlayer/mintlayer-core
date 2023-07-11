@@ -57,9 +57,8 @@ pub fn sign_pubkey_spending(
         return Err(TransactionSigError::SpendeePrivatePublicKeyMismatch);
     }
     let msg = sighash.encode();
-    let signature = private_key
-        .sign_message(&msg)
-        .map_err(TransactionSigError::ProducingSignatureFailed)?;
+    let signature =
+        private_key.sign_message(&msg).map_err(TransactionSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeySpend::new(signature))
 }

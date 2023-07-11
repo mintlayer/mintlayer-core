@@ -39,23 +39,12 @@ fn create_default_config() {
     let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
     assert_eq!(
-        config
-            .chainstate
-            .clone()
-            .unwrap_or_default()
-            .chainstate_config
-            .max_db_commit_attempts,
+        config.chainstate.clone().unwrap_or_default().chainstate_config.max_db_commit_attempts,
         None
     );
     assert_eq!(config.chainstate.unwrap_or_default().chainstate_config.max_orphan_blocks, None);
 
-    assert!(config
-        .p2p
-        .clone()
-        .unwrap_or_default()
-        .bind_addresses
-        .unwrap_or_default()
-        .is_empty());
+    assert!(config.p2p.clone().unwrap_or_default().bind_addresses.unwrap_or_default().is_empty());
     assert_eq!(config.p2p.clone().unwrap_or_default().ban_threshold, None);
     assert_eq!(config.p2p.clone().unwrap_or_default().outbound_connection_timeout, None);
 

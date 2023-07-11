@@ -165,10 +165,7 @@ impl UtxosBlockUndo {
     }
 
     fn get_parents_of(&self, tx_id: &Id<Transaction>) -> Vec<(Id<Transaction>, Id<Transaction>)> {
-        self.child_parent_dependencies
-            .range(Self::tx_children_range(tx_id))
-            .copied()
-            .collect()
+        self.child_parent_dependencies.range(Self::tx_children_range(tx_id)).copied().collect()
     }
 
     pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<UtxosTxUndo> {
@@ -213,16 +210,13 @@ impl UtxosBlockUndo {
         }
 
         // combine utxo
-        other
-            .tx_undos
-            .into_iter()
-            .try_for_each(|(id, u)| match self.tx_undos.entry(id) {
-                Entry::Vacant(e) => {
-                    e.insert(u);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(UtxosBlockUndoError::UndoAlreadyExists(id)),
-            })?;
+        other.tx_undos.into_iter().try_for_each(|(id, u)| match self.tx_undos.entry(id) {
+            Entry::Vacant(e) => {
+                e.insert(u);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(UtxosBlockUndoError::UndoAlreadyExists(id)),
+        })?;
 
         // combine dependencies
         other.child_parent_dependencies.into_iter().try_for_each(|v| {

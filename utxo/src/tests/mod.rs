@@ -531,9 +531,8 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     // create a new transaction
     let new_tx = Transaction::new(0x00, to_spend.clone(), vec![]).expect("should succeed");
     // let's test `connect_transaction`
-    let tx_undo = cache
-        .connect_transaction(&new_tx, BlockHeight::new(2))
-        .expect("should return tx undo");
+    let tx_undo =
+        cache.connect_transaction(&new_tx, BlockHeight::new(2)).expect("should return tx undo");
 
     // check that these utxos came from the tx's output
     tx_undo.utxos().iter().for_each(|x| {
@@ -608,9 +607,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     assert_eq!(undo1.utxos().len(), 1);
 
     //undo spending
-    cache
-        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
-        .unwrap();
+    cache.disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned())).unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
@@ -641,9 +638,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     assert_eq!(undo1.utxos().len(), 1);
 
     //undo spending
-    cache
-        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
-        .unwrap();
+    cache.disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned())).unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
@@ -737,9 +732,7 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
     assert!(undo1.is_none());
 
     //undo spending
-    cache
-        .disconnect_block_transactable(&reward, &block.get_id().into(), None)
-        .unwrap();
+    cache.disconnect_block_transactable(&reward, &block.get_id().into(), None).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
 
     //spend the reward again
@@ -836,9 +829,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     // spend the utxo in a block reward
     let block_id = block.get_id().into();
     assert_eq!(
-        cache
-            .connect_block_transactable(&reward, &block_id, BlockHeight::new(1))
-            .unwrap_err(),
+        cache.connect_block_transactable(&reward, &block_id, BlockHeight::new(1)).unwrap_err(),
         Error::InvalidBlockRewardOutputType(block_id)
     );
 }
@@ -869,9 +860,7 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     assert_eq!(undo1.utxos().len(), 1);
 
     //undo spending
-    cache
-        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
-        .unwrap();
+    cache.disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned())).unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
@@ -905,9 +894,7 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
     assert_eq!(cache.utxos.len(), 1);
 
     //undo spending
-    cache
-        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
-        .unwrap();
+    cache.disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned())).unwrap();
     assert!(!cache.has_utxo_in_cache(&new_utxo_outpoint));
     assert!(cache.utxos.is_empty());
 

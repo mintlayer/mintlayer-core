@@ -152,8 +152,7 @@ fn get_headers(#[case] seed: Seed) {
         assert_eq!(expected[0].prev_block_id(), &locator[0]);
 
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
-        tf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng)
-            .unwrap();
+        tf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng).unwrap();
         let headers = tf.chainstate.get_headers(locator, header_limit).unwrap();
         assert_eq!(headers.len(), header_limit);
     });

@@ -94,12 +94,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = tf
-            .outputs_from_genblock(issuance_block.get_id().into())
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(issuance_block.get_id().into()).keys().next().unwrap().clone();
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // B1 - burn NFT in mainchain
@@ -128,12 +124,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
-        let b1_outpoint_id = tf
-            .outputs_from_genblock(block_b1.get_id().into())
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
+        let b1_outpoint_id =
+            tf.outputs_from_genblock(block_b1.get_id().into()).keys().next().unwrap().clone();
 
         // Try to transfer burnt NFT
         let result = tf
@@ -187,12 +179,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
-        let c1_outpoint_id = tf
-            .outputs_from_genblock(block_c1.get_id().into())
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
+        let c1_outpoint_id =
+            tf.outputs_from_genblock(block_c1.get_id().into()).keys().next().unwrap().clone();
         // Let's add D1
         let block_index = tf
             .make_block_builder()
@@ -209,12 +197,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
-        let _ = tf
-            .outputs_from_genblock(block_d1.get_id().into())
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
+        let _ = tf.outputs_from_genblock(block_d1.get_id().into()).keys().next().unwrap().clone();
 
         // Second chain - B2
         let tx_2 = TransactionBuilder::new()

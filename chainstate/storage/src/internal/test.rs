@@ -267,10 +267,8 @@ pub fn create_rand_block_undo(
     max_lim_of_tx_undos: u8,
 ) -> UtxosBlockUndo {
     let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
-    let reward_utxos = (0..utxo_rng)
-        .enumerate()
-        .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
-        .collect();
+    let reward_utxos =
+        (0..utxo_rng).enumerate().map(|(i, _)| create_rand_utxo(rng, i as u64).0).collect();
     let reward_undo = UtxosBlockRewardUndo::new(reward_utxos);
 
     let mut tx_undo = vec![];

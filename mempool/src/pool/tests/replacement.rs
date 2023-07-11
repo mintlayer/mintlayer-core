@@ -275,10 +275,8 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     //Create a new incoming transaction that conflicts with `replaced_tx` because it spends
     //`input`. It will be rejected because its fee exactly equals (so is not greater than) the
     //sum of the fees of the conflict together with its descendants
-    let insufficient_rbf_fee = [replaced_tx_fee, descendant1_fee, descendant2_fee]
-        .into_iter()
-        .sum::<Option<_>>()
-        .unwrap();
+    let insufficient_rbf_fee =
+        [replaced_tx_fee, descendant1_fee, descendant2_fee].into_iter().sum::<Option<_>>().unwrap();
     let incoming_tx = tx_spend_input(
         &mempool,
         input.clone(),

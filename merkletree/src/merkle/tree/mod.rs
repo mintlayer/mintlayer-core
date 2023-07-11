@@ -64,10 +64,7 @@ impl<T: Clone, H> MerkleTree<T, H> {
     }
 
     pub fn total_node_count(&self) -> TreeSize {
-        self.tree
-            .len()
-            .try_into()
-            .expect("(total_node_count) By design, tree_size is always > 0")
+        self.tree.len().try_into().expect("(total_node_count) By design, tree_size is always > 0")
     }
 
     pub fn leaf_count(&self) -> NonZeroU32 {
@@ -244,9 +241,7 @@ pub struct MerkleTreeNodeParentIterator<'a, T, H> {
 
 impl<T: Debug, H> Debug for MerkleTreeNodeParentIterator<'_, T, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MerkleTreeNodeParentIterator")
-            .field("node", &self.node)
-            .finish()
+        f.debug_struct("MerkleTreeNodeParentIterator").field("node", &self.node).finish()
     }
 }
 

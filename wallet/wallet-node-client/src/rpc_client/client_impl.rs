@@ -32,9 +32,7 @@ impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
-        ChainstateRpcClient::info(&self.http_client)
-            .await
-            .map_err(NodeRpcError::ResponseError)
+        ChainstateRpcClient::info(&self.http_client).await.map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
@@ -120,9 +118,7 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
-        P2pRpcClient::connect(&self.http_client, address)
-            .await
-            .map_err(NodeRpcError::ResponseError)
+        P2pRpcClient::connect(&self.http_client, address).await.map_err(NodeRpcError::ResponseError)
     }
     async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error> {
         P2pRpcClient::disconnect(&self.http_client, peer_id)
@@ -130,9 +126,7 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
-        P2pRpcClient::get_peer_count(&self.http_client)
-            .await
-            .map_err(NodeRpcError::ResponseError)
+        P2pRpcClient::get_peer_count(&self.http_client).await.map_err(NodeRpcError::ResponseError)
     }
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         P2pRpcClient::get_connected_peers(&self.http_client)

@@ -69,9 +69,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
-        self.chainstate
-            .preliminary_header_check(header)
-            .map_err(ChainstateError::ProcessBlockError)
+        self.chainstate.preliminary_header_check(header).map_err(ChainstateError::ProcessBlockError)
     }
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
@@ -457,9 +455,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
         let utxo_view = chainstate_ref.make_utxo_view();
-        utxo_view
-            .utxo(outpoint)
-            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
+        utxo_view.utxo(outpoint).map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {

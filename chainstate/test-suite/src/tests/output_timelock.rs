@@ -385,9 +385,8 @@ fn output_lock_until_time(#[case] seed: Seed) {
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
-        let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
-            .take(8)
-            .collect();
+        let block_times: Vec<_> =
+            itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1).take(8).collect();
         // Check that without the last block the output remains locked.
         assert_eq!(median_block_time(&block_times[..block_times.len() - 1]), lock_time - 1);
         // Check that the last block allows to unlock the output.
@@ -516,9 +515,8 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
 
         let genesis_timestamp = tf.genesis().timestamp();
-        let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
-            .take(8)
-            .collect();
+        let block_times: Vec<_> =
+            itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1).take(8).collect();
         let lock_seconds = 3;
         let unlock_time = block_times[1] + lock_seconds;
         // Check that without the last block the output remains locked.

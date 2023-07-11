@@ -317,10 +317,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .chain_block_id()
             .ok_or(PropertyQueryError::GenesisHeaderRequested)
             .log_err()?;
-        Ok(self
-            .get_block_index(&id)
-            .log_err()?
-            .map(|block_index| block_index.into_block_header()))
+        Ok(self.get_block_index(&id).log_err()?.map(|block_index| block_index.into_block_header()))
     }
 
     pub fn get_block_reward(
@@ -402,10 +399,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
 
         // If the block height does not match a checkpoint height, we need to check that an ancestor block id matches the checkpoint id
-        let (expected_checkpoint_height, expected_checkpoint_id) = self
-            .chain_config
-            .height_checkpoints()
-            .parent_checkpoint_to_height(current_height);
+        let (expected_checkpoint_height, expected_checkpoint_id) =
+            self.chain_config.height_checkpoints().parent_checkpoint_to_height(current_height);
 
         let parent_checkpoint_block_index =
             self.get_ancestor(&prev_block_index, expected_checkpoint_height)?;
@@ -513,48 +508,43 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block
-            .block_reward()
-            .outputs()
-            .iter()
-            .enumerate()
-            .try_for_each(|(index, output)| {
-                match block.consensus_data() {
-                    ConsensusData::None | ConsensusData::PoW(_) => match output {
-                        TxOutput::LockThenTransfer(_, _, tl) => {
-                            let outpoint = UtxoOutPoint::new(block.get_id().into(), index as u32);
-                            let required =
-                                block.consensus_data().reward_maturity_distance(self.chain_config);
-                            tx_verifier::timelock_check::check_output_maturity_setting(
-                                tl, required, outpoint,
-                            )
-                            .map_err(CheckBlockError::BlockRewardMaturityError)
-                        }
+        block.block_reward().outputs().iter().enumerate().try_for_each(|(index, output)| {
+            match block.consensus_data() {
+                ConsensusData::None | ConsensusData::PoW(_) => match output {
+                    TxOutput::LockThenTransfer(_, _, tl) => {
+                        let outpoint = UtxoOutPoint::new(block.get_id().into(), index as u32);
+                        let required =
+                            block.consensus_data().reward_maturity_distance(self.chain_config);
+                        tx_verifier::timelock_check::check_output_maturity_setting(
+                            tl, required, outpoint,
+                        )
+                        .map_err(CheckBlockError::BlockRewardMaturityError)
+                    }
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => {
+                        Err(CheckBlockError::InvalidBlockRewardOutputType(block.get_id()))
+                    }
+                },
+                ConsensusData::PoS(_) => {
+                    match output {
+                        // The output can be reused in block reward right away
+                        TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
                         TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
                         | TxOutput::CreateStakePool(_, _)
-                        | TxOutput::ProduceBlockFromStake(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _) => {
                             Err(CheckBlockError::InvalidBlockRewardOutputType(block.get_id()))
                         }
-                    },
-                    ConsensusData::PoS(_) => {
-                        match output {
-                            // The output can be reused in block reward right away
-                            TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
-                            TxOutput::Transfer(_, _)
-                            | TxOutput::LockThenTransfer(_, _, _)
-                            | TxOutput::CreateStakePool(_, _)
-                            | TxOutput::Burn(_)
-                            | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DelegateStaking(_, _) => {
-                                Err(CheckBlockError::InvalidBlockRewardOutputType(block.get_id()))
-                            }
-                        }
                     }
                 }
-            })
+            }
+        })
     }
 
     fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {
@@ -738,9 +728,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header()).log_err()?;
 
-        self.check_block_size(block)
-            .map_err(CheckBlockError::BlockSizeError)
-            .log_err()?;
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError).log_err()?;
 
         self.check_block_reward_maturity_settings(block).log_err()?;
 
@@ -991,9 +979,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                 &(*new_tip_block_index.block_id()).into(),
             )
             .log_err()?;
-        self.db_tx
-            .set_best_block_id(&(*new_tip_block_index.block_id()).into())
-            .log_err()?;
+        self.db_tx.set_best_block_id(&(*new_tip_block_index.block_id()).into()).log_err()?;
         Ok(())
     }
 
