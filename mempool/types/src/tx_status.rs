@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,20 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(clippy::clone_on_ref_ptr)]
+/// Result of adding transaction to the mempool
+#[derive(
+    Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize, serde::Deserialize,
+)]
+#[must_use = "Please check whether the tx was accepted to main mempool or orphan pool"]
+pub enum TxStatus {
+    /// Transaction is in mempool
+    InMempool,
+    /// Transaction is in orphan pool
+    InOrphanPool,
+}
 
-pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
-pub use mempool_types::{TxOrigin, TxStatus};
+impl TxStatus {
+    pub fn in_mempool(&self) -> bool {
+        self == &TxStatus::InMempool
+    }
 
-mod config;
-pub mod error;
-pub mod event;
-mod interface;
-mod pool;
-pub mod rpc;
-pub mod tx_accumulator;
-
-pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
-
-pub type Result<T> = core::result::Result<T, error::Error>;
+    pub fn in_orphan_pool(&self) -> bool {
+        self == &TxStatus::InOrphanPool
+    }
+}

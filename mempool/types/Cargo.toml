@@ -1,0 +1,12 @@
+[package]
+name = "mempool-types"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+p2p-types = { path = '../../p2p/types' }
+
+serde.workspace = true

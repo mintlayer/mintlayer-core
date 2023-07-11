@@ -72,9 +72,8 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Time::from_secs(rng.gen());
-    let origin = crate::TxOrigin::TEST;
 
-    TxEntry::new(transaction, insertion_time, origin)
+    TxEntry::new(transaction, insertion_time, crate::TxOrigin::LocalMempool)
 }
 
 #[rstest]

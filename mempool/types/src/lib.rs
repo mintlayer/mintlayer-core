@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,20 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(clippy::clone_on_ref_ptr)]
+mod tx_origin;
+mod tx_status;
 
-pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
-pub use mempool_types::{TxOrigin, TxStatus};
-
-mod config;
-pub mod error;
-pub mod event;
-mod interface;
-mod pool;
-pub mod rpc;
-pub mod tx_accumulator;
-
-pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
-
-pub type Result<T> = core::result::Result<T, error::Error>;
+pub use tx_origin::TxOrigin;
+pub use tx_status::TxStatus;
