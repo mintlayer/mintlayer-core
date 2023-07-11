@@ -46,11 +46,7 @@ pub struct NodeConfigFile {
 
 impl NodeConfigFile {
     pub fn new() -> Result<Self> {
-        Ok(Self {
-            chainstate: None,
-            p2p: None,
-            rpc: None,
-        })
+        Ok(Self { chainstate: None, p2p: None, rpc: None })
     }
 
     fn read_to_string_with_policy<P: AsRef<Path>>(config_path: P) -> Result<String> {
@@ -69,21 +65,14 @@ impl NodeConfigFile {
     pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
         let config_as_str = Self::read_to_string_with_policy(config_path)?;
 
-        let NodeConfigFile {
-            chainstate,
-            p2p,
-            rpc,
-        } = toml::from_str(&config_as_str).context("Failed to parse config")?;
+        let NodeConfigFile { chainstate, p2p, rpc } =
+            toml::from_str(&config_as_str).context("Failed to parse config")?;
 
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
         let rpc = rpc_config(rpc.unwrap_or_default(), options);
 
-        Ok(Self {
-            chainstate: Some(chainstate),
-            p2p: Some(p2p),
-            rpc: Some(rpc),
-        })
+        Ok(Self { chainstate: Some(chainstate), p2p: Some(p2p), rpc: Some(rpc) })
     }
 }
 
@@ -91,10 +80,7 @@ fn chainstate_config(
     config: ChainstateLauncherConfigFile,
     options: &RunOptions,
 ) -> ChainstateLauncherConfigFile {
-    let ChainstateLauncherConfigFile {
-        storage_backend,
-        chainstate_config,
-    } = config;
+    let ChainstateLauncherConfigFile { storage_backend, chainstate_config } = config;
 
     let ChainstateConfigFile {
         max_db_commit_attempts,
@@ -117,10 +103,7 @@ fn chainstate_config(
         tx_index_enabled,
         max_tip_age,
     };
-    ChainstateLauncherConfigFile {
-        storage_backend,
-        chainstate_config,
-    }
+    ChainstateLauncherConfigFile { storage_backend, chainstate_config }
 }
 
 fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {

@@ -113,13 +113,11 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
             DataDelta::new(Some(pool_data), Some(new_pool_data)),
         )?;
 
-        Ok(PoSAccountingUndo::IncreasePledgeAmount(
-            IncreasePledgeAmountUndo {
-                pool_id,
-                amount_added: amount_to_add,
-                data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
-            },
-        ))
+        Ok(PoSAccountingUndo::IncreasePledgeAmount(IncreasePledgeAmountUndo {
+            pool_id,
+            amount_added: amount_to_add,
+            data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
+        }))
     }
 
     fn create_delegation_id(
@@ -184,12 +182,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
             .delegation_data
             .merge_delta_data_element(delegation_id, DataDelta::new(Some(delegation_data), None))?;
 
-        Ok(PoSAccountingUndo::DeleteDelegationId(
-            DeleteDelegationIdUndo {
-                delegation_id,
-                data_undo: DelegationDataUndo::DataDelta(Box::new(data_undo)),
-            },
-        ))
+        Ok(PoSAccountingUndo::DeleteDelegationId(DeleteDelegationIdUndo {
+            delegation_id,
+            data_undo: DelegationDataUndo::DataDelta(Box::new(data_undo)),
+        }))
     }
 
     fn delegate_staking(
@@ -233,10 +229,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
-        Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo {
-            delegation_id,
-            amount,
-        }))
+        Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo { delegation_id, amount }))
     }
 
     fn undo(&mut self, undo_data: PoSAccountingUndo) -> Result<(), Error> {

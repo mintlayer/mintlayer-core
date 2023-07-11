@@ -46,9 +46,7 @@ pub struct TabSettings {
 
 impl TabSettings {
     pub fn new() -> Self {
-        TabSettings {
-            tab_bar_position: Some(TabBarPosition::Top),
-        }
+        TabSettings { tab_bar_position: Some(TabBarPosition::Top) }
     }
 }
 
@@ -64,9 +62,7 @@ pub struct SettingsTab {
 
 impl SettingsTab {
     pub fn new() -> Self {
-        SettingsTab {
-            settings: TabSettings::new(),
-        }
+        SettingsTab { settings: TabSettings::new() }
     }
 
     pub fn settings(&self) -> &TabSettings {
@@ -101,8 +97,8 @@ impl Tab for SettingsTab {
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
-        let content: Element<'_, SettingsMessage> = Container::new(
-            Column::new().push(Text::new("Tabs position").size(20)).push(
+        let content: Element<'_, SettingsMessage> =
+            Container::new(Column::new().push(Text::new("Tabs position").size(20)).push(
                 TabBarPosition::ALL.iter().cloned().fold(
                     Column::new().padding(10).spacing(10),
                     |column, position| {
@@ -117,9 +113,8 @@ impl Tab for SettingsTab {
                         )
                     },
                 ),
-            ),
-        )
-        .into();
+            ))
+            .into();
 
         content.map(TabsMessage::Settings)
     }

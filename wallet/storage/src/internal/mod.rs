@@ -48,10 +48,7 @@ impl<B: storage::Backend> Store<B> {
         let storage: storage::Storage<B, Schema> =
             storage::Storage::new(backend).map_err(crate::Error::from)?;
 
-        let mut storage = Self {
-            storage,
-            encryption_state: EncryptionState::Locked,
-        };
+        let mut storage = Self { storage, encryption_state: EncryptionState::Locked };
 
         let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
         if challenge.is_none() {
@@ -133,10 +130,7 @@ where
     B::Impl: Clone,
 {
     fn clone(&self) -> Self {
-        Self {
-            storage: self.storage.clone(),
-            encryption_state: self.encryption_state.clone(),
-        }
+        Self { storage: self.storage.clone(), encryption_state: self.encryption_state.clone() }
     }
 }
 

@@ -165,12 +165,12 @@ where
                 block_height,
             )
             .map_err(ConsensusCreationError::MiningError),
-            GenerateBlockInputData::PoS(_) => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::PoSInputDataProvided,
-            )),
-            GenerateBlockInputData::None => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::NoInputDataProvided,
-            )),
+            GenerateBlockInputData::PoS(_) => {
+                Err(ConsensusCreationError::MiningError(ConsensusPoWError::PoSInputDataProvided))
+            }
+            GenerateBlockInputData::None => {
+                Err(ConsensusCreationError::MiningError(ConsensusPoWError::NoInputDataProvided))
+            }
         },
     }
 }
@@ -186,12 +186,12 @@ pub fn finalize_consensus_data(
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
         RequiredConsensus::PoS(_) => match block_header.consensus_data() {
-            ConsensusData::None => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::NoInputDataProvided,
-            )),
-            ConsensusData::PoW(_) => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::PoWInputDataProvided,
-            )),
+            ConsensusData::None => {
+                Err(ConsensusCreationError::StakingError(ConsensusPoSError::NoInputDataProvided))
+            }
+            ConsensusData::PoW(_) => {
+                Err(ConsensusCreationError::StakingError(ConsensusPoSError::PoWInputDataProvided))
+            }
             ConsensusData::PoS(pos_data) => match finalize_data {
                 FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::NoInputDataProvided,
@@ -230,12 +230,12 @@ pub fn finalize_consensus_data(
             },
         },
         RequiredConsensus::PoW(_) => match block_header.consensus_data() {
-            ConsensusData::None => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::NoInputDataProvided,
-            )),
-            ConsensusData::PoS(_) => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::PoSInputDataProvided,
-            )),
+            ConsensusData::None => {
+                Err(ConsensusCreationError::MiningError(ConsensusPoWError::NoInputDataProvided))
+            }
+            ConsensusData::PoS(_) => {
+                Err(ConsensusCreationError::MiningError(ConsensusPoWError::PoSInputDataProvided))
+            }
             ConsensusData::PoW(pow_data) => {
                 let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
 

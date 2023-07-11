@@ -57,10 +57,7 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
             crypto::vrf::VRFKeyKind::Schnorrkel,
         )
         .unwrap();
-        let key_content = RootKeys {
-            root_key: xpriv_key,
-            root_vrf_key: vrf_key,
-        };
+        let key_content = RootKeys { root_key: xpriv_key, root_vrf_key: vrf_key };
         {
             let mut db_tx = store.transaction_rw_unlocked(None).unwrap();
             db_tx.set_root_key(&key_content).unwrap();

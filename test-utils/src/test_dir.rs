@@ -104,10 +104,7 @@ impl TestRoot {
             }
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "All attempted directory names exist",
-        ))
+        Err(io::Error::new(io::ErrorKind::AlreadyExists, "All attempted directory names exist"))
     }
 
     /// Create the new test subdirectory

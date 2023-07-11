@@ -108,10 +108,8 @@ impl<M> Mempool<M> {
         memory_usage_estimator: M,
     ) -> Self {
         log::trace!("Setting up mempool transaction verifier");
-        let tx_verifier = tx_verifier::create(
-            chain_config.shallow_clone(),
-            chainstate_handle.shallow_clone(),
-        );
+        let tx_verifier =
+            tx_verifier::create(chain_config.shallow_clone(), chainstate_handle.shallow_clone());
 
         log::trace!("Creating mempool object");
         Self {
@@ -258,11 +256,7 @@ impl<M> Mempool<M> {
 /// Result of transaction validation
 enum ValidationOutcome {
     /// Transaction is valid for acceptance to mempool
-    Valid {
-        transaction: TxEntryWithFee,
-        conflicts: Conflicts,
-        delta: TransactionVerifierDelta,
-    },
+    Valid { transaction: TxEntryWithFee, conflicts: Conflicts, delta: TransactionVerifierDelta },
 
     /// Transaction is valid of acceptance to orphan pool.
     /// It may or may not end up being valid, depending on the validity of the missing inputs.
@@ -272,17 +266,11 @@ enum ValidationOutcome {
 /// Result of transaction validation
 enum VerificationOutcome {
     /// Transaction is valid for acceptance to mempool
-    Valid {
-        transaction: TxEntryWithFee,
-        delta: TransactionVerifierDelta,
-    },
+    Valid { transaction: TxEntryWithFee, delta: TransactionVerifierDelta },
 
     /// Transaction is valid of acceptance to orphan pool.
     /// It may or may not end up being valid, depending on the validity of the missing inputs.
-    Orphan {
-        transaction: TxEntry,
-        orphan_type: OrphanType,
-    },
+    Orphan { transaction: TxEntry, orphan_type: OrphanType },
 }
 
 // Transaction Validation
@@ -328,16 +316,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let outcome = match self.verify_transaction(transaction)? {
             VerificationOutcome::Valid { transaction, delta } => {
                 let conflicts = self.check_mempool_policy(&transaction)?;
-                ValidationOutcome::Valid {
-                    transaction,
-                    conflicts,
-                    delta,
-                }
+                ValidationOutcome::Valid { transaction, conflicts, delta }
             }
-            VerificationOutcome::Orphan {
-                transaction,
-                orphan_type,
-            } => {
+            VerificationOutcome::Orphan { transaction, orphan_type } => {
                 self.check_orphan_pool_policy(&transaction, orphan_type)?;
                 ValidationOutcome::Orphan { transaction }
             }
@@ -364,9 +345,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let mut tx_verifier = self.tx_verifier.derive_child();
 
             let res = tx_verifier.connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &current_best,
-                },
+                &TransactionSourceForConnect::Mempool { current_best: &current_best },
                 transaction.transaction(),
                 &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
                 None,
@@ -384,10 +363,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 }
                 Err(err) => {
                     let orphan_type = OrphanType::from_error(&err).ok_or(err)?;
-                    VerificationOutcome::Orphan {
-                        transaction,
-                        orphan_type,
-                    }
+                    VerificationOutcome::Orphan { transaction, orphan_type }
                 }
             };
 
@@ -402,28 +378,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let tx = entry.transaction();
         let tx_id = entry.tx_id();
 
-        ensure!(
-            !tx.transaction().inputs().is_empty(),
-            MempoolPolicyError::NoInputs,
-        );
+        ensure!(!tx.transaction().inputs().is_empty(), MempoolPolicyError::NoInputs,);
 
-        ensure!(
-            !tx.transaction().outputs().is_empty(),
-            MempoolPolicyError::NoOutputs,
-        );
+        ensure!(!tx.transaction().outputs().is_empty(), MempoolPolicyError::NoOutputs,);
 
         // TODO: see this issue:
         // https://github.com/mintlayer/mintlayer-core/issues/331
-        ensure!(
-            entry.size() <= MAX_BLOCK_SIZE_BYTES,
-            MempoolPolicyError::ExceedsMaxBlockSize,
-        );
+        ensure!(entry.size() <= MAX_BLOCK_SIZE_BYTES, MempoolPolicyError::ExceedsMaxBlockSize,);
 
         // TODO: Taken from the previous implementation. Is this correct?
-        ensure!(
-            !self.contains_transaction(tx_id),
-            MempoolPolicyError::TransactionAlreadyInMempool,
-        );
+        ensure!(!self.contains_transaction(tx_id), MempoolPolicyError::TransactionAlreadyInMempool,);
 
         Ok(())
     }
@@ -463,10 +427,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         // Account nonces are supposed to be consecutive. If the distance between the expected and
         // given nonce is too large, the transaction is not accepted into the orphan pool.
         if let OrphanType::AccountNonceGap(gap) = orphan_type {
-            ensure!(
-                gap <= config::MAX_ORPHAN_ACCOUNT_GAP,
-                OrphanPoolError::NonceGapTooLarge(gap),
-            );
+            ensure!(gap <= config::MAX_ORPHAN_ACCOUNT_GAP, OrphanPoolError::NonceGapTooLarge(gap),);
         }
 
         self.orphan_rbf_checks(transaction)?;
@@ -480,10 +441,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("pays_minimum_mempool_fee tx_fee = {tx_fee:?}, minimum_fee = {minimum_fee:?}");
         ensure!(
             tx_fee >= minimum_fee,
-            MempoolPolicyError::RollingFeeThresholdNotMet {
-                minimum_fee,
-                tx_fee,
-            }
+            MempoolPolicyError::RollingFeeThresholdNotMet { minimum_fee, tx_fee }
         );
         Ok(())
     }
@@ -608,10 +566,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             additional_fees,
             relay_fee
         );
-        ensure!(
-            additional_fees >= relay_fee,
-            MempoolPolicyError::InsufficientFeesToRelayRBF
-        );
+        ensure!(additional_fees >= relay_fee, MempoolPolicyError::InsufficientFeesToRelayRBF);
         Ok(())
     }
 
@@ -654,10 +609,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let new = !inputs_spent_by_conflicts.contains(input);
             unconfirmed && new
         });
-        ensure!(
-            spends_new_unconfirmed,
-            MempoolConflictError::SpendsNewUnconfirmed,
-        );
+        ensure!(spends_new_unconfirmed, MempoolConflictError::SpendsNewUnconfirmed,);
         Ok(())
     }
 
@@ -719,10 +671,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         );
 
         self.limit_mempool_size()?;
-        ensure!(
-            self.store.txs_by_id.contains_key(&id),
-            MempoolPolicyError::MempoolFull
-        );
+        ensure!(self.store.txs_by_id.contains_key(&id), MempoolPolicyError::MempoolFull);
         Ok(())
     }
 
@@ -881,11 +830,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::trace!("Adding transaction {tx:?}");
 
         match self.validate_transaction(tx).log_err_pfx("Transaction rejected")? {
-            ValidationOutcome::Valid {
-                transaction,
-                conflicts,
-                delta,
-            } => {
+            ValidationOutcome::Valid { transaction, conflicts, delta } => {
                 if ENABLE_RBF {
                     self.store.drop_conflicts(conflicts);
                 }

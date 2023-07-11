@@ -50,10 +50,7 @@ fn store_coin(#[case] seed: Seed) {
         // spend coin
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(tx_output.clone())
@@ -68,10 +65,7 @@ fn store_coin(#[case] seed: Seed) {
 
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
-        assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok"),
-            Id::<GenBlock>::from(block_id)
-        );
+        assert_eq!(db_tx.get_best_block_for_utxos().expect("ok"), Id::<GenBlock>::from(block_id));
         assert_eq!(
             db_tx.get_best_block_id().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_id)
@@ -128,10 +122,7 @@ fn store_token(#[case] seed: Seed) {
         // issue a token
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -159,10 +150,7 @@ fn store_token(#[case] seed: Seed) {
         let db_tx = storage.transaction_ro().unwrap();
 
         // best block has changed
-        assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok"),
-            Id::<GenBlock>::from(block_id)
-        );
+        assert_eq!(db_tx.get_best_block_for_utxos().expect("ok"), Id::<GenBlock>::from(block_id));
         assert_eq!(
             db_tx.get_best_block_id().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_id)
@@ -183,10 +171,7 @@ fn store_token(#[case] seed: Seed) {
         }
 
         // token info is stored
-        assert_eq!(
-            db_tx.get_token_id(&tx_id).expect("ok").expect("some"),
-            token_id
-        );
+        assert_eq!(db_tx.get_token_id(&tx_id).expect("ok").expect("some"), token_id);
         let aux_data = db_tx.get_token_aux_data(&token_id).expect("ok").expect("some");
         let expected_aux_data = TokenAuxiliaryData::new(tx.transaction().clone(), block_id);
         assert_eq!(aux_data, expected_aux_data);
@@ -219,10 +204,8 @@ fn reorg_store_coin(#[case] seed: Seed) {
             )
             .add_output(tx_1_output)
             .build();
-        let tx_1_utxo_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-            0,
-        );
+        let tx_1_utxo_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0);
 
         let block_1 = tf.make_block_builder().add_transaction(tx_1).build();
         let block_1_id = block_1.get_id();
@@ -276,10 +259,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
 
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
-        assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok"),
-            Id::<GenBlock>::from(block_3_id)
-        );
+        assert_eq!(db_tx.get_best_block_for_utxos().expect("ok"), Id::<GenBlock>::from(block_3_id));
         assert_eq!(
             db_tx.get_best_block_id().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_3_id)
@@ -345,19 +325,13 @@ fn reorg_store_coin(#[case] seed: Seed) {
         assert_eq!(db_tx.get_undo_data(block_1_id).expect("ok"), None);
         // utxo from block_2 was deleted
         assert_eq!(db_tx.get_utxo(&tx_2_utxo_outpoint).expect("ok"), None);
-        assert_eq!(
-            db_tx.get_undo_data(block_2_id).expect("ok").expect("some").tx_undos().len(),
-            1
-        );
+        assert_eq!(db_tx.get_undo_data(block_2_id).expect("ok").expect("some").tx_undos().len(), 1);
         // utxo from block_3 is stored
         assert_eq!(
             db_tx.get_utxo(&tx_3_utxo_outpoint).expect("ok").expect("some").output(),
             &tx_3_output
         );
-        assert_eq!(
-            db_tx.get_undo_data(block_3_id).expect("ok").expect("some").tx_undos().len(),
-            1
-        );
+        assert_eq!(db_tx.get_undo_data(block_3_id).expect("ok").expect("some").tx_undos().len(), 1);
     });
 }
 
@@ -378,10 +352,7 @@ fn reorg_store_token(#[case] seed: Seed) {
         // create block
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -398,10 +369,8 @@ fn reorg_store_token(#[case] seed: Seed) {
                 tf.chainstate.get_chain_config().token_min_issuance_fee(),
             )))
             .build();
-        let tx_1_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-            0,
-        );
+        let tx_1_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0);
         let token_1_id = token_id(tx_1.transaction()).unwrap();
         let tx_1_id = tx_1.transaction().get_id();
 
@@ -412,10 +381,7 @@ fn reorg_store_token(#[case] seed: Seed) {
         let bbbb_tokens_amount = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -473,10 +439,7 @@ fn reorg_store_token(#[case] seed: Seed) {
 
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
-        assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok"),
-            Id::<GenBlock>::from(block_3_id)
-        );
+        assert_eq!(db_tx.get_best_block_for_utxos().expect("ok"), Id::<GenBlock>::from(block_3_id));
         assert_eq!(
             db_tx.get_best_block_id().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_3_id)
@@ -484,10 +447,7 @@ fn reorg_store_token(#[case] seed: Seed) {
 
         if *tf.chainstate.get_chainstate_config().tx_index_enabled {
             // tx index from block_1 was deleted
-            assert_eq!(
-                db_tx.get_mainchain_tx_index(&tx_1_outpoint.tx_id()).expect("ok"),
-                None
-            );
+            assert_eq!(db_tx.get_mainchain_tx_index(&tx_1_outpoint.tx_id()).expect("ok"), None);
             // tx index from block_2 is stored
             let tx_2_index =
                 db_tx.get_mainchain_tx_index(&tx_2_outpoint.tx_id()).expect("ok").expect("some");
@@ -525,10 +485,7 @@ fn reorg_store_token(#[case] seed: Seed) {
         assert_eq!(token_1_id, token_2_id);
 
         // token issuance from tx block_2 was stored
-        assert_eq!(
-            db_tx.get_token_id(&tx_2_id).expect("ok").expect("some"),
-            token_2_id
-        );
+        assert_eq!(db_tx.get_token_id(&tx_2_id).expect("ok").expect("some"), token_2_id);
         let aux_data_b = db_tx.get_token_aux_data(&token_2_id).expect("ok").expect("some");
         let expected_aux_data_b = TokenAuxiliaryData::new(tx_2.transaction().clone(), block_2_id);
         assert_eq!(aux_data_b, expected_aux_data_b);

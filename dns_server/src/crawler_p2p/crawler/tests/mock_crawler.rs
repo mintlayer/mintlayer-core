@@ -61,11 +61,7 @@ pub fn test_crawler(
 ) -> MockCrawler {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
-    let crawler = Crawler::new(
-        chain_config.clone(),
-        loaded_addresses.clone(),
-        added_addresses,
-    );
+    let crawler = Crawler::new(chain_config.clone(), loaded_addresses.clone(), added_addresses);
 
     MockCrawler {
         crawler,
@@ -89,10 +85,7 @@ impl MockCrawler {
     pub fn step(&mut self, event: CrawlerEvent<SocketAddr>, rng: &mut impl Rng) {
         match &event {
             CrawlerEvent::Timer { period: _ } => {}
-            CrawlerEvent::NewAddress {
-                address: _,
-                sender: _,
-            } => {}
+            CrawlerEvent::NewAddress { address: _, sender: _ } => {}
             CrawlerEvent::Connected { peer_info, address } => {
                 let removed = self.pending_connects.remove(address);
                 assert!(removed);
@@ -131,11 +124,7 @@ impl MockCrawler {
                 let inserted = self.pending_disconnects.insert(peer_id);
                 assert!(inserted);
             }
-            CrawlerCommand::UpdateAddress {
-                address,
-                old_state,
-                new_state,
-            } => {
+            CrawlerCommand::UpdateAddress { address, old_state, new_state } => {
                 match (old_state.is_reachable(), new_state.is_reachable()) {
                     (false, true) => {
                         let inserted = self.reachable.insert(address);
@@ -160,11 +149,7 @@ impl MockCrawler {
                     _ => {}
                 }
 
-                self.address_updates.push(AddressUpdate {
-                    address,
-                    old_state,
-                    new_state,
-                });
+                self.address_updates.push(AddressUpdate { address, old_state, new_state });
             }
         };
 

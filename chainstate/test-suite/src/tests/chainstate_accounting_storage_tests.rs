@@ -48,13 +48,7 @@ fn create_pool_data(
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ratio = PerThousand::new_from_rng(rng);
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
-    PoolData::new(
-        decommission_destination,
-        pledged_amount,
-        vrf_pk,
-        margin_ratio,
-        cost_per_block,
-    )
+    PoolData::new(decommission_destination, pledged_amount, vrf_pk, margin_ratio, cost_per_block)
 }
 
 fn make_tx_with_stake_pool_from_genesis(
@@ -93,10 +87,8 @@ fn make_tx_with_stake_pool(
         )),
     );
 
-    let transfer_output = TxOutput::Transfer(
-        OutputValue::Coin(amount_to_transfer),
-        anyonecanspend_address(),
-    );
+    let transfer_output =
+        TxOutput::Transfer(OutputValue::Coin(amount_to_transfer), anyonecanspend_address());
 
     let tx_builder =
         TransactionBuilder::new().add_input(input0_outpoint.into(), empty_witness(rng));
@@ -104,15 +96,9 @@ fn make_tx_with_stake_pool(
     // random order of transfer and stake outputs so that tests can use different outpoint 0 or 1
     // to make the next pool
     let (tx, transfer_output_idx) = if rng.gen::<bool>() {
-        (
-            tx_builder.add_output(transfer_output).add_output(stake_output).build(),
-            0,
-        )
+        (tx_builder.add_output(transfer_output).add_output(stake_output).build(), 0)
     } else {
-        (
-            tx_builder.add_output(stake_output).add_output(transfer_output).build(),
-            1,
-        )
+        (tx_builder.add_output(stake_output).add_output(transfer_output).build(), 1)
     };
     let transfer_outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(tx.transaction().get_id()),
@@ -149,10 +135,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
 
         // utxo is stored
         db_tx.get_utxo(&tx_utxo_outpoint).expect("ok").expect("some");
-        assert_eq!(
-            db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos().len(),
-            1
-        );
+        assert_eq!(db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos().len(), 1);
 
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, pool_data)]),
@@ -162,10 +145,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
 
-        assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
-            expected_tip_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_tip().unwrap(), expected_tip_storage_data);
 
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
     });
@@ -249,10 +229,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
 
-        assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
-            expected_tip_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_tip().unwrap(), expected_tip_storage_data);
 
         // check that result is not stored to sealed
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
@@ -366,10 +343,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
 
-        assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
-            expected_tip_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_tip().unwrap(), expected_tip_storage_data);
 
         // check that result is not stored to sealed
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
@@ -497,10 +471,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
         };
-        assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
-            expected_tip_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_tip().unwrap(), expected_tip_storage_data);
 
         // check that epoch1 is stored to sealed
         let expected_sealed_storage_data = pos_accounting::PoSAccountingData {
@@ -510,10 +481,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
         };
-        assert_eq!(
-            storage.read_accounting_data_sealed().unwrap(),
-            expected_sealed_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_sealed().unwrap(), expected_sealed_storage_data);
 
         // check that deltas per block are stored
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
@@ -610,14 +578,8 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
         };
-        assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
-            expected_storage_data
-        );
-        assert_eq!(
-            storage.read_accounting_data_sealed().unwrap(),
-            expected_storage_data
-        );
+        assert_eq!(storage.read_accounting_data_tip().unwrap(), expected_storage_data);
+        assert_eq!(storage.read_accounting_data_sealed().unwrap(), expected_storage_data);
 
         // check that deltas per block are stored
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
@@ -668,10 +630,7 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
 
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(

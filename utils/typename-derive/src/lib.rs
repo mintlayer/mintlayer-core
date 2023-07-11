@@ -20,13 +20,8 @@ use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(TypeName)]
 pub fn derive(input: TokenStream) -> TokenStream {
-    let DeriveInput {
-        ident,
-        attrs: _attrs,
-        vis: _vis,
-        generics,
-        data: _data,
-    } = parse_macro_input!(input);
+    let DeriveInput { ident, attrs: _attrs, vis: _vis, generics, data: _data } =
+        parse_macro_input!(input);
     let output = if generics.params.is_empty() {
         let type_name = ident.to_string();
         quote! {

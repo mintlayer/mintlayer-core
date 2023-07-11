@@ -36,10 +36,7 @@ impl SignedTransaction {
             signatures.len() == transaction.inputs().len(),
             TransactionCreationError::InvalidWitnessCount
         );
-        Ok(Self {
-            transaction,
-            signatures,
-        })
+        Ok(Self { transaction, signatures })
     }
 
     pub fn transaction(&self) -> &Transaction {
@@ -99,10 +96,7 @@ impl Decode for SignedTransaction {
             )
             .chain(err));
         }
-        Ok(Self {
-            transaction,
-            signatures: witness,
-        })
+        Ok(Self { transaction, signatures: witness })
     }
 }
 

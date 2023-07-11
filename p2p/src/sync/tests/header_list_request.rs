@@ -97,10 +97,7 @@ async fn valid_request(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )
+        .send_message(peer, SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)))
         .await;
 
     let (sent_to, message) = handle.message().await;

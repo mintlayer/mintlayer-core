@@ -64,10 +64,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
         .take(*p2p_config.max_request_blocks_count + 1)
         .collect();
     handle
-        .send_message(
-            peer,
-            SyncMessage::BlockListRequest(BlockListRequest::new(blocks)),
-        )
+        .send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(blocks)))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -110,10 +107,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(unknown_blocks[0]))
             .ban_score();
     handle
-        .send_message(
-            peer,
-            SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)),
-        )
+        .send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -153,19 +147,13 @@ async fn valid_request(#[case] seed: Seed) {
 
     let ids = blocks.iter().map(|b| b.get_id()).collect();
     handle
-        .send_message(
-            peer,
-            SyncMessage::BlockListRequest(BlockListRequest::new(ids)),
-        )
+        .send_message(peer, SyncMessage::BlockListRequest(BlockListRequest::new(ids)))
         .await;
 
     for block in blocks {
         let (sent_to, message) = handle.message().await;
         assert_eq!(peer, sent_to);
-        assert_eq!(
-            message,
-            SyncMessage::BlockResponse(BlockResponse::new(block))
-        );
+        assert_eq!(message, SyncMessage::BlockResponse(BlockResponse::new(block)));
     }
 
     handle.assert_no_error().await;
@@ -209,10 +197,7 @@ async fn request_same_block_twice(#[case] seed: Seed) {
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::BlockResponse(BlockResponse::new(block.clone()))
-    );
+    assert_eq!(message, SyncMessage::BlockResponse(BlockResponse::new(block.clone())));
 
     handle.assert_no_error().await;
     handle.assert_no_peer_manager_event().await;

@@ -135,9 +135,7 @@ fn get_purpose_and_index(
 ) -> KeyChainResult<(KeyPurpose, ChildNumber)> {
     // Check that derivation path has the expected number of nodes
     if derivation_path.len() != BIP44_PATH_LENGTH {
-        return Err(KeyChainError::InvalidBip44DerivationPath(
-            derivation_path.clone(),
-        ));
+        return Err(KeyChainError::InvalidBip44DerivationPath(derivation_path.clone()));
     }
     let path = derivation_path.as_slice();
     // Calculate the key purpose and index

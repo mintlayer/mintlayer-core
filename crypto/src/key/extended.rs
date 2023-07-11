@@ -50,9 +50,7 @@ impl ExtendedPrivateKey {
         match key_kind {
             ExtendedKeyKind::Secp256k1Schnorr => {
                 let secp_key = Secp256k1ExtendedPrivateKey::new_master(seed)?;
-                Ok(ExtendedPrivateKey {
-                    key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(secp_key),
-                })
+                Ok(ExtendedPrivateKey { key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(secp_key) })
             }
         }
     }
@@ -69,12 +67,8 @@ impl ExtendedPrivateKey {
             ExtendedKeyKind::Secp256k1Schnorr => {
                 let k = Secp256k1ExtendedPrivateKey::new(rng);
                 (
-                    ExtendedPrivateKey {
-                        key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(k.0),
-                    },
-                    ExtendedPublicKey {
-                        pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(k.1),
-                    },
+                    ExtendedPrivateKey { key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(k.0) },
+                    ExtendedPublicKey { pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(k.1) },
                 )
             }
         }
@@ -116,9 +110,7 @@ impl ExtendedPublicKey {
         match private_key.get_internal_key() {
             ExtendedPrivateKeyHolder::Secp256k1Schnorr(ref k) => {
                 let secp_key = Secp256k1ExtendedPublicKey::from_private_key(k);
-                ExtendedPublicKey {
-                    pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(secp_key),
-                }
+                ExtendedPublicKey { pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(secp_key) }
             }
         }
     }
@@ -135,9 +127,7 @@ impl Derivable for ExtendedPrivateKey {
         match self.key {
             ExtendedPrivateKeyHolder::Secp256k1Schnorr(key) => {
                 let secp_key = key.derive_child(num)?;
-                Ok(ExtendedPrivateKey {
-                    key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(secp_key),
-                })
+                Ok(ExtendedPrivateKey { key: ExtendedPrivateKeyHolder::Secp256k1Schnorr(secp_key) })
             }
         }
     }

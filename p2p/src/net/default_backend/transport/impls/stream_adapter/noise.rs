@@ -47,17 +47,11 @@ impl NoiseEncryptionAdapter {
                 .generate_keypair()
                 .expect("key generation must succeed"),
         );
-        Self {
-            local_key,
-            handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
-        }
+        Self { local_key, handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT }
     }
 
     pub fn with_handshake_timeout(self, handshake_timeout: Duration) -> Self {
-        Self {
-            local_key: self.local_key,
-            handshake_timeout,
-        }
+        Self { local_key: self.local_key, handshake_timeout }
     }
 }
 

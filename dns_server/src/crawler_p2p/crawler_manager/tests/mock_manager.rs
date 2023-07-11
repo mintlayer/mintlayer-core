@@ -75,9 +75,7 @@ impl MockStateRef {
     pub fn node_online(&self, ip: SocketAddr) {
         let old = self.online.lock().unwrap().insert(
             ip,
-            TestNode {
-                chain_config: Arc::new(common::chain::config::create_mainnet()),
-            },
+            TestNode { chain_config: Arc::new(common::chain::config::create_mainnet()) },
         );
         assert!(old.is_none());
     }
@@ -225,10 +223,7 @@ pub fn test_crawler(
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let reserved_nodes = reserved_nodes.iter().map(ToString::to_string).collect();
-    let crawler_config = CrawlerManagerConfig {
-        reserved_nodes,
-        default_p2p_port: 3031,
-    };
+    let crawler_config = CrawlerManagerConfig { reserved_nodes, default_p2p_port: 3031 };
 
     let state = MockStateRef {
         crawler_config: crawler_config.clone(),
@@ -238,10 +233,7 @@ pub fn test_crawler(
         conn_tx,
     };
 
-    let conn = MockConnectivityHandle {
-        state: state.clone(),
-        conn_rx,
-    };
+    let conn = MockConnectivityHandle { state: state.clone(), conn_rx };
     let sync = MockSyncingEventReceiver {};
 
     let storage = storage::inmemory::InMemory::new();

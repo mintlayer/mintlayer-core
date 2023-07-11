@@ -74,10 +74,7 @@ impl RpcCreds {
     ) -> Result<Self, RpcCredsError> {
         match (username, password) {
             (Some(username), Some(password)) => {
-                utils::ensure!(
-                    cookie_file.is_none(),
-                    RpcCredsError::InvalidCookieFileConfig
-                );
+                utils::ensure!(cookie_file.is_none(), RpcCredsError::InvalidCookieFileConfig);
                 Self::basic(username, password)
             }
 
@@ -93,11 +90,7 @@ impl RpcCreds {
                 write_file_atomically(&cookie_file, &cookie)
                     .map_err(|e| RpcCredsError::CookieFileIoError(cookie_file.clone(), e))?;
 
-                Ok(Self {
-                    username,
-                    password,
-                    cookie_file: Some(cookie_file),
-                })
+                Ok(Self { username, password, cookie_file: Some(cookie_file) })
             }
 
             _ => Err(RpcCredsError::InvalidUsernamePasswordConfig),

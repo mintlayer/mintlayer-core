@@ -70,10 +70,7 @@ pub struct TxMainChainPosition {
 
 impl TxMainChainPosition {
     pub fn new(block_id: Id<Block>, byte_offset_in_block: u32) -> Self {
-        TxMainChainPosition {
-            block_id,
-            byte_offset_in_block,
-        }
+        TxMainChainPosition { block_id, byte_offset_in_block }
     }
 
     pub fn block_id(&self) -> &Id<Block> {
@@ -89,10 +86,7 @@ impl TxMainChainPosition {
 pub enum SpendError {
     AlreadySpent(Spender),
     AlreadyUnspent,
-    OutOfRange {
-        tx_id: Option<Spender>,
-        source_output_index: usize,
-    },
+    OutOfRange { tx_id: Option<Spender>, source_output_index: usize },
 }
 
 /// This enum represents that we can either spend from a block reward or a regular transaction
@@ -208,10 +202,9 @@ impl TxMainChainIndex {
         let index = index as usize;
 
         match self.spent.get_mut(index) {
-            None => Err(SpendError::OutOfRange {
-                tx_id: Some(spender),
-                source_output_index: index,
-            }),
+            None => {
+                Err(SpendError::OutOfRange { tx_id: Some(spender), source_output_index: index })
+            }
             Some(spent_state) => Self::spend_internal(spent_state, spender),
         }
     }
@@ -220,10 +213,7 @@ impl TxMainChainIndex {
         let index = index as usize;
 
         match self.spent.get_mut(index) {
-            None => Err(SpendError::OutOfRange {
-                tx_id: None,
-                source_output_index: index,
-            }),
+            None => Err(SpendError::OutOfRange { tx_id: None, source_output_index: index }),
             Some(spent_state) => Self::unspend_internal(spent_state),
         }
     }
@@ -266,10 +256,7 @@ impl TxMainChainIndex {
         let spent_vec = std::iter::repeat_with(|| OutputSpentState::Unspent)
             .take(output_count as usize)
             .collect();
-        let res = TxMainChainIndex {
-            position,
-            spent: spent_vec,
-        };
+        let res = TxMainChainIndex { position, spent: spent_vec };
         Ok(res)
     }
 }

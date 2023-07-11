@@ -119,55 +119,47 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
 fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     const NUM_DBS: usize = 5;
-    using_proptest(
-        file!(),
-        backend_fn,
-        gen::entries(NUM_DBS, 0usize..20),
-        |backend, entries| {
-            let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
+    using_proptest(file!(), backend_fn, gen::entries(NUM_DBS, 0usize..20), |backend, entries| {
+        let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
 
-            // Add all entries to the database
-            let mut dbtx = store.transaction_rw(None).unwrap();
-            for ((db, key), val) in &entries {
-                dbtx.put(*db, key.clone(), val.clone()).unwrap();
-            }
-            dbtx.commit().unwrap();
+        // Add all entries to the database
+        let mut dbtx = store.transaction_rw(None).unwrap();
+        for ((db, key), val) in &entries {
+            dbtx.put(*db, key.clone(), val.clone()).unwrap();
+        }
+        dbtx.commit().unwrap();
 
-            // check all entries have been added
-            let dbtx = store.transaction_ro().unwrap();
-            for ((db, key), val) in &entries {
-                assert_eq!(
-                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
-                    val.as_ref() as &[u8]
-                );
-            }
-            drop(dbtx);
+        // check all entries have been added
+        let dbtx = store.transaction_ro().unwrap();
+        for ((db, key), val) in &entries {
+            assert_eq!(
+                dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                val.as_ref() as &[u8]
+            );
+        }
+        drop(dbtx);
 
-            // remove all entries
-            let mut dbtx = store.transaction_rw(None).unwrap();
-            for (db, key) in entries.keys() {
-                dbtx.del(*db, key).unwrap();
-            }
-            dbtx.commit().unwrap();
+        // remove all entries
+        let mut dbtx = store.transaction_rw(None).unwrap();
+        for (db, key) in entries.keys() {
+            dbtx.del(*db, key).unwrap();
+        }
+        dbtx.commit().unwrap();
 
-            // Check entries no longer present
-            let dbtx = store.transaction_ro().unwrap();
-            for (db, key) in entries.keys() {
-                assert_eq!(dbtx.get(*db, key), Ok(None));
-            }
-            drop(dbtx);
-        },
-    )
+        // Check entries no longer present
+        let dbtx = store.transaction_ro().unwrap();
+        for (db, key) in entries.keys() {
+            assert_eq!(dbtx.get(*db, key), Ok(None));
+        }
+        drop(dbtx);
+    })
 }
 
 fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
         backend_fn,
-        (
-            gen::key(1000),
-            gen::prop::collection::vec(gen::any::<Data>(), 0..100),
-        ),
+        (gen::key(1000), gen::prop::collection::vec(gen::any::<Data>(), 0..100)),
         |backend, (key, vals)| {
             let store = backend.open(desc(1)).expect("db open to succeed");
             let last = vals.last().cloned();
@@ -212,10 +204,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let dbtx = store.transaction_ro().unwrap();
             for ent @ (db, key) in entries1.keys().chain(entries2.keys()).chain(extra_keys.iter()) {
                 let expected = entries2.get(ent).or_else(|| entries1.get(ent)).map(AsRef::as_ref);
-                assert_eq!(
-                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()),
-                    expected
-                );
+                assert_eq!(dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()), expected);
             }
             drop(dbtx);
 
@@ -248,11 +237,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
     using_proptest(
         file!(),
         backend_fn,
-        (
-            gen::actions(100, 0..20),
-            gen::actions(100, 0..20),
-            gen::actions(100, 0..20),
-        ),
+        (gen::actions(100, 0..20), gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (to_prepopulate, to_abort, to_commit)| {
             let model = Model::from_actions(to_prepopulate.clone());
             let store = backend.open(desc(1)).expect("db open to succeed");
@@ -349,10 +334,7 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
         backend_fn,
-        (
-            gen::actions(100, 0..20),
-            gen::prop::collection::vec(gen::key(100), 0..20),
-        ),
+        (gen::actions(100, 0..20), gen::prop::collection::vec(gen::key(100), 0..20)),
         |backend, (actions, keys)| {
             let store = backend.open(desc(5)).expect("db open to succeed");
 
@@ -437,24 +419,19 @@ fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 }
 
 fn post_commit_consistency<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    using_proptest(
-        file!(),
-        backend_fn,
-        gen::actions(100, 0..50),
-        |backend, actions| {
-            // Open storage
-            let store = backend.open(desc(1)).expect("db open to succeed");
+    using_proptest(file!(), backend_fn, gen::actions(100, 0..50), |backend, actions| {
+        // Open storage
+        let store = backend.open(desc(1)).expect("db open to succeed");
 
-            let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(MAPID.0, actions.into_iter());
-            let model = Model::from_tx(&dbtx, MAPID.0);
-            dbtx.commit().unwrap();
+        let mut dbtx = store.transaction_rw(None).unwrap();
+        dbtx.apply_actions(MAPID.0, actions.into_iter());
+        let model = Model::from_tx(&dbtx, MAPID.0);
+        dbtx.commit().unwrap();
 
-            // The state from the transaction just before committing should de the same as the
-            // state of the database after the commit.
-            assert_eq!(Model::from_db(&store, MAPID.0), model);
-        },
-    )
+        // The state from the transaction just before committing should de the same as the
+        // state of the database after the commit.
+        assert_eq!(Model::from_db(&store, MAPID.0), model);
+    })
 }
 
 tests![

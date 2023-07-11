@@ -36,9 +36,7 @@ impl AmountsMap {
     >(
         iter: T,
     ) -> Result<Self, ConnectTransactionError> {
-        let mut result = Self {
-            data: BTreeMap::new(),
-        };
+        let mut result = Self { data: BTreeMap::new() };
 
         iter.into_fallible_iter()
             .for_each(|(t, v)| insert_or_increase(&mut result.data, t, v).map_err(Into::into))?;
@@ -140,9 +138,7 @@ mod tests {
                 ]
                 .into_iter()
                 .map(Ok)
-                .chain(vec![Err(
-                    ConnectTransactionError::InvariantBrokenAlreadyUnspent,
-                )]),
+                .chain(vec![Err(ConnectTransactionError::InvariantBrokenAlreadyUnspent)]),
             );
 
             let expected = ConnectTransactionError::InvariantBrokenAlreadyUnspent;

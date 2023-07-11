@@ -229,9 +229,9 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
+            )))
         ));
 
         // Case 8: the correct, working case
@@ -296,10 +296,7 @@ fn orphans_chains(#[case] seed: Seed) {
         // now we submit the missing block (at height 1), and we expect all blocks to be processed
         let last_block_index =
             tf.process_block(missing_block, BlockSource::Local).unwrap().unwrap();
-        assert_eq!(
-            last_block_index.block_height(),
-            (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
-        );
+        assert_eq!(last_block_index.block_height(), (MAX_ORPHANS_COUNT_IN_TEST as u64).into());
         let current_best = tf
             .best_block_id()
             .classify(tf.chainstate.get_chain_config())
@@ -370,10 +367,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                 let tx_index = tx_index.unwrap();
                 for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
                     let idx = idx as u32;
-                    assert_eq!(
-                        tx_index.get_spent_state(idx).unwrap(),
-                        OutputSpentState::Unspent
-                    );
+                    assert_eq!(tx_index.get_spent_state(idx).unwrap(), OutputSpentState::Unspent);
                     let utxo =
                         tf.chainstate.utxo(&UtxoOutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
                     assert_eq!(utxo.output(), txo);
@@ -476,10 +470,7 @@ fn straight_chain(#[case] seed: Seed) {
 
             assert_eq!(new_block_index.prev_block_id(), &prev_block_id);
             assert!(new_block_index.chain_trust() > block_index.chain_trust());
-            assert_eq!(
-                new_block_index.block_height(),
-                block_index.block_height().next_height()
-            );
+            assert_eq!(new_block_index.block_height(), block_index.block_height().next_height());
 
             block_index = GenBlockIndex::Block(new_block_index);
             prev_blk_id = new_block.get_id().into();
@@ -505,10 +496,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
             }
         )),
         tf.chainstate
-            .get_ancestor(
-                &tf.best_block_index(),
-                u64::try_from(invalid_height).unwrap().into()
-            )
+            .get_ancestor(&tf.best_block_index(), u64::try_from(invalid_height).unwrap().into())
             .unwrap_err()
     );
 }
@@ -529,10 +517,7 @@ fn get_ancestor(#[case] seed: Seed) {
         .expect("Chain creation to succeed");
 
     let ancestor = GenBlockIndex::Block(tf.index_at(ANCESTOR_HEIGHT).clone());
-    assert_eq!(
-        ancestor.block_height(),
-        BlockHeight::from(ANCESTOR_HEIGHT as u64)
-    );
+    assert_eq!(ancestor.block_height(), BlockHeight::from(ANCESTOR_HEIGHT as u64));
 
     let split = GenBlockIndex::Block(tf.index_at(SPLIT_HEIGHT).clone());
     assert_eq!(split.block_height(), BlockHeight::from(SPLIT_HEIGHT as u64));
@@ -549,12 +534,8 @@ fn get_ancestor(#[case] seed: Seed) {
     }
 
     // Create the first chain and test get_ancestor for this chain's  last block
-    tf.create_chain(
-        &split.block_id(),
-        FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT,
-        &mut rng,
-    )
-    .expect("second chain");
+    tf.create_chain(&split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT, &mut rng)
+        .expect("second chain");
     let last_block_in_first_chain = tf.best_block_index();
 
     const ANCESTOR_IN_FIRST_CHAIN_HEIGHT: usize = 400;
@@ -600,11 +581,7 @@ fn get_ancestor(#[case] seed: Seed) {
 
     // Create a second chain and test get_ancestor for this chain's last block
     let last_block_in_second_chain = tf
-        .create_chain(
-            &split.block_id(),
-            SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
-            &mut rng,
-        )
+        .create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT, &mut rng)
         .expect("second chain");
     assert_eq!(
         ancestor.block_id(),
@@ -637,21 +614,13 @@ fn last_common_ancestor(#[case] seed: Seed) {
     let split = GenBlockIndex::Block(tf.index_at(SPLIT_HEIGHT).clone());
 
     // First branch of fork
-    tf.create_chain(
-        &split.block_id(),
-        FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT,
-        &mut rng,
-    )
-    .expect("Chain creation to succeed");
+    tf.create_chain(&split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT, &mut rng)
+        .expect("Chain creation to succeed");
     let last_block_in_first_chain = tf.best_block_index();
 
     // Second branch of fork
     let last_block_in_second_chain = tf
-        .create_chain(
-            &split.block_id(),
-            SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
-            &mut rng,
-        )
+        .create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT, &mut rng)
         .unwrap();
     let last_block_in_second_chain = tf.block_index(&last_block_in_second_chain);
 
@@ -699,20 +668,14 @@ fn consensus_type(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             pow,
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
                 initial_difficulty: min_difficulty.into(),
             }),
         ),
-        (
-            ignore_again,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_again, UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             pow_again,
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
@@ -898,10 +861,7 @@ fn pow(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             pow_consensus,
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
@@ -941,11 +901,11 @@ fn pow(#[case] seed: Seed) {
         .expect("generate invalid block");
     assert!(matches!(
         tf.process_block(random_invalid_block.clone(), BlockSource::Local),
-        Err(ChainstateError::ProcessBlockError(
-            BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
-                ConsensusVerificationError::PoWError(ConsensusPoWError::InvalidPoW(_))
+        Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoWError(
+                ConsensusPoWError::InvalidPoW(_)
             ))
-        ))
+        )))
     ));
 
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
@@ -977,10 +937,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             pow_consensus,
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
@@ -1066,9 +1023,8 @@ fn blocks_from_the_future(#[case] seed: Seed) {
         let config = create_unit_test_config();
 
         // current time is genesis time
-        let current_time = Arc::new(SeqCstAtomicU64::new(
-            config.genesis_block().timestamp().as_int_seconds(),
-        ));
+        let current_time =
+            Arc::new(SeqCstAtomicU64::new(config.genesis_block().timestamp().as_int_seconds()));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(config)
@@ -1224,10 +1180,7 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
 
         let first_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .build();

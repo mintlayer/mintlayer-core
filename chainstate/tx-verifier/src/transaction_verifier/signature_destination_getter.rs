@@ -134,9 +134,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                 }
             };
 
-        Self {
-            f: Box::new(destination_getter),
-        }
+        Self { f: Box::new(destination_getter) }
     }
 
     pub fn new_for_block_reward<U: UtxosView>(utxos_view: &'a U) -> Self {
@@ -185,9 +183,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                 }
             };
 
-        Self {
-            f: Box::new(destination_getter),
-        }
+        Self { f: Box::new(destination_getter) }
     }
 
     #[allow(dead_code)]

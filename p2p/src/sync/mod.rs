@@ -211,11 +211,9 @@ where
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) {
         match event {
-            SyncingEvent::Connected {
-                peer_id,
-                services,
-                sync_rx,
-            } => self.register_peer(peer_id, services, sync_rx),
+            SyncingEvent::Connected { peer_id, services, sync_rx } => {
+                self.register_peer(peer_id, services, sync_rx)
+            }
             SyncingEvent::Disconnected { peer_id } => self.unregister_peer(peer_id),
         }
     }
@@ -228,13 +226,11 @@ pub async fn subscribe_to_new_tip(
     let (sender, receiver) = mpsc::unbounded_channel();
 
     let subscribe_func =
-        Arc::new(
-            move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                chainstate::ChainstateEvent::NewTip(block_id, _) => {
-                    let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
-                }
-            },
-        );
+        Arc::new(move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+            chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
+            }
+        });
 
     chainstate_handle
         .call_mut(|this| this.subscribe_to_events(subscribe_func))

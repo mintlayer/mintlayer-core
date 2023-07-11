@@ -60,10 +60,7 @@ fn setup_test_chain_with_staked_pool(
 ) -> (TestFramework, PoolId, PrivateKey) {
     let difficulty = Uint256::MAX;
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -102,10 +99,7 @@ fn setup_test_chain_with_staked_pool(
             TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
-        .add_output(TxOutput::CreateStakePool(
-            pool_id,
-            Box::new(stake_pool_data),
-        ))
+        .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
         .build();
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 

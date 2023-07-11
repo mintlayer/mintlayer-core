@@ -59,10 +59,7 @@ fn get_locator(#[case] seed: Seed) {
 
             // Check the locator length.
             let locator = btf.chainstate.get_locator().unwrap();
-            assert_eq!(
-                locator.len(),
-                blocks.next_power_of_two().trailing_zeros() as usize + 1
-            );
+            assert_eq!(locator.len(), blocks.next_power_of_two().trailing_zeros() as usize + 1);
 
             // Check the locator headers.
             let height =
@@ -131,10 +128,7 @@ fn get_headers(#[case] seed: Seed) {
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
         let locator = tf.chainstate.get_locator().unwrap();
-        assert_eq!(
-            tf.chainstate.get_headers(locator.clone(), header_limit).unwrap(),
-            vec![],
-        );
+        assert_eq!(tf.chainstate.get_headers(locator.clone(), header_limit).unwrap(), vec![],);
 
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
@@ -446,9 +440,9 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         let filtered_headers = tf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
         assert_eq!(
             filtered_headers,
-            Err(ChainstateError::FailedToReadProperty(
-                PropertyQueryError::BlockNotFound(Id::new(headers[1].prev_block_id().get()))
-            ))
+            Err(ChainstateError::FailedToReadProperty(PropertyQueryError::BlockNotFound(Id::new(
+                headers[1].prev_block_id().get()
+            ))))
         );
     });
 }

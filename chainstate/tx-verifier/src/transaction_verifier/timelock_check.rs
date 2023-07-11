@@ -77,10 +77,7 @@ fn check_timelock(
         }
     };
 
-    ensure!(
-        past_lock,
-        ConnectTransactionError::TimeLockViolation(outpoint.clone())
-    );
+    ensure!(past_lock, ConnectTransactionError::TimeLockViolation(outpoint.clone()));
 
     Ok(())
 }
@@ -269,8 +266,8 @@ pub fn check_output_maturity_setting(
         }
         OutputTimeLock::UntilHeight(_)
         | OutputTimeLock::UntilTime(_)
-        | OutputTimeLock::ForSeconds(_) => Err(
-            OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
-        ),
+        | OutputTimeLock::ForSeconds(_) => {
+            Err(OutputMaturityError::InvalidOutputMaturitySettingType(outpoint))
+        }
     }
 }

@@ -107,9 +107,7 @@ impl<T: ?Sized> Clone for Handle<T> {
 
 impl<T: ?Sized> ShallowClone for Handle<T> {
     fn shallow_clone(&self) -> Self {
-        Self {
-            action_tx: self.action_tx.clone(),
-        }
+        Self { action_tx: self.action_tx.clone() }
     }
 }
 
@@ -147,10 +145,9 @@ impl<T> std::future::Future for CallResult<T> {
     type Output = Result<T, CallError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        self.0.as_mut().map_or_else(
-            |err| task::Poll::Ready(Err(*err)),
-            |res| Pin::new(res).poll(cx),
-        )
+        self.0
+            .as_mut()
+            .map_or_else(|err| task::Poll::Ready(Err(*err)), |res| Pin::new(res).poll(cx))
     }
 }
 

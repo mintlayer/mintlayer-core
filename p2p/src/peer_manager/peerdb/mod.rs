@@ -219,10 +219,8 @@ where
             let banned = now <= *banned_till;
 
             if !banned {
-                storage::update_db(&self.storage, |tx| {
-                    tx.del_banned_address(&address.to_string())
-                })
-                .expect("removing banned address is expected to succeed");
+                storage::update_db(&self.storage, |tx| tx.del_banned_address(&address.to_string()))
+                    .expect("removing banned address is expected to succeed");
             }
 
             banned
@@ -275,11 +273,7 @@ where
 
         let is_persistent_old = address_data.is_persistent();
 
-        log::debug!(
-            "update address {} state to {:?}",
-            address.to_string(),
-            transition,
-        );
+        log::debug!("update address {} state to {:?}", address.to_string(), transition,);
 
         address_data.transition_to(transition, now, &mut make_pseudo_rng());
 
@@ -287,16 +281,12 @@ where
 
         match (is_persistent_old, is_persistent_new) {
             (false, true) => {
-                storage::update_db(&self.storage, |tx| {
-                    tx.add_known_address(&address.to_string())
-                })
-                .expect("adding address expected to succeed (peer_connected)");
+                storage::update_db(&self.storage, |tx| tx.add_known_address(&address.to_string()))
+                    .expect("adding address expected to succeed (peer_connected)");
             }
             (true, false) => {
-                storage::update_db(&self.storage, |tx| {
-                    tx.del_known_address(&address.to_string())
-                })
-                .expect("adding address expected to succeed (peer_connected)");
+                storage::update_db(&self.storage, |tx| tx.del_known_address(&address.to_string()))
+                    .expect("adding address expected to succeed (peer_connected)");
             }
             _ => {}
         }

@@ -72,11 +72,8 @@ where
     let addr = conn2.local_addresses();
     conn1.connect(addr[0].clone()).unwrap();
 
-    if let Ok(ConnectivityEvent::OutboundAccepted {
-        address,
-        peer_info,
-        receiver_address: _,
-    }) = conn1.poll_next().await
+    if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address: _ }) =
+        conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
@@ -147,11 +144,7 @@ where
     conn1.connect(bind_address[0].clone()).unwrap();
     let res2 = conn2.poll_next().await;
     match res2.unwrap() {
-        ConnectivityEvent::InboundAccepted {
-            address: _,
-            peer_info,
-            receiver_address: _,
-        } => {
+        ConnectivityEvent::InboundAccepted { address: _, peer_info, receiver_address: _ } => {
             assert_eq!(peer_info.network, *config.magic_bytes());
             assert_eq!(peer_info.version, *config.version());
             assert_eq!(peer_info.user_agent, p2p_config.user_agent);
@@ -219,11 +212,7 @@ where
     let res2 = conn2.poll_next().await;
 
     match res2.unwrap() {
-        ConnectivityEvent::InboundAccepted {
-            address: _,
-            peer_info,
-            receiver_address: _,
-        } => {
+        ConnectivityEvent::InboundAccepted { address: _, peer_info, receiver_address: _ } => {
             conn2.disconnect(peer_info.peer_id).unwrap();
         }
         _ => panic!("invalid event received, expected incoming connection"),
@@ -300,11 +289,8 @@ where
     // Check that we can still connect normally after
     let addr = conn2.local_addresses();
     conn1.connect(addr[0].clone()).unwrap();
-    if let Ok(ConnectivityEvent::OutboundAccepted {
-        address,
-        peer_info,
-        receiver_address: _,
-    }) = conn1.poll_next().await
+    if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address: _ }) =
+        conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.protocol, NETWORK_PROTOCOL_CURRENT);

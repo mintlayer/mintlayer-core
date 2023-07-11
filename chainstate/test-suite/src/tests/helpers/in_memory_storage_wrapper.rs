@@ -38,10 +38,7 @@ pub struct InMemoryStorageWrapper {
 
 impl InMemoryStorageWrapper {
     pub fn new(storage: Store, chain_config: ChainConfig) -> Self {
-        Self {
-            storage,
-            chain_config,
-        }
+        Self { storage, chain_config }
     }
 }
 
@@ -60,9 +57,9 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         match block_id.classify(&self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
+            GenBlockId::Genesis(_id) => {
+                Ok(Some(GenBlockIndex::Genesis(Arc::clone(self.chain_config.genesis_block()))))
+            }
             GenBlockId::Block(id) => {
                 self.storage.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block))
             }

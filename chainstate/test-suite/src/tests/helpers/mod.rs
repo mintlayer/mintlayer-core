@@ -64,11 +64,7 @@ pub fn add_block_with_locked_output(
 
     let block_outputs = tf.outputs_from_genblock(tf.block_id(new_height.into()));
     assert!(block_outputs.contains_key(&tx_id.into()));
-    (
-        InputWitness::NoSignature(None),
-        TxInput::from_utxo(tx_id.into(), 1),
-        tx_id,
-    )
+    (InputWitness::NoSignature(None), TxInput::from_utxo(tx_id.into(), 1), tx_id)
 }
 
 pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {

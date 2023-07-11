@@ -202,15 +202,9 @@ async fn test_wallet_node_communication(
         chain_config.genesis_block_id()
     );
 
-    assert_eq!(
-        node_interface.get_block_id_at_height(1.into()).await.unwrap().unwrap(),
-        block_1_id
-    );
+    assert_eq!(node_interface.get_block_id_at_height(1.into()).await.unwrap().unwrap(), block_1_id);
 
-    assert_eq!(
-        node_interface.get_block_id_at_height(2.into()).await.unwrap(),
-        None
-    );
+    assert_eq!(node_interface.get_block_id_at_height(2.into()).await.unwrap(), None);
 
     let block_1 = node_interface.get_block(best_block_id.get().into()).await.unwrap().unwrap();
 

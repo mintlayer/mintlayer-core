@@ -51,10 +51,7 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
         let mut tx = storage.transaction_rw()?;
         tx.set_version(STORAGE_VERSION)?;
         tx.commit()?;
-        Ok(LoadedStorage {
-            known_addresses: BTreeSet::new(),
-            banned_addresses: BTreeMap::new(),
-        })
+        Ok(LoadedStorage { known_addresses: BTreeSet::new(), banned_addresses: BTreeMap::new() })
     }
 
     fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A, B>> {
@@ -87,9 +84,6 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-        Ok(LoadedStorage {
-            known_addresses,
-            banned_addresses,
-        })
+        Ok(LoadedStorage { known_addresses, banned_addresses })
     }
 }

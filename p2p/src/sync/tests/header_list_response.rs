@@ -107,10 +107,7 @@ async fn unordered_headers(#[case] seed: Seed) {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(
-        score,
-        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
-    );
+    assert_eq!(score, P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score());
     handle.assert_no_event().await;
 
     handle.join_subsystem_manager().await;
@@ -148,10 +145,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(
-        score,
-        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
-    );
+    assert_eq!(score, P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score());
     handle.assert_no_event().await;
 
     handle.join_subsystem_manager().await;

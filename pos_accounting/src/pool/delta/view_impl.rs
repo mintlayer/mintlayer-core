@@ -49,15 +49,14 @@ fn sum_maps<K: Ord + Copy>(
             Some(pv) => *pv,
             None => Amount::from_atoms(0),
         };
-        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
-        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorSumToSignedFailed,
-        ))?;
-        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
+        let base_amount = base_value
+            .into_signed()
+            .ok_or(Error::AccountingError(accounting::Error::ArithmeticErrorToUnsignedFailed))?;
+        let new_amount = (base_amount + v)
+            .ok_or(Error::AccountingError(accounting::Error::ArithmeticErrorSumToSignedFailed))?;
+        let new_amount = new_amount
+            .into_unsigned()
+            .ok_or(Error::AccountingError(accounting::Error::ArithmeticErrorToUnsignedFailed))?;
         m1.insert(k, new_amount);
     }
     Ok(m1)

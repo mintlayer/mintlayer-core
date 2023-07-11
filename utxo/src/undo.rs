@@ -77,10 +77,7 @@ pub struct UtxosTxUndoWithSources {
 
 impl UtxosTxUndoWithSources {
     pub fn new(utxos: Vec<Option<Utxo>>, sources: Vec<OutPointSourceId>) -> Self {
-        Self {
-            utxos: UtxosTxUndo::new(utxos),
-            sources,
-        }
+        Self { utxos: UtxosTxUndo::new(utxos), sources }
     }
 
     pub fn utxos(&self) -> &[Option<Utxo>] {

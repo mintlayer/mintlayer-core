@@ -93,9 +93,7 @@ impl PrivateKey {
 
 impl From<Secp256k1PrivateKey> for PrivateKey {
     fn from(sk: Secp256k1PrivateKey) -> Self {
-        Self {
-            key: PrivateKeyHolder::Secp256k1Schnorr(sk),
-        }
+        Self { key: PrivateKeyHolder::Secp256k1Schnorr(sk) }
     }
 }
 
@@ -132,9 +130,7 @@ impl PublicKey {
 
 impl From<Secp256k1PublicKey> for PublicKey {
     fn from(pk: Secp256k1PublicKey) -> Self {
-        Self {
-            pub_key: PublicKeyHolder::Secp256k1Schnorr(pk),
-        }
+        Self { pub_key: PublicKeyHolder::Secp256k1Schnorr(pk) }
     }
 }
 

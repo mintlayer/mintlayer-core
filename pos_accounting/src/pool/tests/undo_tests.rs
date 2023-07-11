@@ -65,14 +65,8 @@ fn create_pool_check_undo_check(
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, undo) = create_pool(rng, op, pledged_amount).unwrap();
 
-    assert_eq!(
-        op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_balance(pool_id).expect("ok").expect("some"), pledged_amount);
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(op.get_pool_delegations_shares(pool_id).unwrap(), None);
 
     op.undo(undo).unwrap();
@@ -173,14 +167,8 @@ fn decommission_pool_check_undo_check(
 
     op.undo(undo).unwrap();
 
-    assert_eq!(
-        op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_balance(pool_id).expect("ok").expect("some"), pledged_amount);
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(op.get_pool_delegations_shares(pool_id).expect("ok"), None);
 }
 
@@ -284,28 +272,16 @@ fn check_delegation_id(
         DelegationData::new(pool_id, del_pub_key)
     );
     assert_eq!(op.get_delegation_balance(delegation_id).expect("ok"), None);
-    assert_eq!(
-        op.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
-        None
-    );
+    assert_eq!(op.get_pool_delegation_share(pool_id, delegation_id).expect("ok"), None);
 
     op.undo(undo).unwrap();
 
     assert_eq!(op.get_delegation_data(delegation_id).expect("ok"), None);
 
-    assert_eq!(
-        op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_balance(pool_id).expect("ok").expect("some"), pledged_amount);
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(op.get_delegation_balance(delegation_id).expect("ok"), None);
-    assert_eq!(
-        op.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
-        None
-    );
+    assert_eq!(op.get_pool_delegation_share(pool_id, delegation_id).expect("ok"), None);
 }
 
 #[rstest]
@@ -434,14 +410,8 @@ fn check_delegate_staking(
         op.get_delegation_data(delegation_id).expect("ok").expect("some"),
         DelegationData::new(pool_id, del_pub_key)
     );
-    assert_eq!(
-        op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_balance(pool_id).expect("ok").expect("some"), pledged_amount);
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(op.get_delegation_balance(delegation_id).expect("ok"), None);
 }
 
@@ -468,10 +438,7 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
             BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
             BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
             BTreeMap::from([(delegation_id, delegated_amount)]),
-            BTreeMap::from([(
-                delegation_id,
-                DelegationData::new(pool_id, del_pub_key.clone()),
-            )]),
+            BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key.clone()))]),
         );
         assert_eq!(storage, expected_storage);
         delta_undo
@@ -569,10 +536,7 @@ fn check_spend_share(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
         ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap()
     );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(
         op.get_delegation_data(delegation_id).expect("ok").expect("some"),
         DelegationData::new(pool_id, del_pub_key.clone())
@@ -592,10 +556,7 @@ fn check_spend_share(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
         (pledged_amount + delegated_amount).unwrap()
     );
-    assert_eq!(
-        op.get_pool_data(pool_id).expect("ok").expect("some"),
-        pool_data
-    );
+    assert_eq!(op.get_pool_data(pool_id).expect("ok").expect("some"), pool_data);
     assert_eq!(
         op.get_delegation_data(delegation_id).expect("ok").expect("some"),
         DelegationData::new(pool_id, del_pub_key)
@@ -635,10 +596,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
                 (delegated_amount - spent_amount).unwrap(),
             )]),
             BTreeMap::from([(delegation_id, (delegated_amount - spent_amount).unwrap())]),
-            BTreeMap::from([(
-                delegation_id,
-                DelegationData::new(pool_id, del_pub_key.clone()),
-            )]),
+            BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key.clone()))]),
         );
         assert_eq!(storage, expected_storage);
         delta_undo

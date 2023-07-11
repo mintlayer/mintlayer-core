@@ -50,24 +50,9 @@ pub fn check_nft_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    check_token_ticker(
-        chain_config,
-        &issuance.metadata.ticker,
-        tx_id,
-        source_block_id,
-    )?;
-    check_nft_name(
-        chain_config,
-        &issuance.metadata.name,
-        tx_id,
-        source_block_id,
-    )?;
-    check_nft_description(
-        chain_config,
-        &issuance.metadata.description,
-        tx_id,
-        source_block_id,
-    )?;
+    check_token_ticker(chain_config, &issuance.metadata.ticker, tx_id, source_block_id)?;
+    check_nft_name(chain_config, &issuance.metadata.name, tx_id, source_block_id)?;
+    check_nft_description(chain_config, &issuance.metadata.description, tx_id, source_block_id)?;
 
     let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
         .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
@@ -131,10 +116,7 @@ pub fn check_tokens_issuance_data(
 
     // Check decimals
     if number_of_decimals > &chain_config.token_max_dec_count() {
-        return Err(TokensError::IssueErrorTooManyDecimals(
-            tx_id,
-            source_block_id,
-        ));
+        return Err(TokensError::IssueErrorTooManyDecimals(tx_id, source_block_id));
     }
 
     // Check URI

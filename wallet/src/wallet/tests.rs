@@ -104,11 +104,8 @@ fn get_address(
     let address_priv_key = root_key
         .derive_absolute_path(&DerivationPath::try_from(address_path).unwrap())
         .unwrap();
-    Address::from_public_key(
-        chain_config,
-        &address_priv_key.to_public_key().into_public_key(),
-    )
-    .unwrap()
+    Address::from_public_key(chain_config, &address_priv_key.to_public_key().into_public_key())
+        .unwrap()
 }
 
 #[track_caller]
@@ -118,10 +115,7 @@ fn verify_wallet_balance(
     expected_balance: Amount,
 ) {
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -132,10 +126,7 @@ fn verify_wallet_balance(
     let db_copy = wallet.db.clone();
     let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy).unwrap();
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -150,11 +141,7 @@ fn test_balance_from_genesis(
     utxos: Vec<TxOutput>,
     expected_balance: Amount,
 ) {
-    let genesis = Genesis::new(
-        String::new(),
-        BlockTimestamp::from_int_seconds(1639975460),
-        utxos,
-    );
+    let genesis = Genesis::new(String::new(), BlockTimestamp::from_int_seconds(1639975460), utxos);
     let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
 
     let db = create_wallet_in_memory().unwrap();
@@ -189,10 +176,8 @@ fn wallet_balance_genesis() {
     let chain_type = ChainType::Mainnet;
 
     let genesis_amount = Amount::from_atoms(12345);
-    let genesis_output = TxOutput::Transfer(
-        OutputValue::Coin(genesis_amount),
-        Destination::AnyoneCanSpend,
-    );
+    let genesis_output =
+        TxOutput::Transfer(OutputValue::Coin(genesis_amount), Destination::AnyoneCanSpend);
 
     test_balance_from_genesis(chain_type, vec![genesis_output.clone()], genesis_amount);
 
@@ -214,13 +199,8 @@ fn wallet_balance_genesis() {
     for purpose in KeyPurpose::ALL {
         for address_index in address_indexes {
             let address_index: U31 = address_index.try_into().unwrap();
-            let address = get_address(
-                &chain_config,
-                MNEMONIC,
-                DEFAULT_ACCOUNT_INDEX,
-                purpose,
-                address_index,
-            );
+            let address =
+                get_address(&chain_config, MNEMONIC, DEFAULT_ACCOUNT_INDEX, purpose, address_index);
 
             let genesis_amount = Amount::from_atoms(23456);
             let genesis_output = make_address_output(address, genesis_amount).unwrap();
@@ -241,10 +221,8 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_type = ChainType::Mainnet;
     let genesis_amount = Amount::from_atoms(rng.gen_range(1..10000));
-    let genesis_output = TxOutput::Transfer(
-        OutputValue::Coin(genesis_amount),
-        Destination::AnyoneCanSpend,
-    );
+    let genesis_output =
+        TxOutput::Transfer(OutputValue::Coin(genesis_amount), Destination::AnyoneCanSpend);
     let genesis = Genesis::new(
         String::new(),
         BlockTimestamp::from_int_seconds(1639975460),
@@ -256,10 +234,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -271,10 +246,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     wallet.lock_wallet().unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -290,10 +262,7 @@ fn wallet_balance_block_reward() {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -355,11 +324,7 @@ fn wallet_balance_block_reward() {
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block2_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
-    verify_wallet_balance(
-        &chain_config,
-        &wallet,
-        (block1_amount + block2_amount).unwrap(),
-    );
+    verify_wallet_balance(&chain_config, &wallet, (block1_amount + block2_amount).unwrap());
 
     // Create a new block to replace the second block
     let block2_amount_new = Amount::from_atoms(30000);
@@ -375,9 +340,7 @@ fn wallet_balance_block_reward() {
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address, block2_amount_new).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(address, block2_amount_new).unwrap()]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
@@ -387,11 +350,7 @@ fn wallet_balance_block_reward() {
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block2_new_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
-    verify_wallet_balance(
-        &chain_config,
-        &wallet,
-        (block1_amount + block2_amount_new).unwrap(),
-    );
+    verify_wallet_balance(&chain_config, &wallet, (block1_amount + block2_amount_new).unwrap());
 }
 
 #[test]
@@ -410,12 +369,9 @@ fn wallet_balance_block_transactions() {
         0.try_into().unwrap(),
     );
 
-    let transaction1 = Transaction::new(
-        0,
-        Vec::new(),
-        vec![make_address_output(address, tx_amount1).unwrap()],
-    )
-    .unwrap();
+    let transaction1 =
+        Transaction::new(0, Vec::new(), vec![make_address_output(address, tx_amount1).unwrap()])
+            .unwrap();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
     let block1 = Block::new(
         vec![signed_transaction1],
@@ -457,12 +413,9 @@ fn wallet_balance_parent_child_transactions() {
         1.try_into().unwrap(),
     );
 
-    let transaction1 = Transaction::new(
-        0,
-        Vec::new(),
-        vec![make_address_output(address1, tx_amount1).unwrap()],
-    )
-    .unwrap();
+    let transaction1 =
+        Transaction::new(0, Vec::new(), vec![make_address_output(address1, tx_amount1).unwrap()])
+            .unwrap();
     let transaction_id1 = transaction1.get_id();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
 
@@ -551,12 +504,7 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     wallet.lock_wallet().unwrap();
 
     let err = wallet.create_account(None);
-    assert_eq!(
-        err,
-        Err(WalletError::DatabaseError(
-            wallet_storage::Error::WalletLocked
-        ))
-    );
+    assert_eq!(err, Err(WalletError::DatabaseError(wallet_storage::Error::WalletLocked)));
 
     let name: String = (0..rng.gen_range(0..10)).map(|_| rng.gen::<char>()).collect();
 
@@ -584,10 +532,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -619,10 +564,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     wallet.lock_wallet().unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -638,9 +580,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     assert_eq!(
         wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output.clone()]),
-        Err(WalletError::DatabaseError(
-            wallet_storage::Error::WalletLocked
-        ))
+        Err(WalletError::DatabaseError(wallet_storage::Error::WalletLocked))
     );
 
     // success after unlock
@@ -683,9 +623,7 @@ fn lock_wallet_fail_empty_password() {
     let empty_password = Some(String::new());
     assert_eq!(
         wallet.encrypt_wallet(&empty_password),
-        Err(WalletError::DatabaseError(
-            wallet_storage::Error::WalletEmptyPassword
-        ))
+        Err(WalletError::DatabaseError(wallet_storage::Error::WalletEmptyPassword))
     );
 }
 
@@ -700,10 +638,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -724,9 +659,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(address.clone(), block1_amount).unwrap()]),
     )
     .unwrap();
 
@@ -736,10 +669,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -753,14 +683,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
     let new_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(
-            TokenIssuance {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                amount_to_issue: token_amount_to_issue,
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-            },
-        )))),
+        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(TokenIssuance {
+            token_ticker: "XXXX".as_bytes().to_vec(),
+            amount_to_issue: token_amount_to_issue,
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+        })))),
         Destination::Address(pkh),
     );
 
@@ -773,19 +701,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         block1_id.into(),
         block1_timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(address.clone(), block1_amount).unwrap()]),
     )
     .unwrap();
 
     wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
 
     let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap();
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
@@ -829,10 +752,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     wallet.scan_new_blocks(BlockHeight::new(2), vec![block3]).unwrap();
 
     let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap();
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
@@ -849,10 +769,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let token_amount = token_balances
         .first()
         .map_or(Amount::ZERO, |(_token_id, token_amount)| *token_amount);
-    assert_eq!(
-        token_amount,
-        (token_amount_to_issue - tokens_to_transfer).expect("")
-    );
+    assert_eq!(token_amount, (token_amount_to_issue - tokens_to_transfer).expect(""));
 
     let not_enough_tokens_to_transfer =
         Amount::from_atoms(rng.gen_range(
@@ -893,10 +810,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -919,9 +833,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(address.clone(), block1_amount).unwrap()]),
     )
     .unwrap();
 
@@ -933,10 +845,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
     let coin_balance = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()
@@ -979,10 +888,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
 
     let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap();
     let balance_without_locked_transer =
         (((block1_amount * 2).unwrap() - amount_to_lock_then_transfer).unwrap()
@@ -997,10 +903,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     // check that for block_count_lock, the amount is not included
     for idx in 0..block_count_lock {
         let currency_balances = wallet
-            .get_balance(
-                DEFAULT_ACCOUNT_INDEX,
-                UtxoType::Transfer | UtxoType::LockThenTransfer,
-            )
+            .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
             .unwrap();
         assert_eq!(
             currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
@@ -1023,10 +926,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
 
     // check that after block_count_lock, the amount is included
     let currency_balances = wallet
-        .get_balance(
-            DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(DEFAULT_ACCOUNT_INDEX, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap();
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
@@ -1090,20 +990,14 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     for block in blocks {
         // not yet synced
         let err = wallet.get_balance(new_account_index, UtxoType::Transfer.into()).err().unwrap();
-        assert_eq!(
-            err,
-            WalletError::AccountNotSyncedWithIndex(new_account_index)
-        );
+        assert_eq!(err, WalletError::AccountNotSyncedWithIndex(new_account_index));
 
         let (_, block_height) = wallet.get_best_block_for_unsynced_account().unwrap();
         wallet.scan_new_blocks_for_unsynced_account(block_height, vec![block]).unwrap();
     }
     // now both account are in sync and can be used
     let coin_balance = wallet
-        .get_balance(
-            new_account_index,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-        )
+        .get_balance(new_account_index, UtxoType::Transfer | UtxoType::LockThenTransfer)
         .unwrap()
         .get(&Currency::Coin)
         .copied()

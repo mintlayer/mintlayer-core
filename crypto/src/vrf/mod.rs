@@ -89,12 +89,8 @@ impl VRFPrivateKey {
             VRFKeyKind::Schnorrkel => {
                 let k = schnorrkel::SchnorrkelPrivateKey::new(rng);
                 (
-                    VRFPrivateKey {
-                        key: VRFPrivateKeyHolder::Schnorrkel(k.0),
-                    },
-                    VRFPublicKey {
-                        pub_key: VRFPublicKeyHolder::Schnorrkel(k.1),
-                    },
+                    VRFPrivateKey { key: VRFPrivateKeyHolder::Schnorrkel(k.0) },
+                    VRFPublicKey { pub_key: VRFPublicKeyHolder::Schnorrkel(k.1) },
                 )
             }
         }
@@ -110,12 +106,8 @@ impl VRFPrivateKey {
             VRFKeyKind::Schnorrkel => {
                 let k = schnorrkel::SchnorrkelPrivateKey::new_using_random_bytes(bytes)?;
                 Ok((
-                    VRFPrivateKey {
-                        key: VRFPrivateKeyHolder::Schnorrkel(k.0),
-                    },
-                    VRFPublicKey {
-                        pub_key: VRFPublicKeyHolder::Schnorrkel(k.1),
-                    },
+                    VRFPrivateKey { key: VRFPrivateKeyHolder::Schnorrkel(k.0) },
+                    VRFPublicKey { pub_key: VRFPublicKeyHolder::Schnorrkel(k.1) },
                 ))
             }
         }
@@ -288,10 +280,7 @@ mod tests {
 
     fn make_arbitrary_transcript() -> WrappedTranscript {
         TranscriptAssembler::new(b"some context")
-            .attach(
-                b"some label",
-                TranscriptComponent::RawData(b"Data to commit".to_vec()),
-            )
+            .attach(b"some label", TranscriptComponent::RawData(b"Data to commit".to_vec()))
             .attach(b"some other label", TranscriptComponent::U64(42))
             .attach(
                 b"some third label",

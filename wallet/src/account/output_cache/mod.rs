@@ -46,10 +46,7 @@ pub struct OutputCache {
 
 impl OutputCache {
     pub fn empty() -> Self {
-        Self {
-            txs: BTreeMap::new(),
-            consumed: BTreeSet::new(),
-        }
+        Self { txs: BTreeMap::new(), consumed: BTreeSet::new() }
     }
 
     pub fn new(txs: BTreeMap<AccountWalletTxId, WalletTx>) -> Self {

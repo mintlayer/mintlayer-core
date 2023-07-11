@@ -49,19 +49,13 @@ impl ManagerConfig {
     }
 
     pub fn new(name: &'static str, shutdown_timeout_per_subsystem: Option<Duration>) -> Self {
-        Self {
-            name,
-            shutdown_timeout_per_subsystem,
-        }
+        Self { name, shutdown_timeout_per_subsystem }
     }
 }
 
 impl Default for ManagerConfig {
     fn default() -> Self {
-        Self {
-            name: "<manager>",
-            shutdown_timeout_per_subsystem: Self::DEFAULT_SHUTDOWN_TIMEOUT,
-        }
+        Self { name: "<manager>", shutdown_timeout_per_subsystem: Self::DEFAULT_SHUTDOWN_TIMEOUT }
     }
 }
 
@@ -102,10 +96,7 @@ impl Manager {
 
     /// Initialize a new subsystem manager.
     pub fn new_with_config(config: ManagerConfig) -> Self {
-        let ManagerConfig {
-            name,
-            shutdown_timeout_per_subsystem,
-        } = config;
+        let ManagerConfig { name, shutdown_timeout_per_subsystem } = config;
         log::info!("Initializing subsystem manager {}", name);
 
         let (shutting_down_tx, shutting_down_rx) = mpsc::unbounded_channel();
@@ -185,11 +176,7 @@ impl Manager {
             // Perform the subsystem task.
             subsystem(call_rq, shutdown_rq).await;
         });
-        self.subsystems.push(SubsystemInfo {
-            name: subsys_name,
-            task,
-            shutdown_tx,
-        });
+        self.subsystems.push(SubsystemInfo { name: subsys_name, task, shutdown_tx });
 
         log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
 

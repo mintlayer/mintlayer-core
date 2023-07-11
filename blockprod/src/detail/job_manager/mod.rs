@@ -77,10 +77,7 @@ pub struct JobKey {
 
 impl JobKey {
     pub fn new(custom_id: Option<Vec<u8>>, current_tip_id: Id<GenBlock>) -> Self {
-        JobKey {
-            custom_id,
-            current_tip_id,
-        }
+        JobKey { custom_id, current_tip_id }
     }
 
     pub fn current_tip_id(&self) -> Id<GenBlock> {
@@ -135,9 +132,7 @@ pub struct JobManagerImpl {
 
 impl JobManagerImpl {
     pub fn new(chainstate_handle: Option<ChainstateHandle>) -> Self {
-        Self {
-            job_manager: JobManager::new(chainstate_handle),
-        }
+        Self { job_manager: JobManager::new(chainstate_handle) }
     }
 }
 
@@ -250,15 +245,13 @@ impl JobManager {
             chainstate_handle
                 .call_mut(|this| {
                     let subscribe_func =
-                        Arc::new(
-                            move |chainstate_event: ChainstateEvent| match chainstate_event {
-                                ChainstateEvent::NewTip(block_id, _) => {
-                                    _ = chainstate_sender.send(block_id.into()).log_err_pfx(
-                                        "Chainstate subscriber failed to send new tip",
-                                    );
-                                }
-                            },
-                        );
+                        Arc::new(move |chainstate_event: ChainstateEvent| match chainstate_event {
+                            ChainstateEvent::NewTip(block_id, _) => {
+                                _ = chainstate_sender
+                                    .send(block_id.into())
+                                    .log_err_pfx("Chainstate subscriber failed to send new tip");
+                            }
+                        });
 
                     this.subscribe_to_events(subscribe_func);
                 })
@@ -286,17 +279,9 @@ impl JobManager {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
-        let job = NewJobEvent {
-            custom_id,
-            current_tip_id: block_id,
-            cancel_sender,
-            result_sender,
-        };
+        let job = NewJobEvent { custom_id, current_tip_id: block_id, cancel_sender, result_sender };
 
-        ensure!(
-            self.new_job_sender.send(job).is_ok(),
-            JobManagerError::FailedToSendNewJobEvent
-        );
+        ensure!(self.new_job_sender.send(job).is_ok(), JobManagerError::FailedToSendNewJobEvent);
 
         result_receiver
             .await

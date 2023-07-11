@@ -34,9 +34,7 @@ impl BlockStatus {
     pub const FULLY_CHECKED: BlockStatus = Self::new_at_stage(BlockValidationStage::FullyChecked);
 
     pub const fn new_at_stage(stage: BlockValidationStage) -> Self {
-        Self {
-            last_successful_validation_stage: stage,
-        }
+        Self { last_successful_validation_stage: stage }
     }
 
     pub const fn new() -> Self {

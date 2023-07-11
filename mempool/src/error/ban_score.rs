@@ -238,10 +238,7 @@ impl MempoolBanScore for TxIndexError {
             // Invalid transactions
             TxIndexError::InvalidOutputCount => 100,
             TxIndexError::SerializationInvariantError(_) => 100,
-            TxIndexError::OutputIndexOutOfRange {
-                tx_id: _,
-                source_output_index: _,
-            } => 100,
+            TxIndexError::OutputIndexOutOfRange { tx_id: _, source_output_index: _ } => 100,
 
             // Double spend may happen if peers are out of sync.
             TxIndexError::DoubleSpendAttempt(_) => 0,

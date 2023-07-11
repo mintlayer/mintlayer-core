@@ -40,11 +40,7 @@ impl BlockSize {
     }
 
     fn new_with_header_size(header_size: usize) -> Self {
-        BlockSize {
-            header: header_size,
-            from_txs: 0,
-            from_smart_contracts: 0,
-        }
+        BlockSize { header: header_size, from_txs: 0, from_smart_contracts: 0 }
     }
 
     pub fn size_from_txs(&self) -> usize {

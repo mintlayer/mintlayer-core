@@ -56,17 +56,11 @@ impl Utxo {
     }
 
     pub fn new_for_blockchain(output: TxOutput, height: BlockHeight) -> Self {
-        Self {
-            output,
-            source: UtxoSource::Blockchain(height),
-        }
+        Self { output, source: UtxoSource::Blockchain(height) }
     }
 
     pub fn new_for_mempool(output: TxOutput) -> Self {
-        Self {
-            output,
-            source: UtxoSource::Mempool,
-        }
+        Self { output, source: UtxoSource::Mempool }
     }
 
     pub fn source(&self) -> &UtxoSource {

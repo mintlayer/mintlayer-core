@@ -41,9 +41,7 @@ impl BlockTimestamp {
     }
 
     pub fn from_duration_since_epoch(duration: Duration) -> Self {
-        Self {
-            timestamp: duration.as_secs(),
-        }
+        Self { timestamp: duration.as_secs() }
     }
 
     pub fn as_duration_since_epoch(&self) -> Duration {

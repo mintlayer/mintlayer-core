@@ -136,25 +136,17 @@ pub fn run(
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
-    let mut line_editor = create_line_editor(
-        logger.printer().clone(),
-        repl_command.clone(),
-        history_file,
-        vi_mode,
-    )?;
+    let mut line_editor =
+        create_line_editor(logger.printer().clone(), repl_command.clone(), history_file, vi_mode)?;
 
     let mut prompt = wallet_prompt::WalletPrompt::new();
 
     // first wait for the results of any startup command before processing the rest
     for res_rx in startup_command_futures {
         let res = res_rx.blocking_recv().expect("Channel must be open");
-        if let Some(value) = handle_response(
-            res.map(Some),
-            &mut console,
-            &mut prompt,
-            &mut line_editor,
-            true,
-        ) {
+        if let Some(value) =
+            handle_response(res.map(Some), &mut console, &mut prompt, &mut line_editor, true)
+        {
             return value;
         }
     }
@@ -169,13 +161,9 @@ pub fn run(
 
         let res = process_line(&repl_command, &event_tx, sig);
 
-        if let Some(value) = handle_response(
-            res,
-            &mut console,
-            &mut prompt,
-            &mut line_editor,
-            exit_on_error,
-        ) {
+        if let Some(value) =
+            handle_response(res, &mut console, &mut prompt, &mut line_editor, exit_on_error)
+        {
             return value;
         }
     }
@@ -192,10 +180,7 @@ fn handle_response(
         Ok(Some(ConsoleCommand::Print(text))) => {
             console.print_line(&text);
         }
-        Ok(Some(ConsoleCommand::SetStatus {
-            status,
-            print_message,
-        })) => {
+        Ok(Some(ConsoleCommand::SetStatus { status, print_message })) => {
             prompt.set_status(status);
             console.print_line(&print_message);
         }

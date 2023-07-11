@@ -44,26 +44,14 @@ async fn two_transactions_in_sequence(
     let genesis_id = tf.genesis().get_id();
 
     let tx0 = TransactionBuilder::new()
-        .add_input(
-            TxInput::from_utxo(genesis_id.into(), 0),
-            empty_witness(&mut rng),
-        )
-        .add_output(TxOutput::Transfer(
-            OutputValue::Coin(amt0),
-            Destination::AnyoneCanSpend,
-        ))
+        .add_input(TxInput::from_utxo(genesis_id.into(), 0), empty_witness(&mut rng))
+        .add_output(TxOutput::Transfer(OutputValue::Coin(amt0), Destination::AnyoneCanSpend))
         .build();
     let tx0_id = tx0.transaction().get_id();
 
     let tx1 = TransactionBuilder::new()
-        .add_input(
-            TxInput::from_utxo(tx0_id.into(), 0),
-            empty_witness(&mut rng),
-        )
-        .add_output(TxOutput::Transfer(
-            OutputValue::Coin(amt1),
-            Destination::AnyoneCanSpend,
-        ))
+        .add_input(TxInput::from_utxo(tx0_id.into(), 0), empty_witness(&mut rng))
+        .add_output(TxOutput::Transfer(OutputValue::Coin(amt1), Destination::AnyoneCanSpend))
         .build();
     let tx1_id = tx1.transaction().get_id();
 
@@ -201,10 +189,7 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
 
     // Check transaction that conflicts with one in mempool gets rejected instead of ending up in
     // the orphan pool.
-    assert_eq!(
-        mempool.add_transaction(tx1b),
-        Err(OrphanPoolError::MempoolConflict.into()),
-    );
+    assert_eq!(mempool.add_transaction(tx1b), Err(OrphanPoolError::MempoolConflict.into()),);
 }
 
 #[rstest]

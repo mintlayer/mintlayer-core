@@ -31,11 +31,7 @@ pub struct UtxosDBInMemoryImpl {
 
 impl UtxosDBInMemoryImpl {
     pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<UtxoOutPoint, Utxo>) -> Self {
-        Self {
-            store: initial_utxos,
-            undo_store: BTreeMap::new(),
-            best_block_id: best_block,
-        }
+        Self { store: initial_utxos, undo_store: BTreeMap::new(), best_block_id: best_block }
     }
 }
 

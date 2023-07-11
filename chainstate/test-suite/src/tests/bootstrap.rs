@@ -122,10 +122,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
             assert!(chain1.iter().all(|item| tree_vec.contains(item)));
             assert!(chain2.iter().all(|item| tree_vec.contains(item)));
             assert!(chain3.iter().all(|item| tree_vec.contains(item)));
-            assert_eq!(
-                mainchain_vec.len(),
-                chain2.len() - len_to_cut_from_branch + new_branch_len
-            );
+            assert_eq!(mainchain_vec.len(), chain2.len() - len_to_cut_from_branch + new_branch_len);
             assert_eq!(tree_vec.len(), 45 + new_branch_len);
 
             check_height_order(&mainchain_vec, &tf1.chainstate);
@@ -148,10 +145,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
                 .chain(chain4)
                 .collect::<BTreeSet<Id<Block>>>();
 
-            assert_eq!(
-                all_blocks,
-                tree_vec.iter().cloned().collect::<BTreeSet<Id<Block>>>()
-            );
+            assert_eq!(all_blocks, tree_vec.iter().cloned().collect::<BTreeSet<Id<Block>>>());
 
             tree_vec
         };

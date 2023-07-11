@@ -33,11 +33,7 @@ pub struct BufferedTranscoder<S> {
 impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
     pub fn new(stream: S, max_message_size: usize) -> BufferedTranscoder<S> {
         let encoder_decoder = EncoderDecoder::new(max_message_size);
-        BufferedTranscoder {
-            stream,
-            buffer: BytesMut::new(),
-            encoder_decoder,
-        }
+        BufferedTranscoder { stream, buffer: BytesMut::new(), encoder_decoder }
     }
 
     pub async fn send(&mut self, msg: Message) -> Result<()> {

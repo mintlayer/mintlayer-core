@@ -38,10 +38,7 @@ pub struct TokenAuxiliaryData {
 
 impl TokenAuxiliaryData {
     pub fn new(issuance_tx: Transaction, issuance_block_id: Id<Block>) -> Self {
-        Self {
-            issuance_tx,
-            issuance_block_id,
-        }
+        Self { issuance_tx, issuance_block_id }
     }
 
     pub fn issuance_tx(&self) -> &Transaction {

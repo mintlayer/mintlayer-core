@@ -55,12 +55,7 @@ impl WalletHandlesClient {
         block_prod: BlockProductionHandle,
         p2p: P2pHandle,
     ) -> Result<Self, WalletHandlesClientError> {
-        let result = Self {
-            chainstate,
-            _mempool: mempool,
-            block_prod,
-            p2p,
-        };
+        let result = Self { chainstate, _mempool: mempool, block_prod, p2p };
         result.basic_start_test().await?;
         Ok(result)
     }

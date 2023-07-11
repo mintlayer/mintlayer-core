@@ -50,9 +50,9 @@ impl<'a> TransactionSourceForConnect<'a> {
             TransactionSourceForConnect::Chain { new_block_index } => {
                 new_block_index.block_height()
             }
-            TransactionSourceForConnect::Mempool {
-                current_best: best_block_index,
-            } => best_block_index.block_height().next_height(),
+            TransactionSourceForConnect::Mempool { current_best: best_block_index } => {
+                best_block_index.block_height().next_height()
+            }
         }
     }
 

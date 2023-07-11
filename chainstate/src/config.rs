@@ -25,10 +25,7 @@ make_config_setting!(MaxOrphanBlocks, usize, 512);
 make_config_setting!(
     MinMaxBootstrapImportBufferSizes,
     (usize, usize),
-    (
-        DEFAULT_MIN_IMPORT_BUFFER_SIZE,
-        DEFAULT_MAX_IMPORT_BUFFER_SIZE,
-    )
+    (DEFAULT_MIN_IMPORT_BUFFER_SIZE, DEFAULT_MAX_IMPORT_BUFFER_SIZE,)
 );
 make_config_setting!(TxIndexEnabled, bool, false);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));

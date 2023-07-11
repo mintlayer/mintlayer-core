@@ -85,10 +85,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_a
             let destination_a = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let genesis_outpoint = UtxoOutPoint::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
-            );
+            let genesis_outpoint =
+                UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
             let pool_id_a = pos_accounting::make_pool_id(&genesis_outpoint);
             let tx_a = TransactionBuilder::new()
                 .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
@@ -120,10 +118,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_c
             let destination_c = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let tx_b_outpoint0 = UtxoOutPoint::new(
-                OutPointSourceId::Transaction(tx_b.transaction().get_id()),
-                0,
-            );
+            let tx_b_outpoint0 =
+                UtxoOutPoint::new(OutPointSourceId::Transaction(tx_b.transaction().get_id()), 0);
             let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
             let tx_c = TransactionBuilder::new()
                 .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
@@ -144,10 +140,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             let block_a = tf.make_block_builder().add_transaction(tx_a).build();
             let block_a_index =
                 tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_a_index.block_id())
-            );
+            assert_eq!(tf.best_block_id(), Id::<GenBlock>::from(*block_a_index.block_id()));
 
             // create block b
             let block_b = tf
@@ -159,10 +152,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             tf.process_block(block_b, BlockSource::Local).unwrap();
 
             // no reorg here
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_a_index.block_id())
-            );
+            assert_eq!(tf.best_block_id(), Id::<GenBlock>::from(*block_a_index.block_id()));
 
             // create block c
             let block_c = tf
@@ -173,10 +163,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .unwrap()
                 .unwrap();
 
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_c.block_id())
-            );
+            assert_eq!(tf.best_block_id(), Id::<GenBlock>::from(*block_c.block_id()));
 
             // Accounting data in storage after reorg should equal to the data in storage for chain
             // where reorg never happened.
@@ -270,13 +257,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
         tf.progress_time_seconds_since_epoch(target_block_time.get());
 
         let common_block_id = tf
-            .create_chain_pos(
-                &tf.genesis().get_id().into(),
-                5,
-                &mut rng,
-                &staking_sk,
-                &vrf_sk,
-            )
+            .create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng, &staking_sk, &vrf_sk)
             .unwrap();
 
         let old_tip = tf

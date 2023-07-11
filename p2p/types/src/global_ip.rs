@@ -140,16 +140,10 @@ mod tests {
         ];
 
         for ip in global_unicast_ips {
-            assert!(
-                is_global_unicast(ip),
-                "{ip} is expected to be global unicast IP address"
-            );
+            assert!(is_global_unicast(ip), "{ip} is expected to be global unicast IP address");
         }
         for ip in non_global_unicast_ips {
-            assert!(
-                !is_global_unicast(ip),
-                "{ip} is expected to be not global unicast IP address"
-            );
+            assert!(!is_global_unicast(ip), "{ip} is expected to be not global unicast IP address");
         }
     }
 }

@@ -32,12 +32,7 @@ impl JobsContainer {
     }
 
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
-        let NewJobEvent {
-            custom_id,
-            current_tip_id,
-            cancel_sender,
-            result_sender,
-        } = event;
+        let NewJobEvent { custom_id, current_tip_id, cancel_sender, result_sender } = event;
 
         let job_key = JobKey::new(custom_id, current_tip_id);
 

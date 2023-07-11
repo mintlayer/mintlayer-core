@@ -112,10 +112,7 @@ mod test {
 
     #[test]
     fn serialization() {
-        let data = TestStruct {
-            num: 1337,
-            blurb: "Hello!".into(),
-        };
+        let data = TestStruct { num: 1337, blurb: "Hello!".into() };
 
         let data_clone = data.clone();
         let encoded = WithId::new(data).encode();
@@ -127,10 +124,7 @@ mod test {
 
     #[test]
     fn owned() {
-        let data = TestStruct {
-            num: 1337,
-            blurb: "Hello!".into(),
-        };
+        let data = TestStruct { num: 1337, blurb: "Hello!".into() };
 
         let data_clone = data.clone();
         let wrapped = WithId::new(data);
@@ -140,10 +134,7 @@ mod test {
 
     #[test]
     fn borrowed() {
-        let data = TestStruct {
-            num: 42,
-            blurb: "Goodbye!".into(),
-        };
+        let data = TestStruct { num: 42, blurb: "Goodbye!".into() };
 
         // Check it works with references too so IDs can be pre-calculated for borrowed data.
         let data_id = data.get_id();

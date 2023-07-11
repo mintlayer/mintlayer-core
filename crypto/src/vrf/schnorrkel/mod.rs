@@ -38,9 +38,7 @@ pub struct SchnorrkelPublicKey {
 
 impl SchnorrkelPublicKey {
     pub fn from_private_key(private_key: &SchnorrkelPrivateKey) -> Self {
-        SchnorrkelPublicKey {
-            key: private_key.key.to_public(),
-        }
+        SchnorrkelPublicKey { key: private_key.key.to_public() }
     }
 
     pub fn verify_generic_vrf_data(
@@ -114,21 +112,14 @@ impl SchnorrkelPrivateKey {
             .map_err(|e| VRFError::GenerateKeyError(e.to_string()))?;
         let keypair = mini_secret.expand_to_keypair(schnorrkel::ExpansionMode::Uniform);
         Ok((
-            SchnorrkelPrivateKey {
-                key: keypair.secret.clone(),
-            },
-            SchnorrkelPublicKey {
-                key: keypair.public,
-            },
+            SchnorrkelPrivateKey { key: keypair.secret.clone() },
+            SchnorrkelPublicKey { key: keypair.public },
         ))
     }
 
     pub fn produce_vrf_data(&self, message: Transcript) -> SchnorrkelVRFReturn {
-        let (io, proof, _batchable_proof) = Keypair {
-            secret: self.key.clone(),
-            public: self.key.to_public(),
-        }
-        .vrf_sign(message);
+        let (io, proof, _batchable_proof) =
+            Keypair { secret: self.key.clone(), public: self.key.to_public() }.vrf_sign(message);
 
         SchnorrkelVRFReturn::new(io.to_preout(), proof)
     }
@@ -145,9 +136,7 @@ impl SchnorrkelPrivateKey {
             );
 
             (
-                Self {
-                    key: mini_secret.expand(schnorrkel::ExpansionMode::Uniform),
-                },
+                Self { key: mini_secret.expand(schnorrkel::ExpansionMode::Uniform) },
                 new_chain_code.0.into(),
             )
         } else {
@@ -230,10 +219,7 @@ mod tests {
         let decoded_sk = SchnorrkelPrivateKey::decode_all(&mut encoded_sk.as_slice()).unwrap();
         let decoded_pk = SchnorrkelPublicKey::decode_all(&mut encoded_pk.as_slice()).unwrap();
 
-        assert_eq!(
-            decoded_pk,
-            SchnorrkelPublicKey::from_private_key(&decoded_sk)
-        )
+        assert_eq!(decoded_pk, SchnorrkelPublicKey::from_private_key(&decoded_sk))
     }
 
     #[test]
@@ -255,19 +241,12 @@ mod tests {
             .public
             .vrf_verify(ctx.bytes(msg), out1, &proof1)
             .expect("Correct VRF verification failed!");
-        assert_eq!(
-            io1too, io1,
-            "Output differs between signing and verification!"
-        );
+        assert_eq!(io1too, io1, "Output differs between signing and verification!");
         assert_eq!(
             proof1batchable, proof1too,
             "VRF verification yielded incorrect batchable proof"
         );
-        assert_eq!(
-            keypair1.vrf_sign(ctx.bytes(msg)).0,
-            io1,
-            "Rerunning VRF gave different output"
-        );
+        assert_eq!(keypair1.vrf_sign(ctx.bytes(msg)).0, io1, "Rerunning VRF gave different output");
 
         assert!(
             keypair1.public.vrf_verify(ctx.bytes(b"not meow"), out1, &proof1).is_err(),

@@ -147,11 +147,7 @@ pub enum ConnectivityEvent<A> {
 #[derive(Debug)]
 pub enum SyncingEvent {
     /// Peer connected
-    Connected {
-        peer_id: PeerId,
-        services: Services,
-        sync_rx: Receiver<SyncMessage>,
-    },
+    Connected { peer_id: PeerId, services: Services, sync_rx: Receiver<SyncMessage> },
 
     /// Peer disconnected
     Disconnected { peer_id: PeerId },

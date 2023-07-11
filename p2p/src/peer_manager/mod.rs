@@ -219,23 +219,15 @@ where
             .local_addresses()
             .iter()
             .map(TransportAddress::as_peer_address)
-            .filter_map(
-                |listening_address| match (&receiver_address, listening_address) {
-                    (PeerAddress::Ip4(receiver), PeerAddress::Ip4(listener)) => {
-                        Some(PeerAddress::Ip4(PeerAddressIp4 {
-                            ip: receiver.ip,
-                            port: listener.port,
-                        }))
-                    }
-                    (PeerAddress::Ip6(receiver), PeerAddress::Ip6(listener)) => {
-                        Some(PeerAddress::Ip6(PeerAddressIp6 {
-                            ip: receiver.ip,
-                            port: listener.port,
-                        }))
-                    }
-                    _ => None,
-                },
-            )
+            .filter_map(|listening_address| match (&receiver_address, listening_address) {
+                (PeerAddress::Ip4(receiver), PeerAddress::Ip4(listener)) => {
+                    Some(PeerAddress::Ip4(PeerAddressIp4 { ip: receiver.ip, port: listener.port }))
+                }
+                (PeerAddress::Ip6(receiver), PeerAddress::Ip6(listener)) => {
+                    Some(PeerAddress::Ip6(PeerAddressIp6 { ip: receiver.ip, port: listener.port }))
+                }
+                _ => None,
+            })
             .filter_map(|address| {
                 TransportAddress::from_peer_address(
                     &address,
@@ -1000,18 +992,10 @@ where
             ConnectivityEvent::Message { peer, message } => {
                 self.handle_incoming_message(peer, message);
             }
-            ConnectivityEvent::InboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => {
+            ConnectivityEvent::InboundAccepted { address, peer_info, receiver_address } => {
                 self.accept_connection(address, Role::Inbound, peer_info, receiver_address);
             }
-            ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => {
+            ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address } => {
                 self.accept_connection(address, Role::Outbound, peer_info, receiver_address);
             }
             ConnectivityEvent::ConnectionClosed { peer_id } => {
@@ -1098,10 +1082,7 @@ where
                         *peer_id,
                         PeerManagerMessage::PingRequest(PingRequest { nonce }),
                     );
-                    peer.sent_ping = Some(SentPing {
-                        nonce,
-                        timestamp: now,
-                    });
+                    peer.sent_ping = Some(SentPing { nonce, timestamp: now });
                 }
             }
         }

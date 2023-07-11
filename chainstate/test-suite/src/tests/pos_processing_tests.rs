@@ -109,17 +109,12 @@ fn add_block_with_stake_pool(
     tf: &mut TestFramework,
     stake_pool_data: StakePoolData,
 ) -> (UtxoOutPoint, PoolId) {
-    let genesis_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
+    let genesis_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
     let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(
-            pool_id,
-            Box::new(stake_pool_data),
-        ))
+        .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
         .build();
     let tx_id = tx.transaction().get_id();
 
@@ -127,10 +122,7 @@ fn add_block_with_stake_pool(
 
     tf.progress_time_seconds_since_epoch(1);
 
-    (
-        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
-        pool_id,
-    )
+    (UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0), pool_id)
 }
 
 fn add_block_with_2_stake_pools(
@@ -139,17 +131,12 @@ fn add_block_with_2_stake_pools(
     stake_pool_data1: StakePoolData,
     stake_pool_data2: StakePoolData,
 ) -> (UtxoOutPoint, PoolId, UtxoOutPoint, PoolId) {
-    let outpoint_genesis = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
+    let outpoint_genesis =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
     let pool_id1 = pos_accounting::make_pool_id(&outpoint_genesis);
     let tx1 = TransactionBuilder::new()
         .add_input(outpoint_genesis.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(
-            pool_id1,
-            Box::new(stake_pool_data1),
-        ))
+        .add_output(TxOutput::CreateStakePool(pool_id1, Box::new(stake_pool_data1)))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(tf.chainstate.get_chain_config().min_stake_pool_pledge()),
             anyonecanspend_address(),
@@ -163,10 +150,7 @@ fn add_block_with_2_stake_pools(
     let pool_id2 = pos_accounting::make_pool_id(&transfer_outpoint1);
     let tx2 = TransactionBuilder::new()
         .add_input(transfer_outpoint1.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(
-            pool_id2,
-            Box::new(stake_pool_data2),
-        ))
+        .add_output(TxOutput::CreateStakePool(pool_id2, Box::new(stake_pool_data2)))
         .build();
     let outpoint2 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
@@ -187,10 +171,7 @@ fn setup_test_chain_with_staked_pool(
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -224,20 +205,9 @@ fn setup_test_chain_with_2_staked_pools(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
-) -> (
-    TestFramework,
-    UtxoOutPoint,
-    PoolId,
-    PrivateKey,
-    UtxoOutPoint,
-    PoolId,
-    PrivateKey,
-) {
+) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey, UtxoOutPoint, PoolId, PrivateKey) {
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -255,15 +225,7 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
     upgrades: Vec<(BlockHeight, UpgradeVersion)>,
-) -> (
-    TestFramework,
-    UtxoOutPoint,
-    PoolId,
-    PrivateKey,
-    UtxoOutPoint,
-    PoolId,
-    PrivateKey,
-) {
+) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey, UtxoOutPoint, PoolId, PrivateKey) {
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::test_chain()
         .net_upgrades(net_upgrades)
@@ -286,15 +248,7 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
     let (stake_pool_outpoint1, pool_id1, stake_pool_outpoint2, pool_id2) =
         add_block_with_2_stake_pools(rng, &mut tf, stake_pool_data1, stake_pool_data2);
 
-    (
-        tf,
-        stake_pool_outpoint1,
-        pool_id1,
-        pk1,
-        stake_pool_outpoint2,
-        pool_id2,
-        pk2,
-    )
+    (tf, stake_pool_outpoint1, pool_id1, pk1, stake_pool_outpoint2, pool_id2, pk2)
 }
 
 fn produce_kernel_signature(
@@ -528,15 +482,10 @@ fn pos_block_signature(#[case] seed: Seed) {
     // InvalidBlockAlreadySeen).
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::from_utxo(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
-            ),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
-            100_000,
-        ))))
+        .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(100_000))))
         .build();
     let block = tf
         .make_block_builder()
@@ -604,10 +553,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -780,11 +726,8 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     {
         // invalid epoch
-        let vrf_transcript = construct_transcript(
-            valid_epoch + 1,
-            &valid_prev_randomness,
-            valid_block_timestamp,
-        );
+        let vrf_transcript =
+            construct_transcript(valid_epoch + 1, &valid_prev_randomness, valid_block_timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
         let pos_data = PoSData::new(
             valid_pos_data.kernel_inputs().to_owned(),
@@ -933,10 +876,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -1150,10 +1090,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let total_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
     let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
-    assert_eq!(
-        (total_subsidy.unwrap() + initially_staked).unwrap(),
-        res_pool_balance
-    );
+    assert_eq!((total_subsidy.unwrap() + initially_staked).unwrap(), res_pool_balance);
 }
 
 #[rstest]
@@ -1222,10 +1159,8 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let genesis_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
+    let genesis_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
     let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -1501,10 +1436,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let total_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
     let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
-    assert_eq!(
-        (total_subsidy.unwrap() + initially_staked).unwrap(),
-        res_pool_balance
-    );
+    assert_eq!((total_subsidy.unwrap() + initially_staked).unwrap(), res_pool_balance);
 }
 
 #[rstest]
@@ -1646,10 +1578,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let target_block_time = create_unittest_pos_config().target_block_time().get();
 
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -1758,10 +1687,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // no reorg happened so decommission has no effect on pool2
-    assert_eq!(
-        tf.best_block_id(),
-        block_b_index.unwrap().into_gen_block_index().block_id()
-    );
+    assert_eq!(tf.best_block_id(), block_b_index.unwrap().into_gen_block_index().block_id());
 
     let total_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
@@ -1771,10 +1697,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id1)
             .unwrap()
             .unwrap();
-    assert_eq!(
-        (total_subsidy + initially_staked).unwrap(),
-        res_pool_balance_1
-    );
+    assert_eq!((total_subsidy + initially_staked).unwrap(), res_pool_balance_1);
 
     let res_pool_balance_2 =
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id2)
@@ -1789,10 +1712,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
 fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -1981,10 +1901,7 @@ fn pos_reorg(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -2031,10 +1948,8 @@ fn pos_reorg(#[case] seed: Seed) {
     let mut tf1 = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
     let mut tf2 = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let genesis_mint_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf1.genesis().get_id().into()),
-        0,
-    );
+    let genesis_mint_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf1.genesis().get_id().into()), 0);
 
     // Pool2 CreateStakePool transaction
     let pool2_id = pos_accounting::make_pool_id(&genesis_mint_outpoint);
@@ -2069,36 +1984,18 @@ fn pos_reorg(#[case] seed: Seed) {
 
     // Block with height 2 by pool1
     let kernel_outpoint = UtxoOutPoint::new(tf1.best_block_id().into(), 0);
-    let _block2_pool1 = mine_pos_block(
-        &mut tf1,
-        genesis_pool_id,
-        &staker1_sk,
-        &vrf1_sk,
-        vec![],
-        kernel_outpoint,
-    );
+    let _block2_pool1 =
+        mine_pos_block(&mut tf1, genesis_pool_id, &staker1_sk, &vrf1_sk, vec![], kernel_outpoint);
 
     // Block at height 2 by pool2
     let kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(pool2_tx_id), 0);
-    let block2_pool2 = mine_pos_block(
-        &mut tf2,
-        pool2_id,
-        &staker2_sk,
-        &vrf2_sk,
-        vec![],
-        kernel_outpoint,
-    );
+    let block2_pool2 =
+        mine_pos_block(&mut tf2, pool2_id, &staker2_sk, &vrf2_sk, vec![], kernel_outpoint);
 
     // Block at height 3 by pool2
     let kernel_outpoint = UtxoOutPoint::new(tf2.best_block_id().into(), 0);
-    let block3_pool2 = mine_pos_block(
-        &mut tf2,
-        pool2_id,
-        &staker2_sk,
-        &vrf2_sk,
-        vec![],
-        kernel_outpoint,
-    );
+    let block3_pool2 =
+        mine_pos_block(&mut tf2, pool2_id, &staker2_sk, &vrf2_sk, vec![], kernel_outpoint);
 
     // Try to switch to a new branch
 
@@ -2151,10 +2048,8 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
     let delegation_reward_per_block = (block_subsidy - staker_reward_per_block).unwrap();
 
-    let genesis_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
+    let genesis_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
     let delegation_id = pos_accounting::make_delegation_id(&genesis_outpoint);
 
     let tx1 = TransactionBuilder::new()
@@ -2163,17 +2058,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             OutputValue::Coin(amount_to_delegate),
             Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::CreateDelegationId(
-            Destination::AnyoneCanSpend,
-            pool_id,
-        ))
+        .add_output(TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, pool_id))
         .build();
     let tx1_id = tx1.transaction().get_id();
     let tx2 = TransactionBuilder::new()
-        .add_input(
-            UtxoOutPoint::new(tx1_id.into(), 0).into(),
-            empty_witness(&mut rng),
-        )
+        .add_input(UtxoOutPoint::new(tx1_id.into(), 0).into(), empty_witness(&mut rng))
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
         .build();
 
@@ -2202,10 +2091,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         AccountSpending::Delegation(delegation_id, amount_to_withdraw),
     );
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::Account(tx_input_spend_from_delegation),
-            empty_witness(&mut rng),
-        )
+        .add_input(TxInput::Account(tx_input_spend_from_delegation), empty_witness(&mut rng))
         .add_output(TxOutput::LockThenTransfer(
             OutputValue::Coin(amount_to_withdraw),
             Destination::AnyoneCanSpend,
@@ -2235,10 +2121,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             AccountSpending::Delegation(delegation_id, delegation_balance_overspend),
         );
         let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::Account(tx_input_spend_from_delegation),
-                empty_witness(&mut rng),
-            )
+            .add_input(TxInput::Account(tx_input_spend_from_delegation), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(delegation_balance_overspend),
                 Destination::AnyoneCanSpend,
@@ -2270,10 +2153,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         AccountSpending::Delegation(delegation_id, delegation_balance),
     );
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::Account(tx_input_spend_from_delegation),
-            empty_witness(&mut rng),
-        )
+        .add_input(TxInput::Account(tx_input_spend_from_delegation), empty_witness(&mut rng))
         .add_output(TxOutput::LockThenTransfer(
             OutputValue::Coin(delegation_balance),
             Destination::AnyoneCanSpend,

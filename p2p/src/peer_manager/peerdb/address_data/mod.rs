@@ -256,9 +256,7 @@ impl AddressData {
                             disconnected_by_user,
                         }
                     } else if !was_reachable {
-                        AddressState::Unreachable {
-                            erase_after: now + PURGE_UNREACHABLE_TIME,
-                        }
+                        AddressState::Unreachable { erase_after: now + PURGE_UNREACHABLE_TIME }
                     } else if fail_count + 1 >= PURGE_REACHABLE_FAIL_COUNT {
                         AddressState::Unreachable { erase_after: now }
                     } else {

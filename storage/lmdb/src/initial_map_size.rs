@@ -28,9 +28,7 @@ impl InitialMapSize {
 
 impl From<MemSize> for InitialMapSize {
     fn from(initial_map_size: MemSize) -> Self {
-        Self {
-            initial_map_size: Some(initial_map_size),
-        }
+        Self { initial_map_size: Some(initial_map_size) }
     }
 }
 

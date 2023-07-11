@@ -112,10 +112,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         // create a block with a single tx based on genesis
         let tx0 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -132,14 +129,9 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
-        let tx_source = TransactionSourceForConnect::Mempool {
-            current_best: &best_block.into(),
-        };
+        let mut verifier =
+            TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
+        let tx_source = TransactionSourceForConnect::Mempool { current_best: &best_block.into() };
 
         // create and connect a tx from mempool based on best block
         let tx1 = TransactionBuilder::new()
@@ -214,9 +206,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-            Err(ConnectTransactionError::TxUndoWithDependency(
-                tx1.transaction().get_id()
-            ))
+            Err(ConnectTransactionError::TxUndoWithDependency(tx1.transaction().get_id()))
         );
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();
 

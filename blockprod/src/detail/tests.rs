@@ -138,10 +138,7 @@ mod collect_transactions {
             let accumulator = block_production.collect_transactions().await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load();
-            assert!(
-                !collected_transactions,
-                "Expected collect_tx() not to be called"
-            );
+            assert!(!collected_transactions, "Expected collect_tx() not to be called");
 
             match accumulator {
                 Err(BlockProductionError::SubsystemCallError(_)) => {}
@@ -187,10 +184,7 @@ mod collect_transactions {
                 let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");
 
-                assert!(
-                    accumulator.is_ok(),
-                    "Expected collect_transactions() to succeed"
-                );
+                assert!(accumulator.is_ok(), "Expected collect_transactions() to succeed");
             }
         });
 
@@ -479,12 +473,8 @@ mod produce_block {
             mock_chainstate.expect_subscribe_to_events().times(1).returning(|_| ());
 
             let mut expected_return_values = vec![
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    chain_config.genesis_block(),
-                ))),
-                Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::BestBlockNotFound,
-                )),
+                Ok(GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()))),
+                Err(ChainstateError::FailedToReadProperty(PropertyQueryError::BestBlockNotFound)),
             ];
 
             mock_chainstate
@@ -541,12 +531,8 @@ mod produce_block {
             mock_chainstate.expect_subscribe_to_events().times(1).returning(|_| ());
 
             let mut expected_return_values = vec![
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    chain_config.genesis_block(),
-                ))),
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    create_testnet().genesis_block(),
-                ))),
+                Ok(GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()))),
+                Ok(GenBlockIndex::Genesis(Arc::clone(create_testnet().genesis_block()))),
             ];
 
             mock_chainstate
@@ -1031,9 +1017,7 @@ mod produce_block {
 
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,
-                ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::MAX.into(),
-                },
+                ConsensusUpgrade::PoW { initial_difficulty: Uint256::MAX.into() },
                 ConsensusUpgrade::PoS {
                     initial_difficulty: Uint256::MAX.into(),
                     config: easy_pos_config,
@@ -1699,20 +1683,12 @@ mod stop_job {
             job_keys.push(job_key)
         }
 
-        assert_eq!(
-            job_keys.len(),
-            jobs_to_create,
-            "Failed to create {jobs_to_create} jobs"
-        );
+        assert_eq!(job_keys.len(), jobs_to_create, "Failed to create {jobs_to_create} jobs");
 
         while !job_keys.is_empty() {
             let current_jobs_count =
                 block_production.job_manager_handle.get_job_count().await.unwrap();
-            assert_eq!(
-                current_jobs_count,
-                job_keys.len(),
-                "Jobs count is incorrect"
-            );
+            assert_eq!(current_jobs_count, job_keys.len(), "Jobs count is incorrect");
 
             let job_key = job_keys.pop().unwrap();
 

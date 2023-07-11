@@ -354,25 +354,13 @@ mod tests {
     use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
-        assert_eq!(
-            chainstate.get_best_block_id().unwrap(),
-            chain_config.genesis_block_id()
-        );
-        assert_eq!(
-            chainstate.get_best_block_height().unwrap(),
-            BlockHeight::new(0)
-        );
+        assert_eq!(chainstate.get_best_block_id().unwrap(), chain_config.genesis_block_id());
+        assert_eq!(chainstate.get_best_block_height().unwrap(), BlockHeight::new(0));
     }
 
     fn test_interface<C: ChainstateInterface>(chainstate: C, chain_config: &ChainConfig) {
-        assert_eq!(
-            chainstate.get_best_block_id().unwrap(),
-            chain_config.genesis_block_id()
-        );
-        assert_eq!(
-            chainstate.get_best_block_height().unwrap(),
-            BlockHeight::new(0)
-        );
+        assert_eq!(chainstate.get_best_block_id().unwrap(), chain_config.genesis_block_id());
+        assert_eq!(chainstate.get_best_block_height().unwrap(), BlockHeight::new(0));
     }
 
     #[test]

@@ -186,10 +186,7 @@ where
         .map(|index| epoch_data_cache.get_epoch_data(index))
         .transpose()?
         .flatten()
-        .map_or_else(
-            || PoSRandomness::at_genesis(chain_config),
-            |d| *d.randomness(),
-        );
+        .map_or_else(|| PoSRandomness::at_genesis(chain_config), |d| *d.randomness());
 
     let epoch_index = chain_config.epoch_index_from_height(block_height);
     PoSRandomness::from_block(
@@ -428,11 +425,6 @@ mod tests {
             db.expect_del_accounting_epoch_undo_delta().times(1).return_const(Ok(()));
         }
 
-        update_epoch_seal(
-            &mut db,
-            &chain_config,
-            BlockStateEvent::Disconnect(tip_height),
-        )
-        .unwrap();
+        update_epoch_seal(&mut db, &chain_config, BlockStateEvent::Disconnect(tip_height)).unwrap();
     }
 }

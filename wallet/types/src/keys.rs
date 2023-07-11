@@ -83,10 +83,7 @@ pub struct KeychainUsageState {
 
 impl KeychainUsageState {
     pub fn new(last_used: Option<U31>, last_issued: Option<U31>) -> Self {
-        Self {
-            last_used,
-            last_issued,
-        }
+        Self { last_used, last_issued }
     }
 
     /// Get the last index used in the blockchain

@@ -33,11 +33,7 @@ pub struct Genesis {
 
 impl Genesis {
     pub fn new(fun_message: String, timestamp: BlockTimestamp, utxos: Vec<TxOutput>) -> Self {
-        Self {
-            fun_message,
-            timestamp,
-            utxos,
-        }
+        Self { fun_message, timestamp, utxos }
     }
 
     pub fn utxos(&self) -> &[TxOutput] {

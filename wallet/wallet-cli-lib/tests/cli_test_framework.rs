@@ -61,10 +61,7 @@ struct MockConsole {
 impl MockConsole {
     fn new(input: &[&str]) -> Self {
         let input = input.iter().map(|&s| s.to_owned()).collect();
-        MockConsole {
-            input: Arc::new(Mutex::new(input)),
-            output: Default::default(),
-        }
+        MockConsole { input: Arc::new(Mutex::new(input)), output: Default::default() }
     }
 }
 
@@ -150,10 +147,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
     let genesis = create_custom_regtest_genesis(rng);
     let pos_config = create_unittest_pos_config();
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -219,11 +213,8 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
 
     let chainstate = manager.add_subsystem("wallet-cli-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
-        Arc::clone(&chain_config),
-        chainstate.clone(),
-        Default::default(),
-    );
+    let mempool =
+        mempool::make_mempool(Arc::clone(&chain_config), chainstate.clone(), Default::default());
     let mempool = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)
     });
@@ -255,10 +246,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
     );
 
     let rpc = rpc::Builder::new(rpc_config, Some(rpc_creds))
-        .register(node_lib::rpc::init(
-            manager.make_shutdown_trigger(),
-            chain_config,
-        ))
+        .register(node_lib::rpc::init(manager.make_shutdown_trigger(), chain_config))
         .register(block_prod.clone().into_rpc())
         .register(chainstate.clone().into_rpc())
         .register(mempool.clone().into_rpc())
@@ -294,13 +282,7 @@ impl CliTestFramework {
         let shutdown_trigger = manager.make_shutdown_trigger();
         let manager_task = manager.main_in_task();
 
-        Self {
-            chain_config,
-            manager_task,
-            shutdown_trigger,
-            rpc_address,
-            test_root,
-        }
+        Self { chain_config, manager_task, shutdown_trigger, rpc_address, test_root }
     }
 
     pub async fn run(&self, commands: &[&str]) -> Vec<String> {

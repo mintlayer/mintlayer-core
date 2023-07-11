@@ -61,10 +61,7 @@ pub fn make_address_output_token(
     let destination = Destination::Address(pub_key_hash);
 
     Ok(TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id,
-            amount,
-        }))),
+        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer { token_id, amount }))),
         destination,
     ))
 }
@@ -94,12 +91,7 @@ pub fn make_stake_output(
 
 impl SendRequest {
     pub fn new() -> Self {
-        Self {
-            flags: 0,
-            utxos: Vec::new(),
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-        }
+        Self { flags: 0, utxos: Vec::new(), inputs: Vec::new(), outputs: Vec::new() }
     }
 
     pub fn from_transaction(transaction: Transaction, utxos: Vec<TxOutput>) -> Self {

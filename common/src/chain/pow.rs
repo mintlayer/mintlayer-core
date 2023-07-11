@@ -126,10 +126,7 @@ mod tests {
 
         let mainnet_cfg = cfg.get_proof_of_work_config();
 
-        assert_eq!(
-            mainnet_cfg.no_retargeting(),
-            no_retargeting(ChainType::Mainnet)
-        );
+        assert_eq!(mainnet_cfg.no_retargeting(), no_retargeting(ChainType::Mainnet));
         assert_eq!(
             mainnet_cfg.allow_min_difficulty_blocks(),
             allow_min_difficulty_blocks(ChainType::Mainnet)

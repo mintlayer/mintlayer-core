@@ -115,9 +115,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let new_tip: WithId<Block> = self
                 .get_block_from_index(&new_tip_block_index)
                 .log_err()?
-                .ok_or(CheckBlockError::BlockNotFound(
-                    (*new_tip_block_index.block_id()).into(),
-                ))?
+                .ok_or(CheckBlockError::BlockNotFound((*new_tip_block_index.block_id()).into()))?
                 .into();
 
             // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp

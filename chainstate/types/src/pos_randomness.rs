@@ -65,9 +65,7 @@ impl PoSRandomness {
 
     /// randomness at genesis
     pub fn at_genesis(chain_config: &ChainConfig) -> Self {
-        Self {
-            value: chain_config.initial_randomness(),
-        }
+        Self { value: chain_config.initial_randomness() }
     }
 
     pub fn value(&self) -> H256 {

@@ -52,10 +52,7 @@ impl RollingFeeRate {
             (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
         ));
 
-        log::debug!(
-            "decay_fee: new fee rate:  {:?}",
-            self.rolling_minimum_fee_rate
-        );
+        log::debug!("decay_fee: new fee rate:  {:?}", self.rolling_minimum_fee_rate);
         self.last_rolling_fee_update = current_time;
         self
     }

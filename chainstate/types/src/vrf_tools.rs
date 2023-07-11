@@ -44,14 +44,8 @@ pub fn construct_transcript(
             RANDOMNESS_COMPONENT_LABEL,
             TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
         )
-        .attach(
-            SLOT_COMPONENT_LABEL,
-            TranscriptComponent::U64(block_timestamp.as_int_seconds()),
-        )
-        .attach(
-            EPOCH_INDEX_COMPONENT_LABEL,
-            TranscriptComponent::U64(epoch_index),
-        )
+        .attach(SLOT_COMPONENT_LABEL, TranscriptComponent::U64(block_timestamp.as_int_seconds()))
+        .attach(EPOCH_INDEX_COMPONENT_LABEL, TranscriptComponent::U64(epoch_index))
         .finalize()
 }
 

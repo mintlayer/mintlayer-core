@@ -40,10 +40,7 @@ fn invalid_output_count_for_transaction() {
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
     let pos = TxMainChainPosition::new(block_id.into(), 1).into();
     let tx_index = TxMainChainIndex::new(pos, 0);
-    assert_eq!(
-        tx_index.unwrap_err(),
-        TxMainChainIndexError::InvalidOutputCount
-    );
+    assert_eq!(tx_index.unwrap_err(), TxMainChainIndexError::InvalidOutputCount);
 }
 
 #[test]
@@ -70,17 +67,11 @@ fn basic_spending() {
     assert!(tx_index.get_spent_state(2).is_ok());
     assert_eq!(
         tx_index.get_spent_state(3).unwrap_err(),
-        SpendError::OutOfRange {
-            tx_id: None,
-            source_output_index: 3
-        }
+        SpendError::OutOfRange { tx_id: None, source_output_index: 3 }
     );
     assert_eq!(
         tx_index.get_spent_state(4).unwrap_err(),
-        SpendError::OutOfRange {
-            tx_id: None,
-            source_output_index: 4
-        }
+        SpendError::OutOfRange { tx_id: None, source_output_index: 4 }
     );
     assert_eq!(tx_index.output_count(), 3);
 
@@ -92,20 +83,14 @@ fn basic_spending() {
     };
 
     // check that all are unspent
-    assert_eq!(
-        p.block_id,
-        Into::<Id<Block>>::into(H256::from_low_u64_be(123))
-    );
+    assert_eq!(p.block_id, Into::<Id<Block>>::into(H256::from_low_u64_be(123)));
     for output in &tx_index.spent {
         assert_eq!(*output, OutputSpentState::Unspent);
     }
     assert!(!tx_index.all_outputs_spent());
 
     for i in 0..tx_index.output_count() {
-        assert_eq!(
-            tx_index.get_spent_state(i).unwrap(),
-            OutputSpentState::Unspent
-        );
+        assert_eq!(tx_index.get_spent_state(i).unwrap(), OutputSpentState::Unspent);
     }
 
     let tx_spending_output_0 = Id::<Transaction>::new(
@@ -127,14 +112,8 @@ fn basic_spending() {
         tx_index.get_spent_state(0).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_0.into())
     );
-    assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
-        OutputSpentState::Unspent
-    );
+    assert_eq!(tx_index.get_spent_state(1).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.get_spent_state(2).unwrap(), OutputSpentState::Unspent);
 
     assert!(!tx_index.all_outputs_spent());
 
@@ -172,10 +151,7 @@ fn basic_spending() {
 
     // check the new unspent state
     assert!(!tx_index.all_outputs_spent());
-    assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
-        OutputSpentState::Unspent
-    );
+    assert_eq!(tx_index.get_spent_state(0).unwrap(), OutputSpentState::Unspent);
     assert_eq!(
         tx_index.get_spent_state(1).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_1.into())
@@ -191,18 +167,9 @@ fn basic_spending() {
 
     // check the new unspent state
     assert!(!tx_index.all_outputs_spent());
-    assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
-        OutputSpentState::Unspent
-    );
+    assert_eq!(tx_index.get_spent_state(0).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.get_spent_state(1).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.get_spent_state(2).unwrap(), OutputSpentState::Unspent);
 }
 
 fn generate_random_h256(rng: &mut impl Rng) -> H256 {

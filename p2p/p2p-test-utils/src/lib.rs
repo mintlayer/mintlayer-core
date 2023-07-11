@@ -100,9 +100,7 @@ impl P2pBasicTestTimeGetter {
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
         let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
-        Self {
-            current_time_millis,
-        }
+        Self { current_time_millis }
     }
 
     pub fn get_time_getter(&self) -> TimeGetter {

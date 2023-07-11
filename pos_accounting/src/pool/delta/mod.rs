@@ -61,10 +61,7 @@ impl DeltaMergeUndo {
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     pub fn new(parent: P) -> Self {
-        Self {
-            parent,
-            data: PoSAccountingDeltaData::new(),
-        }
+        Self { parent, data: PoSAccountingDeltaData::new() }
     }
 
     pub fn from_data(parent: P, data: PoSAccountingDeltaData) -> Self {

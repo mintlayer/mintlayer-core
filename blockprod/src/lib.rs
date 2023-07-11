@@ -283,11 +283,7 @@ mod tests {
                     Box::pin(async move {
                         let stopped_jobs_count = this.stop_all().await;
 
-                        assert_eq!(
-                            stopped_jobs_count,
-                            Ok(0),
-                            "Failed to stop non-existent jobs"
-                        );
+                        assert_eq!(stopped_jobs_count, Ok(0), "Failed to stop non-existent jobs");
                         shutdown.initiate();
                     })
                 })

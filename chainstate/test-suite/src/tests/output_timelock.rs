@@ -95,10 +95,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
 
         // let's create more blocks until block_height_that_unlocks - 1, and always fail to spend, and build up the chain
         for height in 3..block_height_that_unlocks {
-            assert_eq!(
-                BlockHeight::new(height - 1),
-                tf.best_block_index().block_height()
-            );
+            assert_eq!(BlockHeight::new(height - 1), tf.best_block_index().block_height());
             logging::log::info!("Submitting block of height: {}", height);
 
             // Create another block, and spend the first input from the previous block.
@@ -118,24 +115,15 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     )
                 ))
             );
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height - 1)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height - 1));
 
             // create another block, with no transactions, and get the blockchain to progress
             tf.make_block_builder().build_and_process().unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height));
         }
 
         // now we should be able to spend it at block_height_that_unlocks
-        assert_eq!(
-            tf.best_block_id(),
-            tf.block_id(block_height_that_unlocks - 1)
-        );
+        assert_eq!(tf.best_block_id(), tf.block_id(block_height_that_unlocks - 1));
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -256,10 +244,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
 
         // let's create more blocks until block_count_that_unlocks + block_height_with_locked_output, and always fail to spend, and build up the chain
         for height in 3..block_count_that_unlocks + block_height_with_locked_output {
-            assert_eq!(
-                BlockHeight::new(height - 1),
-                tf.best_block_index().block_height()
-            );
+            assert_eq!(BlockHeight::new(height - 1), tf.best_block_index().block_height());
             logging::log::info!("Submitting block of height: {}", height);
 
             // create another block, and spend the first input from the previous block
@@ -279,17 +264,11 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     )
                 ))
             );
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height - 1)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height - 1));
 
             // create another block, with no transactions, and get the blockchain to progress
             tf.make_block_builder().build_and_process().unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height));
         }
 
         // now we should be able to spend it at block_count_that_unlocks
@@ -410,10 +389,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             .take(8)
             .collect();
         // Check that without the last block the output remains locked.
-        assert_eq!(
-            median_block_time(&block_times[..block_times.len() - 1]),
-            lock_time - 1
-        );
+        assert_eq!(median_block_time(&block_times[..block_times.len() - 1]), lock_time - 1);
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), lock_time);
 
@@ -425,18 +401,12 @@ fn output_lock_until_time(#[case] seed: Seed) {
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
-        assert_eq!(
-            tf.best_block_index().block_height(),
-            BlockHeight::new(expected_height as u64),
-        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(expected_height as u64),);
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
-            assert_eq!(
-                mtp.as_int_seconds(),
-                median_block_time(&block_times[..=height])
-            );
+            assert_eq!(mtp.as_int_seconds(), median_block_time(&block_times[..=height]));
 
             // Check that the output still cannot be spent.
             assert_eq!(
@@ -456,19 +426,13 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     )
                 ))
             );
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64),);
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64 + 1),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64 + 1),);
         }
 
         // Check that the output can now be spent.
@@ -481,9 +445,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             )
             // The block that is being validated isn't taken into account when calculating the
             // median time, so any time can be used here.
-            .with_timestamp(BlockTimestamp::from_int_seconds(
-                *block_times.last().unwrap(),
-            ))
+            .with_timestamp(BlockTimestamp::from_int_seconds(*block_times.last().unwrap()))
             .build_and_process()
             .unwrap();
         assert_eq!(
@@ -560,10 +522,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         let lock_seconds = 3;
         let unlock_time = block_times[1] + lock_seconds;
         // Check that without the last block the output remains locked.
-        assert_eq!(
-            median_block_time(&block_times[..block_times.len() - 1]),
-            unlock_time - 1
-        );
+        assert_eq!(median_block_time(&block_times[..block_times.len() - 1]), unlock_time - 1);
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), unlock_time);
 
@@ -575,18 +534,12 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             OutputTimeLock::ForSeconds(lock_seconds),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
-        assert_eq!(
-            tf.best_block_index().block_height(),
-            BlockHeight::new(expected_height as u64),
-        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(expected_height as u64),);
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
-            assert_eq!(
-                mtp.as_int_seconds(),
-                median_block_time(&block_times[..=height])
-            );
+            assert_eq!(mtp.as_int_seconds(), median_block_time(&block_times[..=height]));
 
             // Check that the output still cannot be spent.
             assert_eq!(
@@ -606,20 +559,14 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     )
                 ))
             );
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64),);
 
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64 + 1),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64 + 1),);
         }
 
         // Check that the output can now be spent.
@@ -632,9 +579,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             )
             // The block that is being validated isn't taken into account when calculating the
             // median time, so any time can be used here.
-            .with_timestamp(BlockTimestamp::from_int_seconds(
-                *block_times.last().unwrap(),
-            ))
+            .with_timestamp(BlockTimestamp::from_int_seconds(*block_times.last().unwrap()))
             .build_and_process()
             .unwrap();
         assert_eq!(

@@ -56,13 +56,7 @@ fn create_pool_data(
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
-    PoolData::new(
-        decommission_destination,
-        pledged_amount,
-        vrf_pk,
-        margin_ratio,
-        cost_per_block,
-    )
+    PoolData::new(decommission_destination, pledged_amount, vrf_pk, margin_ratio, cost_per_block)
 }
 
 fn create_pool(
@@ -71,10 +65,8 @@ fn create_pool(
     pledged_amount: Amount,
 ) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))), 0);
     let pool_data = create_pool_data(rng, destination, pledged_amount);
     let pool_id = make_pool_id(&outpoint);
     op.create_pool(pool_id, pool_data.clone())
@@ -87,10 +79,8 @@ fn create_delegation_id(
     target_pool: PoolId,
 ) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))), 0);
     op.create_delegation_id(target_pool, destination.clone(), &outpoint)
         .map(|(id, undo)| (id, destination, undo))
 }
@@ -117,13 +107,7 @@ fn create_storage_with_pool_and_delegation(
     rng: &mut (impl Rng + CryptoRng),
     pledged_amount: Amount,
     delegated_amount: Amount,
-) -> (
-    PoolId,
-    PoolData,
-    DelegationId,
-    Destination,
-    InMemoryPoSAccounting,
-) {
+) -> (PoolId, PoolData, DelegationId, Destination, InMemoryPoSAccounting) {
     let pool_id = new_pool_id(rng.next_u64());
     let destination_pool = new_pub_key_destination(rng);
     let delegation_id = new_delegation_id(rng.next_u64());
@@ -135,10 +119,7 @@ fn create_storage_with_pool_and_delegation(
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),
-        BTreeMap::from([(
-            delegation_id,
-            DelegationData::new(pool_id, destination_del.clone()),
-        )]),
+        BTreeMap::from([(delegation_id, DelegationData::new(pool_id, destination_del.clone()))]),
     );
     (pool_id, pool_data, delegation_id, destination_del, storage)
 }

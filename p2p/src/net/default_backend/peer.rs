@@ -102,16 +102,7 @@ where
     ) -> Self {
         let socket = BufferedTranscoder::new(socket, *p2p_config.max_message_size);
 
-        Self {
-            peer_id,
-            peer_role,
-            chain_config,
-            p2p_config,
-            socket,
-            receiver_address,
-            tx,
-            rx,
-        }
+        Self { peer_id, peer_role, chain_config, p2p_config, socket, receiver_address, tx, rx }
     }
 
     fn validate_peer_time(
@@ -172,17 +163,15 @@ where
                 ))?;
 
                 self.socket
-                    .send(types::Message::Handshake(
-                        types::HandshakeMessage::HelloAck {
-                            protocol: NETWORK_PROTOCOL_CURRENT,
-                            network: *self.chain_config.magic_bytes(),
-                            user_agent: self.p2p_config.user_agent.clone(),
-                            version: *self.chain_config.version(),
-                            services: (*self.p2p_config.node_type).into(),
-                            receiver_address: self.receiver_address.clone(),
-                            current_time: local_time,
-                        },
-                    ))
+                    .send(types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                        protocol: NETWORK_PROTOCOL_CURRENT,
+                        network: *self.chain_config.magic_bytes(),
+                        user_agent: self.p2p_config.user_agent.clone(),
+                        version: *self.chain_config.version(),
+                        services: (*self.p2p_config.node_type).into(),
+                        receiver_address: self.receiver_address.clone(),
+                        current_time: local_time,
+                    }))
                     .await?;
             }
             PeerRole::Outbound { handshake_nonce } => {
@@ -250,33 +239,23 @@ where
 
             Message::PingRequest(r) => tx.send((
                 peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::PingRequest(r),
-                },
+                PeerEvent::MessageReceived { message: PeerManagerMessage::PingRequest(r) },
             ))?,
             Message::PingResponse(r) => tx.send((
                 peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::PingResponse(r),
-                },
+                PeerEvent::MessageReceived { message: PeerManagerMessage::PingResponse(r) },
             ))?,
             Message::AddrListRequest(r) => tx.send((
                 peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AddrListRequest(r),
-                },
+                PeerEvent::MessageReceived { message: PeerManagerMessage::AddrListRequest(r) },
             ))?,
             Message::AddrListResponse(r) => tx.send((
                 peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AddrListResponse(r),
-                },
+                PeerEvent::MessageReceived { message: PeerManagerMessage::AddrListResponse(r) },
             ))?,
             Message::AnnounceAddrRequest(r) => tx.send((
                 peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AnnounceAddrRequest(r),
-                },
+                PeerEvent::MessageReceived { message: PeerManagerMessage::AnnounceAddrRequest(r) },
             ))?,
 
             Message::HeaderListRequest(v) => {
@@ -471,17 +450,15 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         socket2.recv().await.unwrap();
         assert!(socket2
-            .send(types::Message::Handshake(
-                types::HandshakeMessage::HelloAck {
-                    protocol: NETWORK_PROTOCOL_CURRENT,
-                    version: *chain_config.version(),
-                    network: *chain_config.magic_bytes(),
-                    user_agent: p2p_config.user_agent.clone(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
-                    receiver_address: None,
-                    current_time: P2pTimestamp::from_int_seconds(123456),
-                }
-            ))
+            .send(types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                protocol: NETWORK_PROTOCOL_CURRENT,
+                version: *chain_config.version(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_int_seconds(123456),
+            }))
             .await
             .is_ok());
 
@@ -607,9 +584,9 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
-            .send(types::Message::HeaderListRequest(
-                message::HeaderListRequest::new(Locator::new(vec![])),
-            ))
+            .send(types::Message::HeaderListRequest(message::HeaderListRequest::new(Locator::new(
+                vec![],
+            ))))
             .await
             .unwrap();
 

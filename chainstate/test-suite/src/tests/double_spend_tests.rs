@@ -472,10 +472,7 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
 
         let first_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(
@@ -506,10 +503,7 @@ fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
 
         let first_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(

@@ -32,11 +32,7 @@ pub struct Argon2Config {
 
 impl Argon2Config {
     pub fn new(m_cost_memory_size: u32, t_cost_iterations: u32, p_cost_parallelism: u32) -> Self {
-        Self {
-            m_cost_memory_size,
-            t_cost_iterations,
-            p_cost_parallelism,
-        }
+        Self { m_cost_memory_size, t_cost_iterations, p_cost_parallelism }
     }
 }
 
@@ -77,10 +73,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "0b549350ae93d48747c5b3a676589279a3cce4a7b9de79494e2f0b7193d0ae9b"
-        );
+        assert_eq!(hash_hex, "0b549350ae93d48747c5b3a676589279a3cce4a7b9de79494e2f0b7193d0ae9b");
     }
 
     #[test]
@@ -94,10 +87,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "f6acd6dc507655ef500975881f6ba642eb03d04ce71d3b3a139e04b321daa88a"
-        );
+        assert_eq!(hash_hex, "f6acd6dc507655ef500975881f6ba642eb03d04ce71d3b3a139e04b321daa88a");
     }
 
     #[test]
@@ -111,10 +101,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "e57d0a6482f160a9f9f6c23f480eb478fcf5b13e07445514a7d4d6e48c52c5e3"
-        );
+        assert_eq!(hash_hex, "e57d0a6482f160a9f9f6c23f480eb478fcf5b13e07445514a7d4d6e48c52c5e3");
     }
 
     #[test]
@@ -128,10 +115,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "6e7833c72c1eaa5388b389f1cb657ee27858f062a164763d041c880fe7ced6d7"
-        );
+        assert_eq!(hash_hex, "6e7833c72c1eaa5388b389f1cb657ee27858f062a164763d041c880fe7ced6d7");
     }
 
     #[test]
@@ -145,10 +129,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "8dd956b8a3d0e0a28905a70cff97a63ecc764af44b73daaef608de5a593e7ea7"
-        );
+        assert_eq!(hash_hex, "8dd956b8a3d0e0a28905a70cff97a63ecc764af44b73daaef608de5a593e7ea7");
     }
 
     #[test]
@@ -162,10 +143,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "5aa54fa17129a5488e51a8c8ba6754921dfb0cbd88013942a4705ecb1789ab11"
-        );
+        assert_eq!(hash_hex, "5aa54fa17129a5488e51a8c8ba6754921dfb0cbd88013942a4705ecb1789ab11");
     }
 
     #[test]
@@ -179,10 +157,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "d3fd0dc78bceed1c87d303aaead74177676157bed51b9e5479e09c905c5bf2b4"
-        );
+        assert_eq!(hash_hex, "d3fd0dc78bceed1c87d303aaead74177676157bed51b9e5479e09c905c5bf2b4");
     }
 
     #[test]
@@ -210,10 +185,7 @@ pub mod test {
         );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
-        assert_eq!(
-            hash_hex,
-            "495205d26d5184c4b90e41c98cd067f85b67cc303d86391dfd16436f5d272e58"
-        );
+        assert_eq!(hash_hex, "495205d26d5184c4b90e41c98cd067f85b67cc303d86391dfd16436f5d272e58");
     }
 
     #[test]

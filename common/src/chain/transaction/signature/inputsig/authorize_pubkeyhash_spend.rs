@@ -34,10 +34,7 @@ impl AuthorizedPublicKeyHashSpend {
     }
 
     pub fn new(public_key: PublicKey, signature: Signature) -> Self {
-        Self {
-            public_key,
-            signature,
-        }
+        Self { public_key, signature }
     }
 }
 

@@ -57,11 +57,7 @@ impl<'a> BlockRewardTransactable<'a> {
         outputs: Option<&'a [TxOutput]>,
         witness: Option<&'a [InputWitness]>,
     ) -> Self {
-        Self {
-            inputs,
-            outputs,
-            witness,
-        }
+        Self { inputs, outputs, witness }
     }
 
     pub fn witness(&self) -> Option<&[InputWitness]> {

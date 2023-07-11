@@ -199,9 +199,8 @@ where
             SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
         )?;
 
-        self.last_activity = PeerActivity::ExpectingHeaderList {
-            time: self.time_getter.get_time(),
-        };
+        self.last_activity =
+            PeerActivity::ExpectingHeaderList { time: self.time_getter.get_time() };
 
         Ok(())
     }
@@ -269,12 +268,10 @@ where
             .max_request_blocks_count
             .checked_sub(block_ids.len())
             .and_then(|n| n.checked_sub(self.blocks_queue.len()))
-            .ok_or(P2pError::ProtocolError(
-                ProtocolError::BlocksRequestLimitExceeded(
-                    block_ids.len() + self.blocks_queue.len(),
-                    *self.p2p_config.max_request_blocks_count,
-                ),
-            ))?;
+            .ok_or(P2pError::ProtocolError(ProtocolError::BlocksRequestLimitExceeded(
+                block_ids.len() + self.blocks_queue.len(),
+                *self.p2p_config.max_request_blocks_count,
+            )))?;
         log::trace!("Requested block ids: {block_ids:#?}");
 
         // Check that all the blocks are known and haven't been already requested.
@@ -284,9 +281,9 @@ where
             .call(move |c| {
                 // Check that all blocks are known. Skip the first block as it has already checked.
                 for id in ids {
-                    let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
-                        ProtocolError::UnknownBlockRequested(id),
-                    ))?;
+                    let index = c
+                        .get_block_index(&id)?
+                        .ok_or(P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(id)))?;
 
                     if let Some(ref best_known_block) = best_known_block {
                         if index.block_height() <= best_known_block.block_height() {
@@ -358,12 +355,10 @@ where
         }
 
         if headers.len() > *self.p2p_config.msg_header_count_limit {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::HeadersLimitExceeded(
-                    headers.len(),
-                    *self.p2p_config.msg_header_count_limit,
-                ),
-            ));
+            return Err(P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(
+                headers.len(),
+                *self.p2p_config.msg_header_count_limit,
+            )));
         }
         log::trace!("Received headers: {headers:#?}");
 
@@ -495,9 +490,8 @@ where
         } else {
             // We expect additional blocks from the peer. Update the timestamp we received the
             // current one.
-            self.last_activity = PeerActivity::ExpectingBlocks {
-                time: self.time_getter.get_time(),
-            };
+            self.last_activity =
+                PeerActivity::ExpectingBlocks { time: self.time_getter.get_time() };
         }
 
         Ok(())
@@ -573,9 +567,9 @@ where
         }
 
         if self.announced_transactions.contains(&tx) {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::DuplicatedTransactionAnnouncement(tx),
-            ));
+            return Err(P2pError::ProtocolError(ProtocolError::DuplicatedTransactionAnnouncement(
+                tx,
+            )));
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
@@ -620,17 +614,11 @@ where
             | P2pError::ChainstateError(_)) => {
                 let ban_score = e.ban_score();
                 if ban_score > 0 {
-                    log::info!(
-                        "Adjusting the '{}' peer score by {}: {:?}",
-                        peer_id,
-                        ban_score,
-                        e,
-                    );
+                    log::info!("Adjusting the '{}' peer score by {}: {:?}", peer_id, ban_score, e,);
 
                     let (sender, receiver) = oneshot_nofail::channel();
-                    peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                        peer_id, ban_score, sender,
-                    ))?;
+                    peer_manager_sender
+                        .send(PeerManagerEvent::AdjustPeerScore(peer_id, ban_score, sender))?;
                     receiver.await?.or_else(|e| match e {
                         P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
                         e => Err(e),
@@ -692,9 +680,7 @@ where
         )?;
         self.requested_blocks.extend(block_ids);
 
-        self.last_activity = PeerActivity::ExpectingBlocks {
-            time: self.time_getter.get_time(),
-        };
+        self.last_activity = PeerActivity::ExpectingBlocks { time: self.time_getter.get_time() };
 
         Ok(())
     }
@@ -713,10 +699,8 @@ where
         self.best_known_block = index?;
 
         log::debug!("Sending {} block to {} peer", block.get_id(), self.id());
-        self.messaging_handle.send_message(
-            self.id(),
-            SyncMessage::BlockResponse(BlockResponse::new(block)),
-        )
+        self.messaging_handle
+            .send_message(self.id(), SyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
     async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {

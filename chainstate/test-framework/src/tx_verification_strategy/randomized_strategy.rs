@@ -60,9 +60,7 @@ pub struct RandomizedTransactionVerificationStrategy {
 
 impl RandomizedTransactionVerificationStrategy {
     pub fn new(seed: Seed) -> Self {
-        Self {
-            rng: RefCell::new(Box::new(make_seedable_rng(seed))),
-        }
+        Self { rng: RefCell::new(Box::new(make_seedable_rng(seed))) }
     }
 }
 
@@ -183,9 +181,7 @@ impl RandomizedTransactionVerificationStrategy {
                 // connect transactable using current verifier
 
                 tx_verifier.connect_transaction(
-                    &TransactionSourceForConnect::Chain {
-                        new_block_index: block_index,
-                    },
+                    &TransactionSourceForConnect::Chain { new_block_index: block_index },
                     &block.transactions()[tx_num],
                     median_time_past,
                     take_front_tx_index(&mut tx_indices),
@@ -235,9 +231,7 @@ impl RandomizedTransactionVerificationStrategy {
             } else {
                 // connect transactable using current verifier
                 let fee = tx_verifier.connect_transaction(
-                    &TransactionSourceForConnect::Chain {
-                        new_block_index: block_index,
-                    },
+                    &TransactionSourceForConnect::Chain { new_block_index: block_index },
                     &block.transactions()[tx_num],
                     median_time_past,
                     take_front_tx_index(tx_indices),

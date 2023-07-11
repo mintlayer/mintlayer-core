@@ -186,10 +186,8 @@ fn test_scale_version_compatibility_struct() {
     );
 
     let mut field_btree_map_string = BTreeMap::new();
-    field_btree_map_string.insert(
-        0xFF,
-        "The Adventure of Tom Sawyer is a novel by Mark Twain.".to_string(),
-    );
+    field_btree_map_string
+        .insert(0xFF, "The Adventure of Tom Sawyer is a novel by Mark Twain.".to_string());
 
     let mut field_btree_map_bytes = BTreeMap::new();
     field_btree_map_bytes.insert(0xFF, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);

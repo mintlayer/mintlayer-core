@@ -27,16 +27,14 @@ impl<T: Hash> BloomFilter<T> {
     pub fn new(size: usize, fpp: f64, rng: &mut impl Rng) -> Self {
         assert!(size > 0);
         assert!(fpp > 0.0 && fpp < 1.0);
-        Self(
-            probabilistic_collections::bloom::BloomFilter::<T>::with_hashers(
-                size,
-                fpp,
-                [
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-                ],
-            ),
-        )
+        Self(probabilistic_collections::bloom::BloomFilter::<T>::with_hashers(
+            size,
+            fpp,
+            [
+                SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+                SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+            ],
+        ))
     }
 
     /// Inserts an element into the bloom filter

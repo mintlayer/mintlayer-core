@@ -93,11 +93,7 @@ impl EmissionScheduleTabular {
         initial_subsidy: Mlt,
         periods: BTreeMap<BlockHeight, Mlt>,
     ) -> Self {
-        Self {
-            initial_supply,
-            initial_subsidy,
-            periods,
-        }
+        Self { initial_supply, initial_subsidy, periods }
     }
 
     /// All subsidy periods, starting at block height 0
@@ -125,27 +121,20 @@ impl EmissionScheduleTabular {
 
     /// Get the final emission schedule
     pub fn schedule(&self) -> EmissionSchedule {
-        let table_seed = (
-            self.initial_supply,
-            self.initial_subsidy,
-            BlockHeight::zero(),
-        );
+        let table_seed = (self.initial_supply, self.initial_subsidy, BlockHeight::zero());
 
         // Pre-calculate a table with starting supply and per-block rewards for each reward period.
         let table: BTreeMap<BlockHeight, (Mlt, Mlt)> = self
             .periods
             .iter()
-            .scan(
-                table_seed,
-                |(supply, old_subsidy, start_block), (end_block, new_subsidy)| {
-                    let n_blocks = u64::from(*end_block) - u64::from(*start_block);
-                    let cur_period = (*old_subsidy * n_blocks as u128).expect("Subsidy overflow");
-                    *supply = (*supply + cur_period).expect("Subsidy overflow");
-                    *old_subsidy = *new_subsidy;
-                    *start_block = *end_block;
-                    Some((*end_block, (*supply, *new_subsidy)))
-                },
-            )
+            .scan(table_seed, |(supply, old_subsidy, start_block), (end_block, new_subsidy)| {
+                let n_blocks = u64::from(*end_block) - u64::from(*start_block);
+                let cur_period = (*old_subsidy * n_blocks as u128).expect("Subsidy overflow");
+                *supply = (*supply + cur_period).expect("Subsidy overflow");
+                *old_subsidy = *new_subsidy;
+                *start_block = *end_block;
+                Some((*end_block, (*supply, *new_subsidy)))
+            })
             .collect();
 
         // Take copies of values to be moved into the closure.
@@ -155,10 +144,7 @@ impl EmissionScheduleTabular {
             let initial = (&BlockHeight::zero(), &initial_entry);
             let (start, (start_supply, subsidy)) =
                 table.range(BlockHeight::zero()..height).next_back().unwrap_or(initial);
-            assert!(
-                start <= &height,
-                "Block heights incorrect, start={start}, ht={height}"
-            );
+            assert!(start <= &height, "Block heights incorrect, start={start}, ht={height}");
             let n_blocks = u64::from(height) - u64::from(*start);
             let period_subsidy = (*subsidy * n_blocks as u128).expect("Subsidy overflow");
             (*start_supply + period_subsidy).expect("Subsidy overflow")
@@ -257,11 +243,7 @@ impl FromStr for EmissionScheduleTabular {
             })
             .collect();
 
-        Ok(Self {
-            initial_supply,
-            initial_subsidy,
-            periods: periods?,
-        })
+        Ok(Self { initial_supply, initial_subsidy, periods: periods? })
     }
 }
 
@@ -313,10 +295,7 @@ mod tests {
 
     #[test]
     fn mainnet_schedule_display() {
-        assert_eq!(
-            &format!("{}", mainnet_default_table()),
-            MAINNET_TABLE_STRING
-        )
+        assert_eq!(&format!("{}", mainnet_default_table()), MAINNET_TABLE_STRING)
     }
 
     #[test]
@@ -514,10 +493,7 @@ mod tests {
         ];
         let schedule =
             EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
-        assert_eq!(
-            schedule.final_supply(),
-            Some(Mlt::from_atoms(200 + 400 + 250))
-        );
+        assert_eq!(schedule.final_supply(), Some(Mlt::from_atoms(200 + 400 + 250)));
     }
 
     #[test]
@@ -541,10 +517,7 @@ mod tests {
 
     #[test]
     fn initial_supply_mainnet() {
-        assert_eq!(
-            mainnet_default_schedule().initial_supply(),
-            MAINNET_COIN_PREMINE
-        );
+        assert_eq!(mainnet_default_schedule().initial_supply(), MAINNET_COIN_PREMINE);
     }
 
     #[test]

@@ -29,9 +29,7 @@ pub struct TxIndexCache {
 
 impl TxIndexCache {
     pub fn new() -> Self {
-        Self {
-            data: TxIndexMap::new(),
-        }
+        Self { data: TxIndexMap::new() }
     }
 
     #[cfg(test)]
@@ -89,9 +87,7 @@ impl TxIndexCache {
     ) -> Result<&mut CachedInputsOperation, TxIndexError> {
         match self.data.get_mut(outpoint) {
             Some(tx_index) => Ok(tx_index),
-            None => Err(TxIndexError::PreviouslyCachedInputNotFound(
-                outpoint.clone(),
-            )),
+            None => Err(TxIndexError::PreviouslyCachedInputNotFound(outpoint.clone())),
         }
     }
 

@@ -41,10 +41,7 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
                 .expect("block index to be returned");
         }
         // Check there are the expected number of blocks in the storage now
-        assert_eq!(
-            tf.chainstate.get_best_block_height().unwrap(),
-            num_blocks.into()
-        );
+        assert_eq!(tf.chainstate.get_best_block_height().unwrap(), num_blocks.into());
 
         // Extract the final storage and drop the test framework
         tf.storage
@@ -78,15 +75,11 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
     use chainstate_storage::{BlockchainStorageRead, Transactional};
     let conf0 = ChainConfigBuilder::new(ChainType::Mainnet)
         .net_upgrades(NetUpgrades::unit_tests())
-        .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
-            [0x00; 32].into(),
-        )))
+        .genesis_unittest(common::chain::Destination::ScriptHash(Id::new([0x00; 32].into())))
         .build();
     let conf1 = ChainConfigBuilder::new(ChainType::Mainnet)
         .net_upgrades(NetUpgrades::unit_tests())
-        .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
-            [0x01; 32].into(),
-        )))
+        .genesis_unittest(common::chain::Destination::ScriptHash(Id::new([0x01; 32].into())))
         .build();
     assert_ne!(conf0.genesis_block_id(), conf1.genesis_block_id());
 
@@ -102,10 +95,7 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
                 .expect("block index to be returned");
         }
         // Check the number of blocks in the storage matches
-        assert_eq!(
-            tf.chainstate.get_best_block_height().unwrap(),
-            num_blocks.into()
-        );
+        assert_eq!(tf.chainstate.get_best_block_height().unwrap(), num_blocks.into());
 
         tf.storage
     };

@@ -43,10 +43,8 @@ fn create_pool_twice(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
 
     let pledge_amount = Amount::from_atoms(100);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))), 0);
     let destination = new_pub_key_destination(&mut rng);
     let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
     let pool_id = crate::make_pool_id(&outpoint);
@@ -191,10 +189,8 @@ fn create_delegation_twice(#[case] seed: Seed) {
     let pledge_amount = Amount::from_atoms(100);
     let (pool_id, _, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
 
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))), 0);
     let destination = new_pub_key_destination(&mut rng);
 
     let mut db = PoSAccountingDB::new(&mut storage);
@@ -228,10 +224,8 @@ fn create_delegation_id_unknown_pool(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
 
     let destination = new_pub_key_destination(&mut rng);
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))), 0);
     let pool_id = new_pool_id(rng.next_u64());
 
     {

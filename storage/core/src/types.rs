@@ -127,10 +127,7 @@ impl DbMapDesc {
 
     /// New DB map description with all details
     pub fn new_with_details(name: impl Into<String>, value_size_hint: Range<usize>) -> Self {
-        Self {
-            name: name.into(),
-            value_size_hint,
-        }
+        Self { name: name.into(), value_size_hint }
     }
 
     /// Get DB map name
@@ -176,10 +173,6 @@ pub mod construct {
 
     fn assert_names_unique(maps: &DbMapsData<DbMapDesc>) {
         let set: std::collections::BTreeSet<_> = maps.0.iter().map(|desc| &desc.name).collect();
-        assert_eq!(
-            set.len(),
-            maps.db_map_count().as_usize(),
-            "Duplicate map names found"
-        );
+        assert_eq!(set.len(), maps.db_map_count().as_usize(), "Duplicate map names found");
     }
 }

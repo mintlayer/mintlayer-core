@@ -21,9 +21,7 @@ pub struct OnceDestructor<F: FnOnce()> {
 
 impl<F: FnOnce()> OnceDestructor<F> {
     pub fn new(call_on_drop: F) -> Self {
-        Self {
-            call_on_drop: Some(call_on_drop),
-        }
+        Self { call_on_drop: Some(call_on_drop) }
     }
 }
 

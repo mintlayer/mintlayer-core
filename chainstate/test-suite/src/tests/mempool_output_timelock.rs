@@ -49,11 +49,8 @@ fn output_lock_until_height(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier =
+            TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
 
         let block_height_that_unlocks = 10;
 
@@ -75,9 +72,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None
@@ -86,19 +81,14 @@ fn output_lock_until_height(#[case] seed: Seed) {
             ));
 
             tf.make_block_builder().build_and_process().unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height));
         }
 
         // now we should be able to spend it at block_height_that_unlocks
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -114,11 +104,8 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier =
+            TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
@@ -142,9 +129,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None,
@@ -154,10 +139,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
 
             // create another block, with no transactions, and get the blockchain to progress
             tf.make_block_builder().build_and_process().unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height)
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height));
         }
 
         // now we should be able to spend it at block_count_that_unlocks
@@ -166,9 +148,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -184,11 +164,8 @@ fn output_lock_until_time(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier =
+            TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
@@ -196,10 +173,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             .take(8)
             .collect();
         // Check that without the last block the output remains locked.
-        assert_eq!(
-            median_block_time(&block_times[..block_times.len() - 1]),
-            lock_time - 1
-        );
+        assert_eq!(median_block_time(&block_times[..block_times.len() - 1]), lock_time - 1);
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), lock_time);
 
@@ -211,10 +185,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
-        assert_eq!(
-            tf.best_block_index().block_height(),
-            BlockHeight::new(expected_height as u64),
-        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(expected_height as u64),);
 
         let spend_locked_tx = TransactionBuilder::new()
             .add_input(locked_output.1.clone(), locked_output.0)
@@ -224,18 +195,13 @@ fn output_lock_until_time(#[case] seed: Seed) {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
-            assert_eq!(
-                mtp.as_int_seconds(),
-                median_block_time(&block_times[..=height])
-            );
+            assert_eq!(mtp.as_int_seconds(), median_block_time(&block_times[..=height]));
 
             // Check that the output still cannot be spent.
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                     &spend_locked_tx,
                     &mtp,
                     None,
@@ -248,19 +214,14 @@ fn output_lock_until_time(#[case] seed: Seed) {
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64 + 1),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64 + 1),);
         }
 
         // Check that the output can now be spent.
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -276,11 +237,8 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup(&mut rng);
-        let mut verifier = TransactionVerifier::new(
-            &storage,
-            &chain_config,
-            TransactionVerifierConfig::new(true),
-        );
+        let mut verifier =
+            TransactionVerifier::new(&storage, &chain_config, TransactionVerifierConfig::new(true));
 
         let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
@@ -289,10 +247,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         let lock_seconds = 3;
         let unlock_time = block_times[1] + lock_seconds;
         // Check that without the last block the output remains locked.
-        assert_eq!(
-            median_block_time(&block_times[..block_times.len() - 1]),
-            unlock_time - 1
-        );
+        assert_eq!(median_block_time(&block_times[..block_times.len() - 1]), unlock_time - 1);
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), unlock_time);
 
@@ -304,10 +259,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             OutputTimeLock::ForSeconds(lock_seconds),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
-        assert_eq!(
-            tf.best_block_index().block_height(),
-            BlockHeight::new(expected_height as u64),
-        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(expected_height as u64),);
 
         let spend_locked_tx = TransactionBuilder::new()
             .add_input(locked_output.1.clone(), locked_output.0)
@@ -317,18 +269,13 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
-            assert_eq!(
-                mtp.as_int_seconds(),
-                median_block_time(&block_times[..=height])
-            );
+            assert_eq!(mtp.as_int_seconds(), median_block_time(&block_times[..=height]));
 
             // Check that the output still cannot be spent.
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                     &spend_locked_tx,
                     &mtp,
                     None
@@ -336,29 +283,21 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                 Err(ConnectTransactionError::TimeLockViolation(_))
             ));
 
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64),);
 
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
-            assert_eq!(
-                tf.best_block_index().block_height(),
-                BlockHeight::new(height as u64 + 1),
-            );
+            assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(height as u64 + 1),);
         }
 
         // Check that the output can now be spent.
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::Mempool { current_best: &best_block_index },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(time::get_time()),
                 None,

@@ -55,10 +55,9 @@ fn to_line_output(
 ) -> Result<LineOutput, WalletCliError> {
     match command_output {
         ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
-        ConsoleCommand::SetStatus {
-            status: _,
-            print_message,
-        } => Ok(LineOutput::Print(print_message)),
+        ConsoleCommand::SetStatus { status: _, print_message } => {
+            Ok(LineOutput::Print(print_message))
+        }
         ConsoleCommand::ClearScreen
         | ConsoleCommand::PrintHistory
         | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(

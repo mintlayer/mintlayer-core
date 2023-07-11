@@ -68,10 +68,7 @@ pub struct MpscChannelTransport {
 impl MpscChannelTransport {
     pub fn new() -> Self {
         let local_address: Ipv4Addr = NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed).into();
-        MpscChannelTransport {
-            local_address: local_address.into(),
-            last_port: 1024.into(),
-        }
+        MpscChannelTransport { local_address: local_address.into(), last_port: 1024.into() }
     }
 
     fn new_port(&self) -> u16 {
@@ -109,9 +106,7 @@ impl TransportSocket for MpscChannelTransport {
 
             // It's not possible to bind to the used address
             if connections.contains_key(address) {
-                return Err(P2pError::DialError(DialError::IoError(
-                    std::io::ErrorKind::AddrInUse,
-                )));
+                return Err(P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse)));
             }
         }
 
@@ -122,10 +117,7 @@ impl TransportSocket for MpscChannelTransport {
             assert!(old_entry.is_none());
         }
 
-        Ok(Self::Listener {
-            addresses,
-            receiver,
-        })
+        Ok(Self::Listener { addresses, receiver })
     }
 
     fn connect(&self, mut address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {

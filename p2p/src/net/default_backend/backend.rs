@@ -110,10 +110,8 @@ pub struct Backend<T: TransportSocket> {
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
-    peer_chan: (
-        mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
-    ),
+    peer_chan:
+        (mpsc::UnboundedSender<(PeerId, PeerEvent)>, mpsc::UnboundedReceiver<(PeerId, PeerEvent)>),
 
     /// TX channel for sending events to the frontend
     conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
@@ -214,17 +212,11 @@ where
 
         Self::send_sync_event(
             &self.sync_tx,
-            SyncingEvent::Connected {
-                peer_id,
-                services: peer.services,
-                sync_rx,
-            },
+            SyncingEvent::Connected { peer_id, services: peer.services, sync_rx },
             &self.shutdown,
         );
-        self.events_controller.broadcast(P2pEvent::PeerConnected {
-            id: peer_id,
-            services: peer.services,
-        });
+        self.events_controller
+            .broadcast(P2pEvent::PeerConnected { id: peer_id, services: peer.services });
 
         Ok(())
     }
@@ -358,15 +350,8 @@ where
             }
         });
 
-        self.pending.insert(
-            remote_peer_id,
-            PendingPeerContext {
-                handle,
-                address,
-                peer_role,
-                tx: peer_tx,
-            },
-        );
+        self.pending
+            .insert(remote_peer_id, PendingPeerContext { handle, address, peer_role, tx: peer_tx });
 
         Ok(())
     }
@@ -381,16 +366,12 @@ where
         peer_info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
-        let PendingPeerContext {
-            handle,
-            address,
-            peer_role,
-            tx,
-        } = match self.pending.remove(&peer_id) {
-            Some(pending) => pending,
-            // Could be removed if self-connection was detected earlier
-            None => return Ok(()),
-        };
+        let PendingPeerContext { handle, address, peer_role, tx } =
+            match self.pending.remove(&peer_id) {
+                Some(pending) => pending,
+                // Could be removed if self-connection was detected earlier
+                None => return Ok(()),
+            };
 
         if self.is_connection_from_self(peer_role, handshake_nonce)? {
             return Ok(());
@@ -415,15 +396,8 @@ where
             }
         }
 
-        self.peers.insert(
-            peer_id,
-            PeerContext {
-                handle,
-                services,
-                tx,
-                was_accepted: SetFlag::new(),
-            },
-        );
+        self.peers
+            .insert(peer_id, PeerContext { handle, services, tx, was_accepted: SetFlag::new() });
 
         Ok(())
     }
@@ -466,10 +440,7 @@ where
                 .pending
                 .iter()
                 .find(|(_peer_id, pending)| {
-                    pending.peer_role
-                        == PeerRole::Outbound {
-                            handshake_nonce: incoming_nonce,
-                        }
+                    pending.peer_role == PeerRole::Outbound { handshake_nonce: incoming_nonce }
                 })
                 .map(|(peer_id, _pending)| *peer_id);
 
@@ -477,10 +448,7 @@ where
                 let outbound_pending =
                     self.pending.remove(&outbound_peer_id).expect("peer must exist");
 
-                log::info!(
-                    "self-connection detected on address {:?}",
-                    outbound_pending.address
-                );
+                log::info!("self-connection detected on address {:?}", outbound_pending.address);
 
                 // Report outbound connection failure
                 self.conn_tx.send(ConnectivityEvent::ConnectionError {
@@ -509,14 +477,7 @@ where
             } => self.create_peer(
                 peer_id,
                 handshake_nonce,
-                PeerInfo {
-                    peer_id,
-                    protocol,
-                    network,
-                    version,
-                    user_agent,
-                    services,
-                },
+                PeerInfo { peer_id, protocol, network, version, user_agent, services },
                 receiver_address,
             ),
 

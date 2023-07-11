@@ -44,10 +44,7 @@ pub struct BlockBody {
 
 impl BlockBody {
     pub fn new(reward: BlockReward, transactions: Vec<SignedTransaction>) -> Self {
-        Self {
-            reward,
-            transactions,
-        }
+        Self { reward, transactions }
     }
 
     pub fn transactions(&self) -> &[SignedTransaction] {
@@ -199,10 +196,7 @@ mod tests {
         // Check leaf count
         let leaf_count = (transactions.len() + 1).next_power_of_two();
         assert_eq!(merkle_tree.raw_tree().leaf_count().get(), leaf_count as u32);
-        assert_eq!(
-            witness_merkle_tree.raw_tree().leaf_count().get(),
-            leaf_count as u32
-        );
+        assert_eq!(witness_merkle_tree.raw_tree().leaf_count().get(), leaf_count as u32);
 
         // Check leaves hashes
         let merkle_tree_leaves =

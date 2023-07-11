@@ -79,13 +79,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
-            ))
+            )))
         ));
 
         // Ticker doesn't exist
@@ -114,13 +112,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
-            ))
+            )))
         ));
 
         {
@@ -167,13 +163,13 @@ fn token_issue_test(#[case] seed: Seed) {
 
                 assert!(matches!(
                     result,
-                    Err(ChainstateError::ProcessBlockError(
-                        BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                        CheckBlockError::CheckTransactionFailed(
                             CheckBlockTransactionsError::TokensError(
                                 TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
                             )
-                        ))
-                    ))
+                        )
+                    )))
                 ));
             }
         }
@@ -204,11 +200,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueAmountIsZero(_, _))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueAmountIsZero(_, _)
                 ))
-            ))
+            )))
         ));
 
         // Too many decimals
@@ -240,13 +236,13 @@ fn token_issue_test(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorTooManyDecimals(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
 
@@ -282,13 +278,13 @@ fn token_issue_test(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorIncorrectMetadataURI(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
 
@@ -318,13 +314,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
                 ))
-            ))
+            )))
         ));
 
         // Valid case
@@ -456,9 +450,9 @@ fn token_transfer_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            )))
         ));
 
         // Try to transfer token with wrong id
@@ -512,11 +506,11 @@ fn token_transfer_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::TransferZeroTokens(_, _))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::TransferZeroTokens(_, _)
                 ))
-            ))
+            )))
         ));
 
         // Valid case - Transfer tokens
@@ -529,11 +523,8 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -585,13 +576,11 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .build_and_process();
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::MultipleTokenIssuanceInTransaction(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::MultipleTokenIssuanceInTransaction(_, _)
                 ))
-            ))
+            )))
         ));
 
         // Valid issuance
@@ -674,11 +663,9 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         // Try to process tx with insufficient token fees
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::InsufficientTokenFees(_, _)
-                ))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(_, _))
+            )))
         ));
 
         // Valid issuance
@@ -767,11 +754,8 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: quarter_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -795,11 +779,8 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -842,10 +823,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -880,9 +858,9 @@ fn burn_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            )))
         ));
 
         // Valid case: Burn 25% with burn data, and burn 25% by not specifying an output, and transfer the remaining 50%
@@ -895,18 +873,11 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: quarter_funds }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: half_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: half_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -928,18 +899,11 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: quarter_funds }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: quarter_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -961,11 +925,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: quarter_funds }.into(),
                     ))
                     .build(),
             )
@@ -985,11 +945,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenTransfer {
-                            token_id,
-                            amount: quarter_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: quarter_funds }.into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -1043,10 +999,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        issuance_data,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(issuance_data, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(token_min_issuance_fee),
                         Destination::AnyoneCanSpend,
@@ -1077,11 +1030,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: total_funds }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123455)),
@@ -1106,11 +1055,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
@@ -1159,10 +1105,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         TxInput::from_utxo(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .build(),
             )
             .build_and_process()
@@ -1182,11 +1125,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
@@ -1218,11 +1158,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: total_funds }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123454)),
@@ -1253,11 +1189,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: total_funds }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123454)),
@@ -1332,10 +1264,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -1371,9 +1300,9 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            )))
         ));
 
         // Valid case - try to transfer correct amount of tokens
@@ -1386,11 +1315,8 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -1430,10 +1356,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -1456,19 +1379,13 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -1477,9 +1394,9 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            )))
         ));
 
         // Valid case - try to transfer correct amount of tokens
@@ -1492,11 +1409,8 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: total_funds,
-                        })
-                        .into(),
+                        TokenData::TokenTransfer(TokenTransfer { token_id, amount: total_funds })
+                            .into(),
                         Destination::AnyoneCanSpend,
                     ))
                     .build(),
@@ -1534,10 +1448,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
                         Destination::AnyoneCanSpend,
@@ -1638,9 +1549,9 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            )))
         ));
     })
 }
@@ -1692,10 +1603,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check id
         assert_eq!(issuance_block.get_id(), token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert_eq!(
-            issuance_tx.transaction().get_id(),
-            token_aux_data.issuance_tx().get_id()
-        );
+        assert_eq!(issuance_tx.transaction().get_id(), token_aux_data.issuance_tx().get_id());
         // Check issuance storage in the chain and in the storage
         assert_eq!(
             get_output_value(&issuance_tx.transaction().outputs()[0]).unwrap(),
@@ -1711,13 +1619,11 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         // Check that reorg happened
         let height = block_index.block_height();
-        assert!(
-            tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
-                .classify(tf.chainstate.get_chain_config())
-                .chain_block_id()
-                .unwrap()
-                != block_index.block_id())
-        );
+        assert!(tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
+            .classify(tf.chainstate.get_chain_config())
+            .chain_block_id()
+            .unwrap()
+            != block_index.block_id()));
 
         // Check that issuance transaction in the storage is removed
         assert!(tf
@@ -1771,9 +1677,9 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
+            )))
         ));
 
         // Check if it transfer
@@ -1793,18 +1699,14 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
+            )))
         ));
 
         // Check if it burn
         let reward_output = TxOutput::Burn(
-            TokenTransfer {
-                token_id: TokenId::random_using(&mut rng),
-                amount: total_funds,
-            }
-            .into(),
+            TokenTransfer { token_id: TokenId::random_using(&mut rng), amount: total_funds }.into(),
         );
         let block = tf
             .make_block_builder()
@@ -1814,9 +1716,9 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
+            )))
         ));
     })
 }
@@ -1884,10 +1786,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -1905,10 +1804,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(

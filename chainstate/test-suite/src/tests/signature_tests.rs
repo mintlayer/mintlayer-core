@@ -69,10 +69,7 @@ fn signed_tx(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -147,18 +144,12 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(100)),
-                destination,
-            ))
+            .add_output(TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(100)), destination))
             .build();
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -252,18 +243,12 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(100)),
-                destination,
-            ))
+            .add_output(TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(100)), destination))
             .build();
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(

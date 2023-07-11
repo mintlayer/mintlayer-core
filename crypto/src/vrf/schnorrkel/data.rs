@@ -175,11 +175,7 @@ mod tests {
 
         keypair
             .public
-            .vrf_verify(
-                ctx.bytes(&msg),
-                vrf_out_decoded.preout(),
-                vrf_out_decoded.proof(),
-            )
+            .vrf_verify(ctx.bytes(&msg), vrf_out_decoded.preout(), vrf_out_decoded.proof())
             .expect("Correct VRF verification failed");
     }
 
@@ -193,10 +189,7 @@ mod tests {
         assert_eq!(public_key_encoded.len(), 32);
         let secret_key = SecretKey::from_bytes(&secret_key_encoded).unwrap();
         let public_key = PublicKey::from_bytes(&public_key_encoded).unwrap();
-        let keypair = Keypair {
-            secret: secret_key,
-            public: public_key,
-        };
+        let keypair = Keypair { secret: secret_key, public: public_key };
 
         let label: Vec<u8> = FromHex::from_hex("b1d98117b0db617adbb95f2a7ac6c2ffd9c00972ce15a41ecd7ef629ab8082db74f7243da9a618e909a06c265185513dbc60f70d5dc7b8b1212af7718388d0adc944b7a20a4f939b2df418dacb21cfee2c3aa602e34384f729d05e88313b821f50754cb4b9946ddfe3dba6c728c842138e1ecf5fe69214bb73d2d2db42f0c82000749d619b2ac7302c35779d06729fcaa10d51f8992a78c547272351ef0d3f6b58837331c6d3d31612519bdee3f2774a37c3c5be47e0").unwrap();
 
@@ -212,11 +205,7 @@ mod tests {
 
         keypair
             .public
-            .vrf_verify(
-                ctx.bytes(&msg),
-                vrf_out_decoded.preout(),
-                vrf_out_decoded.proof(),
-            )
+            .vrf_verify(ctx.bytes(&msg), vrf_out_decoded.preout(), vrf_out_decoded.proof())
             .expect("Correct VRF verification failed");
 
         ///////////////////////////////////////

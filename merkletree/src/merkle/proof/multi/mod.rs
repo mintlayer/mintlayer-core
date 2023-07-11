@@ -105,11 +105,9 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
         }
 
         if !is_sorted_and_unique(leaves_indices) {
-            return Err(
-                MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
-                    leaves_indices.to_vec(),
-                ),
-            );
+            return Err(MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
+                leaves_indices.to_vec(),
+            ));
         }
 
         {
@@ -206,10 +204,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
 /// This struct is supposed to be serialized and stored to be used later, unlike `MultiProofNodes`.
 #[must_use]
 #[derive(Debug, Clone)]
-#[cfg_attr(
-    feature = "scale-codec",
-    derive(parity_scale_codec::Encode, parity_scale_codec::Decode)
-)]
+#[cfg_attr(feature = "scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
 pub struct MultiProofHashes<T, H> {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
     nodes: BTreeMap<u32, T>,

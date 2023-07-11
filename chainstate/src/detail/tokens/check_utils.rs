@@ -43,14 +43,8 @@ pub fn is_uri_valid(uri: &[u8]) -> bool {
 }
 
 pub fn check_media_hash(chain_config: &ChainConfig, hash: &[u8]) -> Result<(), TokensError> {
-    ensure!(
-        hash.len() >= chain_config.min_hash_len(),
-        TokensError::MediaHashTooShort
-    );
-    ensure!(
-        hash.len() <= chain_config.max_hash_len(),
-        TokensError::MediaHashTooLong
-    );
+    ensure!(hash.len() >= chain_config.min_hash_len(), TokensError::MediaHashTooShort);
+    ensure!(hash.len() <= chain_config.max_hash_len(), TokensError::MediaHashTooLong);
     Ok(())
 }
 

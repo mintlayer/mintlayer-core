@@ -99,17 +99,11 @@ async fn valid_response(#[case] seed: Seed) {
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
     let ids = blocks.iter().map(|b| b.get_id()).collect();
-    assert_eq!(
-        message,
-        SyncMessage::BlockListRequest(BlockListRequest::new(ids))
-    );
+    assert_eq!(message, SyncMessage::BlockListRequest(BlockListRequest::new(ids)));
 
     for (i, block) in blocks.into_iter().enumerate() {
         handle
-            .send_message(
-                peer,
-                SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
-            )
+            .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block.clone())))
             .await;
 
         // A peer would request headers after the last block.
@@ -186,18 +180,12 @@ async fn disconnect(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
-    );
+    assert_eq!(message, SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])));
 
     tokio::time::sleep(Duration::from_millis(300)).await;
     handle.assert_disconnect_peer_event(peer).await;

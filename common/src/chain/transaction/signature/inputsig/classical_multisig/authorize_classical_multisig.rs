@@ -63,10 +63,7 @@ pub struct AuthorizedClassicalMultisigSpend {
 
 impl AuthorizedClassicalMultisigSpend {
     pub fn new_empty(challenge: ClassicMultisigChallenge) -> Self {
-        Self {
-            signatures: BTreeMap::new(),
-            challenge,
-        }
+        Self { signatures: BTreeMap::new(), challenge }
     }
 
     pub fn available_signatures_count(&self) -> usize {
@@ -108,10 +105,7 @@ impl AuthorizedClassicalMultisigSpend {
     }
 
     pub fn new(signatures: BTreeMap<u8, Signature>, challenge: ClassicMultisigChallenge) -> Self {
-        Self {
-            signatures,
-            challenge,
-        }
+        Self { signatures, challenge }
     }
 }
 
@@ -218,12 +212,10 @@ pub fn sign_classical_multisig_spending(
     let spendee_pubkey = match challenge.public_keys().get(key_index as usize) {
         Some(k) => k,
         None => {
-            return Err(
-                ClassicalMultisigSigningError::InvalidClassicalMultisigKeyIndex(
-                    key_index,
-                    challenge.public_keys().len(),
-                ),
-            )
+            return Err(ClassicalMultisigSigningError::InvalidClassicalMultisigKeyIndex(
+                key_index,
+                challenge.public_keys().len(),
+            ))
         }
     };
 
@@ -245,12 +237,12 @@ pub fn sign_classical_multisig_spending(
         PartiallySignedMultisigChallenge::from_partial(chain_config, &msg, &current_signatures)?;
 
     match verifier.verify_signatures(chain_config)? {
-        super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => Ok(
-            ClassicalMultisigCompletionStatus::Complete(current_signatures),
-        ),
-        super::multisig_partial_signature::SigsVerifyResult::Incomplete => Ok(
-            ClassicalMultisigCompletionStatus::Incomplete(current_signatures),
-        ),
+        super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
+            Ok(ClassicalMultisigCompletionStatus::Complete(current_signatures))
+        }
+        super::multisig_partial_signature::SigsVerifyResult::Incomplete => {
+            Ok(ClassicalMultisigCompletionStatus::Incomplete(current_signatures))
+        }
         super::multisig_partial_signature::SigsVerifyResult::Invalid => {
             unreachable!(
                 "We checked the signatures then added a signature, so this should be unreachable"
@@ -424,10 +416,7 @@ mod tests {
             .into_iter()
             .take(min_required_signatures.get() as usize)
             .collect::<Vec<_>>();
-        assert_eq!(
-            indices_to_sign.len(),
-            min_required_signatures.get() as usize
-        );
+        assert_eq!(indices_to_sign.len(), min_required_signatures.get() as usize);
 
         let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
 
@@ -561,10 +550,7 @@ mod tests {
         indices_to_sign.shuffle(&mut rng);
         let indices_to_sign =
             indices_to_sign.into_iter().take(min_required_signatures.get() as usize);
-        assert_eq!(
-            indices_to_sign.len(),
-            min_required_signatures.get() as usize
-        );
+        assert_eq!(indices_to_sign.len(), min_required_signatures.get() as usize);
 
         // Keep signing and adding signatures until it's complete
         let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
@@ -718,10 +704,7 @@ mod tests {
         indices_to_sign.shuffle(&mut rng);
         let indices_to_sign =
             indices_to_sign.into_iter().take(min_required_signatures.get() as usize);
-        assert_eq!(
-            indices_to_sign.len(),
-            min_required_signatures.get() as usize
-        );
+        assert_eq!(indices_to_sign.len(), min_required_signatures.get() as usize);
 
         // Keep signing and adding signatures until it's complete
         let current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
@@ -901,14 +884,8 @@ mod tests {
                 current_signatures.challenge().clone(),
             );
 
-            assert_eq!(
-                current_signatures.challenge(),
-                tampered_with_signatures.challenge()
-            );
-            assert_ne!(
-                current_signatures.signatures(),
-                tampered_with_signatures.signatures()
-            );
+            assert_eq!(current_signatures.challenge(), tampered_with_signatures.challenge());
+            assert_ne!(current_signatures.signatures(), tampered_with_signatures.signatures());
             assert_ne!(current_signatures, tampered_with_signatures);
 
             // Now we sign again, and because the signature from before is invalid, this should fail

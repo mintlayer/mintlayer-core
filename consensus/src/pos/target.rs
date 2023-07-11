@@ -85,10 +85,7 @@ fn calculate_new_target(
     };
 
     let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
-    ensure!(
-        target_block_time > Uint512::ZERO,
-        ConsensusPoSError::InvalidTargetBlockTime
-    );
+    ensure!(target_block_time > Uint512::ZERO, ConsensusPoSError::InvalidTargetBlockTime);
     let prev_target: Uint512 = (*prev_target).into();
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
@@ -115,10 +112,7 @@ where
     F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     let pos_config = match pos_status {
-        PoSStatus::Threshold {
-            initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+        PoSStatus::Threshold { initial_difficulty, config: _ } => return Ok(*initial_difficulty),
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -137,10 +131,7 @@ pub fn calculate_target_required(
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<Compact, ConsensusPoSError> {
     let pos_config = match pos_status {
-        PoSStatus::Threshold {
-            initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+        PoSStatus::Threshold { initial_difficulty, config: _ } => return Ok(*initial_difficulty),
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -172,10 +163,9 @@ where
     // check if prev block is a net upgrade threshold
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
         RequiredConsensus::PoS(status) => match status {
-            PoSStatus::Threshold {
-                initial_difficulty,
-                config: _,
-            } => return Ok(initial_difficulty),
+            PoSStatus::Threshold { initial_difficulty, config: _ } => {
+                return Ok(initial_difficulty)
+            }
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
@@ -258,10 +248,7 @@ mod tests {
 
     impl<'a> TestBlockIndexHandle<'a> {
         pub fn new(chain_config: &'a ChainConfig) -> Self {
-            Self {
-                blocks: Default::default(),
-                chain_config,
-            }
+            Self { blocks: Default::default(), chain_config }
         }
 
         pub fn new_with_blocks(
@@ -290,10 +277,7 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
 
-            Self {
-                blocks,
-                chain_config,
-            }
+            Self { blocks, chain_config }
         }
 
         pub fn get_block_index_by_height(&self, height: BlockHeight) -> Option<&BlockIndex> {
@@ -336,9 +320,7 @@ mod tests {
             }
 
             if ancestor_height == BlockHeight::new(0) {
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    self.chain_config.genesis_block(),
-                )))
+                Ok(GenBlockIndex::Genesis(Arc::clone(self.chain_config.genesis_block())))
             } else {
                 Ok(self
                     .get_block_index_by_height(ancestor_height)

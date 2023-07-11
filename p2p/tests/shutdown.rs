@@ -48,11 +48,8 @@ async fn shutdown_timeout() {
     .unwrap();
     let chainstate = manager.add_subsystem("shutdown-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(
-        Arc::clone(&chain_config),
-        chainstate.clone(),
-        Default::default(),
-    );
+    let mempool =
+        mempool::make_mempool(Arc::clone(&chain_config), chainstate.clone(), Default::default());
     let mempool = manager.add_subsystem_with_custom_eventloop("shutdown-test-mempool", {
         move |call, shutdown| mempool.run(call, shutdown)
     });

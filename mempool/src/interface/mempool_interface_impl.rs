@@ -47,11 +47,7 @@ impl MempoolInit {
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         time_getter: TimeGetter,
     ) -> Self {
-        Self {
-            chain_config,
-            chainstate_handle,
-            time_getter,
-        }
+        Self { chain_config, chainstate_handle, time_getter }
     }
 
     pub async fn subscribe_to_chainstate_events(

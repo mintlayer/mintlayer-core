@@ -50,20 +50,13 @@ impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
     }
 
     fn new_plain(value: &T) -> Self {
-        Self {
-            value: value.encode(),
-            _phantom: Default::default(),
-        }
+        Self { value: value.encode(), _phantom: Default::default() }
     }
 
     fn new_encrypted(value: &T, encryption_key: &SymmetricKey) -> Self {
         Self {
             value: encryption_key
-                .encrypt(
-                    Zeroizing::new(value.encode()).as_slice(),
-                    &mut make_true_rng(),
-                    None,
-                )
+                .encrypt(Zeroizing::new(value.encode()).as_slice(), &mut make_true_rng(), None)
                 .expect("should not fail"),
             _phantom: Default::default(),
         }
@@ -195,10 +188,7 @@ mod tests {
         let value = rng.gen::<u32>();
 
         let optional_key = if rng.gen::<bool>() {
-            Some(SymmetricKey::new(
-                SymmetricKeyKind::XChacha20Poly1305,
-                &mut rng,
-            ))
+            Some(SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng))
         } else {
             None
         };

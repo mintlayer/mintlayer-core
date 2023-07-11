@@ -155,10 +155,7 @@ async fn initialize(
         )?;
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let rpc = rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
-            .register(crate::rpc::init(
-                manager.make_shutdown_trigger(),
-                chain_config,
-            ))
+            .register(crate::rpc::init(manager.make_shutdown_trigger(), chain_config))
             .register(block_prod.clone().into_rpc())
             .register(chainstate.clone().into_rpc())
             .register(mempool.clone().into_rpc())
@@ -175,10 +172,8 @@ async fn initialize(
     };
 
     if let Some(sender) = node_controller {
-        let runtime_info = crate::node_controller::RuntimeInfo {
-            rpc_http_address,
-            rpc_websocket_address,
-        };
+        let runtime_info =
+            crate::node_controller::RuntimeInfo { rpc_http_address, rpc_websocket_address };
 
         let controller = NodeController {
             shutdown_trigger: manager.make_shutdown_trigger(),
@@ -261,11 +256,9 @@ async fn start(
     let node_config =
         NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
 
-    let data_dir = prepare_data_dir(
-        || default_data_dir(*chain_config.chain_type()),
-        datadir_path_opt,
-    )
-    .expect("Failed to prepare data directory");
+    let data_dir =
+        prepare_data_dir(|| default_data_dir(*chain_config.chain_type()), datadir_path_opt)
+            .expect("Failed to prepare data directory");
     let lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");

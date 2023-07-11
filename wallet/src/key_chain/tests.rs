@@ -144,10 +144,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     for _ in 1..key_chain.lookahead_size() {
         last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
     }
-    assert_eq!(
-        key_chain.issue_address(&mut db_tx, purpose),
-        Err(KeyChainError::LookAheadExceeded)
-    );
+    assert_eq!(key_chain.issue_address(&mut db_tx, purpose), Err(KeyChainError::LookAheadExceeded));
     db_tx.commit().unwrap();
 
     let account_info = AccountInfo::new(
@@ -176,10 +173,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 
     let mut db_tx = db.transaction_rw(None).unwrap();
 
-    assert_eq!(
-        key_chain.issue_address(&mut db_tx, purpose),
-        Err(KeyChainError::LookAheadExceeded)
-    );
+    assert_eq!(key_chain.issue_address(&mut db_tx, purpose), Err(KeyChainError::LookAheadExceeded));
 
     key_chain
         .mark_public_key_hash_as_used(
@@ -192,10 +186,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     for _ in 0..key_chain.lookahead_size() {
         key_chain.issue_address(&mut db_tx, purpose).unwrap();
     }
-    assert_eq!(
-        key_chain.issue_address(&mut db_tx, purpose),
-        Err(KeyChainError::LookAheadExceeded)
-    );
+    assert_eq!(key_chain.issue_address(&mut db_tx, purpose), Err(KeyChainError::LookAheadExceeded));
 }
 
 #[rstest]
@@ -253,14 +244,8 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);
         let last_derived_idx = ChildNumber::from_index_with_hardened_bit(20);
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-        assert_eq!(
-            leaf_keys.usage_state().last_issued(),
-            Some(U31::from_u32(0).unwrap())
-        );
-        assert_eq!(
-            leaf_keys.usage_state().last_used(),
-            Some(U31::from_u32(0).unwrap())
-        );
+        assert_eq!(leaf_keys.usage_state().last_issued(), Some(U31::from_u32(0).unwrap()));
+        assert_eq!(leaf_keys.usage_state().last_used(), Some(U31::from_u32(0).unwrap()));
     }
 
     // Derive keys until lookahead
@@ -277,13 +262,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);
         let last_derived_idx = ChildNumber::from_index_with_hardened_bit(40);
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-        assert_eq!(
-            leaf_keys.usage_state().last_issued(),
-            Some(U31::from_u32(20).unwrap())
-        );
-        assert_eq!(
-            leaf_keys.usage_state().last_used(),
-            Some(U31::from_u32(20).unwrap())
-        );
+        assert_eq!(leaf_keys.usage_state().last_issued(), Some(U31::from_u32(20).unwrap()));
+        assert_eq!(leaf_keys.usage_state().last_used(), Some(U31::from_u32(20).unwrap()));
     }
 }

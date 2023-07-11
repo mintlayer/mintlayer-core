@@ -115,9 +115,7 @@ impl SyncManagerHandle {
             events_sender: messaging_sender,
             connected_peers: Arc::clone(&connected_peers),
         };
-        let sync_event_receiver = SyncingEventReceiverMock {
-            events_receiver: messaging_receiver,
-        };
+        let sync_event_receiver = SyncingEventReceiverMock { events_receiver: messaging_receiver };
 
         let sync = BlockSyncManager::new(
             chain_config,
@@ -398,13 +396,8 @@ impl SyncManagerHandleBuilder {
     }
 
     pub async fn build(self) -> SyncManagerHandle {
-        let SyncManagerHandleBuilder {
-            chain_config,
-            p2p_config,
-            chainstate,
-            time_getter,
-            blocks,
-        } = self;
+        let SyncManagerHandleBuilder { chain_config, p2p_config, chainstate, time_getter, blocks } =
+            self;
 
         let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
         let shutdown_trigger = manager.make_shutdown_trigger();
@@ -541,9 +534,8 @@ pub fn new_block(
     let witness = InputWitness::NoSignature(Some(random_bytes));
     let signed_transaction = SignedTransaction::new(transaction, vec![witness]).unwrap();
 
-    let prev_block_id: Id<GenBlock> = prev_block.map_or(chain_config.genesis_block_id(), |block| {
-        block.header().block_id().into()
-    });
+    let prev_block_id: Id<GenBlock> = prev_block
+        .map_or(chain_config.genesis_block_id(), |block| block.header().block_id().into());
 
     Block::new(
         vec![signed_transaction],

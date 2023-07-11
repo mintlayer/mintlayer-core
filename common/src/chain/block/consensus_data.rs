@@ -95,13 +95,7 @@ impl PoSData {
         vrf_data: VRFReturn,
         compact_target: Compact,
     ) -> Self {
-        Self {
-            kernel_inputs,
-            kernel_witness,
-            stake_pool_id,
-            vrf_data,
-            compact_target,
-        }
+        Self { kernel_inputs, kernel_witness, stake_pool_id, vrf_data, compact_target }
     }
 
     pub fn kernel_inputs(&self) -> &[TxInput] {

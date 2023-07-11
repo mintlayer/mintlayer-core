@@ -98,11 +98,7 @@ async fn make_peer_manager<T>(
     transport: T::Transport,
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
-) -> (
-    PeerManager<T, impl PeerDbStorage>,
-    oneshot::Sender<()>,
-    UnboundedSender<P2pEventHandler>,
-)
+) -> (PeerManager<T, impl PeerDbStorage>, oneshot::Sender<()>, UnboundedSender<P2pEventHandler>)
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -125,11 +121,7 @@ async fn run_peer_manager<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
-) -> (
-    UnboundedSender<PeerManagerEvent<T>>,
-    oneshot::Sender<()>,
-    UnboundedSender<P2pEventHandler>,
-)
+) -> (UnboundedSender<PeerManagerEvent<T>>, oneshot::Sender<()>, UnboundedSender<P2pEventHandler>)
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -169,10 +161,7 @@ async fn send_and_sync<T: NetworkingService>(
 
     let event = expect_recv!(cmd_rx);
     match event {
-        Command::SendMessage {
-            peer,
-            message: Message::PingResponse(PingResponse { nonce }),
-        } => {
+        Command::SendMessage { peer, message: Message::PingResponse(PingResponse { nonce }) } => {
             conn_tx
                 .send(ConnectivityEvent::Message {
                     peer,

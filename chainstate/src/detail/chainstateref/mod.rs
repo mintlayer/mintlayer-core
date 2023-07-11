@@ -386,9 +386,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
-            CheckBlockError::PrevBlockNotFound(*header.prev_block_id(), header.get_id()),
-        )?;
+        let prev_block_index = self
+            .get_gen_block_index(header.prev_block_id())?
+            .ok_or(CheckBlockError::PrevBlockNotFound(*header.prev_block_id(), header.get_id()))?;
         let current_height = prev_block_index.block_height().next_height();
 
         // If the block height is at the exact checkpoint height, we need to check that the block id matches the checkpoint id
@@ -397,10 +397,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         {
             let expected_id = Id::<Block>::new(e.get());
             if expected_id != header.get_id() {
-                return Err(CheckBlockError::CheckpointMismatch(
-                    expected_id,
-                    header.get_id(),
-                ));
+                return Err(CheckBlockError::CheckpointMismatch(expected_id, header.get_id()));
             }
         }
 
@@ -430,9 +427,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
-            PropertyQueryError::PrevBlockIndexNotFound(*header.prev_block_id()),
-        )?;
+        let prev_block_index = self
+            .get_gen_block_index(header.prev_block_id())?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*header.prev_block_id()))?;
         let common_ancestor_height =
             self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
 
@@ -538,9 +535,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::ProduceBlockFromStake(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::DelegateStaking(_, _) => Err(
-                            CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
-                        ),
+                        | TxOutput::DelegateStaking(_, _) => {
+                            Err(CheckBlockError::InvalidBlockRewardOutputType(block.get_id()))
+                        }
                     },
                     ConsensusData::PoS(_) => {
                         match output {
@@ -551,9 +548,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::CreateStakePool(_, _)
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DelegateStaking(_, _) => Err(
-                                CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
-                            ),
+                            | TxOutput::DelegateStaking(_, _) => {
+                                Err(CheckBlockError::InvalidBlockRewardOutputType(block.get_id()))
+                            }
                         }
                     }
                 }
@@ -616,12 +613,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
             if tx.inputs().is_empty() || tx.outputs().is_empty() {
-                return Err(
-                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                        tx.transaction().get_id(),
-                        block.get_id(),
-                    ),
-                );
+                return Err(CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                    tx.transaction().get_id(),
+                    block.get_id(),
+                ));
             }
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
@@ -735,10 +730,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     // Return Ok(()) if the specified block has a valid parent and an error otherwise.
     pub fn check_block_parent(&self, block: &WithId<Block>) -> Result<(), BlockError> {
         let parent_block_index = self.get_previous_block_index_or_block_error(block)?;
-        ensure!(
-            parent_block_index.status().is_valid(),
-            BlockError::InvalidParent(block.get_id())
-        );
+        ensure!(parent_block_index.status().is_valid(), BlockError::InvalidParent(block.get_id()));
 
         Ok(())
     }
@@ -853,14 +845,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
         let chain_trust = prev_block_chaintrust + current_block_proof;
-        let block_index = BlockIndex::new(
-            block,
-            chain_trust,
-            some_ancestor,
-            height,
-            time_max,
-            block_status,
-        );
+        let block_index =
+            BlockIndex::new(block, chain_trust, some_ancestor, height, time_max, block_status);
         Ok(block_index)
     }
 }

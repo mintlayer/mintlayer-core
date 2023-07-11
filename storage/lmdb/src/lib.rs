@@ -139,10 +139,7 @@ impl LmdbImpl {
         start_tx: impl FnOnce(&'a lmdb::Environment) -> Result<Tx, lmdb::Error>,
     ) -> storage_core::Result<DbTx<'a, Tx>> {
         // Make sure map token is acquired before starting the transaction below
-        Ok(DbTx {
-            tx: start_tx(&self.env).or_else(error::process_with_err)?,
-            backend: self,
-        })
+        Ok(DbTx { tx: start_tx(&self.env).or_else(error::process_with_err)?, backend: self })
     }
 
     fn schedule_map_resize(&self) {

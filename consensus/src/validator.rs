@@ -59,12 +59,9 @@ where
     let block_height = prev_block_height.next_height();
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
     match consensus_status {
-        RequiredConsensus::PoW(pow_status) => validate_pow_consensus(
-            chain_config,
-            header.header(),
-            &pow_status,
-            block_index_handle,
-        ),
+        RequiredConsensus::PoW(pow_status) => {
+            validate_pow_consensus(chain_config, header.header(), &pow_status, block_index_handle)
+        }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header.header()),
         RequiredConsensus::PoS(pos_status) => validate_pos_consensus(
             chain_config,
@@ -90,14 +87,10 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
                 "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
             ))
         }
-        ConsensusData::PoW(pow_data) => check_pow_consensus(
-            chain_config,
-            header,
-            pow_data,
-            pow_status,
-            block_index_handle,
-        )
-        .map_err(Into::into),
+        ConsensusData::PoW(pow_data) => {
+            check_pow_consensus(chain_config, header, pow_data, pow_status, block_index_handle)
+                .map_err(Into::into)
+        }
     }
 }
 

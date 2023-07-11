@@ -104,13 +104,11 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
-        Ok(PoSAccountingUndo::IncreasePledgeAmount(
-            IncreasePledgeAmountUndo {
-                pool_id,
-                amount_added: amount_to_add,
-                data_undo: PoolDataUndo::Data(Box::new(pool_data)),
-            },
-        ))
+        Ok(PoSAccountingUndo::IncreasePledgeAmount(IncreasePledgeAmountUndo {
+            pool_id,
+            amount_added: amount_to_add,
+            data_undo: PoolDataUndo::Data(Box::new(pool_data)),
+        }))
     }
 
     fn create_delegation_id(
@@ -170,12 +168,10 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.store.del_delegation_data(delegation_id)?;
 
-        Ok(PoSAccountingUndo::DeleteDelegationId(
-            DeleteDelegationIdUndo {
-                delegation_id,
-                data_undo: DelegationDataUndo::Data(Box::new(delegation_data)),
-            },
-        ))
+        Ok(PoSAccountingUndo::DeleteDelegationId(DeleteDelegationIdUndo {
+            delegation_id,
+            data_undo: DelegationDataUndo::Data(Box::new(delegation_data)),
+        }))
     }
 
     fn delegate_staking(
@@ -219,10 +215,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
-        Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo {
-            delegation_id,
-            amount,
-        }))
+        Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo { delegation_id, amount }))
     }
 
     fn undo(&mut self, undo_data: PoSAccountingUndo) -> Result<(), Error> {

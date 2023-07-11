@@ -106,10 +106,7 @@ fn test_storage_manipulation() {
         "Transaction format has changed, adjust the offset in this test",
     );
     let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
-    assert_eq!(
-        &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
-        &tx0
-    );
+    assert_eq!(&store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(), &tx0);
 
     // Test setting and retrieving best chain id
     assert_eq!(store.get_best_block_id(), Ok(None));
@@ -123,19 +120,13 @@ fn test_storage_manipulation() {
     let out_id_tx0 = OutPointSourceId::from(tx0.get_id());
     assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
     assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
-    assert_eq!(
-        store.get_mainchain_tx_index(&out_id_tx0),
-        Ok(Some(idx_tx0.clone()))
-    );
+    assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(Some(idx_tx0.clone())));
     assert_eq!(store.del_mainchain_tx_index(&out_id_tx0), Ok(()));
     assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
     assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
 
     // Retrieve transactions by ID using the index
-    assert_eq!(
-        store.get_mainchain_tx_index(&OutPointSourceId::from(tx1.get_id())),
-        Ok(None)
-    );
+    assert_eq!(store.get_mainchain_tx_index(&OutPointSourceId::from(tx1.get_id())), Ok(None));
     if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
         if let SpendablePosition::Transaction(ref p) = index.position() {
             assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
@@ -259,10 +250,8 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utx
 
     // generate utxo
     let utxo = Utxo::new_for_blockchain(output, BlockHeight::new(block_height));
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))), 0);
 
     (utxo, outpoint)
 }
@@ -322,10 +311,7 @@ fn undo_test(#[case] seed: Seed) {
 
     // add undo data and check if it is there
     assert_eq!(store.set_undo_data(id0, &block_undo0), Ok(()));
-    assert_eq!(
-        store.get_undo_data(id0).unwrap().unwrap(),
-        block_undo0.clone()
-    );
+    assert_eq!(store.get_undo_data(id0).unwrap().unwrap(), block_undo0.clone());
 
     // insert, remove, and reinsert the next block_undo
 
@@ -335,16 +321,10 @@ fn undo_test(#[case] seed: Seed) {
 
     assert_eq!(store.get_undo_data(id1), Ok(None));
     assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));
-    assert_eq!(
-        store.get_undo_data(id0).unwrap().unwrap(),
-        block_undo0.clone()
-    );
+    assert_eq!(store.get_undo_data(id0).unwrap().unwrap(), block_undo0.clone());
     assert_eq!(store.del_undo_data(id1), Ok(()));
     assert_eq!(store.get_undo_data(id1), Ok(None));
-    assert_eq!(
-        store.get_undo_data(id0).unwrap().unwrap(),
-        block_undo0.clone()
-    );
+    assert_eq!(store.get_undo_data(id0).unwrap().unwrap(), block_undo0.clone());
     assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));
     assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
 }

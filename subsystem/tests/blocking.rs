@@ -30,10 +30,7 @@ pub struct Tester {
 
 impl Tester {
     fn new(substringer: BlockingHandle<Substringer>, counter: BlockingHandle<Counter>) -> Self {
-        Self {
-            substringer,
-            counter,
-        }
+        Self { substringer, counter }
     }
 
     async fn run(self, _: CallRequest<()>, _shutdown: ShutdownRequest) {

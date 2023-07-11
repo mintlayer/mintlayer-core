@@ -91,11 +91,7 @@ fn reachable_reconnects(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(
-    Seed::from_entropy(),
-    AddressStateTransitionTo::DisconnectedByUser,
-    false
-)]
+#[case(Seed::from_entropy(), AddressStateTransitionTo::DisconnectedByUser, false)]
 #[case(Seed::from_entropy(), AddressStateTransitionTo::Disconnected, true)]
 fn no_reconnects_after_manual_disconnect(
     #[case] seed: Seed,

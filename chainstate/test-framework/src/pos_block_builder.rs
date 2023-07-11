@@ -180,10 +180,7 @@ impl<'f> PoSBlockBuilder<'f> {
         );
         self.framework.progress_time_seconds_since_epoch(target_block_time.get());
 
-        (
-            Block::new_from_header(signed_header, block_body).unwrap(),
-            self.framework,
-        )
+        (Block::new_from_header(signed_header, block_body).unwrap(), self.framework)
     }
 
     /// Builds a block without processing it.

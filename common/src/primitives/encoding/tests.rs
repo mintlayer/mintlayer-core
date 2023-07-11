@@ -68,11 +68,7 @@ fn check_valid_addresses() {
             "a0d0c06640b95b78f965416ad6971b3b1609c3cd9b512aaa39439088211868b7",
         ),
         ("bc1zr4pq63udck", "5202", "1d42"),
-        (
-            "tb1ray6e8gxfx49ers6c4c70l3c8lsxtcmlx",
-            "5310",
-            "e93593a0c9354b91c358ae3cffc707fc",
-        ),
+        ("tb1ray6e8gxfx49ers6c4c70l3c8lsxtcmlx", "5310", "e93593a0c9354b91c358ae3cffc707fc"),
         (
             "tb1pxqf7d825wjtcftj7uep8w24jq3tz8vudfaqj20rns8ahqya56gcs92eqtu",
             "5120",
@@ -175,10 +171,7 @@ fn check_invalid_addresses() {
             "bc10rmfwl8nxdweeyc4sf89t0tn9fv9w6qpyzsnl2r4k48vjqh03qas9asdje0rlr0phru0wqw0p",
             "invalid length",
         ),
-        (
-            "bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5u302s7x",
-            "invalid Bech32 encoding",
-        ),
+        ("bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5u302s7x", "invalid Bech32 encoding"),
         ("bcrt1rhsveeudk", "invalid length"),
         (
             "tb13h83rtwq62udrhwpn87uely7cyxcjrj0azz6a4r3n9s87x5uj98ys6ufp83",
@@ -366,10 +359,7 @@ fn bech32m_empty_hrp_is_invalid() {
         .to_lowercase();
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
 
-    assert_eq!(
-        super::encode(test_hrp, random_bytes).unwrap_err(),
-        Bech32Error::InvalidLength
-    );
+    assert_eq!(super::encode(test_hrp, random_bytes).unwrap_err(), Bech32Error::InvalidLength);
 }
 
 #[test]

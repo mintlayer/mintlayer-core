@@ -88,9 +88,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
                     .connect_transaction(
-                        &TransactionSourceForConnect::Chain {
-                            new_block_index: block_index,
-                        },
+                        &TransactionSourceForConnect::Chain { new_block_index: block_index },
                         tx,
                         &median_time_past,
                         take_front_tx_index(&mut tx_indices),

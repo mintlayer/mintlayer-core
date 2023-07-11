@@ -98,10 +98,7 @@ mod tests {
             let mut tx_index = tx_index;
             tx_index.spend(index, spender.clone()).unwrap();
             cached_operation.spend(index, spender).unwrap();
-            assert_eq!(
-                cached_operation,
-                CachedInputsOperation::Write(tx_index.clone())
-            );
+            assert_eq!(cached_operation, CachedInputsOperation::Write(tx_index.clone()));
 
             tx_index.unspend(index).unwrap();
             cached_operation.unspend(index).unwrap();
@@ -128,10 +125,7 @@ mod tests {
             let mut tx_index = tx_index;
             tx_index.spend(index, spender.clone()).unwrap();
             cached_operation.spend(index, spender).unwrap();
-            assert_eq!(
-                cached_operation,
-                CachedInputsOperation::Write(tx_index.clone())
-            );
+            assert_eq!(cached_operation, CachedInputsOperation::Write(tx_index.clone()));
 
             tx_index.unspend(index).unwrap();
             cached_operation.unspend(index).unwrap();

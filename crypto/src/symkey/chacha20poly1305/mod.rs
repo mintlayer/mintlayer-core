@@ -38,15 +38,15 @@ impl Chacha20poly1305Key {
     }
 
     pub fn new_from_array(key_data: [u8; Self::KEY_LEN]) -> Self {
-        Self {
-            key_data: key_data.into(),
-        }
+        Self { key_data: key_data.into() }
     }
 
     pub fn new_from_bytes_slice(bytes_slice: &[u8]) -> Result<Self, Error> {
-        Ok(Self::new_from_array(bytes_slice.try_into().map_err(
-            |_| Error::WrongLenKeyBytes(bytes_slice.len(), Self::KEY_LEN),
-        )?))
+        Ok(Self::new_from_array(
+            bytes_slice
+                .try_into()
+                .map_err(|_| Error::WrongLenKeyBytes(bytes_slice.len(), Self::KEY_LEN))?,
+        ))
     }
 
     fn encrypt_with_nonce_and_aead<T: AsRef<[u8]>>(
@@ -97,10 +97,7 @@ impl Chacha20poly1305Key {
         associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         if cipher_text_in.as_ref().len() < Self::NONCE_LEN {
-            return Err(Error::CipherTextTooShort(
-                cipher_text_in.as_ref().len(),
-                Self::NONCE_LEN,
-            ));
+            return Err(Error::CipherTextTooShort(cipher_text_in.as_ref().len(), Self::NONCE_LEN));
         }
         let nonce = &cipher_text_in.as_ref()[..Self::NONCE_LEN];
         let cipher_text = &cipher_text_in.as_ref()[Self::NONCE_LEN..];
@@ -239,10 +236,7 @@ mod test {
                 Some(&aead),
             )
             .unwrap();
-        assert_eq!(
-            nonce_with_encrypted[Chacha20poly1305Key::NONCE_LEN..],
-            expected_encrypted
-        );
+        assert_eq!(nonce_with_encrypted[Chacha20poly1305Key::NONCE_LEN..], expected_encrypted);
         assert_eq!(decrypted, message);
     }
 
@@ -319,10 +313,7 @@ mod test {
                 Some(&aead),
             )
             .unwrap();
-        assert_eq!(
-            nonce_with_encrypted[Chacha20poly1305Key::NONCE_LEN..],
-            cipher
-        );
+        assert_eq!(nonce_with_encrypted[Chacha20poly1305Key::NONCE_LEN..], cipher);
         assert_eq!(decrypted, message);
     }
 

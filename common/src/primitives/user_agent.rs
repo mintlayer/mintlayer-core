@@ -63,10 +63,7 @@ impl TryFrom<Vec<u8>> for UserAgent {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         ensure!(!value.is_empty(), UserAgentError::Empty);
-        ensure!(
-            value.len() <= MAX_LENGTH,
-            UserAgentError::TooLong(value.len(), MAX_LENGTH)
-        );
+        ensure!(value.len() <= MAX_LENGTH, UserAgentError::TooLong(value.len(), MAX_LENGTH));
         ensure!(
             value
                 .iter()
@@ -98,22 +95,12 @@ mod tests {
 
     fn check(value: &str, valid: bool) {
         let convert_res = UserAgent::try_from(value.as_bytes().to_owned());
-        assert_eq!(
-            convert_res.is_ok(),
-            valid,
-            "convert check failed for {}",
-            value
-        );
+        assert_eq!(convert_res.is_ok(), valid, "convert check failed for {}", value);
 
         let encoded = value.encode();
         let decode_res =
             <UserAgent as serialization::DecodeAll>::decode_all(&mut encoded.as_slice());
-        assert_eq!(
-            decode_res.is_ok(),
-            valid,
-            "decode check failed for {}",
-            value
-        );
+        assert_eq!(decode_res.is_ok(), valid, "decode check failed for {}", value);
 
         if let Ok(decoded) = decode_res {
             assert_eq!(decoded.to_string(), value);

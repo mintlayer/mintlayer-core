@@ -122,10 +122,7 @@ async fn ping_timeout() {
 
         let event = expect_recv!(&mut cmd_rx);
         match event {
-            Command::SendMessage {
-                peer,
-                message: Message::PingRequest(PingRequest { nonce }),
-            } => {
+            Command::SendMessage { peer, message: Message::PingRequest(PingRequest { nonce }) } => {
                 send_and_sync::<TestNetworkingService>(
                     peer,
                     PeerManagerMessage::PingResponse(PingResponse { nonce }),

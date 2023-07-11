@@ -32,10 +32,7 @@ pub struct BlockIndexHistoryIterator<'a, H> {
 impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
     #[must_use]
     pub fn new(starting_id: Id<GenBlock>, block_index_handle: &'a H) -> Self {
-        Self {
-            next_id: Some(starting_id),
-            block_index_handle,
-        }
+        Self { next_id: Some(starting_id), block_index_handle }
     }
 }
 

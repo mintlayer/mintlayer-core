@@ -56,10 +56,7 @@ fn empty_multi_proof() {
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[]);
-    assert_eq!(
-        multi_proof.unwrap_err(),
-        MerkleTreeProofExtractionError::NoLeavesToCreateProof
-    );
+    assert_eq!(multi_proof.unwrap_err(), MerkleTreeProofExtractionError::NoLeavesToCreateProof);
 }
 
 /// Proof of one leaf must be equivalent to single proof
@@ -121,10 +118,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nodes
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(
-        multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        nodes
-    );
+    assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
         multi_proof
             .proof_leaves()
@@ -158,10 +152,7 @@ fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[u32], #[case] node
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(
-        multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        nodes
-    );
+    assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
         multi_proof
             .proof_leaves()
@@ -453,10 +444,7 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nod
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(
-        multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        nodes
-    );
+    assert_eq!(multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
         multi_proof
             .proof_leaves()
@@ -469,10 +457,7 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nod
 }
 
 fn gen_leaves_indices_combinations(leaf_count: u32) -> impl Iterator<Item = Vec<u32>> {
-    assert!(
-        leaf_count.is_power_of_two(),
-        "leaf_count must be a power of 2"
-    );
+    assert!(leaf_count.is_power_of_two(), "leaf_count must be a power of 2");
     let mut leaves_indices = vec![];
     for i in 0..leaf_count {
         leaves_indices.push(i);
@@ -486,10 +471,7 @@ fn gen_leaves_indices_combinations(leaf_count: u32) -> impl Iterator<Item = Vec<
 #[case(4)]
 #[case(8)]
 fn leaf_count_combinations_generator(#[case] leaf_count: u32) {
-    assert_eq!(
-        gen_leaves_indices_combinations(leaf_count).count(),
-        1 << leaf_count
-    );
+    assert_eq!(gen_leaves_indices_combinations(leaf_count).count(), 1 << leaf_count);
 }
 
 #[rstest]
@@ -555,10 +537,7 @@ fn multi_proof_verification(
     cases.shuffle(&mut rng);
 
     // ensure we're really going through all the test cases we expect
-    assert_eq!(
-        cases.len(),
-        max_test_cases.unwrap_or_else(|| 1 << leaf_count)
-    );
+    assert_eq!(cases.len(), max_test_cases.unwrap_or_else(|| 1 << leaf_count));
 
     for leaves_indices in cases {
         if leaves_indices.is_empty() {
@@ -631,10 +610,7 @@ fn multi_proof_verification_tampered_nodes(
     cases.shuffle(&mut rng);
 
     // ensure we're really going through all the test cases we expect
-    assert_eq!(
-        cases.len(),
-        max_test_cases.unwrap_or_else(|| 1 << leaf_count)
-    );
+    assert_eq!(cases.len(), max_test_cases.unwrap_or_else(|| 1 << leaf_count));
 
     for leaves_indices in cases {
         if leaves_indices.is_empty() {
@@ -692,10 +668,7 @@ fn multi_proof_verification_tampered_leaves(
     cases.shuffle(&mut rng);
 
     // ensure we're really going through all the test cases we expect
-    assert_eq!(
-        cases.len(),
-        max_test_cases.unwrap_or_else(|| 1 << leaf_count)
-    );
+    assert_eq!(cases.len(), max_test_cases.unwrap_or_else(|| 1 << leaf_count));
 
     for leaves_indices in cases {
         if leaves_indices.is_empty() {
@@ -760,10 +733,7 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     cases.shuffle(&mut rng);
 
     // ensure we're really going through all the test cases we expect
-    assert_eq!(
-        cases.len(),
-        max_test_cases.unwrap_or_else(|| 1 << leaf_count)
-    );
+    assert_eq!(cases.len(), max_test_cases.unwrap_or_else(|| 1 << leaf_count));
 
     for leaves_indices in cases {
         if leaves_indices.is_empty() {
@@ -824,10 +794,7 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     cases.shuffle(&mut rng);
 
     // ensure we're really going through all the test cases we expect
-    assert_eq!(
-        cases.len(),
-        max_test_cases.unwrap_or_else(|| 1 << leaf_count)
-    );
+    assert_eq!(cases.len(), max_test_cases.unwrap_or_else(|| 1 << leaf_count));
 
     for leaves_indices in cases {
         if leaves_indices.is_empty() {

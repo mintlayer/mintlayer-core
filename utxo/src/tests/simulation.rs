@@ -39,13 +39,8 @@ fn cache_simulation_test(
     let test_view = empty_test_utxos_view(common::primitives::H256::zero().into());
     let mut base = UtxosCache::new(test_view).unwrap_infallible();
 
-    let new_consumed_cache = simulation_step(
-        &mut rng,
-        &mut result,
-        &base,
-        iterations_per_cache,
-        nested_level,
-    );
+    let new_consumed_cache =
+        simulation_step(&mut rng, &mut result, &base, iterations_per_cache, nested_level);
     let new_consumed_cache = new_consumed_cache.unwrap();
     base.batch_write(new_consumed_cache).expect("batch write must succeed");
 
@@ -88,13 +83,8 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
     all_outputs.append(&mut current_cache_outputs);
 
     // create the child
-    let child_cache_op = simulation_step(
-        rng,
-        all_outputs,
-        &current_cache,
-        iterations_per_cache,
-        nested_level - 1,
-    );
+    let child_cache_op =
+        simulation_step(rng, all_outputs, &current_cache, iterations_per_cache, nested_level - 1);
 
     // flush child into current cache
     if let Some(child_cache) = child_cache_op {

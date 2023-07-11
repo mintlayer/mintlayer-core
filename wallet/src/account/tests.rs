@@ -79,10 +79,7 @@ fn account_addresses_lookahead() {
         .unwrap();
     let mut account = Account::new(config, &mut db_tx, key_chain, None).unwrap();
 
-    assert_eq!(
-        account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
-        None
-    );
+    assert_eq!(account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(), None);
     let expected_last_derived =
         ChildNumber::from_index_with_hardened_bit(account.key_chain.lookahead_size() - 1);
     assert_eq!(
@@ -169,10 +166,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let outputs = vec![
-        TxOutput::Transfer(
-            OutputValue::Coin(dest_amount),
-            Destination::PublicKey(dest_pub),
-        ),
+        TxOutput::Transfer(OutputValue::Coin(dest_amount), Destination::PublicKey(dest_pub)),
         TxOutput::LockThenTransfer(
             OutputValue::Coin(lock_amount),
             Destination::AnyoneCanSpend,

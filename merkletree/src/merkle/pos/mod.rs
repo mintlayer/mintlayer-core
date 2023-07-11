@@ -36,10 +36,7 @@ impl NodePosition {
             return None;
         }
 
-        Some(Self {
-            tree_size,
-            absolute_index,
-        })
+        Some(Self { tree_size, absolute_index })
     }
 
     pub fn from_position(
@@ -63,10 +60,7 @@ impl NodePosition {
             return None;
         }
 
-        Some(Self {
-            tree_size,
-            absolute_index,
-        })
+        Some(Self { tree_size, absolute_index })
     }
 
     pub fn tree_size(&self) -> TreeSize {
@@ -80,10 +74,7 @@ impl NodePosition {
     /// Returns the level and index in the level of the node, as in (level, index).
     /// Notice that the index value is capped by the number of nodes in the level.
     pub fn position(&self) -> (u32, u32) {
-        assert!(
-            self.abs_index() < self.tree_size.get(),
-            "Index must be within the tree size"
-        );
+        assert!(self.abs_index() < self.tree_size.get(), "Index must be within the tree size");
 
         let level_from_top = (self.tree_size.get() - self.abs_index() + 1)
             .next_power_of_two()
@@ -128,10 +119,7 @@ impl NodePosition {
             NodePosition::from_position(self.tree_size, parent_level, parent_node_index_in_level)
                 .expect("Parent index must be in range");
 
-        Some(Self {
-            tree_size: self.tree_size,
-            absolute_index: parent_position.abs_index(),
-        })
+        Some(Self { tree_size: self.tree_size, absolute_index: parent_position.abs_index() })
     }
 
     pub fn sibling(&self) -> Option<Self> {
@@ -143,10 +131,7 @@ impl NodePosition {
         // Practically we add one to the absolute index to get the sibling if it's a left, and subtract one if it's a right.
         let absolute_index = self.absolute_index ^ 1;
 
-        Some(Self {
-            tree_size: self.tree_size,
-            absolute_index,
-        })
+        Some(Self { tree_size: self.tree_size, absolute_index })
     }
 
     pub fn into_iter_parents(self) -> MerkleTreeNodePositionParentIterator {

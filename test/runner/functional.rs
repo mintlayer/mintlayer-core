@@ -75,10 +75,7 @@ fn find_python_exe() -> PathBuf {
         .into_iter()
         .find_map(|exe| get_executable_path_from_path_env_var(format!("{exe}{file_suffix}")))
         .unwrap_or_else(|| {
-            panic!(
-                "Unable to find any of the executables {:?} in PATH",
-                possible_python_execs
-            )
+            panic!("Unable to find any of the executables {:?} in PATH", possible_python_execs)
         });
 
     println!("Found python executable in path: {}", python_exe.display());

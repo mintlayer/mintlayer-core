@@ -198,14 +198,7 @@ impl<B: storage::Backend> Wallet<B> {
             .map(|first_unsynced| accounts.split_off(&first_unsynced))
             .unwrap_or_default();
 
-        Ok(Wallet {
-            chain_config,
-            db,
-            key_chain,
-            accounts,
-            latest_median_time,
-            unsynced_accounts,
-        })
+        Ok(Wallet { chain_config, db, key_chain, accounts, latest_median_time, unsynced_accounts })
     }
 
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
@@ -237,10 +230,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn create_account(&mut self, name: Option<String>) -> WalletResult<(U31, Option<String>)> {
-        ensure!(
-            self.unsynced_accounts.is_empty(),
-            WalletError::LastAccountNotInSync
-        );
+        ensure!(self.unsynced_accounts.is_empty(), WalletError::LastAccountNotInSync);
 
         let next_account_index = self.accounts.last_key_value().map_or(
             Ok(U31::ZERO),
@@ -257,10 +247,7 @@ impl<B: storage::Backend> Wallet<B> {
             },
         )?;
 
-        ensure!(
-            name.as_ref().map_or(true, |name| !name.is_empty()),
-            WalletError::EmptyAccountName
-        );
+        ensure!(name.as_ref().map_or(true, |name| !name.is_empty()), WalletError::EmptyAccountName);
 
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 

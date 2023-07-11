@@ -47,9 +47,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         pool_data.cost_per_block(),
         pool_data.margin_ratio_per_thousand(),
     )
-    .ok_or(ConnectTransactionError::PoolOwnerRewardCalculationFailed(
-        block_id, pool_id,
-    ))?;
+    .ok_or(ConnectTransactionError::PoolOwnerRewardCalculationFailed(block_id, pool_id))?;
 
     let total_delegations_reward = (total_reward - pool_owner_reward).ok_or(
         ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
@@ -152,20 +150,20 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
 
     // Due to integer arithmetics there can be a small remainder after all the delegations distributed.
     // This remainder goes to the pool's owner
-    let total_delegations_reward_distributed =
-        rewards_per_delegation.iter().map(|(_, v)| *v).sum::<Option<Amount>>().ok_or(
-            ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
-        )?;
+    let total_delegations_reward_distributed = rewards_per_delegation
+        .iter()
+        .map(|(_, v)| *v)
+        .sum::<Option<Amount>>()
+        .ok_or(ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id))?;
 
-    let delegations_reward_remainder =
-        (total_delegations_reward - total_delegations_reward_distributed).ok_or(
-            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(
-                pool_id,
-                block_id,
-                total_delegations_reward_distributed,
-                total_delegations_reward,
-            ),
-        )?;
+    let delegations_reward_remainder = (total_delegations_reward
+        - total_delegations_reward_distributed)
+        .ok_or(ConnectTransactionError::DistributedDelegationsRewardExceedTotal(
+            pool_id,
+            block_id,
+            total_delegations_reward_distributed,
+            total_delegations_reward,
+        ))?;
     Ok((delegation_undos, delegations_reward_remainder))
 }
 
@@ -188,22 +186,20 @@ fn calculate_rewards_per_delegation(
     let total_delegations_reward = Uint256::from_amount(total_delegations_reward_amount);
     delegation_shares
         .iter()
-        .map(
-            |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
-                let balance = Uint256::from_amount(*balance_amount);
-                let reward = (total_delegations_reward * balance) / total_delegations_balance;
-                let reward: common::primitives::amount::UnsignedIntType =
-                    reward.try_into().map_err(|_| {
-                        ConnectTransactionError::DelegationRewardOverflow(
-                            *delegation_id,
-                            total_delegations_amount,
-                            total_delegations_reward_amount,
-                            *balance_amount,
-                        )
-                    })?;
-                Ok((*delegation_id, Amount::from_atoms(reward)))
-            },
-        )
+        .map(|(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
+            let balance = Uint256::from_amount(*balance_amount);
+            let reward = (total_delegations_reward * balance) / total_delegations_balance;
+            let reward: common::primitives::amount::UnsignedIntType =
+                reward.try_into().map_err(|_| {
+                    ConnectTransactionError::DelegationRewardOverflow(
+                        *delegation_id,
+                        total_delegations_amount,
+                        total_delegations_reward_amount,
+                        *balance_amount,
+                    )
+                })?;
+            Ok((*delegation_id, Amount::from_atoms(reward)))
+        })
         .collect::<Result<Vec<_>, _>>()
 }
 
@@ -396,15 +392,9 @@ mod tests {
                 ((pool_id_b, delegation_b_2), delegation_b_2_amount),
             ]),
             BTreeMap::from_iter([
-                (
-                    delegation_a_1,
-                    (delegation_a_1_amount + Amount::from_atoms(300)).unwrap(),
-                ),
+                (delegation_a_1, (delegation_a_1_amount + Amount::from_atoms(300)).unwrap()),
                 (delegation_b_1, delegation_b_1_amount),
-                (
-                    delegation_a_2,
-                    (delegation_a_2_amount + Amount::from_atoms(600)).unwrap(),
-                ),
+                (delegation_a_2, (delegation_a_2_amount + Amount::from_atoms(600)).unwrap()),
                 (delegation_b_2, delegation_b_2_amount),
             ]),
             BTreeMap::from_iter([
@@ -465,12 +455,9 @@ mod tests {
         let total_delegation_reward =
             (reward - calculate_pool_owner_reward(reward, cost_per_block, mpt).unwrap()).unwrap();
 
-        let original_pool_balance = amount_sum!(
-            original_pledged_amount,
-            delegation_1_balance,
-            delegation_2_balance
-        )
-        .unwrap();
+        let original_pool_balance =
+            amount_sum!(original_pledged_amount, delegation_1_balance, delegation_2_balance)
+                .unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
@@ -563,10 +550,8 @@ mod tests {
                     total_delegation_reward.into_atoms() / reward.into_atoms();
 
                 // the range is inclusive in case lower bound == upper bound
-                assert!(
-                    (reward_proportion_lower_bound..=reward_proportion_upper_bound)
-                        .contains(&balance_proportion)
-                );
+                assert!((reward_proportion_lower_bound..=reward_proportion_upper_bound)
+                    .contains(&balance_proportion));
             };
 
             check_reward_is_proportional_to_balance(delegation_1_balance, delegation_1_reward);

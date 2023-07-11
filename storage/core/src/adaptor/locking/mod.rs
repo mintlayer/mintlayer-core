@@ -64,10 +64,9 @@ impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
     type PrefixIter<'i> = prefix_iter_rw::Iter<'i, T> where Self: 'i;
 
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
-        self.deltas[map_id].get(key).map_or_else(
-            || self.db.get(map_id, key),
-            |x| Ok(x.as_deref().map(|p| p.into())),
-        )
+        self.deltas[map_id]
+            .get(key)
+            .map_or_else(|| self.db.get(map_id, key), |x| Ok(x.as_deref().map(|p| p.into())))
     }
 
     fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>> {
@@ -106,19 +105,13 @@ pub struct TransactionLockImpl<T> {
 
 impl<T> Clone for TransactionLockImpl<T> {
     fn clone(&self) -> Self {
-        Self {
-            db: sync::Arc::clone(&self.db),
-            num_maps: self.num_maps,
-        }
+        Self { db: sync::Arc::clone(&self.db), num_maps: self.num_maps }
     }
 }
 
 impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {
     fn shallow_clone(&self) -> Self {
-        Self {
-            db: self.db.shallow_clone(),
-            num_maps: self.num_maps.shallow_clone(),
-        }
+        Self { db: self.db.shallow_clone(), num_maps: self.num_maps.shallow_clone() }
     }
 }
 

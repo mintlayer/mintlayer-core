@@ -55,10 +55,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -69,10 +66,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -83,10 +77,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
 
         let tx_3 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_2.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_2.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -140,10 +131,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -164,10 +152,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_1.transaction().get_id()), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(

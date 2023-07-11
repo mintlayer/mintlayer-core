@@ -82,10 +82,7 @@ pub fn check_pos_hash(
     let hash: Uint512 = hash.into();
     let pool_balance: Uint512 = pool_balance.into();
 
-    ensure!(
-        hash <= pool_balance * target.into(),
-        ConsensusPoSError::StakeKernelHashTooHigh
-    );
+    ensure!(hash <= pool_balance * target.into(), ConsensusPoSError::StakeKernelHashTooHigh);
 
     Ok(())
 }

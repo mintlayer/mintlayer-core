@@ -85,13 +85,11 @@ fn nft_name_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidNameLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidNameLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -138,13 +136,11 @@ fn nft_empty_name(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidNameLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidNameLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -203,13 +199,13 @@ fn nft_invalid_name(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorNameHasNoneAlphaNumericChar(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -263,13 +259,11 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -317,13 +311,11 @@ fn nft_empty_ticker(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -382,13 +374,13 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -442,13 +434,11 @@ fn nft_description_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidDescriptionLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidDescriptionLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -496,13 +486,11 @@ fn nft_empty_description(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidDescriptionLength(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorInvalidDescriptionLength(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -560,13 +548,13 @@ fn nft_invalid_description(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -619,13 +607,11 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectIconURI(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectIconURI(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -678,10 +664,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
+        assert_eq!(block_index.block_height(), common::primitives::BlockHeight::from(1));
 
         let block = tf.block(*block_index.block_id());
         let outputs =
@@ -748,13 +731,13 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorIncorrectIconURI(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -808,13 +791,11 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -866,10 +847,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
+        assert_eq!(block_index.block_height(), common::primitives::BlockHeight::from(1));
 
         let block = tf.block(*block_index.block_id());
         let outputs =
@@ -936,13 +914,13 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorIncorrectMetadataURI(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -996,13 +974,11 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectMediaURI(_, _)
-                    )
+            Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectMediaURI(_, _)
                 ))
-            ))
+            )))
         ));
     })
 }
@@ -1056,10 +1032,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
+        assert_eq!(block_index.block_height(), common::primitives::BlockHeight::from(1));
 
         let block = tf.block(*block_index.block_id());
         let outputs =
@@ -1126,13 +1099,13 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(
                             TokensError::IssueErrorIncorrectMediaURI(_, _)
                         )
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -1204,11 +1177,11 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(TokensError::MediaHashTooShort)
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -1235,11 +1208,11 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
 
             assert!(matches!(
                 result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                Err(ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::TokensError(TokensError::MediaHashTooLong)
-                    ))
-                ))
+                    )
+                )))
             ));
         }
     })
@@ -1343,19 +1316,13 @@ fn nft_valid_case(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            block_index.block_height(),
-            common::primitives::BlockHeight::from(1)
-        );
+        assert_eq!(block_index.block_height(), common::primitives::BlockHeight::from(1));
 
         let block = tf.block(*block_index.block_id());
         let outputs =
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(
-            get_output_value(issuance_output).unwrap(),
-            output_value.into()
-        );
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value.into());
     })
 }

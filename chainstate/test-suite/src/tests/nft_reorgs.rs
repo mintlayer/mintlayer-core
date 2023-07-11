@@ -81,10 +81,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        issuance_data,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(issuance_data, Destination::AnyoneCanSpend))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(token_min_issuance_fee),
                         Destination::AnyoneCanSpend,
@@ -119,11 +116,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
+                        TokenTransfer { token_id, amount: Amount::from_atoms(1) }.into(),
                     ))
                     .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123455)),
@@ -209,10 +202,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::from_utxo(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Transfer(
-                        output_value,
-                        Destination::AnyoneCanSpend,
-                    ))
+                    .add_output(TxOutput::Transfer(output_value, Destination::AnyoneCanSpend))
                     .build(),
             )
             .build_and_process()
@@ -228,16 +218,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Second chain - B2
         let tx_2 = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(issuance_outpoint_id, 0),
-                InputWitness::NoSignature(None),
-            )
+            .add_input(TxInput::from_utxo(issuance_outpoint_id, 0), InputWitness::NoSignature(None))
             .add_output(TxOutput::Transfer(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                })
-                .into(),
+                TokenData::TokenTransfer(TokenTransfer { token_id, amount: Amount::from_atoms(1) })
+                    .into(),
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
@@ -262,16 +246,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::from_utxo(b2_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_input(
-                TxInput::from_utxo(b2_outpoint_id, 1),
-                InputWitness::NoSignature(None),
-            )
+            .add_input(TxInput::from_utxo(b2_outpoint_id, 1), InputWitness::NoSignature(None))
             .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                }
-                .into(),
+                TokenTransfer { token_id, amount: Amount::from_atoms(1) }.into(),
             ))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
@@ -295,16 +272,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::from_utxo(c2_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_input(
-                TxInput::from_utxo(c2_outpoint_id, 1),
-                InputWitness::NoSignature(None),
-            )
+            .add_input(TxInput::from_utxo(c2_outpoint_id, 1), InputWitness::NoSignature(None))
             .add_output(TxOutput::Burn(
-                TokenTransfer {
-                    token_id,
-                    amount: Amount::from_atoms(1),
-                }
-                .into(),
+                TokenTransfer { token_id, amount: Amount::from_atoms(1) }.into(),
             ))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
@@ -345,9 +315,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
-            ))
+            Err(ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            )))
         ));
     })
 }
@@ -409,10 +379,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check id
         assert_eq!(issuance_block.get_id(), token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert_eq!(
-            issuance_tx.transaction().get_id(),
-            token_aux_data.issuance_tx().get_id()
-        );
+        assert_eq!(issuance_tx.transaction().get_id(), token_aux_data.issuance_tx().get_id());
         // Check issuance storage in the chain and in the storage
         assert_eq!(
             get_output_value(&issuance_tx.outputs()[0]).unwrap(),
@@ -428,13 +395,11 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         // Check that reorg happened
         let height = block_index.block_height();
-        assert!(
-            tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
-                .classify(tf.chainstate.get_chain_config())
-                .chain_block_id()
-                .unwrap()
-                != block_index.block_id())
-        );
+        assert!(tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
+            .classify(tf.chainstate.get_chain_config())
+            .chain_block_id()
+            .unwrap()
+            != block_index.block_id()));
 
         // Check that issuance transaction in the storage is removed
         assert!(tf

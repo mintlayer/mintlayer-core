@@ -47,10 +47,7 @@ async fn test_replace_tx(
     .await
     .expect("should be able to spend here");
     let original_id = original.transaction().get_id();
-    log::debug!(
-        "created a tx with fee {:?}",
-        try_get_fee(&mempool, &original).await
-    );
+    log::debug!("created a tx with fee {:?}", try_get_fee(&mempool, &original).await);
     mempool.add_transaction(original)?.assert_in_mempool();
 
     let flags = 0;
@@ -63,10 +60,7 @@ async fn test_replace_tx(
     )
     .await
     .expect("should be able to spend here");
-    log::debug!(
-        "created a replacement with fee {:?}",
-        try_get_fee(&mempool, &replacement).await
-    );
+    log::debug!("created a replacement with fee {:?}", try_get_fee(&mempool, &replacement).await);
     mempool.add_transaction(replacement)?.assert_in_mempool();
     assert!(!mempool.contains_transaction(&original_id));
     mempool.store.assert_valid();
@@ -136,35 +130,20 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     let replacement_fee: Fee = Amount::from_atoms(relay_fee + 100).into();
     test_replace_tx(&mut rng, Fee::new(Amount::from_atoms(100)), replacement_fee).await?;
     let res = test_replace_tx(&mut rng, Fee::new(Amount::from_atoms(300)), replacement_fee).await;
+    assert!(matches!(res, Err(Error::Policy(MempoolPolicyError::InsufficientFeesToRelayRBF))));
+    let res =
+        test_replace_tx(&mut rng, Amount::from_atoms(100).into(), Amount::from_atoms(100).into())
+            .await;
     assert!(matches!(
         res,
-        Err(Error::Policy(
-            MempoolPolicyError::InsufficientFeesToRelayRBF
-        ))
+        Err(Error::Policy(MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }))
     ));
-    let res = test_replace_tx(
-        &mut rng,
-        Amount::from_atoms(100).into(),
-        Amount::from_atoms(100).into(),
-    )
-    .await;
+    let res =
+        test_replace_tx(&mut rng, Amount::from_atoms(100).into(), Amount::from_atoms(90).into())
+            .await;
     assert!(matches!(
         res,
-        Err(Error::Policy(
-            MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }
-        ))
-    ));
-    let res = test_replace_tx(
-        &mut rng,
-        Amount::from_atoms(100).into(),
-        Amount::from_atoms(90).into(),
-    )
-    .await;
-    assert!(matches!(
-        res,
-        Err(Error::Policy(
-            MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }
-        ))
+        Err(Error::Policy(MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }))
     ));
     Ok(())
 }

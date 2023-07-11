@@ -46,10 +46,7 @@ fn get_total_fee(
     let inputs_total = *inputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::ZERO);
     (inputs_total - outputs_total)
         .map(Fee)
-        .ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
-            inputs_total,
-            outputs_total,
-        ))
+        .ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(inputs_total, outputs_total))
 }
 
 fn check_transferred_amount(
@@ -164,9 +161,7 @@ where
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
-                    .ok_or(ConnectTransactionError::DelegationBalanceNotFound(
-                        *delegation_id,
-                    ))?;
+                    .ok_or(ConnectTransactionError::DelegationBalanceNotFound(*delegation_id))?;
                 ensure!(
                     total_balance >= *withdraw_amount,
                     ConnectTransactionError::AttemptToPrintMoney(total_balance, *withdraw_amount)
@@ -654,10 +649,8 @@ mod tests {
             AccountNonce::new(0),
             AccountSpending::Delegation(delegation_id, withdraw_amount),
         ));
-        let output = TxOutput::Transfer(
-            OutputValue::Coin(withdraw_amount),
-            Destination::AnyoneCanSpend,
-        );
+        let output =
+            TxOutput::Transfer(OutputValue::Coin(withdraw_amount), Destination::AnyoneCanSpend);
         let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
 
         check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| Ok(None))

@@ -44,9 +44,7 @@ impl<T> From<T> for ConstValue<T> {
 
 impl<T: Default> Default for ConstValue<T> {
     fn default() -> Self {
-        Self {
-            value: T::default(),
-        }
+        Self { value: T::default() }
     }
 }
 
@@ -66,9 +64,7 @@ impl<T: Copy> Copy for ConstValue<T> {}
 
 impl<T: Clone> Clone for ConstValue<T> {
     fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-        }
+        Self { value: self.value.clone() }
     }
 }
 

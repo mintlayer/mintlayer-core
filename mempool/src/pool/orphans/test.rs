@@ -32,11 +32,7 @@ fn check_integrity(orphans: &TxOrphanPool) {
     assert_eq!(len, orphans.maps.by_insertion_time.len());
 
     orphans.maps.by_tx_id.iter().for_each(|(tx_id, iid)| {
-        assert_eq!(
-            orphans.get_at(*iid).tx_id(),
-            tx_id,
-            "Entry {iid:?} tx ID inconsistent",
-        );
+        assert_eq!(orphans.get_at(*iid).tx_id(), tx_id, "Entry {iid:?} tx ID inconsistent",);
     });
     orphans.maps.by_insertion_time.iter().for_each(|(time, iid)| {
         assert_eq!(
@@ -91,10 +87,7 @@ fn insert_and_delete(#[case] seed: Seed) {
 
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans.transactions.len(), 1);
-    assert_eq!(
-        orphans.maps.by_tx_id.keys().collect::<Vec<_>>(),
-        vec![&tx_id],
-    );
+    assert_eq!(orphans.maps.by_tx_id.keys().collect::<Vec<_>>(), vec![&tx_id],);
     assert_eq!(orphans.maps.by_deps.len(), n_deps);
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
     check_integrity(&orphans);
@@ -142,11 +135,7 @@ fn simulation(#[case] seed: Seed) {
             // Insert a random tx
             0..=1 => {
                 let entry = random_tx_entry(&mut rng);
-                assert_eq!(
-                    orphans.insert(entry.clone()),
-                    Ok(()),
-                    "Insertion of {entry:?} failed"
-                );
+                assert_eq!(orphans.insert(entry.clone()), Ok(()), "Insertion of {entry:?} failed");
                 assert_eq!(orphans.len(), len_before + 1);
             }
 
@@ -164,11 +153,7 @@ fn simulation(#[case] seed: Seed) {
             // Delete a non-existing tx
             3..=3 => {
                 let id: Id<Transaction> = H256(rng.gen::<[u8; 32]>()).into();
-                assert_eq!(
-                    orphans.remove(id),
-                    None,
-                    "Removal of non-existent {id:?} failed"
-                );
+                assert_eq!(orphans.remove(id), None, "Removal of non-existent {id:?} failed");
                 assert_eq!(orphans.len(), len_before);
             }
 

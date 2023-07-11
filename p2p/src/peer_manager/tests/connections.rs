@@ -177,11 +177,8 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+        .await;
 }
 
 #[tokio::test]
@@ -222,11 +219,9 @@ where
     )
     .await;
 
-    let (_address, peer_info, _) = connect_services::<T>(
-        &mut pm2.peer_connectivity_handle,
-        &mut pm1.peer_connectivity_handle,
-    )
-    .await;
+    let (_address, peer_info, _) =
+        connect_services::<T>(&mut pm2.peer_connectivity_handle, &mut pm1.peer_connectivity_handle)
+            .await;
     assert_ne!(peer_info.network, *config.magic_bytes());
 }
 
@@ -272,11 +267,9 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info, _) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    let (address, peer_info, _) =
+        connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+            .await;
     pm2.try_accept_connection(address, Role::Inbound, peer_info, None).unwrap();
 }
 
@@ -310,12 +303,9 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
-        A::make_transport(),
-        addr1,
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::new(config::create_mainnet()))
+            .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
@@ -323,11 +313,9 @@ where
     )
     .await;
 
-    let (address, peer_info, _) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    let (address, peer_info, _) =
+        connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+            .await;
 
     assert_eq!(
         pm2.try_accept_connection(address, Role::Inbound, peer_info, None),
@@ -374,18 +362,12 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
-        A::make_transport(),
-        addr1,
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
-    let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
-        A::make_transport(),
-        addr2,
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::new(config::create_mainnet()))
+            .await;
+    let (mut pm2, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, Arc::new(config::create_mainnet()))
+            .await;
 
     let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -393,10 +375,7 @@ where
     )
     .await;
 
-    assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id),
-        Ok(())
-    );
+    assert_eq!(pm2.peer_connectivity_handle.disconnect(peer_info.peer_id), Ok(()));
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })

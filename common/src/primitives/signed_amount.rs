@@ -76,9 +76,7 @@ impl SignedAmount {
 
         // cover the corner case: SignedAmount::MIN
         if negative && unsigned_amount.into_atoms() == UnsignedIntType::MAX / 2 + 1 {
-            return Some(SignedAmount {
-                val: SignedIntType::MIN,
-            });
+            return Some(SignedAmount { val: SignedIntType::MIN });
         }
 
         let signed_amount = unsigned_amount.into_signed()?;
@@ -215,12 +213,7 @@ mod tests {
 
     #[test]
     fn add_overflow() {
-        assert_eq!(
-            SignedAmount {
-                val: SignedIntType::MAX
-            } + SignedAmount { val: 1 },
-            None
-        );
+        assert_eq!(SignedAmount { val: SignedIntType::MAX } + SignedAmount { val: 1 }, None);
     }
 
     #[test]
@@ -238,9 +231,7 @@ mod tests {
         let amounts = vec![
             SignedAmount { val: 1 },
             SignedAmount { val: 2 },
-            SignedAmount {
-                val: SignedIntType::MAX - 2,
-            },
+            SignedAmount { val: SignedIntType::MAX - 2 },
         ];
         assert_eq!(amounts.into_iter().sum::<Option<SignedAmount>>(), None);
     }
@@ -255,22 +246,12 @@ mod tests {
 
     #[test]
     fn sub_underflow() {
-        assert_eq!(
-            SignedAmount {
-                val: SignedIntType::MIN
-            } - SignedAmount { val: 1 },
-            None
-        );
+        assert_eq!(SignedAmount { val: SignedIntType::MIN } - SignedAmount { val: 1 }, None);
     }
 
     #[test]
     fn mul_overflow() {
-        assert_eq!(
-            SignedAmount {
-                val: SignedIntType::MAX / 2 + 1
-            } * 2,
-            None
-        );
+        assert_eq!(SignedAmount { val: SignedIntType::MAX / 2 + 1 } * 2, None);
     }
 
     #[test]
@@ -322,18 +303,12 @@ mod tests {
         );
 
         assert_eq!(
-            amount_sum!(
-                SignedAmount::from_atoms(SignedIntType::MAX),
-                SignedAmount::from_atoms(0)
-            ),
+            amount_sum!(SignedAmount::from_atoms(SignedIntType::MAX), SignedAmount::from_atoms(0)),
             Some(SignedAmount::from_atoms(SignedIntType::MAX))
         );
 
         assert_eq!(
-            amount_sum!(
-                SignedAmount::from_atoms(SignedIntType::MAX),
-                SignedAmount::from_atoms(1)
-            ),
+            amount_sum!(SignedAmount::from_atoms(SignedIntType::MAX), SignedAmount::from_atoms(1)),
             None
         );
 
@@ -351,20 +326,14 @@ mod tests {
     fn unsigned_conversion_signed_arbitrary() {
         let amount = SignedAmount::from_atoms(10);
         let unsigned_amount_inner = 10 as UnsignedIntType;
-        assert_eq!(
-            amount.into_unsigned().unwrap(),
-            Amount::from_atoms(unsigned_amount_inner)
-        )
+        assert_eq!(amount.into_unsigned().unwrap(), Amount::from_atoms(unsigned_amount_inner))
     }
 
     #[test]
     fn unsigned_conversion_signed_max() {
         let amount = SignedAmount::MAX;
         let unsigned_amount_inner = SignedIntType::MAX as UnsignedIntType;
-        assert_eq!(
-            amount.into_unsigned().unwrap(),
-            Amount::from_atoms(unsigned_amount_inner)
-        )
+        assert_eq!(amount.into_unsigned().unwrap(), Amount::from_atoms(unsigned_amount_inner))
     }
 
     #[test]

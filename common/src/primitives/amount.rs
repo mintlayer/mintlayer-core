@@ -187,9 +187,7 @@ impl std::ops::BitAnd for Amount {
     type Output = Self;
 
     fn bitand(self, other: Self) -> Self {
-        Amount {
-            val: self.val.bitand(other.val),
-        }
+        Amount { val: self.val.bitand(other.val) }
     }
 }
 
@@ -203,9 +201,7 @@ impl std::ops::BitOr for Amount {
     type Output = Self;
 
     fn bitor(self, other: Self) -> Self {
-        Amount {
-            val: self.val.bitor(other.val),
-        }
+        Amount { val: self.val.bitor(other.val) }
     }
 }
 
@@ -219,9 +215,7 @@ impl std::ops::BitXor for Amount {
     type Output = Self;
 
     fn bitxor(self, other: Self) -> Self {
-        Amount {
-            val: self.val.bitxor(other.val),
-        }
+        Amount { val: self.val.bitxor(other.val) }
     }
 }
 
@@ -235,9 +229,7 @@ impl std::ops::Not for Amount {
     type Output = Self;
 
     fn not(self) -> Self {
-        Amount {
-            val: self.val.not(),
-        }
+        Amount { val: self.val.not() }
     }
 }
 
@@ -297,18 +289,12 @@ mod tests {
 
     #[test]
     fn add_some() {
-        assert_eq!(
-            Amount { val: 2 } + Amount { val: 2 },
-            Some(Amount { val: 4 })
-        );
+        assert_eq!(Amount { val: 2 } + Amount { val: 2 }, Some(Amount { val: 4 }));
     }
 
     #[test]
     fn sub_some() {
-        assert_eq!(
-            Amount { val: 4 } - Amount { val: 2 },
-            Some(Amount { val: 2 })
-        );
+        assert_eq!(Amount { val: 4 } - Amount { val: 2 }, Some(Amount { val: 2 }));
     }
 
     #[test]
@@ -328,61 +314,35 @@ mod tests {
 
     #[test]
     fn add_overflow() {
-        assert_eq!(
-            Amount {
-                val: UnsignedIntType::MAX
-            } + Amount { val: 1 },
-            None
-        );
+        assert_eq!(Amount { val: UnsignedIntType::MAX } + Amount { val: 1 }, None);
     }
 
     #[test]
     fn sum_some() {
         let amounts = vec![Amount { val: 1 }, Amount { val: 2 }, Amount { val: 3 }];
-        assert_eq!(
-            amounts.into_iter().sum::<Option<Amount>>(),
-            Some(Amount { val: 6 })
-        );
+        assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), Some(Amount { val: 6 }));
     }
 
     #[test]
     fn sum_overflow() {
-        let amounts = vec![
-            Amount { val: 1 },
-            Amount { val: 2 },
-            Amount {
-                val: UnsignedIntType::MAX - 2,
-            },
-        ];
+        let amounts =
+            vec![Amount { val: 1 }, Amount { val: 2 }, Amount { val: UnsignedIntType::MAX - 2 }];
         assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
     }
 
     #[test]
     fn sum_empty() {
-        assert_eq!(
-            vec![].into_iter().sum::<Option<Amount>>(),
-            Some(Amount::from_atoms(0))
-        )
+        assert_eq!(vec![].into_iter().sum::<Option<Amount>>(), Some(Amount::from_atoms(0)))
     }
 
     #[test]
     fn sub_underflow() {
-        assert_eq!(
-            Amount {
-                val: UnsignedIntType::MIN
-            } - Amount { val: 1 },
-            None
-        );
+        assert_eq!(Amount { val: UnsignedIntType::MIN } - Amount { val: 1 }, None);
     }
 
     #[test]
     fn mul_overflow() {
-        assert_eq!(
-            Amount {
-                val: UnsignedIntType::MAX / 2 + 1
-            } * 2,
-            None
-        );
+        assert_eq!(Amount { val: UnsignedIntType::MAX / 2 + 1 } * 2, None);
     }
 
     #[test]
@@ -445,11 +405,7 @@ mod tests {
         );
 
         assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(1),
-                Amount::from_atoms(2),
-                Amount::from_atoms(3)
-            ),
+            amount_sum!(Amount::from_atoms(1), Amount::from_atoms(2), Amount::from_atoms(3)),
             Some(Amount::from_atoms(6))
         );
 
@@ -464,18 +420,12 @@ mod tests {
         );
 
         assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(UnsignedIntType::MAX),
-                Amount::from_atoms(0)
-            ),
+            amount_sum!(Amount::from_atoms(UnsignedIntType::MAX), Amount::from_atoms(0)),
             Some(Amount::from_atoms(UnsignedIntType::MAX))
         );
 
         assert_eq!(
-            amount_sum!(
-                Amount::from_atoms(UnsignedIntType::MAX),
-                Amount::from_atoms(1)
-            ),
+            amount_sum!(Amount::from_atoms(UnsignedIntType::MAX), Amount::from_atoms(1)),
             None
         );
 
@@ -493,10 +443,7 @@ mod tests {
     fn signed_conversion_arbitrary() {
         let amount = Amount::from_atoms(10);
         let signed_amount_inner = 10 as SignedIntType;
-        assert_eq!(
-            amount.into_signed().unwrap(),
-            SignedAmount::from_atoms(signed_amount_inner)
-        )
+        assert_eq!(amount.into_signed().unwrap(), SignedAmount::from_atoms(signed_amount_inner))
     }
 
     #[test]
@@ -509,10 +456,7 @@ mod tests {
     fn signed_conversion_signed_max_before_threshold() {
         let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType);
         let signed_amount_inner = SignedIntType::MAX;
-        assert_eq!(
-            amount.into_signed().unwrap(),
-            SignedAmount::from_atoms(signed_amount_inner)
-        )
+        assert_eq!(amount.into_signed().unwrap(), SignedAmount::from_atoms(signed_amount_inner))
     }
 
     #[test]

@@ -47,10 +47,7 @@ impl ClassicMultisigChallenge {
         min_required_signatures: NonZeroU8,
         public_keys: Vec<PublicKey>,
     ) -> Result<Self, ClassicMultisigChallengeError> {
-        let res = Self {
-            min_required_signatures: min_required_signatures.get(),
-            public_keys,
-        };
+        let res = Self { min_required_signatures: min_required_signatures.get(), public_keys };
         res.is_valid(chain_config)?;
         Ok(res)
     }
@@ -74,12 +71,10 @@ impl ClassicMultisigChallenge {
         }
 
         if self.min_required_signatures as usize > self.public_keys.len() {
-            return Err(
-                ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
-                    self.min_required_signatures,
-                    self.public_keys.len(),
-                ),
-            );
+            return Err(ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
+                self.min_required_signatures,
+                self.public_keys.len(),
+            ));
         }
 
         Ok(())
@@ -109,10 +104,7 @@ mod tests {
         let chain_config = create_mainnet();
 
         // Notice that we circumvent the constructor because this struct can be decoded from data
-        let res = ClassicMultisigChallenge {
-            min_required_signatures: 1,
-            public_keys: vec![],
-        };
+        let res = ClassicMultisigChallenge { min_required_signatures: 1, public_keys: vec![] };
 
         assert_eq!(
             res.is_valid(&chain_config).unwrap_err(),
@@ -157,10 +149,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Notice that we circumvent the constructor because this struct can be decoded from data
-        let res = ClassicMultisigChallenge {
-            min_required_signatures,
-            public_keys,
-        };
+        let res = ClassicMultisigChallenge { min_required_signatures, public_keys };
 
         assert_eq!(
             res.is_valid(&chain_config).unwrap_err(),
@@ -188,10 +177,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Notice that we circumvent the constructor because this struct can be decoded from data
-        let res = ClassicMultisigChallenge {
-            min_required_signatures,
-            public_keys,
-        };
+        let res = ClassicMultisigChallenge { min_required_signatures, public_keys };
 
         assert_eq!(
             res.is_valid(&chain_config).unwrap_err(),

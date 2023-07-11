@@ -76,13 +76,7 @@ fn basic(#[case] seed: Seed) {
     let node2: SocketAddr = "4.3.2.1:12345".parse().unwrap();
     let peer2 = PeerId::new();
 
-    crawler.step(
-        CrawlerEvent::NewAddress {
-            address: node2,
-            sender: peer1,
-        },
-        &mut rng,
-    );
+    crawler.step(CrawlerEvent::NewAddress { address: node2, sender: peer1 }, &mut rng);
 
     crawler.timer(Duration::from_secs(100), &mut rng);
     assert!(crawler.pending_connects.contains(&node2));
@@ -262,10 +256,8 @@ fn long_offline(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let loaded_node: SocketAddr = "1.0.0.0:3031".parse().unwrap();
     let added_node: SocketAddr = "2.0.0.0:3031".parse().unwrap();
-    let mut crawler = test_crawler(
-        [loaded_node].into_iter().collect(),
-        [added_node].into_iter().collect(),
-    );
+    let mut crawler =
+        test_crawler([loaded_node].into_iter().collect(), [added_node].into_iter().collect());
     assert!(crawler.persistent.contains(&loaded_node));
 
     // Reachable and reserved nodes are offline for two month

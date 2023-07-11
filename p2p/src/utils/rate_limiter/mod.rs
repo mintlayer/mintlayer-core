@@ -40,12 +40,7 @@ impl RateLimiter {
         assert!(rate >= 0.0);
         assert!(initial_tokens <= bucket);
         assert!(bucket >= 1);
-        RateLimiter {
-            rate,
-            tokens: initial_tokens.into(),
-            bucket,
-            last_time: now,
-        }
+        RateLimiter { rate, tokens: initial_tokens.into(), bucket, last_time: now }
     }
 
     /// Check if the new request is within the allowed rate at the current time (updating the state)

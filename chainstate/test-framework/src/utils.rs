@@ -107,11 +107,7 @@ pub fn create_utxo_data(
         },
     };
 
-    Some((
-        empty_witness(rng),
-        TxInput::from_utxo(outsrc, index as u32),
-        new_output,
-    ))
+    Some((empty_witness(rng), TxInput::from_utxo(outsrc, index as u32), new_output))
 }
 
 /// Given an output as in input creates multiple new random outputs.
@@ -180,11 +176,8 @@ pub fn create_multiple_utxo_data(
                         transfer.amount
                     };
                     vec![TxOutput::Burn(
-                        TokenTransfer {
-                            token_id: transfer.token_id,
-                            amount: amount_to_burn,
-                        }
-                        .into(),
+                        TokenTransfer { token_id: transfer.token_id, amount: amount_to_burn }
+                            .into(),
                     )]
                 } else {
                     // transfer tokens again
@@ -195,11 +188,7 @@ pub fn create_multiple_utxo_data(
                                 let amount =
                                     Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
                                 TxOutput::Transfer(
-                                    TokenTransfer {
-                                        token_id: transfer.token_id,
-                                        amount,
-                                    }
-                                    .into(),
+                                    TokenTransfer { token_id: transfer.token_id, amount }.into(),
                                     anyonecanspend_address(),
                                 )
                             })
@@ -234,11 +223,7 @@ pub fn create_multiple_utxo_data(
         },
     };
 
-    Some((
-        empty_witness(rng),
-        TxInput::from_utxo(outsrc, index as u32),
-        new_outputs,
-    ))
+    Some((empty_witness(rng), TxInput::from_utxo(outsrc, index as u32), new_outputs))
 }
 
 fn new_token_transfer_output(
@@ -285,12 +270,9 @@ fn new_token_burn_output(
 }
 
 pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
-    [(
-        OutPointSourceId::BlockReward(genesis.get_id().into()),
-        genesis.utxos().to_vec(),
-    )]
-    .into_iter()
-    .collect()
+    [(OutPointSourceId::BlockReward(genesis.get_id().into()), genesis.utxos().to_vec())]
+        .into_iter()
+        .collect()
 }
 
 pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
@@ -322,10 +304,7 @@ pub fn create_chain_config_with_staking_pool(
     pool_data: StakePoolData,
 ) -> ConfigBuilder {
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus)),
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {

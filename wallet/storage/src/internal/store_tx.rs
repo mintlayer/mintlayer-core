@@ -105,10 +105,7 @@ impl<'st, B: storage::Backend> StoreTxRoUnlocked<'st, B> {
         storage: storage::TransactionRo<'st, B, Schema>,
         encryption_key: &'st Option<SymmetricKey>,
     ) -> Self {
-        Self {
-            storage,
-            encryption_key,
-        }
+        Self { storage, encryption_key }
     }
 }
 
@@ -123,10 +120,7 @@ impl<'st, B: storage::Backend> StoreTxRwUnlocked<'st, B> {
         storage: storage::TransactionRw<'st, B, Schema>,
         encryption_key: &'st Option<SymmetricKey>,
     ) -> Self {
-        Self {
-            storage,
-            encryption_key,
-        }
+        Self { storage, encryption_key }
     }
 
     // Delete a value for a well-known entry
@@ -297,11 +291,9 @@ macro_rules! impl_read_unlocked_ops {
         /// Wallet data storage transaction
         impl<'st, B: storage::Backend> WalletStorageReadUnlocked for $TxType<'st, B> {
             fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
-                Ok(
-                    self.read::<db::DBRootKeys, _, _>(&RootKeyConstant {})?.map(|v| {
-                        v.try_take(self.encryption_key).expect("key was checked when unlocked")
-                    }),
-                )
+                Ok(self.read::<db::DBRootKeys, _, _>(&RootKeyConstant {})?.map(|v| {
+                    v.try_take(self.encryption_key).expect("key was checked when unlocked")
+                }))
             }
         }
     };

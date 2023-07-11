@@ -84,10 +84,7 @@ fn single_proof_eight_leaves(
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let p = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
-    assert_eq!(
-        p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        branch
-    );
+    assert_eq!(p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(), branch);
 
     assert!(p
         .into_values()

@@ -378,26 +378,11 @@ fn absolute_index_from_bottom() {
 
     assert_eq!(NodePosition::from_position(s, 1, 0).unwrap().abs_index(), 8);
     assert_eq!(NodePosition::from_position(s, 1, 1).unwrap().abs_index(), 9);
-    assert_eq!(
-        NodePosition::from_position(s, 1, 2).unwrap().abs_index(),
-        10
-    );
-    assert_eq!(
-        NodePosition::from_position(s, 1, 3).unwrap().abs_index(),
-        11
-    );
+    assert_eq!(NodePosition::from_position(s, 1, 2).unwrap().abs_index(), 10);
+    assert_eq!(NodePosition::from_position(s, 1, 3).unwrap().abs_index(), 11);
 
-    assert_eq!(
-        NodePosition::from_position(s, 2, 0).unwrap().abs_index(),
-        12
-    );
-    assert_eq!(
-        NodePosition::from_position(s, 2, 1).unwrap().abs_index(),
-        13
-    );
+    assert_eq!(NodePosition::from_position(s, 2, 0).unwrap().abs_index(), 12);
+    assert_eq!(NodePosition::from_position(s, 2, 1).unwrap().abs_index(), 13);
 
-    assert_eq!(
-        NodePosition::from_position(s, 3, 0).unwrap().abs_index(),
-        14
-    );
+    assert_eq!(NodePosition::from_position(s, 3, 0).unwrap().abs_index(), 14);
 }

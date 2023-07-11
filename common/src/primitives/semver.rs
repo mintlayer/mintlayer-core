@@ -24,11 +24,7 @@ pub struct SemVer {
 
 impl SemVer {
     pub const fn new(major: u8, minor: u8, patch: u16) -> Self {
-        Self {
-            major,
-            minor,
-            patch,
-        }
+        Self { major, minor, patch }
     }
 }
 
@@ -52,11 +48,7 @@ impl TryFrom<&str> for SemVer {
         let minor = split_version[1].parse::<u8>().map_err(|_| parse_err)?;
         let patch = split_version[2].parse::<u16>().map_err(|_| parse_err)?;
 
-        Ok(Self {
-            major,
-            minor,
-            patch,
-        })
+        Ok(Self { major, minor, patch })
     }
 }
 
@@ -94,25 +86,13 @@ mod tests {
         let version = SemVer::new(1, 2, 0x500);
         assert_eq!(String::from(version), "1.2.1280");
 
-        assert_eq!(
-            SemVer::try_from(" "),
-            Err("Invalid version. Number of components is wrong.")
-        );
+        assert_eq!(SemVer::try_from(" "), Err("Invalid version. Number of components is wrong."));
 
-        assert_eq!(
-            SemVer::try_from(""),
-            Err("Invalid version. Number of components is wrong.")
-        );
+        assert_eq!(SemVer::try_from(""), Err("Invalid version. Number of components is wrong."));
 
-        assert_eq!(
-            SemVer::try_from("1.2"),
-            Err("Invalid version. Number of components is wrong.")
-        );
+        assert_eq!(SemVer::try_from("1.2"), Err("Invalid version. Number of components is wrong."));
 
-        assert_eq!(
-            SemVer::try_from("1"),
-            Err("Invalid version. Number of components is wrong.")
-        );
+        assert_eq!(SemVer::try_from("1"), Err("Invalid version. Number of components is wrong."));
 
         let version = "hello";
         assert_eq!(
@@ -133,63 +113,36 @@ mod tests {
         assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 255)));
 
         let version = "255.255.65535".to_string();
-        assert_eq!(
-            SemVer::try_from(version.clone()),
-            Ok(SemVer::new(255, 255, 65535))
-        );
+        assert_eq!(SemVer::try_from(version.clone()), Ok(SemVer::new(255, 255, 65535)));
         assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 65535)));
 
         let version = "255.255.65536";
-        assert_eq!(
-            SemVer::try_from(version),
-            Err("Parsing SemVer component to integer failed")
-        );
+        assert_eq!(SemVer::try_from(version), Err("Parsing SemVer component to integer failed"));
         assert_eq!(
             SemVer::try_from(version.to_string()),
             Err("Parsing SemVer component to integer failed")
         );
 
-        assert_eq!(
-            SemVer::try_from("1.2.a"),
-            Err("Parsing SemVer component to integer failed")
-        );
+        assert_eq!(SemVer::try_from("1.2.a"), Err("Parsing SemVer component to integer failed"));
 
-        assert_eq!(
-            SemVer::try_from("1.2."),
-            Err("Parsing SemVer component to integer failed")
-        );
+        assert_eq!(SemVer::try_from("1.2."), Err("Parsing SemVer component to integer failed"));
 
-        assert_eq!(
-            SemVer::try_from("1..3"),
-            Err("Parsing SemVer component to integer failed")
-        );
+        assert_eq!(SemVer::try_from("1..3"), Err("Parsing SemVer component to integer failed"));
     }
 
     #[test]
     fn vertest_encode_decode() {
         let encoded = SemVer::new(1, 2, 3).encode();
-        assert_eq!(
-            DecodeAll::decode_all(&mut &encoded[..]),
-            Ok(SemVer::new(1, 2, 3))
-        );
+        assert_eq!(DecodeAll::decode_all(&mut &encoded[..]), Ok(SemVer::new(1, 2, 3)));
 
         let encoded = SemVer::new(0xff, 0xff, 0xff).encode();
-        assert_eq!(
-            DecodeAll::decode_all(&mut &encoded[..]),
-            Ok(SemVer::new(0xff, 0xff, 0xff))
-        );
+        assert_eq!(DecodeAll::decode_all(&mut &encoded[..]), Ok(SemVer::new(0xff, 0xff, 0xff)));
 
         let encoded = SemVer::new(0xff, 0xff, 0xffff).encode();
-        assert_eq!(
-            DecodeAll::decode_all(&mut &encoded[..]),
-            Ok(SemVer::new(0xff, 0xff, 0xffff))
-        );
+        assert_eq!(DecodeAll::decode_all(&mut &encoded[..]), Ok(SemVer::new(0xff, 0xff, 0xffff)));
 
         let encoded = SemVer::new(1, 2, 0x500).encode();
-        assert_eq!(
-            DecodeAll::decode_all(&mut &encoded[..]),
-            Ok(SemVer::new(1, 2, 0x500))
-        );
+        assert_eq!(DecodeAll::decode_all(&mut &encoded[..]), Ok(SemVer::new(1, 2, 0x500)));
     }
 
     #[test]

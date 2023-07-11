@@ -62,10 +62,7 @@ mod tests {
         assert_eq!(AccountNonce::new(u64::MAX).increment(), None);
 
         let v = rng.gen_range(0..u64::MAX - 1);
-        assert_eq!(
-            AccountNonce::new(v).increment(),
-            Some(AccountNonce::new(v + 1))
-        );
+        assert_eq!(AccountNonce::new(v).increment(), Some(AccountNonce::new(v + 1)));
     }
 
     #[rstest]
@@ -77,9 +74,6 @@ mod tests {
         assert_eq!(AccountNonce::new(0).decrement(), None);
 
         let v = rng.gen_range(1..u64::MAX);
-        assert_eq!(
-            AccountNonce::new(v).decrement(),
-            Some(AccountNonce::new(v - 1))
-        );
+        assert_eq!(AccountNonce::new(v).decrement(), Some(AccountNonce::new(v - 1)));
     }
 }

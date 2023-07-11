@@ -71,10 +71,7 @@ pub struct SummaryTab {
 
 impl SummaryTab {
     pub fn new(controller: NodeBackendController) -> Self {
-        SummaryTab {
-            controller,
-            current_tip: None,
-        }
+        SummaryTab { controller, current_tip: None }
     }
 
     pub fn start(
@@ -113,15 +110,13 @@ impl SummaryTab {
         chainstate_handle
             .call_mut(|this| {
                 let subscribe_func =
-                    Arc::new(
-                        move |chainstate_event: ChainstateEvent| match chainstate_event {
-                            ChainstateEvent::NewTip(block_id, block_height) => {
-                                _ = chainstate_sender
-                                    .send((block_id.into(), block_height))
-                                    .log_err_pfx("Chainstate subscriber failed to send new tip");
-                            }
-                        },
-                    );
+                    Arc::new(move |chainstate_event: ChainstateEvent| match chainstate_event {
+                        ChainstateEvent::NewTip(block_id, block_height) => {
+                            _ = chainstate_sender
+                                .send((block_id.into(), block_height))
+                                .log_err_pfx("Chainstate subscriber failed to send new tip");
+                        }
+                    });
 
                 this.subscribe_to_events(subscribe_func);
             })

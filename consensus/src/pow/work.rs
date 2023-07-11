@@ -273,18 +273,9 @@ mod tests {
 
     #[rstest]
     #[case(0, "0000000000000000000000000000000000000000000000000000000000000000")]
-    #[case(
-        386_567_092,
-        "6c13667de68cb99b4ca3b8aaabe5513e68b90301a59f05000000000000000000"
-    )] // block 722731
-    #[case(
-        386_568_320,
-        "b33ea07931b531a42afbff7e2d474e905faafcb2385308000000000000000000"
-    )] // block 721311
-    #[case(
-        486_604_799,
-        "bdd99dc9fda39da1b108ce1a5d7030d0a9607bacb68b6b63605f626a00000000"
-    )] // block 2
+    #[case(386_567_092, "6c13667de68cb99b4ca3b8aaabe5513e68b90301a59f05000000000000000000")] // block 722731
+    #[case(386_568_320, "b33ea07931b531a42afbff7e2d474e905faafcb2385308000000000000000000")] // block 721311
+    #[case(486_604_799, "bdd99dc9fda39da1b108ce1a5d7030d0a9607bacb68b6b63605f626a00000000")] // block 2
     fn pow_ok(#[case] bits: u32, #[case] hash: H256) {
         assert!(check_proof_of_work(hash, Compact(bits)).unwrap());
     }

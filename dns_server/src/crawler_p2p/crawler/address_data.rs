@@ -93,99 +93,55 @@ pub struct AddressData {
 impl AddressState {
     fn fail_count(&self) -> u32 {
         match self {
-            AddressState::Connecting {
-                fail_count,
-                was_reachable: _,
-            } => *fail_count,
+            AddressState::Connecting { fail_count, was_reachable: _ } => *fail_count,
             AddressState::Connected {} => 0,
-            AddressState::Disconnecting {
-                fail_count,
-                was_reachable: _,
-            } => *fail_count,
-            AddressState::Disconnected {
-                fail_count,
-                was_reachable: _,
-                disconnected_at: _,
-            } => *fail_count,
-            AddressState::Unreachable {
-                fail_count,
-                erase_after: _,
-                was_reachable: _,
-            } => *fail_count,
+            AddressState::Disconnecting { fail_count, was_reachable: _ } => *fail_count,
+            AddressState::Disconnected { fail_count, was_reachable: _, disconnected_at: _ } => {
+                *fail_count
+            }
+            AddressState::Unreachable { fail_count, erase_after: _, was_reachable: _ } => {
+                *fail_count
+            }
         }
     }
 
     fn was_reachable(&self) -> bool {
         match self {
-            AddressState::Connecting {
-                fail_count: _,
-                was_reachable,
-            } => *was_reachable,
+            AddressState::Connecting { fail_count: _, was_reachable } => *was_reachable,
             AddressState::Connected {} => true,
-            AddressState::Disconnecting {
-                fail_count: _,
-                was_reachable,
-            } => *was_reachable,
-            AddressState::Disconnected {
-                fail_count: _,
-                was_reachable,
-                disconnected_at: _,
-            } => *was_reachable,
-            AddressState::Unreachable {
-                erase_after: _,
-                was_reachable,
-                fail_count: _,
-            } => *was_reachable,
+            AddressState::Disconnecting { fail_count: _, was_reachable } => *was_reachable,
+            AddressState::Disconnected { fail_count: _, was_reachable, disconnected_at: _ } => {
+                *was_reachable
+            }
+            AddressState::Unreachable { erase_after: _, was_reachable, fail_count: _ } => {
+                *was_reachable
+            }
         }
     }
 
     /// Whether the address is currently recognized as reachable (available from DNS)
     pub fn is_reachable(&self) -> bool {
         match self {
-            AddressState::Connecting {
-                fail_count: _,
-                was_reachable: _,
-            } => false,
+            AddressState::Connecting { fail_count: _, was_reachable: _ } => false,
             AddressState::Connected {} => true,
-            AddressState::Disconnecting {
-                fail_count: _,
-                was_reachable: _,
-            } => false,
-            AddressState::Disconnected {
-                fail_count: _,
-                was_reachable: _,
-                disconnected_at: _,
-            } => false,
-            AddressState::Unreachable {
-                fail_count: _,
-                was_reachable: _,
-                erase_after: _,
-            } => false,
+            AddressState::Disconnecting { fail_count: _, was_reachable: _ } => false,
+            AddressState::Disconnected { fail_count: _, was_reachable: _, disconnected_at: _ } => {
+                false
+            }
+            AddressState::Unreachable { fail_count: _, was_reachable: _, erase_after: _ } => false,
         }
     }
 
     /// Whether to retain the address between node restarts (stored in DB).
     pub fn is_persistent(&self) -> bool {
         match self {
-            AddressState::Connecting {
-                fail_count: _,
-                was_reachable,
-            } => *was_reachable,
+            AddressState::Connecting { fail_count: _, was_reachable } => *was_reachable,
             AddressState::Connected {} => true,
-            AddressState::Disconnecting {
-                fail_count: _,
-                was_reachable,
-            } => *was_reachable,
-            AddressState::Disconnected {
-                fail_count: _,
-                was_reachable,
-                disconnected_at: _,
-            } => *was_reachable,
-            AddressState::Unreachable {
-                fail_count: _,
-                was_reachable: _,
-                erase_after: _,
-            } => false,
+            AddressState::Disconnecting { fail_count: _, was_reachable } => *was_reachable,
+            AddressState::Disconnected { fail_count: _, was_reachable, disconnected_at: _ } => {
+                *was_reachable
+            }
+            AddressState::Unreachable { fail_count: _, was_reachable: _, erase_after: _ } => false,
         }
     }
 }
@@ -195,25 +151,13 @@ impl AddressData {
     pub fn connect_now(&self, now: Duration) -> bool {
         match self.state {
             AddressState::Connected {}
-            | AddressState::Connecting {
-                fail_count: _,
-                was_reachable: _,
+            | AddressState::Connecting { fail_count: _, was_reachable: _ }
+            | AddressState::Disconnecting { fail_count: _, was_reachable: _ }
+            | AddressState::Unreachable { fail_count: _, was_reachable: _, erase_after: _ } => {
+                false
             }
-            | AddressState::Disconnecting {
-                fail_count: _,
-                was_reachable: _,
-            }
-            | AddressState::Unreachable {
-                fail_count: _,
-                was_reachable: _,
-                erase_after: _,
-            } => false,
 
-            AddressState::Disconnected {
-                fail_count,
-                was_reachable,
-                disconnected_at,
-            } => {
+            AddressState::Disconnected { fail_count, was_reachable, disconnected_at } => {
                 let age = now - disconnected_at;
                 if *self.reserved {
                     // Try to connect to the reserved nodes more often
@@ -247,11 +191,11 @@ impl AddressData {
     pub fn retain(&self, now: Duration) -> bool {
         match self.state {
             // Always keep user added addresses
-            AddressState::Unreachable {
-                erase_after,
-                fail_count: _,
-                was_reachable: _,
-            } if erase_after >= now => false,
+            AddressState::Unreachable { erase_after, fail_count: _, was_reachable: _ }
+                if erase_after >= now =>
+            {
+                false
+            }
             _ => true,
         }
     }

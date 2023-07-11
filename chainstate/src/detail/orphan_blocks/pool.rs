@@ -98,9 +98,7 @@ impl OrphanBlocksPool {
         self.prune();
         let block_id = block.get_id();
         if self.orphan_by_id.contains_key(&block_id) {
-            return Err(Box::new(OrphanAddError::BlockAlreadyInOrphanList(
-                WithId::take(block),
-            )));
+            return Err(Box::new(OrphanAddError::BlockAlreadyInOrphanList(WithId::take(block))));
         }
 
         let rc_block = Rc::new(block);
@@ -421,11 +419,7 @@ mod tests {
             if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.prev_block_id()) {
                 assert_eq!(blocks.len(), 1);
             } else {
-                panic!(
-                    "block {:?} not found for key {:?}",
-                    block,
-                    block.prev_block_id()
-                );
+                panic!("block {:?} not found for key {:?}", block, block.prev_block_id());
             }
         });
         check_pool_length(&orphans_pool, blocks.len());

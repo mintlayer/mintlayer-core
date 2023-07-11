@@ -188,11 +188,7 @@ impl MempoolStore {
             + self.spender_txs.indirect_memory_usage()
             + self.txs_by_seq_no.indirect_memory_usage()
             + self.seq_nos_by_tx.indirect_memory_usage();
-        assert_eq!(
-            self.mem_tracker.get_usage(),
-            expected_size,
-            "Memory size tracker out of sync",
-        );
+        assert_eq!(self.mem_tracker.get_usage(), expected_size, "Memory size tracker out of sync",);
 
         let entries = self
             .txs_by_descendant_score
@@ -201,10 +197,7 @@ impl MempoolStore {
             .collect::<Vec<_>>();
 
         for id in self.txs_by_id.keys() {
-            assert_eq!(
-                entries.iter().filter(|entry_id| ***entry_id == *id).count(),
-                1
-            )
+            assert_eq!(entries.iter().filter(|entry_id| ***entry_id == *id).count(), 1)
         }
 
         for entry in self.txs_by_id.values() {
@@ -272,16 +265,12 @@ impl MempoolStore {
     fn update_ancestor_state_for_drop(&mut self, entry: &TxMempoolEntry) {
         for ancestor in entry.unconfirmed_ancestors(self).0 {
             self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
-                tracker.modify(
-                    txs_by_id.get_mut(&ancestor).expect("ancestor"),
-                    |ancestor, _| {
-                        ancestor.fees_with_descendants = (ancestor.fees_with_descendants
-                            - entry.fee)
-                            .expect("fee with descendants");
-                        ancestor.size_with_descendants -= entry.size();
-                        ancestor.count_with_descendants -= 1;
-                    },
-                )
+                tracker.modify(txs_by_id.get_mut(&ancestor).expect("ancestor"), |ancestor, _| {
+                    ancestor.fees_with_descendants =
+                        (ancestor.fees_with_descendants - entry.fee).expect("fee with descendants");
+                    ancestor.size_with_descendants -= entry.size();
+                    ancestor.count_with_descendants -= 1;
+                })
             })
         }
     }
@@ -335,15 +324,13 @@ impl MempoolStore {
 
         self.add_to_descendant_score_index(&entry);
         self.add_to_ancestor_score_index(&entry);
-        self.mem_tracker.modify(
-            &mut self.txs_by_creation_time,
-            |txs_by_creation_time, tracker| {
+        self.mem_tracker
+            .modify(&mut self.txs_by_creation_time, |txs_by_creation_time, tracker| {
                 tracker.modify(
                     txs_by_creation_time.entry(entry.creation_time()).or_default(),
                     |entry, _| entry.insert(tx_id),
                 );
-            },
-        );
+            });
 
         self.mem_tracker.modify(&mut self.txs_by_seq_no, |m, _| m.insert(seq_no, tx_id));
         self.mem_tracker.modify(&mut self.seq_nos_by_tx, |m, _| m.insert(tx_id, seq_no));
@@ -356,15 +343,13 @@ impl MempoolStore {
 
     fn add_to_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
-        self.mem_tracker.modify(
-            &mut self.txs_by_descendant_score,
-            |by_desc_score, tracker| {
+        self.mem_tracker
+            .modify(&mut self.txs_by_descendant_score, |by_desc_score, tracker| {
                 tracker.modify(
                     by_desc_score.entry(entry.descendant_score()).or_default(),
                     |map_entry, _| map_entry.insert(*entry.tx_id()),
                 )
-            },
-        );
+            });
     }
 
     fn add_to_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
@@ -373,10 +358,9 @@ impl MempoolStore {
         // When we implement disconnecting a block, we'll need to clean up the mess we're leaving
         // here.
         self.mem_tracker.modify(&mut self.txs_by_ancestor_score, |anc_score, tracker| {
-            tracker.modify(
-                anc_score.entry(entry.ancestor_score()).or_default(),
-                |e, _| e.insert(*entry.tx_id()),
-            )
+            tracker.modify(anc_score.entry(entry.ancestor_score()).or_default(), |e, _| {
+                e.insert(*entry.tx_id())
+            })
         });
     }
 
@@ -392,10 +376,9 @@ impl MempoolStore {
             for ancestor_id in ancestors.0 {
                 let ancestor =
                     self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
-                tracker.modify(
-                    by_ds.entry(ancestor.descendant_score()).or_default(),
-                    |e, _| e.insert(ancestor_id),
-                );
+                tracker.modify(by_ds.entry(ancestor.descendant_score()).or_default(), |e, _| {
+                    e.insert(ancestor_id)
+                });
             }
 
             by_ds.retain(|_score, txs| !txs.is_empty())
@@ -412,10 +395,9 @@ impl MempoolStore {
             for descendant_id in descendants.0 {
                 let descendant =
                     self.txs_by_id.get(&descendant_id).expect("Inconsistent mempool state");
-                tracker.modify(
-                    by_as.entry(descendant.ancestor_score()).or_default(),
-                    |e, _| e.insert(descendant_id),
-                );
+                tracker.modify(by_as.entry(descendant.ancestor_score()).or_default(), |e, _| {
+                    e.insert(descendant_id)
+                });
             }
 
             tracker.modify(&mut self.txs_by_descendant_score, |by_ds, _| {

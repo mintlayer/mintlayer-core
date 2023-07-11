@@ -138,14 +138,7 @@ pub fn sign_whole_tx(
         .iter()
         .enumerate()
         .map(|(i, _input)| {
-            make_signature(
-                &tx,
-                inputs_utxos,
-                i,
-                private_key,
-                sighash_type,
-                destination.clone(),
-            )
+            make_signature(&tx, inputs_utxos, i, private_key, sighash_type, destination.clone())
         })
         .collect();
     let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect_vec();
@@ -164,21 +157,11 @@ pub fn generate_and_sign_tx(
 ) -> Result<SignedTransaction, TransactionCreationError> {
     let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
     let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
-    let signed_tx = sign_whole_tx(
-        tx,
-        inputs_utxos_refs.as_slice(),
-        private_key,
-        sighash_type,
-        destination,
-    )
-    .unwrap();
+    let signed_tx =
+        sign_whole_tx(tx, inputs_utxos_refs.as_slice(), private_key, sighash_type, destination)
+            .unwrap();
     assert_eq!(
-        verify_signed_tx(
-            chain_config,
-            &signed_tx,
-            inputs_utxos_refs.as_slice(),
-            destination
-        ),
+        verify_signed_tx(chain_config, &signed_tx, inputs_utxos_refs.as_slice(), destination),
         Ok(())
     );
     Ok(signed_tx)

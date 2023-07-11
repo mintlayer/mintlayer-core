@@ -21,10 +21,7 @@ pub struct CyclicArray<T, const SIZE: usize> {
 
 impl<T, const SIZE: usize> CyclicArray<T, SIZE> {
     pub fn new(list: [T; SIZE]) -> Self {
-        CyclicArray {
-            list,
-            current_index: SIZE - 1,
-        }
+        CyclicArray { list, current_index: SIZE - 1 }
     }
 
     /// Returns the latest inserted element

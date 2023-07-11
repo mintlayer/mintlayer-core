@@ -40,9 +40,5 @@ pub fn add_menu_keybindings(keybindings: &mut Keybindings) {
         ]),
     );
 
-    keybindings.add_binding(
-        KeyModifiers::SHIFT,
-        KeyCode::BackTab,
-        ReedlineEvent::MenuPrevious,
-    );
+    keybindings.add_binding(KeyModifiers::SHIFT, KeyCode::BackTab, ReedlineEvent::MenuPrevious);
 }

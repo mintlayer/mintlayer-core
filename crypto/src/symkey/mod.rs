@@ -132,10 +132,7 @@ mod test {
         } else {
             assert_eq!(
                 result,
-                Err(Error::WrongLenKeyBytes(
-                    bytes.len(),
-                    Chacha20poly1305Key::KEY_LEN
-                ))
+                Err(Error::WrongLenKeyBytes(bytes.len(), Chacha20poly1305Key::KEY_LEN))
             );
         }
     }

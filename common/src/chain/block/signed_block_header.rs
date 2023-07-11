@@ -59,10 +59,7 @@ pub struct SignedBlockHeader {
 
 impl SignedBlockHeader {
     pub fn new(signature: BlockHeaderSignature, block_header: BlockHeader) -> Self {
-        Self {
-            signature_data: signature,
-            block_header,
-        }
+        Self { signature_data: signature, block_header }
     }
 
     pub fn signature_data(&self) -> &BlockHeaderSignature {

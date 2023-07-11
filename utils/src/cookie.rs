@@ -29,12 +29,10 @@ pub enum LoadCookieError {
 }
 
 pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), LoadCookieError> {
-    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| LoadCookieError::Io {
-        source: e,
-        path: path.as_ref().to_owned(),
-    })?;
-    let (username, password) = content.split_once(':').ok_or_else(|| LoadCookieError::Format {
-        path: path.as_ref().to_owned(),
-    })?;
+    let content = std::fs::read_to_string(path.as_ref())
+        .map_err(|e| LoadCookieError::Io { source: e, path: path.as_ref().to_owned() })?;
+    let (username, password) = content
+        .split_once(':')
+        .ok_or_else(|| LoadCookieError::Format { path: path.as_ref().to_owned() })?;
     Ok((username.to_owned(), password.to_owned()))
 }

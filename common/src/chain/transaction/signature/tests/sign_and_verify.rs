@@ -56,13 +56,8 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
-        let signed_tx = sign_whole_tx(
-            tx,
-            &inputs_utxos_refs,
-            &private_key,
-            sighash_type,
-            &destination,
-        );
+        let signed_tx =
+            sign_whole_tx(tx, &inputs_utxos_refs, &private_key, sighash_type, &destination);
         // `sign_whole_tx` does nothing if there no inputs.
         if destination == Destination::AnyoneCanSpend && inputs > 0 {
             assert_eq!(
@@ -249,13 +244,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
-        match sign_whole_tx(
-            tx,
-            &inputs_utxos_refs,
-            &private_key,
-            sighash_type,
-            &destination,
-        ) {
+        match sign_whole_tx(tx, &inputs_utxos_refs, &private_key, sighash_type, &destination) {
             Ok(signed_tx) => {
                 verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos_refs, &destination)
                     .expect("{sighash_type:X?}, {destination:?}")

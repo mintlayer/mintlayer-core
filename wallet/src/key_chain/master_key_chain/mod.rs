@@ -70,10 +70,7 @@ impl MasterKeyChain {
             return Err(KeyChainError::KeyNotRoot);
         }
 
-        let key_content = wallet_types::keys::RootKeys {
-            root_key,
-            root_vrf_key,
-        };
+        let key_content = wallet_types::keys::RootKeys { root_key, root_vrf_key };
 
         db_tx.set_root_key(&key_content)?;
 

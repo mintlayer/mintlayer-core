@@ -34,10 +34,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
         message: &'a [u8],
         signatures: &'a AuthorizedClassicalMultisigSpend,
     ) -> Result<Self, PartiallySignedMultisigStructureError> {
-        let result = PartiallySignedMultisigChallenge {
-            signatures,
-            message,
-        };
+        let result = PartiallySignedMultisigChallenge { signatures, message };
         result.check_structurally_valid(chain_config)?;
         Ok(result)
     }
@@ -197,24 +194,13 @@ mod tests {
                 })
                 .collect::<BTreeMap<_, _>>();
 
-            Self {
-                chain_config,
-                challenge,
-                message_bytes,
-                priv_keys,
-                signatures_map,
-            }
+            Self { chain_config, challenge, message_bytes, priv_keys, signatures_map }
         }
     }
 
     fn check_valid_auth(rng: &mut impl Rng, data: &TestChallengeData) {
-        let TestChallengeData {
-            chain_config,
-            challenge,
-            message_bytes,
-            priv_keys,
-            signatures_map,
-        } = data;
+        let TestChallengeData { chain_config, challenge, message_bytes, priv_keys, signatures_map } =
+            data;
 
         // Valid cases with incomplete and complete signatures
         for sig_count in 0..priv_keys.len() {
@@ -264,13 +250,8 @@ mod tests {
         data: &TestChallengeData,
         expected_challenge_error: ClassicMultisigChallengeError,
     ) {
-        let TestChallengeData {
-            chain_config,
-            challenge,
-            message_bytes,
-            priv_keys,
-            signatures_map,
-        } = data;
+        let TestChallengeData { chain_config, challenge, message_bytes, priv_keys, signatures_map } =
+            data;
 
         // Valid cases with incomplete and complete signatures
         for sig_count in 0..priv_keys.len() {
@@ -296,13 +277,8 @@ mod tests {
     }
 
     fn check_tampered_sigs(rng: &mut impl Rng, data: &TestChallengeData) {
-        let TestChallengeData {
-            chain_config,
-            challenge,
-            message_bytes,
-            priv_keys,
-            signatures_map,
-        } = data;
+        let TestChallengeData { chain_config, challenge, message_bytes, priv_keys, signatures_map } =
+            data;
 
         for sig_count in 1..priv_keys.len() {
             let mut signatures_map =
@@ -348,13 +324,8 @@ mod tests {
     }
 
     fn check_wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
-        let TestChallengeData {
-            chain_config,
-            challenge,
-            message_bytes,
-            priv_keys,
-            signatures_map,
-        } = data;
+        let TestChallengeData { chain_config, challenge, message_bytes, priv_keys, signatures_map } =
+            data;
 
         for sig_count in 1..priv_keys.len() {
             let mut signatures_map =

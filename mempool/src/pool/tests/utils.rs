@@ -198,10 +198,8 @@ pub fn generate_transaction_graph(
     time: Time,
 ) -> impl Iterator<Item = TxEntryWithFee> + '_ {
     let tf = TestFramework::builder(rng).build();
-    let mut utxos = vec![(
-        TxInput::from_utxo(tf.genesis().get_id().into(), 0),
-        100_000_000_000_000_u128,
-    )];
+    let mut utxos =
+        vec![(TxInput::from_utxo(tf.genesis().get_id().into(), 0), 100_000_000_000_000_u128)];
 
     std::iter::repeat_with(move || {
         let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));

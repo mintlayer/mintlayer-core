@@ -69,10 +69,7 @@ mod tests {
 
     #[test]
     fn typename_with_custom_generic() {
-        assert_eq!(
-            TestType3::<TestType2>::typename_str(),
-            "TestType3<TestType2>"
-        );
+        assert_eq!(TestType3::<TestType2>::typename_str(), "TestType3<TestType2>");
     }
 
     #[derive(TypeName)]
@@ -82,10 +79,7 @@ mod tests {
 
     #[test]
     fn typename_with_derived_generic() {
-        assert_eq!(
-            TestType4::<TestType2>::typename_str(),
-            "TestType4<TestType2>"
-        );
+        assert_eq!(TestType4::<TestType2>::typename_str(), "TestType4<TestType2>");
     }
 
     #[test]
@@ -131,10 +125,7 @@ mod tests {
             B(String),
         }
 
-        assert_eq!(
-            TestType7::<TestType2>::typename_str(),
-            "TestType7<TestType2>"
-        );
+        assert_eq!(TestType7::<TestType2>::typename_str(), "TestType7<TestType2>");
     }
 
     #[test]

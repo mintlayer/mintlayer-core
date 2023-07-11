@@ -70,12 +70,7 @@ impl Builder {
         ws_bind_address: Option<SocketAddr>,
     ) -> Self {
         let methods = Methods::new();
-        Self {
-            http_bind_address,
-            ws_bind_address,
-            methods,
-            creds: None,
-        }
+        Self { http_bind_address, ws_bind_address, methods, creds: None }
     }
 
     /// New builder pre-populated with RPC info methods.
@@ -94,13 +89,8 @@ impl Builder {
             None
         };
 
-        Self {
-            http_bind_address,
-            ws_bind_address,
-            methods: Methods::new(),
-            creds,
-        }
-        .register(RpcInfo.into_rpc())
+        Self { http_bind_address, ws_bind_address, methods: Methods::new(), creds }
+            .register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -173,11 +163,7 @@ impl Rpc {
             None => None,
         };
 
-        Ok(Self {
-            http,
-            websocket,
-            _creds: creds,
-        })
+        Ok(Self { http, websocket, _creds: creds })
     }
 
     pub fn http_address(&self) -> Option<&SocketAddr> {
@@ -250,10 +236,8 @@ pub type RpcHttpClient = HttpClient<SetRequestHeader<HttpBackend, RpcAuthData>>;
 pub type RpcWsClient = WsClient;
 
 pub fn new_http_client(host: String, rpc_auth: RpcAuthData) -> Result<RpcHttpClient> {
-    let middleware = tower::ServiceBuilder::new().layer(SetRequestHeaderLayer::overriding(
-        header::AUTHORIZATION,
-        rpc_auth,
-    ));
+    let middleware = tower::ServiceBuilder::new()
+        .layer(SetRequestHeaderLayer::overriding(header::AUTHORIZATION, rpc_auth));
 
     HttpClientBuilder::default().set_middleware(middleware).build(host)
 }
@@ -433,19 +417,13 @@ mod tests {
         // Valid requests
         http_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: good_username.clone(),
-                password: good_password.clone(),
-            },
+            RpcAuthData::Basic { username: good_username.clone(), password: good_password.clone() },
         )
         .await
         .unwrap();
         ws_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: good_username.clone(),
-                password: good_password.clone(),
-            },
+            RpcAuthData::Basic { username: good_username.clone(), password: good_password.clone() },
         )
         .await
         .unwrap();
@@ -456,37 +434,25 @@ mod tests {
 
         http_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: good_username.clone(),
-                password: bad_password.clone(),
-            },
+            RpcAuthData::Basic { username: good_username.clone(), password: bad_password.clone() },
         )
         .await
         .unwrap_err();
         ws_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: good_username.clone(),
-                password: bad_password.clone(),
-            },
+            RpcAuthData::Basic { username: good_username.clone(), password: bad_password.clone() },
         )
         .await
         .unwrap_err();
         http_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: bad_username.clone(),
-                password: good_password.clone(),
-            },
+            RpcAuthData::Basic { username: bad_username.clone(), password: good_password.clone() },
         )
         .await
         .unwrap_err();
         ws_request(
             &rpc,
-            RpcAuthData::Basic {
-                username: bad_username.clone(),
-                password: good_password.clone(),
-            },
+            RpcAuthData::Basic { username: bad_username.clone(), password: good_password.clone() },
         )
         .await
         .unwrap_err();

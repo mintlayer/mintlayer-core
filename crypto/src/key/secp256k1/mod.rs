@@ -59,10 +59,7 @@ impl Secp256k1PrivateKey {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secret = secp256k1::SecretKey::new(rng);
         let public = secret.public_key(secp256k1::SECP256K1);
-        (
-            Secp256k1PrivateKey::from_native(secret),
-            Secp256k1PublicKey::from_native(public),
-        )
+        (Secp256k1PrivateKey::from_native(secret), Secp256k1PublicKey::from_native(public))
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -138,9 +135,7 @@ impl Secp256k1PublicKey {
     }
 
     pub fn from_native(native: secp256k1::PublicKey) -> Self {
-        Self {
-            pubkey_data: native,
-        }
+        Self { pubkey_data: native }
     }
 
     pub fn from_private_key(private_key: &Secp256k1PrivateKey) -> Self {
@@ -166,11 +161,7 @@ impl Secp256k1PublicKey {
         msg_hashed: &secp256k1::Message,
     ) -> bool {
         secp256k1::SECP256K1
-            .verify_schnorr(
-                signature,
-                msg_hashed,
-                &self.pubkey_data.x_only_public_key().0,
-            )
+            .verify_schnorr(signature, msg_hashed, &self.pubkey_data.x_only_public_key().0)
             .is_ok()
     }
 }

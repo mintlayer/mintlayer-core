@@ -23,11 +23,7 @@ struct ReedlineLogWriter {
 
 impl ReedlineLogWriter {
     fn new(printer: reedline::ExternalPrinter<String>, print_directly: Arc<Mutex<bool>>) -> Self {
-        Self {
-            printer,
-            print_directly,
-            buf: Vec::new(),
-        }
+        Self { printer, print_directly, buf: Vec::new() }
     }
 }
 
@@ -76,10 +72,7 @@ impl InteractiveLogger {
 
         logging::init_logging_pipe(log_writer);
 
-        Self {
-            external_printer,
-            print_directly,
-        }
+        Self { external_printer, print_directly }
     }
 
     pub fn printer(&self) -> &reedline::ExternalPrinter<String> {

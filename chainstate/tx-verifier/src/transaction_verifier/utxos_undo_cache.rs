@@ -36,9 +36,7 @@ pub struct UtxosBlockUndoCache {
 
 impl UtxosBlockUndoCache {
     pub fn new() -> Self {
-        Self {
-            data: BTreeMap::new(),
-        }
+        Self { data: BTreeMap::new() }
     }
 
     #[cfg(test)]
@@ -92,10 +90,7 @@ impl UtxosBlockUndoCache {
                     let block_undo = fetcher_func(*block_id)?
                         .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                     Ok(&mut entry
-                        .insert(UtxosBlockUndoEntry {
-                            undo: block_undo,
-                            is_fresh: false,
-                        })
+                        .insert(UtxosBlockUndoEntry { undo: block_undo, is_fresh: false })
                         .undo)
                 }
                 TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
@@ -143,10 +138,7 @@ impl UtxosBlockUndoCache {
         &mut self
             .data
             .entry(*tx_source)
-            .or_insert(UtxosBlockUndoEntry {
-                is_fresh: true,
-                undo: Default::default(),
-            })
+            .or_insert(UtxosBlockUndoEntry { is_fresh: true, undo: Default::default() })
             .undo
     }
 
@@ -157,10 +149,7 @@ impl UtxosBlockUndoCache {
     ) -> Result<(), utxo::UtxosBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(UtxosBlockUndoEntry {
-                    undo: new_undo.clone(),
-                    is_fresh: true,
-                });
+                e.insert(UtxosBlockUndoEntry { undo: new_undo.clone(), is_fresh: true });
             }
             Entry::Occupied(mut e) => {
                 e.get_mut().undo.combine(new_undo.clone())?;
@@ -178,10 +167,7 @@ impl UtxosBlockUndoCache {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent
             self.data.insert(
                 tx_source,
-                UtxosBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                UtxosBlockUndoEntry { undo: Default::default(), is_fresh: false },
             );
         }
         Ok(())

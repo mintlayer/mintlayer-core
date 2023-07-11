@@ -263,10 +263,7 @@ fn test_scale_enums_with_single_variant() {
     dbg!(&enc);
     let dec = TestEnum6::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(TestEnum6::OnlyOneVariant("Hello, world!".to_string()))
-    );
+    assert_eq!(dec, Some(TestEnum6::OnlyOneVariant("Hello, world!".to_string())));
 
     #[derive(Encode, Decode, Debug, PartialEq, Eq)]
     enum TestEnum7 {

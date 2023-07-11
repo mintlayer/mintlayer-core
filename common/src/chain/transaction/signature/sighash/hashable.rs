@@ -75,10 +75,7 @@ impl<'a> SignatureHashableInputs<'a> {
             ));
         }
 
-        let result = Self {
-            inputs,
-            inputs_utxos,
-        };
+        let result = Self { inputs, inputs_utxos };
 
         Ok(result)
     }
@@ -221,10 +218,7 @@ mod tests {
                     &inputs[index_to_hash],
                     inputs_count,
                 ),
-                Err(TransactionSigError::InvalidInputIndex(
-                    inputs_count,
-                    inputs.len(),
-                ))
+                Err(TransactionSigError::InvalidInputIndex(inputs_count, inputs.len(),))
             );
         }
     }

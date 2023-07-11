@@ -99,19 +99,11 @@ impl DnsServer {
             server.register_socket(udp_socket);
         }
 
-        Ok(Self {
-            auth,
-            server,
-            cmd_rx,
-        })
+        Ok(Self { auth, server, cmd_rx })
     }
 
     pub async fn run(self) -> Result<Never, DnsServerError> {
-        let DnsServer {
-            auth,
-            server,
-            mut cmd_rx,
-        } = self;
+        let DnsServer { auth, server, mut cmd_rx } = self;
 
         tokio::spawn(async move {
             while let Some(command) = cmd_rx.recv().await {
@@ -121,9 +113,7 @@ impl DnsServer {
 
         server.block_until_done().await?;
 
-        Err(DnsServerError::Other(
-            "trust_dns_server terminated unexpectedly",
-        ))
+        Err(DnsServerError::Other("trust_dns_server terminated unexpectedly"))
     }
 }
 

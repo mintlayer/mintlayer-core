@@ -37,12 +37,7 @@ impl TransactionV1 {
         inputs: Vec<TxInput>,
         outputs: Vec<TxOutput>,
     ) -> Result<Self, TransactionCreationError> {
-        let tx = TransactionV1 {
-            version: VersionTag::default(),
-            flags,
-            inputs,
-            outputs,
-        };
+        let tx = TransactionV1 { version: VersionTag::default(), flags, inputs, outputs };
         Ok(tx)
     }
 

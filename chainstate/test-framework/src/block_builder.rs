@@ -176,10 +176,7 @@ impl<'f> BlockBuilder<'f> {
         let (mut witnesses, mut inputs, outputs) =
             self.make_test_inputs_outputs(parent_outputs, rng);
         let spend_from = self.framework.outputs_from_genblock(spend_from.into());
-        inputs.push(TxInput::from_utxo(
-            spend_from.keys().next().unwrap().clone(),
-            0,
-        ));
+        inputs.push(TxInput::from_utxo(spend_from.keys().next().unwrap().clone(), 0));
         witnesses.push(InputWitness::NoSignature(None));
         self.transactions.push(
             SignedTransaction::new(Transaction::new(0, inputs, outputs).unwrap(), witnesses)
@@ -243,10 +240,7 @@ impl<'f> BlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
-        (
-            Block::new_from_header(signed_header, block_body).unwrap(),
-            self.framework,
-        )
+        (Block::new_from_header(signed_header, block_body).unwrap(), self.framework)
     }
 
     /// Builds a block without processing it.

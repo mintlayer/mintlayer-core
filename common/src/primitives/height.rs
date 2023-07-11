@@ -230,22 +230,10 @@ mod tests {
         let d_m1 = BlockDistance::new(-1);
         let d_0 = BlockDistance::new(0);
         let d_p1 = BlockDistance::new(1);
-        assert_eq!(
-            (h_halfmax + d_m1).unwrap(),
-            BlockHeight::new(HeightIntType::MAX / 2 - 1)
-        );
-        assert_eq!(
-            (h_halfmax + d_0).unwrap(),
-            BlockHeight::new(HeightIntType::MAX / 2)
-        );
-        assert_eq!(
-            (d_max + d_m1).unwrap(),
-            BlockDistance::new(DistanceIntType::MAX - 1)
-        );
-        assert_eq!(
-            (d_max + d_0).unwrap(),
-            BlockDistance::new(DistanceIntType::MAX)
-        );
+        assert_eq!((h_halfmax + d_m1).unwrap(), BlockHeight::new(HeightIntType::MAX / 2 - 1));
+        assert_eq!((h_halfmax + d_0).unwrap(), BlockHeight::new(HeightIntType::MAX / 2));
+        assert_eq!((d_max + d_m1).unwrap(), BlockDistance::new(DistanceIntType::MAX - 1));
+        assert_eq!((d_max + d_0).unwrap(), BlockDistance::new(DistanceIntType::MAX));
         assert!((d_max + d_p1).is_none());
     }
 
@@ -265,20 +253,9 @@ mod tests {
                 Token::{NewtypeStruct, U64},
             };
             // Block height serializes to just a number, represented by a newtype struct
-            assert_tokens(
-                &height,
-                &[
-                    NewtypeStruct {
-                        name: "BlockHeight",
-                    },
-                    U64(height.0),
-                ],
-            );
+            assert_tokens(&height, &[NewtypeStruct { name: "BlockHeight" }, U64(height.0)]);
             assert_eq!(serde_json::to_value(height).ok(), Some(height.0.into()));
-            assert_eq!(
-                serde_json::to_string(&height).ok(),
-                Some(height.0.to_string())
-            );
+            assert_eq!(serde_json::to_string(&height).ok(), Some(height.0.to_string()));
         }
         check(BlockHeight::new(0));
         check(BlockHeight::new(1));

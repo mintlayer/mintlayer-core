@@ -84,9 +84,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .try_fold(Amount::from_atoms(0), |total, tx| {
                 let fee = tx_verifier
                     .connect_transaction(
-                        &TransactionSourceForConnect::Chain {
-                            new_block_index: block_index,
-                        },
+                        &TransactionSourceForConnect::Chain { new_block_index: block_index },
                         tx,
                         &median_time_past,
                         take_front_tx_index(&mut tx_indices),

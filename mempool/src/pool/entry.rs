@@ -32,10 +32,7 @@ pub struct TxAccountDependency {
 
 impl TxAccountDependency {
     pub fn new(delegation_id: DelegationId, nonce: AccountNonce) -> Self {
-        TxAccountDependency {
-            delegation_id,
-            nonce,
-        }
+        TxAccountDependency { delegation_id, nonce }
     }
 }
 
@@ -91,12 +88,7 @@ impl TxEntry {
     pub fn new(transaction: SignedTransaction, creation_time: Time) -> Self {
         let tx_id = transaction.transaction().get_id();
         let encoded_size = serialization::Encode::encoded_size(&transaction);
-        Self {
-            tx_id,
-            transaction,
-            creation_time,
-            encoded_size,
-        }
+        Self { tx_id, transaction, creation_time, encoded_size }
     }
 
     /// Underlying transaction

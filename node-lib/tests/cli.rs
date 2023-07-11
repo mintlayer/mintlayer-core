@@ -47,10 +47,7 @@ fn create_default_config() {
             .max_db_commit_attempts,
         None
     );
-    assert_eq!(
-        config.chainstate.unwrap_or_default().chainstate_config.max_orphan_blocks,
-        None
-    );
+    assert_eq!(config.chainstate.unwrap_or_default().chainstate_config.max_orphan_blocks, None);
 
     assert!(config
         .p2p
@@ -60,10 +57,7 @@ fn create_default_config() {
         .unwrap_or_default()
         .is_empty());
     assert_eq!(config.p2p.clone().unwrap_or_default().ban_threshold, None);
-    assert_eq!(
-        config.p2p.clone().unwrap_or_default().outbound_connection_timeout,
-        None
-    );
+    assert_eq!(config.p2p.clone().unwrap_or_default().outbound_connection_timeout, None);
 
     assert_eq!(
         config.rpc.unwrap_or_default().http_bind_address,
@@ -142,31 +136,13 @@ fn read_config_override_values() {
         config.chainstate.clone().unwrap().chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
     );
-    assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.tx_index_enabled,
-        Some(false)
-    );
-    assert_eq!(
-        config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
-        Some(max_tip_age)
-    );
+    assert_eq!(config.chainstate.clone().unwrap().chainstate_config.tx_index_enabled, Some(false));
+    assert_eq!(config.chainstate.clone().unwrap().chainstate_config.max_tip_age, Some(max_tip_age));
 
-    assert_eq!(
-        config.p2p.clone().unwrap().bind_addresses,
-        Some(vec!(p2p_addr.to_owned()))
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().socks5_proxy,
-        Some(p2p_socks5_proxy.to_owned())
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().disable_noise,
-        Some(p2p_disable_noise)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().boot_nodes,
-        Some(vec!(p2p_boot_node.to_owned()))
-    );
+    assert_eq!(config.p2p.clone().unwrap().bind_addresses, Some(vec!(p2p_addr.to_owned())));
+    assert_eq!(config.p2p.clone().unwrap().socks5_proxy, Some(p2p_socks5_proxy.to_owned()));
+    assert_eq!(config.p2p.clone().unwrap().disable_noise, Some(p2p_disable_noise));
+    assert_eq!(config.p2p.clone().unwrap().boot_nodes, Some(vec!(p2p_boot_node.to_owned())));
     assert_eq!(
         config.p2p.clone().unwrap().reserved_nodes,
         Some(vec!(p2p_reserved_node.to_owned()))
@@ -175,56 +151,23 @@ fn read_config_override_values() {
         config.p2p.clone().unwrap().max_inbound_connections,
         Some(p2p_max_inbound_connections)
     );
-    assert_eq!(
-        config.p2p.clone().unwrap().ban_threshold,
-        Some(p2p_ban_threshold)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().outbound_connection_timeout,
-        Some(p2p_timeout)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().ping_check_period,
-        Some(p2p_ping_check_period)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().ping_timeout,
-        Some(p2p_ping_timeout)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().sync_stalling_timeout,
-        Some(p2p_sync_stalling_timeout)
-    );
-    assert_eq!(
-        config.p2p.clone().unwrap().max_clock_diff,
-        Some(p2p_max_clock_diff)
-    );
+    assert_eq!(config.p2p.clone().unwrap().ban_threshold, Some(p2p_ban_threshold));
+    assert_eq!(config.p2p.clone().unwrap().outbound_connection_timeout, Some(p2p_timeout));
+    assert_eq!(config.p2p.clone().unwrap().ping_check_period, Some(p2p_ping_check_period));
+    assert_eq!(config.p2p.clone().unwrap().ping_timeout, Some(p2p_ping_timeout));
+    assert_eq!(config.p2p.clone().unwrap().sync_stalling_timeout, Some(p2p_sync_stalling_timeout));
+    assert_eq!(config.p2p.clone().unwrap().max_clock_diff, Some(p2p_max_clock_diff));
     assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
 
-    assert_eq!(
-        config.rpc.clone().unwrap().http_bind_address,
-        Some(http_rpc_addr)
-    );
+    assert_eq!(config.rpc.clone().unwrap().http_bind_address, Some(http_rpc_addr));
     assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
 
-    assert_eq!(
-        config.rpc.clone().unwrap().ws_bind_address,
-        Some(ws_rpc_addr)
-    );
+    assert_eq!(config.rpc.clone().unwrap().ws_bind_address, Some(ws_rpc_addr));
     assert!(!config.rpc.clone().unwrap().ws_enabled.unwrap());
 
-    assert_eq!(
-        config.rpc.as_ref().unwrap().username.as_deref(),
-        Some(rpc_username)
-    );
-    assert_eq!(
-        config.rpc.as_ref().unwrap().password.as_deref(),
-        Some(rpc_password)
-    );
-    assert_eq!(
-        config.rpc.as_ref().unwrap().cookie_file.as_deref(),
-        Some(rpc_cookie_file)
-    );
+    assert_eq!(config.rpc.as_ref().unwrap().username.as_deref(), Some(rpc_username));
+    assert_eq!(config.rpc.as_ref().unwrap().password.as_deref(), Some(rpc_password));
+    assert_eq!(config.rpc.as_ref().unwrap().cookie_file.as_deref(), Some(rpc_cookie_file));
 
     assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);
 }

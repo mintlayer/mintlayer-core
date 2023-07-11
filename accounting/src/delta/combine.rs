@@ -59,9 +59,9 @@ pub fn combine_amount_delta(
 ) -> Result<Option<Amount>, Error> {
     match (lhs, rhs) {
         (None, None) => Ok(None),
-        (None, Some(v)) => Ok(Some(
-            (*v).into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?,
-        )),
+        (None, Some(v)) => {
+            Ok(Some((*v).into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?))
+        }
         (Some(v), None) => Ok(Some(*v)),
         (Some(v1), Some(v2)) => {
             let v1 = v1.into_signed().ok_or(Error::ArithmeticErrorToSignedFailed)?;

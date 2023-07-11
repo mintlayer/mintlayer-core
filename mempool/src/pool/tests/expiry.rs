@@ -109,12 +109,8 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let config = Arc::clone(chainstate.get_chain_config());
     let chainstate_interface = start_chainstate(chainstate).await;
 
-    let mut mempool = Mempool::new(
-        config,
-        chainstate_interface,
-        mock_clock,
-        StoreMemoryUsageEstimator,
-    );
+    let mut mempool =
+        Mempool::new(config, chainstate_interface, mock_clock, StoreMemoryUsageEstimator);
 
     let parent_id = parent.transaction().get_id();
     mempool.add_transaction(parent.clone())?.assert_in_mempool();

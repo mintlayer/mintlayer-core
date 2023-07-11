@@ -194,57 +194,21 @@ mod tests {
         assert_eq!(TreeSize::from_leaf_count(0), Err(TreeSizeError::ZeroSize));
         assert_eq!(TreeSize::from_leaf_count(1), Ok(TreeSize(1)));
         assert_eq!(TreeSize::from_leaf_count(2), Ok(TreeSize(3)));
-        assert_eq!(
-            TreeSize::from_leaf_count(3),
-            Err(TreeSizeError::InvalidSize(5))
-        );
+        assert_eq!(TreeSize::from_leaf_count(3), Err(TreeSizeError::InvalidSize(5)));
         assert_eq!(TreeSize::from_leaf_count(4), Ok(TreeSize(7)));
-        assert_eq!(
-            TreeSize::from_leaf_count(5),
-            Err(TreeSizeError::InvalidSize(9))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(6),
-            Err(TreeSizeError::InvalidSize(11))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(7),
-            Err(TreeSizeError::InvalidSize(13))
-        );
+        assert_eq!(TreeSize::from_leaf_count(5), Err(TreeSizeError::InvalidSize(9)));
+        assert_eq!(TreeSize::from_leaf_count(6), Err(TreeSizeError::InvalidSize(11)));
+        assert_eq!(TreeSize::from_leaf_count(7), Err(TreeSizeError::InvalidSize(13)));
         assert_eq!(TreeSize::from_leaf_count(8), Ok(TreeSize(15)));
-        assert_eq!(
-            TreeSize::from_leaf_count(9),
-            Err(TreeSizeError::InvalidSize(17))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(10),
-            Err(TreeSizeError::InvalidSize(19))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(11),
-            Err(TreeSizeError::InvalidSize(21))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(12),
-            Err(TreeSizeError::InvalidSize(23))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(13),
-            Err(TreeSizeError::InvalidSize(25))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(14),
-            Err(TreeSizeError::InvalidSize(27))
-        );
-        assert_eq!(
-            TreeSize::from_leaf_count(15),
-            Err(TreeSizeError::InvalidSize(29))
-        );
+        assert_eq!(TreeSize::from_leaf_count(9), Err(TreeSizeError::InvalidSize(17)));
+        assert_eq!(TreeSize::from_leaf_count(10), Err(TreeSizeError::InvalidSize(19)));
+        assert_eq!(TreeSize::from_leaf_count(11), Err(TreeSizeError::InvalidSize(21)));
+        assert_eq!(TreeSize::from_leaf_count(12), Err(TreeSizeError::InvalidSize(23)));
+        assert_eq!(TreeSize::from_leaf_count(13), Err(TreeSizeError::InvalidSize(25)));
+        assert_eq!(TreeSize::from_leaf_count(14), Err(TreeSizeError::InvalidSize(27)));
+        assert_eq!(TreeSize::from_leaf_count(15), Err(TreeSizeError::InvalidSize(29)));
         assert_eq!(TreeSize::from_leaf_count(16), Ok(TreeSize(31)));
-        assert_eq!(
-            TreeSize::from_leaf_count(17),
-            Err(TreeSizeError::InvalidSize(33))
-        );
+        assert_eq!(TreeSize::from_leaf_count(17), Err(TreeSizeError::InvalidSize(33)));
     }
 
     #[test]
@@ -368,10 +332,7 @@ mod tests {
         assert_eq!(t3.iter_pairs_indices().collect::<Vec<_>>(), vec![(0, 1)]);
 
         let t7 = TreeSize::from_u32(7).unwrap();
-        assert_eq!(
-            t7.iter_pairs_indices().collect::<Vec<_>>(),
-            vec![(0, 1), (2, 3), (4, 5)]
-        );
+        assert_eq!(t7.iter_pairs_indices().collect::<Vec<_>>(), vec![(0, 1), (2, 3), (4, 5)]);
 
         let t15 = TreeSize::from_u32(15).unwrap();
         assert_eq!(
@@ -405,10 +366,7 @@ mod tests {
         for i in 1..10_u32 {
             let tree_size = TreeSize::from_u32((1 << i) - 1).unwrap();
             assert_eq!(TreeSize::from_u32((1 << i) - 1), Ok(TreeSize((1 << i) - 1)));
-            assert_eq!(
-                tree_size.iter_pairs_indices().count() as u32,
-                tree_size.get() / 2
-            );
+            assert_eq!(tree_size.iter_pairs_indices().count() as u32, tree_size.get() / 2);
             assert_eq!(
                 tree_size.iter_pairs_indices().collect::<Vec<_>>(),
                 (0..tree_size.get() / 2).map(|i| (i * 2, i * 2 + 1)).collect::<Vec<_>>()

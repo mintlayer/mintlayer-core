@@ -32,10 +32,8 @@ pub mod summary;
 
 const TAB_PADDING: u16 = 16;
 
-const ICON_FONT: Font = iced::Font::External {
-    name: "Icons",
-    bytes: include_bytes!("../../../../fonts/icons.ttf"),
-};
+const ICON_FONT: Font =
+    iced::Font::External { name: "Icons", bytes: include_bytes!("../../../../fonts/icons.ttf") };
 
 enum Icon {
     User,

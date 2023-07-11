@@ -103,10 +103,7 @@ impl<T: Clone, H> MerkleTree<T, H> {
         )?
         .abs_index();
 
-        Some(Node {
-            tree_ref: self,
-            absolute_index,
-        })
+        Some(Node { tree_ref: self, absolute_index })
     }
 }
 
@@ -139,10 +136,7 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
         let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
 
         TreeSize::try_from(tree.len()).expect("Invalid tree size. Invariant broken.");
-        let res = Self {
-            tree,
-            _hasher: std::marker::PhantomData,
-        };
+        let res = Self { tree, _hasher: std::marker::PhantomData };
         Ok(res)
     }
 
@@ -161,10 +155,7 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
         }
 
         let res = MerkleTreeNodeParentIterator {
-            node: Some(Node {
-                tree_ref: self,
-                absolute_index: start_leaf_index,
-            }),
+            node: Some(Node { tree_ref: self, absolute_index: start_leaf_index }),
         };
 
         Ok(res)
@@ -195,10 +186,7 @@ impl<T: Eq, H> Eq for Node<'_, T, H> {}
 
 impl<T, H> Clone for Node<'_, T, H> {
     fn clone(&self) -> Self {
-        Self {
-            tree_ref: self.tree_ref,
-            absolute_index: self.absolute_index,
-        }
+        Self { tree_ref: self.tree_ref, absolute_index: self.absolute_index }
     }
 }
 
@@ -227,10 +215,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     pub fn parent(&self) -> Option<Node<'a, T, H>> {
         let pos = self.into_position().parent()?;
 
-        Some(Node {
-            tree_ref: self.tree_ref,
-            absolute_index: pos.abs_index(),
-        })
+        Some(Node { tree_ref: self.tree_ref, absolute_index: pos.abs_index() })
     }
 
     /// Return the node that combines with this node to create a hash at the parent level.
@@ -239,10 +224,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     /// This can only be None for the root node.
     pub fn sibling(&self) -> Option<Node<'a, T, H>> {
         let absolute_index = self.into_position().sibling()?;
-        Some(Node {
-            tree_ref: self.tree_ref,
-            absolute_index: absolute_index.abs_index(),
-        })
+        Some(Node { tree_ref: self.tree_ref, absolute_index: absolute_index.abs_index() })
     }
 
     pub fn is_root(&self) -> bool {

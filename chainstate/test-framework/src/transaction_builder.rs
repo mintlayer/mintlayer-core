@@ -32,12 +32,7 @@ pub struct TransactionBuilder {
 
 impl TransactionBuilder {
     pub fn new() -> Self {
-        Self {
-            flags: 0,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            witnesses: Vec::new(),
-        }
+        Self { flags: 0, inputs: Vec::new(), outputs: Vec::new(), witnesses: Vec::new() }
     }
 
     pub fn with_flags(mut self, flags: u128) -> Self {
@@ -101,10 +96,8 @@ fn build_transaction(#[case] seed: test_utils::random::Seed) {
 
     let flags = 1;
     let witness = InputWitness::NoSignature(None);
-    let input = TxInput::from_utxo(
-        OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let input =
+        TxInput::from_utxo(OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))), 0);
 
     let tx = TransactionBuilder::new()
         .with_flags(flags)

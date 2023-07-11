@@ -24,10 +24,7 @@ pub struct DelegationData {
 
 impl DelegationData {
     pub fn new(source_pool: PoolId, spend_destination: Destination) -> Self {
-        Self {
-            spend_destination,
-            source_pool,
-        }
+        Self { spend_destination, source_pool }
     }
 
     pub fn spend_destination(&self) -> &Destination {

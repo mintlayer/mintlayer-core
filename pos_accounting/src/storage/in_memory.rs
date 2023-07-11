@@ -80,11 +80,7 @@ impl InMemoryPoSAccounting {
         // pool_balance and pool_data must contain the same keys
         assert_eq!(self.pool_balances.len(), self.pool_data.len());
         self.pool_balances.keys().for_each(|key| {
-            assert!(
-                self.pool_data.contains_key(key),
-                "Pool data doesn't exist for {}",
-                key
-            )
+            assert!(self.pool_data.contains_key(key), "Pool data doesn't exist for {}", key)
         });
 
         // delegation_balance and delegation_data must contain the same keys
@@ -118,10 +114,7 @@ impl InMemoryPoSAccounting {
         });
 
         // delegation balances and delegation shares must contain the same amounts
-        assert_eq!(
-            self.delegation_balances.len(),
-            self.pool_delegation_shares.len()
-        );
+        assert_eq!(self.delegation_balances.len(), self.pool_delegation_shares.len());
         self.pool_delegation_shares.iter().for_each(|((_, key), balance)| {
             assert_eq!(
                 self.delegation_balances.get(key),

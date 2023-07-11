@@ -166,10 +166,8 @@ fn test_addr_list_handling_inbound() {
     // Peer manager sends response normally to first address list request
     pm.handle_addr_list_request(peer_id_1);
     match cmd_rx.try_recv() {
-        Ok(Command::SendMessage {
-            peer,
-            message: Message::AddrListResponse(_),
-        }) if peer == peer_id_1 => {}
+        Ok(Command::SendMessage { peer, message: Message::AddrListResponse(_) })
+            if peer == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
@@ -189,10 +187,7 @@ fn test_addr_list_handling_inbound() {
     assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 
     // Check that the peer is scored if it tries to send an unexpected address list response
-    pm.handle_addr_list_response(
-        peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
-    );
+    pm.handle_addr_list_response(peer_id_1, vec![TestTcpAddressMaker::new().as_peer_address()]);
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
 
@@ -252,10 +247,8 @@ fn test_addr_list_handling_outbound() {
 
     // Address list is requested from the connected peer
     match cmd_rx.try_recv() {
-        Ok(Command::SendMessage {
-            peer,
-            message: Message::AddrListRequest(_),
-        }) if peer == peer_id_1 => {}
+        Ok(Command::SendMessage { peer, message: Message::AddrListRequest(_) })
+            if peer == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
@@ -266,10 +259,7 @@ fn test_addr_list_handling_outbound() {
     }
 
     // Check that the address list response is processed normally and that the peer is not scored
-    pm.handle_addr_list_response(
-        peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
-    );
+    pm.handle_addr_list_response(peer_id_1, vec![TestTcpAddressMaker::new().as_peer_address()]);
     assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 
     // No more messages
@@ -279,10 +269,7 @@ fn test_addr_list_handling_outbound() {
     }
 
     // Check that the peer is scored if it tries to send an unexpected address list response
-    pm.handle_addr_list_response(
-        peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
-    );
+    pm.handle_addr_list_response(peer_id_1, vec![TestTcpAddressMaker::new().as_peer_address()]);
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
 

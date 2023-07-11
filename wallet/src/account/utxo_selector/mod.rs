@@ -474,10 +474,7 @@ fn select_coins_bnb(
         .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     if curr_available_value < selection_target {
-        return Err(UtxoSelectorError::NotEnoughFunds(
-            curr_available_value,
-            selection_target,
-        ));
+        return Err(UtxoSelectorError::NotEnoughFunds(curr_available_value, selection_target));
     }
 
     // Sort the utxo_pool
@@ -644,10 +641,7 @@ pub fn select_coins(
         .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     if total_available_value < selection_target {
-        return Err(UtxoSelectorError::NotEnoughFunds(
-            total_available_value,
-            selection_target,
-        ));
+        return Err(UtxoSelectorError::NotEnoughFunds(total_available_value, selection_target));
     }
 
     match select_coins_srd(
@@ -674,13 +668,7 @@ pub fn select_coins(
         Err(error) => errors.push(error),
     };
 
-    match select_coins_bnb(
-        utxo_pool,
-        selection_target,
-        cost_of_change,
-        max_weight,
-        pay_fees,
-    ) {
+    match select_coins_bnb(utxo_pool, selection_target, cost_of_change, max_weight, pay_fees) {
         Ok(result) => results.push(result),
         Err(error) => errors.push(error),
     };

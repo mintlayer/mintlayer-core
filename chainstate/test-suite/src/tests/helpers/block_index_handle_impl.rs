@@ -30,10 +30,7 @@ pub struct TestBlockIndexHandle<'a, S> {
 
 impl<'a, S: BlockchainStorageRead> TestBlockIndexHandle<'a, S> {
     pub fn new(storage: S, chain_config: &'a ChainConfig) -> Self {
-        Self {
-            db_tx: storage,
-            chain_config,
-        }
+        Self { db_tx: storage, chain_config }
     }
 
     fn gen_block_index_getter(
@@ -41,9 +38,9 @@ impl<'a, S: BlockchainStorageRead> TestBlockIndexHandle<'a, S> {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
+            GenBlockId::Genesis(_id) => {
+                Ok(Some(GenBlockIndex::Genesis(Arc::clone(self.chain_config.genesis_block()))))
+            }
             GenBlockId::Block(id) => {
                 self.db_tx.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block))
             }

@@ -19,8 +19,5 @@ use test_utils::test_dir::*;
 fn existing_dir_error() {
     pub const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
     // Target tmpdir should have been created by cargo, check we get the expected error code
-    assert_eq!(
-        try_create_dir(TARGET_TMPDIR).unwrap(),
-        DirCreationOutcome::AlreadyExists
-    );
+    assert_eq!(try_create_dir(TARGET_TMPDIR).unwrap(), DirCreationOutcome::AlreadyExists);
 }

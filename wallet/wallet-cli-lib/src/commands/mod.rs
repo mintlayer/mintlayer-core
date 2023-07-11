@@ -228,10 +228,7 @@ pub enum ConsoleCommand {
     ClearScreen,
     PrintHistory,
     ClearHistory,
-    SetStatus {
-        status: String,
-        print_message: String,
-    },
+    SetStatus { status: String, print_message: String },
     Exit,
 }
 
@@ -265,11 +262,7 @@ impl CommandHandler {
     }
 
     fn set_accounts(&mut self, new_accounts: Vec<Option<String>>) {
-        if let Some(CLIWalletState {
-            selected_account: _,
-            accounts,
-        }) = self.state.as_mut()
-        {
+        if let Some(CLIWalletState { selected_account: _, accounts }) = self.state.as_mut() {
             *accounts = new_accounts;
         } else {
             self.state.replace(CLIWalletState {
@@ -279,11 +272,7 @@ impl CommandHandler {
         }
     }
     fn add_account(&mut self, new_account: Option<String>) {
-        if let Some(CLIWalletState {
-            selected_account: _,
-            accounts,
-        }) = self.state.as_mut()
-        {
+        if let Some(CLIWalletState { selected_account: _, accounts }) = self.state.as_mut() {
             accounts.push(new_account);
         } else {
             self.state.replace(CLIWalletState {
@@ -294,10 +283,8 @@ impl CommandHandler {
     }
 
     fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
-        let CLIWalletState {
-            selected_account,
-            accounts,
-        } = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
+        let CLIWalletState { selected_account, accounts } =
+            self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
         if account_index.into_u32() as usize >= accounts.len() {
             return Err(WalletCliError::AccountNotFound(account_index));
@@ -313,13 +300,12 @@ impl CommandHandler {
 
     fn repl_status(&mut self) -> String {
         match self.state.as_ref() {
-            Some(CLIWalletState {
-                selected_account,
-                accounts,
-            }) if accounts.len() > 1 => match accounts.get(selected_account.into_u32() as usize) {
-                Some(Some(name)) => format!("(Account {})", name),
-                _ => format!("(Account No. {})", selected_account),
-            },
+            Some(CLIWalletState { selected_account, accounts }) if accounts.len() > 1 => {
+                match accounts.get(selected_account.into_u32() as usize) {
+                    Some(Some(name)) => format!("(Account {})", name),
+                    _ => format!("(Account No. {})", selected_account),
+                }
+            }
             _ => String::new(),
         }
     }
@@ -333,14 +319,8 @@ impl CommandHandler {
     ) -> Result<ConsoleCommand, WalletCliError> {
         let selected_account = self.selected_account();
         match command {
-            WalletCommand::CreateWallet {
-                wallet_path,
-                mnemonic,
-            } => {
-                utils::ensure!(
-                    controller_opt.is_none(),
-                    WalletCliError::WalletFileAlreadyOpen
-                );
+            WalletCommand::CreateWallet { wallet_path, mnemonic } => {
+                utils::ensure!(controller_opt.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
                 // TODO: Support other languages
                 let language = wallet::wallet::Language::English;
@@ -362,11 +342,8 @@ impl CommandHandler {
                 .map_err(WalletCliError::Controller)?;
 
                 let account_names = wallet.account_names().into_iter().cloned().collect();
-                *controller_opt = Some(RpcController::new(
-                    Arc::clone(chain_config),
-                    rpc_client.clone(),
-                    wallet,
-                ));
+                *controller_opt =
+                    Some(RpcController::new(Arc::clone(chain_config), rpc_client.clone(), wallet));
 
                 let msg = if need_mnemonic_backup {
                     format!(
@@ -376,27 +353,18 @@ impl CommandHandler {
                     "New wallet created successfully".to_owned()
                 };
                 self.set_accounts(account_names);
-                Ok(ConsoleCommand::SetStatus {
-                    status: self.repl_status(),
-                    print_message: msg,
-                })
+                Ok(ConsoleCommand::SetStatus { status: self.repl_status(), print_message: msg })
             }
 
             WalletCommand::OpenWallet { wallet_path } => {
-                utils::ensure!(
-                    controller_opt.is_none(),
-                    WalletCliError::WalletFileAlreadyOpen
-                );
+                utils::ensure!(controller_opt.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
                 let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
                     .map_err(WalletCliError::Controller)?;
 
                 let account_names = wallet.account_names().into_iter().cloned().collect();
-                *controller_opt = Some(RpcController::new(
-                    Arc::clone(chain_config),
-                    rpc_client.clone(),
-                    wallet,
-                ));
+                *controller_opt =
+                    Some(RpcController::new(Arc::clone(chain_config), rpc_client.clone(), wallet));
 
                 self.set_accounts(account_names);
                 Ok(ConsoleCommand::SetStatus {
@@ -588,19 +556,16 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 match balance_opt {
-                    Some(balance) => Ok(ConsoleCommand::Print(print_coin_amount(
-                        chain_config,
-                        balance,
-                    ))),
+                    Some(balance) => {
+                        Ok(ConsoleCommand::Print(print_coin_amount(chain_config, balance)))
+                    }
                     None => Ok(ConsoleCommand::Print("Not found".to_owned())),
                 }
             }
 
             WalletCommand::SubmitBlock { block } => {
                 rpc_client.submit_block(block.take()).await.map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print(
-                    "The block was submitted successfully".to_owned(),
-                ))
+                Ok(ConsoleCommand::Print("The block was submitted successfully".to_owned()))
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
@@ -608,9 +573,7 @@ impl CommandHandler {
                     .submit_transaction(transaction.take())
                     .await
                     .map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print(
-                    "The transaction was submitted successfully".to_owned(),
-                ))
+                Ok(ConsoleCommand::Print("The transaction was submitted successfully".to_owned()))
             }
 
             WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
@@ -634,10 +597,7 @@ impl CommandHandler {
                     .get(&Currency::Coin)
                     .copied()
                     .unwrap_or(Amount::ZERO);
-                Ok(ConsoleCommand::Print(print_coin_amount(
-                    chain_config,
-                    coin_balance,
-                )))
+                Ok(ConsoleCommand::Print(print_coin_amount(chain_config, coin_balance)))
             }
 
             WalletCommand::ListUtxo { utxo_type } => {
@@ -695,10 +655,7 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::CreateStakePool {
-                amount,
-                decomission_key,
-            } => {
+            WalletCommand::CreateStakePool { amount, decomission_key } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
                 controller_opt

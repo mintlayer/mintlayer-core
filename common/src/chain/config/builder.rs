@@ -103,9 +103,8 @@ enum GenesisBlockInit {
 }
 
 impl GenesisBlockInit {
-    pub const TEST: Self = GenesisBlockInit::UnitTest {
-        premine_destination: Destination::AnyoneCanSpend,
-    };
+    pub const TEST: Self =
+        GenesisBlockInit::UnitTest { premine_destination: Destination::AnyoneCanSpend };
 }
 
 /// Builder for [ChainConfig]
@@ -238,9 +237,9 @@ impl Builder {
             GenesisBlockInit::Mainnet => create_mainnet_genesis(),
             GenesisBlockInit::Testnet => create_testnet_genesis(),
             GenesisBlockInit::Custom(genesis) => genesis,
-            GenesisBlockInit::UnitTest {
-                premine_destination,
-            } => create_unit_test_genesis(premine_destination),
+            GenesisBlockInit::UnitTest { premine_destination } => {
+                create_unit_test_genesis(premine_destination)
+            }
         };
         let genesis_block = Arc::new(WithId::new(genesis_block));
 
@@ -318,9 +317,7 @@ impl Builder {
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {
-        self.genesis_block = GenesisBlockInit::UnitTest {
-            premine_destination,
-        };
+        self.genesis_block = GenesisBlockInit::UnitTest { premine_destination };
         self
     }
 

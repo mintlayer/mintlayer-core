@@ -28,12 +28,7 @@ pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T> + FusedIterator, 
 
 impl<T, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
     pub fn new(leaves: I, padding_function: F) -> Self {
-        IncrementalPaddingIterator {
-            leaves,
-            padding_function,
-            last_value: None,
-            current_index: 0,
-        }
+        IncrementalPaddingIterator { leaves, padding_function, last_value: None, current_index: 0 }
     }
 }
 

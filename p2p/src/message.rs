@@ -126,9 +126,7 @@ pub struct BlockResponse {
 
 impl BlockResponse {
     pub fn new(block: Block) -> Self {
-        Self {
-            block: Box::new(block),
-        }
+        Self { block: Box::new(block) }
     }
 
     pub fn block(&self) -> &Block {

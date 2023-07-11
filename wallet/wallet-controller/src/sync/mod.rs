@@ -180,10 +180,7 @@ async fn fetch_and_sync<T: NodeInterface>(
         chain_info.best_block_height >= wallet_block_height,
         ControllerError::NotEnoughBlockHeight(wallet_block_height, chain_info.best_block_height,)
     );
-    let FetchedBlock {
-        block,
-        common_block_height,
-    } = fetch_new_block(
+    let FetchedBlock { block, common_block_height } = fetch_new_block(
         chain_config,
         rpc_client,
         chain_info.best_block_id,
@@ -242,11 +239,7 @@ async fn get_next_block_info<T: NodeInterface>(
         common::chain::GenBlockId::Block(id) => id,
     };
 
-    Ok(NextBlockInfo {
-        common_block_id,
-        common_block_height,
-        block_id,
-    })
+    Ok(NextBlockInfo { common_block_id, common_block_height, block_id })
 }
 
 // `node_block_height` can't be less than `wallet_block_height` and `node_block_height` can't be equal to `wallet_block_id`
@@ -258,11 +251,7 @@ async fn fetch_new_block<T: NodeInterface>(
     wallet_block_id: Id<GenBlock>,
     wallet_block_height: BlockHeight,
 ) -> Result<FetchedBlock, FetchBlockError<T>> {
-    let NextBlockInfo {
-        common_block_id,
-        common_block_height,
-        block_id,
-    } = get_next_block_info(
+    let NextBlockInfo { common_block_id, common_block_height, block_id } = get_next_block_info(
         chain_config,
         rpc_client,
         node_block_id,
@@ -282,10 +271,7 @@ async fn fetch_new_block<T: NodeInterface>(
         FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
     );
 
-    Ok(FetchedBlock {
-        block,
-        common_block_height,
-    })
+    Ok(FetchedBlock { block, common_block_height })
 }
 
 #[cfg(test)]

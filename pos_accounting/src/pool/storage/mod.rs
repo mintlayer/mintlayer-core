@@ -43,10 +43,7 @@ pub struct PoSAccountingDB<S, T> {
 
 impl<S, T> PoSAccountingDB<S, T> {
     pub fn new(store: S) -> Self {
-        Self {
-            store,
-            _phantom: Default::default(),
-        }
+        Self { store, _phantom: Default::default() }
     }
 }
 

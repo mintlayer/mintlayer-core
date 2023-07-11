@@ -66,10 +66,7 @@ pub fn prefix_iter<DbMap: schema::DbMap, Tx: ReadOps>(
 ) -> crate::Result<impl '_ + EntryIterator<DbMap>> {
     dbtx.prefix_iter(map_id, prefix).map(|iter| {
         iter.map(|(k, v)| {
-            (
-                Encoded::from_bytes_unchecked(k).decode(),
-                Encoded::from_bytes_unchecked(v),
-            )
+            (Encoded::from_bytes_unchecked(k).decode(), Encoded::from_bytes_unchecked(v))
         })
     })
 }

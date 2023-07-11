@@ -66,14 +66,12 @@ impl Display for PeerAddress {
 impl From<std::net::SocketAddr> for PeerAddress {
     fn from(address: std::net::SocketAddr) -> Self {
         match address {
-            std::net::SocketAddr::V4(ip) => PeerAddress::Ip4(PeerAddressIp4 {
-                ip: (*ip.ip()).into(),
-                port: address.port(),
-            }),
-            std::net::SocketAddr::V6(ip) => PeerAddress::Ip6(PeerAddressIp6 {
-                ip: (*ip.ip()).into(),
-                port: address.port(),
-            }),
+            std::net::SocketAddr::V4(ip) => {
+                PeerAddress::Ip4(PeerAddressIp4 { ip: (*ip.ip()).into(), port: address.port() })
+            }
+            std::net::SocketAddr::V6(ip) => {
+                PeerAddress::Ip6(PeerAddressIp6 { ip: (*ip.ip()).into(), port: address.port() })
+            }
         }
     }
 }

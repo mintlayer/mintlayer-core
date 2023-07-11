@@ -73,12 +73,7 @@ impl<P: UtxosView> UtxosCache<P> {
 
     pub fn new(parent: P) -> Result<Self, P::Error> {
         let current_block_hash = parent.best_block_hash()?;
-        Ok(UtxosCache {
-            parent,
-            current_block_hash,
-            utxos: BTreeMap::new(),
-            memory_usage: 0,
-        })
+        Ok(UtxosCache { parent, current_block_hash, utxos: BTreeMap::new(), memory_usage: 0 })
     }
 
     pub fn from_data(parent: P, utxos: ConsumedUtxoCache) -> Result<Self, P::Error> {
@@ -382,10 +377,7 @@ impl<P: UtxosView> UtxosCache<P> {
     }
 
     pub fn consume(self) -> ConsumedUtxoCache {
-        ConsumedUtxoCache {
-            container: self.utxos,
-            best_block: self.current_block_hash,
-        }
+        ConsumedUtxoCache { container: self.utxos, best_block: self.current_block_hash }
     }
 }
 

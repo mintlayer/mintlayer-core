@@ -207,10 +207,7 @@ impl BanScore for TxIndexError {
             TxIndexError::SerializationInvariantError(_) => 100,
             TxIndexError::DoubleSpendAttempt(_) => 100,
             TxIndexError::MissingOutputOrSpent => 100,
-            TxIndexError::OutputIndexOutOfRange {
-                tx_id: _,
-                source_output_index: _,
-            } => 100,
+            TxIndexError::OutputIndexOutOfRange { tx_id: _, source_output_index: _ } => 100,
         }
     }
 }
@@ -219,10 +216,7 @@ impl BanScore for GetAncestorError {
     fn ban_score(&self) -> u32 {
         match self {
             GetAncestorError::StorageError(_) => 0,
-            GetAncestorError::InvalidAncestorHeight {
-                block_height: _,
-                ancestor_height: _,
-            } => 100,
+            GetAncestorError::InvalidAncestorHeight { block_height: _, ancestor_height: _ } => 100,
             GetAncestorError::PrevBlockIndexNotFound(_) => 0,
             GetAncestorError::StartingPointNotFound(_) => 0,
         }

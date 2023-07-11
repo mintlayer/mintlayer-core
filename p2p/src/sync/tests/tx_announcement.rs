@@ -70,16 +70,10 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::TransactionRequest(tx.transaction().get_id())
-    );
+    assert_eq!(message, SyncMessage::TransactionRequest(tx.transaction().get_id()));
 
     handle
-        .send_message(
-            peer,
-            SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
-        )
+        .send_message(peer, SyncMessage::TransactionResponse(TransactionResponse::Found(tx)))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -278,10 +272,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::TransactionRequest(tx.transaction().get_id())
-    );
+    assert_eq!(message, SyncMessage::TransactionRequest(tx.transaction().get_id()));
 
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
@@ -333,10 +324,7 @@ async fn valid_transaction(#[case] seed: Seed) {
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::TransactionRequest(tx.transaction().get_id())
-    );
+    assert_eq!(message, SyncMessage::TransactionRequest(tx.transaction().get_id()));
 
     handle
         .send_message(
@@ -345,10 +333,7 @@ async fn valid_transaction(#[case] seed: Seed) {
         )
         .await;
 
-    assert_eq!(
-        SyncMessage::NewTransaction(tx.transaction().get_id()),
-        handle.message().await.1
-    );
+    assert_eq!(SyncMessage::NewTransaction(tx.transaction().get_id()), handle.message().await.1);
 
     handle.join_subsystem_manager().await;
 }

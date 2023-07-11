@@ -93,11 +93,9 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     )
     .await?;
 
-    let data_dir = prepare_data_dir(
-        || default_data_dir_for_chain(chain_type.name()),
-        &config.datadir,
-    )
-    .expect("Failed to prepare data directory");
+    let data_dir =
+        prepare_data_dir(|| default_data_dir_for_chain(chain_type.name()), &config.datadir)
+            .expect("Failed to prepare data directory");
 
     let storage = DnsServerStorageImpl::new(storage_lmdb::Lmdb::new(
         data_dir.join(DNS_SERVER_DB_NAME),

@@ -34,10 +34,7 @@ pub struct MemUsageTracker {
 
 impl MemUsageTracker {
     pub fn new() -> Self {
-        Self {
-            current_usage: 0,
-            peak_usage: 0,
-        }
+        Self { current_usage: 0, peak_usage: 0 }
     }
 
     pub fn get_usage(&self) -> usize {
@@ -411,15 +408,11 @@ mod test {
         let mut data: Tracked<Vec<u8>, NoOpDropPolicy> = Tracked::default();
 
         let len1 = rng.gen_range(0..=100);
-        tracker.modify(&mut data, |data, _| {
-            data.extend((0..len1).map(|_| rng.gen::<u8>()))
-        });
+        tracker.modify(&mut data, |data, _| data.extend((0..len1).map(|_| rng.gen::<u8>())));
         assert_eq!(tracker.get_usage(), len1);
 
         let len2 = rng.gen_range(0..=300);
-        tracker.modify(&mut data, |data, _| {
-            data.extend((0..len2).map(|_| rng.gen::<u8>()))
-        });
+        tracker.modify(&mut data, |data, _| data.extend((0..len2).map(|_| rng.gen::<u8>())));
         assert_eq!(tracker.get_usage(), len1 + len2);
     }
 

@@ -66,10 +66,7 @@ pub struct UtxoOutPoint {
 
 impl UtxoOutPoint {
     pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
-        UtxoOutPoint {
-            id: outpoint_source_id,
-            index: output_index,
-        }
+        UtxoOutPoint { id: outpoint_source_id, index: output_index }
     }
 
     pub fn tx_id(&self) -> OutPointSourceId {

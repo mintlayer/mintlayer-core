@@ -55,10 +55,7 @@ pub fn make_chainstate(
     chain_config: Arc<ChainConfig>,
     config: ChainstateLauncherConfig,
 ) -> Result<Box<dyn ChainstateInterface>, Error> {
-    let ChainstateLauncherConfig {
-        storage_backend,
-        chainstate_config,
-    } = config;
+    let ChainstateLauncherConfig { storage_backend, chainstate_config } = config;
 
     let lmdb_resize_callback = MapResizeCallback::new(Box::new(|resize_info| {
         logging::log::info!("Lmdb resize happened: {:?}", resize_info)

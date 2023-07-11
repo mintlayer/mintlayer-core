@@ -63,18 +63,13 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
-        let stake_pool_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let stake_pool_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -106,18 +101,13 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
-        let genesis_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 anyonecanspend_address(),
@@ -147,18 +137,13 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
-        let genesis_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
                 anyonecanspend_address(),
@@ -194,16 +179,10 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let tx0 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::Transfer(
-                token_issuance_data.into(),
-                anyonecanspend_address(),
-            ))
+            .add_output(TxOutput::Transfer(token_issuance_data.into(), anyonecanspend_address()))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_stake),
                 anyonecanspend_address(),
@@ -232,17 +211,11 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: amount_to_issue,
-                })
-                .into(),
+                TokenData::TokenTransfer(TokenTransfer { token_id, amount: amount_to_issue })
+                    .into(),
                 anyonecanspend_address(),
             ))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         let best_block_index = tf
@@ -252,10 +225,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            tf.best_block_id(),
-            Id::<GenBlock>::from(*best_block_index.block_id())
-        );
+        assert_eq!(tf.best_block_id(), Id::<GenBlock>::from(*best_block_index.block_id()));
     });
 }
 
@@ -274,22 +244,14 @@ fn stake_pool_twice(#[case] seed: Seed) {
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
-        let genesis_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data.clone()),
-            ))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data.clone())))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -333,10 +295,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -377,10 +336,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
         );
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.clone().into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
         let tx_id = tx.transaction().get_id();
 
@@ -402,10 +358,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, min_pledge, vrf_pk);
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
@@ -428,18 +381,13 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
-        let stake_pool_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let stake_pool_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx1 = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 
@@ -508,18 +456,13 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
-        let stake_pool_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let stake_pool_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx1 = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 
@@ -575,18 +518,13 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             Amount::ZERO,
         );
 
-        let stake_pool_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let stake_pool_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx1 = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .build();
 
         tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();

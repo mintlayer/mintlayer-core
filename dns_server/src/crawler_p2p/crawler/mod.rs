@@ -89,17 +89,9 @@ pub enum CrawlerEvent<A> {
 }
 
 pub enum CrawlerCommand<A> {
-    Connect {
-        address: A,
-    },
-    Disconnect {
-        peer_id: PeerId,
-    },
-    UpdateAddress {
-        address: A,
-        old_state: AddressState,
-        new_state: AddressState,
-    },
+    Connect { address: A },
+    Disconnect { peer_id: PeerId },
+    UpdateAddress { address: A, old_state: AddressState, new_state: AddressState },
 }
 
 impl<A: Ord + Clone + ToString> Crawler<A> {
@@ -127,12 +119,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
             })
             .collect::<BTreeMap<_, _>>();
 
-        Self {
-            now,
-            chain_config,
-            addresses,
-            outbound_peers: BTreeMap::new(),
-        }
+        Self { now, chain_config, addresses, outbound_peers: BTreeMap::new() }
     }
 
     fn handle_connected(
@@ -209,11 +196,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         transition: AddressStateTransitionTo,
         callback: &mut impl FnMut(CrawlerCommand<A>),
     ) {
-        log::debug!(
-            "change address {} state to {:?}",
-            address.to_string(),
-            transition
-        );
+        log::debug!("change address {} state to {:?}", address.to_string(), transition);
 
         let old_state = address_data.state.clone();
 
@@ -241,10 +224,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
             ADDR_RATE_BUCKET_SIZE,
         );
 
-        let peer = Peer {
-            address: address.clone(),
-            address_rate_limiter,
-        };
+        let peer = Peer { address: address.clone(), address_rate_limiter };
 
         let old_peer = self.outbound_peers.insert(peer_id, peer);
         assert!(old_peer.is_none());
@@ -330,9 +310,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
                 callback,
             );
 
-            callback(CrawlerCommand::Connect {
-                address: address.clone(),
-            });
+            callback(CrawlerCommand::Connect { address: address.clone() });
         }
 
         self.addresses.retain(|_address, address_data| address_data.retain(self.now));
@@ -347,10 +325,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     ) {
         match event {
             CrawlerEvent::Timer { period } => {
-                assert!(
-                    period <= Duration::from_secs(24 * 3600),
-                    "time step is too big"
-                );
+                assert!(period <= Duration::from_secs(24 * 3600), "time step is too big");
 
                 self.now += period;
 

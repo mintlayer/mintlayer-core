@@ -275,10 +275,7 @@ fn tx_one_to_many(#[case] seed: Seed) {
             number_of_outputs,
             extra_output,
         );
-        assert_eq!(
-            check_tx_inputs_outputs_purposes(&tx, &utxo_db),
-            expected_result
-        );
+        assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), expected_result);
     };
 
     // valid cases
@@ -291,11 +288,7 @@ fn tx_one_to_many(#[case] seed: Seed) {
     // invalid input
     let invalid_inputs = [burn(), create_delegation()];
     let valid_outputs = [lock_then_transfer(), transfer(), burn()];
-    check(
-        &invalid_inputs,
-        &valid_outputs,
-        Err(ConnectTransactionError::InvalidInputTypeInTx),
-    );
+    check(&invalid_inputs, &valid_outputs, Err(ConnectTransactionError::InvalidInputTypeInTx));
 
     // invalid output
     let valid_inputs = [stake_pool(), produce_block(), delegate_staking()];
@@ -307,11 +300,7 @@ fn tx_one_to_many(#[case] seed: Seed) {
         create_delegation(),
         delegate_staking(),
     ];
-    check(
-        &valid_inputs,
-        &invalid_outputs,
-        Err(ConnectTransactionError::InvalidInputTypeInTx),
-    );
+    check(&valid_inputs, &invalid_outputs, Err(ConnectTransactionError::InvalidInputTypeInTx));
 }
 
 #[rstest]
@@ -321,10 +310,7 @@ fn tx_spend_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let inputs = vec![TxInput::Account(AccountOutPoint::new(
         AccountNonce::new(0),
-        AccountSpending::Delegation(
-            DelegationId::new(H256::random_using(&mut rng)),
-            Amount::ZERO,
-        ),
+        AccountSpending::Delegation(DelegationId::new(H256::random_using(&mut rng)), Amount::ZERO),
     ))];
 
     let number_of_outputs = rng.gen_range(2..10);
@@ -467,10 +453,7 @@ fn tx_many_to_one(#[case] seed: Seed) {
             1,
             None,
         );
-        assert_eq!(
-            check_tx_inputs_outputs_purposes(&tx, &utxo_db),
-            expected_result
-        );
+        assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), expected_result);
     };
 
     // valid cases
@@ -487,11 +470,7 @@ fn tx_many_to_one(#[case] seed: Seed) {
 
     // invalid outputs
     let invalid_outputs = [produce_block()];
-    check(
-        &valid_inputs,
-        &invalid_outputs,
-        Err(ConnectTransactionError::InvalidOutputTypeInTx),
-    );
+    check(&valid_inputs, &invalid_outputs, Err(ConnectTransactionError::InvalidOutputTypeInTx));
 }
 
 #[rstest]
@@ -513,10 +492,7 @@ fn tx_many_to_many(#[case] seed: Seed) {
             number_of_outputs,
             None,
         );
-        assert_eq!(
-            check_tx_inputs_outputs_purposes(&tx, &utxo_db),
-            expected_result
-        );
+        assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), expected_result);
     };
 
     let mut rng = make_seedable_rng(seed);
@@ -528,20 +504,10 @@ fn tx_many_to_many(#[case] seed: Seed) {
 
     // invalid cases
     let invalid_outputs = [stake_pool(), produce_block()];
-    check(
-        &valid_inputs,
-        &invalid_outputs,
-        2,
-        Err(ConnectTransactionError::InvalidOutputTypeInTx),
-    );
+    check(&valid_inputs, &invalid_outputs, 2, Err(ConnectTransactionError::InvalidOutputTypeInTx));
 
     let invalid_outputs = [create_delegation(), produce_block()];
-    check(
-        &valid_inputs,
-        &invalid_outputs,
-        2,
-        Err(ConnectTransactionError::InvalidOutputTypeInTx),
-    );
+    check(&valid_inputs, &invalid_outputs, 2, Err(ConnectTransactionError::InvalidOutputTypeInTx));
 
     let invalid_inputs = [burn(), stake_pool(), produce_block(), create_delegation()];
     let invalid_outputs = [stake_pool(), produce_block(), create_delegation()];
@@ -745,10 +711,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
         .enumerate()
         .map(|(i, output)| {
             (
-                UtxoOutPoint::new(
-                    OutPointSourceId::BlockReward(Id::new(H256::zero())),
-                    i as u32,
-                ),
+                UtxoOutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::zero())), i as u32),
                 Utxo::new_for_mempool(output),
             )
         })

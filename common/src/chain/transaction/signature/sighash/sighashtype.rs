@@ -56,10 +56,7 @@ impl TryFrom<u8> for SigHashType {
     type Error = TransactionSigError;
 
     fn try_from(sighash_byte: u8) -> Result<Self, Self::Error> {
-        let ok = matches!(
-            sighash_byte & Self::MASK_OUT,
-            Self::ALL | Self::NONE | Self::SINGLE
-        );
+        let ok = matches!(sighash_byte & Self::MASK_OUT, Self::ALL | Self::NONE | Self::SINGLE);
         ok.then_some(Self(sighash_byte))
             .ok_or(TransactionSigError::InvalidSigHashValue(sighash_byte))
     }
@@ -126,15 +123,10 @@ mod test {
         assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single);
 
         // Check try from
-        assert_eq!(
-            SigHashType::try_from(0),
-            Err(TransactionSigError::InvalidSigHashValue(0))
-        );
+        assert_eq!(SigHashType::try_from(0), Err(TransactionSigError::InvalidSigHashValue(0)));
         assert_eq!(
             SigHashType::try_from(SigHashType::ANYONECANPAY),
-            Err(TransactionSigError::InvalidSigHashValue(
-                SigHashType::ANYONECANPAY
-            ))
+            Err(TransactionSigError::InvalidSigHashValue(SigHashType::ANYONECANPAY))
         );
     }
 }

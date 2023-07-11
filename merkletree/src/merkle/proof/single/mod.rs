@@ -35,10 +35,7 @@ pub struct SingleProofNodes<'a, T, H> {
 
 impl<T, H> Clone for SingleProofNodes<'_, T, H> {
     fn clone(&self) -> Self {
-        Self {
-            leaf: self.leaf,
-            branch: self.branch.clone(),
-        }
+        Self { leaf: self.leaf, branch: self.branch.clone() }
     }
 }
 
@@ -87,10 +84,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
             "This happens only if the we fail to find a sibling, which is only for root. In the loop, this cannot happen, so siblings must exist"
         );
 
-        let result = Self {
-            leaf,
-            branch: proof,
-        };
+        let result = Self { leaf, branch: proof };
 
         Ok(result)
     }
@@ -111,10 +105,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
 /// This struct is supposed to be serialized, unlike `SingleProofNodes`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "scale-codec",
-    derive(parity_scale_codec::Encode, parity_scale_codec::Decode)
-)]
+#[cfg_attr(feature = "scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
 pub struct SingleProofHashes<T, H> {
     leaf_index_in_level: u32,
     branch: Vec<T>,

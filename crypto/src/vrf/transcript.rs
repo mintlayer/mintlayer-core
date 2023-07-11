@@ -46,10 +46,7 @@ impl From<WrappedTranscript> for Transcript {
 
 impl TranscriptAssembler {
     pub fn new(label: &'static [u8]) -> Self {
-        Self {
-            label,
-            components: Vec::new(),
-        }
+        Self { label, components: Vec::new() }
     }
 
     pub fn attach(self, label: &'static [u8], value: TranscriptComponent) -> Self {

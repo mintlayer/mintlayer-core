@@ -894,10 +894,7 @@ impl PushData {
 impl Ordinary {
     /// Is this OP_*VERIFY?
     pub fn is_verify(self) -> bool {
-        matches!(
-            self,
-            Self::OP_VERIFY | Self::OP_EQUALVERIFY | Self::OP_NUMEQUALVERIFY
-        )
+        matches!(self, Self::OP_VERIFY | Self::OP_EQUALVERIFY | Self::OP_NUMEQUALVERIFY)
     }
 }
 

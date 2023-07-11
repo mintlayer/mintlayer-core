@@ -155,28 +155,19 @@ fn test_scale_numbers() {
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(SimpleWrapper(-170141123460424235652481386091358552721i128))
-    );
+    assert_eq!(dec, Some(SimpleWrapper(-170141123460424235652481386091358552721i128)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(10614612912676532892982561042679146832i128));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(SimpleWrapper(10614612912676532892982561042679146832i128))
-    );
+    assert_eq!(dec, Some(SimpleWrapper(10614612912676532892982561042679146832i128)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(210614612912676532892982561042679146832u128));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(SimpleWrapper(210614612912676532892982561042679146832u128))
-    );
+    assert_eq!(dec, Some(SimpleWrapper(210614612912676532892982561042679146832u128)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u128));
     assert!(!enc.is_empty());
@@ -345,12 +336,7 @@ fn test_scale_options() {
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(OptionWrapper::new(Some(
-            -170141123460424235652481386091358552721i128
-        )))
-    );
+    assert_eq!(dec, Some(OptionWrapper::new(Some(-170141123460424235652481386091358552721i128))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(
         170141123460424235652481386091358552721i128,
@@ -358,12 +344,7 @@ fn test_scale_options() {
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(OptionWrapper::new(Some(
-            170141123460424235652481386091358552721i128
-        )))
-    );
+    assert_eq!(dec, Some(OptionWrapper::new(Some(170141123460424235652481386091358552721i128))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(
         210614612912676532892982561042679146832u128,
@@ -371,12 +352,7 @@ fn test_scale_options() {
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(
-        dec,
-        Some(OptionWrapper::new(Some(
-            210614612912676532892982561042679146832u128
-        )))
-    );
+    assert_eq!(dec, Some(OptionWrapper::new(Some(210614612912676532892982561042679146832u128))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u128)));
     assert!(!enc.is_empty());
@@ -398,9 +374,7 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(
         dec,
-        Some(OptionWrapper::new(Some(TestEnum::TestField1(Some(
-            "any error message".to_string()
-        )))))
+        Some(OptionWrapper::new(Some(TestEnum::TestField1(Some("any error message".to_string())))))
     );
 
     let result = TestEnum::TestField2(Some(Box::new(Some("any error message".to_string()))));
@@ -410,9 +384,9 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(
         dec,
-        Some(OptionWrapper::new(Some(TestEnum::TestField2(Some(
-            Box::new(Some("any error message".to_string()))
-        )))))
+        Some(OptionWrapper::new(Some(TestEnum::TestField2(Some(Box::new(Some(
+            "any error message".to_string()
+        )))))))
     );
 }
 

@@ -97,10 +97,7 @@ async fn invalid_timestamp() {
     )
     .unwrap();
     handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -146,10 +143,7 @@ async fn invalid_consensus_data() {
     )
     .unwrap();
     handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .await;
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -240,10 +234,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(
-        score,
-        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
-    );
+    assert_eq!(score, P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score());
     handle.assert_no_event().await;
 
     handle.join_subsystem_manager().await;
@@ -272,18 +263,12 @@ async fn valid_block(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
+        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .await;
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
-    assert_eq!(
-        message,
-        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
-    );
+    assert_eq!(message, SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])));
     handle.assert_no_error().await;
 
     handle.join_subsystem_manager().await;

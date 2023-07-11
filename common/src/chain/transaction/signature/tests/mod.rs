@@ -100,13 +100,7 @@ fn verify_no_signature(#[case] seed: Seed) {
             .collect_vec();
         let signed_tx = tx.with_signatures(witnesses).unwrap();
         assert_eq!(
-            verify_signature(
-                &chain_config,
-                &destination,
-                &signed_tx,
-                &inputs_utxos_refs,
-                0
-            ),
+            verify_signature(&chain_config, &destination, &signed_tx, &inputs_utxos_refs, 0),
             Err(TransactionSigError::SignatureNotFound),
             "{destination:?}"
         );
@@ -144,13 +138,7 @@ fn verify_invalid_signature(#[case] seed: Seed) {
         let signed_tx = tx.with_signatures(witnesses).unwrap();
 
         assert_eq!(
-            verify_signature(
-                &chain_config,
-                &destination,
-                &signed_tx,
-                &inputs_utxos_refs,
-                0
-            ),
+            verify_signature(&chain_config, &destination, &signed_tx, &inputs_utxos_refs, 0),
             Err(TransactionSigError::InvalidSignatureEncoding),
             "{sighash_type:?}, signature = {raw_signature:?}"
         );
@@ -191,10 +179,7 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
                 &inputs_utxos_refs,
                 INVALID_SIGNATURE_INDEX
             ),
-            Err(TransactionSigError::InvalidSignatureIndex(
-                INVALID_SIGNATURE_INDEX,
-                3
-            )),
+            Err(TransactionSigError::InvalidSignatureIndex(INVALID_SIGNATURE_INDEX, 3)),
             "{sighash_type:?}"
         );
     }
@@ -228,13 +213,7 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
         )
         .unwrap();
         assert_eq!(
-            verify_signature(
-                &chain_config,
-                &different_outpoint,
-                &tx,
-                &inputs_utxos_refs,
-                0
-            ),
+            verify_signature(&chain_config, &different_outpoint, &tx, &inputs_utxos_refs, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
             "{sighash_type:?}"
         );
@@ -288,13 +267,7 @@ fn mutate_all(#[case] seed: Seed) {
         &outpoint_dest,
         true,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        true,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, true);
 }
 
 // ALL|ANYONECANPAY applies to one input and all outputs, so adding input is ok, but anything else isn't.
@@ -344,13 +317,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &outpoint_dest,
         true,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        true,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, true);
 }
 
 // NONE is applied to all inputs and none of the outputs, so the latter can be changed in any way.
@@ -400,13 +367,7 @@ fn mutate_none(#[case] seed: Seed) {
         &outpoint_dest,
         false,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        false,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, false);
 }
 
 // NONE|ANYONECANPAY is applied to only one input, so changing everything else is OK.
@@ -457,13 +418,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &outpoint_dest,
         false,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        false,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, false);
 }
 
 // SINGLE is applied to all inputs and one output, so only adding an output is OK.
@@ -513,13 +468,7 @@ fn mutate_single(#[case] seed: Seed) {
         &outpoint_dest,
         false,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        true,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, true);
 }
 
 // SINGLE|ANYONECANPAY is applied to one input and one output so adding inputs and outputs is OK.
@@ -570,13 +519,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &outpoint_dest,
         false,
     );
-    check_mutate_output(
-        &chain_config,
-        &original_tx,
-        &inputs_utxos_refs,
-        &outpoint_dest,
-        true,
-    );
+    check_mutate_output(&chain_config, &original_tx, &inputs_utxos_refs, &outpoint_dest, true);
 }
 
 fn sign_mutate_then_verify(
@@ -639,10 +582,8 @@ fn check_insert_input(
     let outpoint_source_id =
         OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(rng)));
 
-    let inputs_utxo = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(123)),
-        Destination::AnyoneCanSpend,
-    );
+    let inputs_utxo =
+        TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(123)), Destination::AnyoneCanSpend);
     let mut inputs_utxos = inputs_utxos.to_vec();
     inputs_utxos.push(Some(&inputs_utxo));
 
@@ -781,13 +722,7 @@ fn check_mutate_inputs_utxos(
         inputs_utxos[input] = Some(&inputs_utxo);
 
         assert!(matches!(
-            verify_signature(
-                chain_config,
-                outpoint_dest,
-                original_tx,
-                &inputs_utxos,
-                input
-            ),
+            verify_signature(chain_config, outpoint_dest, original_tx, &inputs_utxos, input),
             Err(TransactionSigError::SignatureVerificationFailed)
         ));
     }

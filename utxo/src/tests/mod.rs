@@ -795,10 +795,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 
     // undo spending of block reward but miss reward_undo
     let res = cache.disconnect_block_transactable(&reward, &block.get_id().into(), None);
-    assert_eq!(
-        res,
-        Err(Error::MissingBlockRewardUndo(block.get_id().into()))
-    );
+    assert_eq!(res, Err(Error::MissingBlockRewardUndo(block.get_id().into())));
 }
 
 #[rstest]
@@ -863,10 +860,8 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     // create burn output at index 0
     let output1 = TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)));
     // create transfer output at index 1
-    let output2 = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(10)),
-        Destination::AnyoneCanSpend,
-    );
+    let output2 =
+        TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(10)), Destination::AnyoneCanSpend);
     let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output1, output2]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();

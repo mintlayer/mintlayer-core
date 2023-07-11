@@ -72,10 +72,7 @@ impl AccountingBlockUndo {
         tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
         reward_undos: Option<AccountingBlockRewardUndo>,
     ) -> Self {
-        Self {
-            reward_undos,
-            tx_undos,
-        }
+        Self { reward_undos, tx_undos }
     }
 
     pub fn is_empty(&self) -> bool {

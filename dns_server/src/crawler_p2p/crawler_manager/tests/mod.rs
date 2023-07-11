@@ -33,18 +33,12 @@ async fn basic() {
     // Node goes online, DNS record added
     state.node_online(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node1.ip()));
 
     // Node goes offline, DNS record removed
     state.node_offline(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::DelAddress(node1.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::DelAddress(node1.ip()));
 }
 
 #[tokio::test]
@@ -53,21 +47,12 @@ async fn long_offline() {
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
     // Two weeks passed
-    advance_time(
-        &mut crawler,
-        &time_getter,
-        Duration::from_secs(3600),
-        14 * 24,
-    )
-    .await;
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(3600), 14 * 24).await;
 
     // Node goes online, DNS record is added in 24 hours
     state.node_online(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node1.ip()));
 }
 
 #[tokio::test]
@@ -82,30 +67,18 @@ async fn announced_online() {
     state.node_online(node3);
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node1.ip()));
 
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node2.ip()));
 
     state.announce_address(node2, node3);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node3.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node3.ip()));
 
     let addresses = crawler.storage.transaction_ro().unwrap().get_addresses().unwrap();
-    assert_eq!(
-        addresses,
-        vec![node1.to_string(), node2.to_string(), node3.to_string()]
-    );
+    assert_eq!(addresses, vec![node1.to_string(), node2.to_string(), node3.to_string()]);
 }
 
 #[tokio::test]
@@ -117,10 +90,7 @@ async fn announced_offline() {
     state.node_online(node1);
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node1.ip()));
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 1);
 
     // Check that the crawler tries to connect to an offline node just once
@@ -132,10 +102,7 @@ async fn announced_offline() {
     state.node_online(node2);
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node2.ip()));
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
 }
 
@@ -160,14 +127,8 @@ async fn private_ip() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
 
     // Check that only nodes with public addresses and on the default port are added to DNS
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
-    );
-    assert_eq!(
-        command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
-    );
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node1.ip()));
+    assert_eq!(command_rx.recv().await.unwrap(), DnsServerCommand::AddAddress(node2.ip()));
     assert!(command_rx.try_recv().is_err());
 
     // Check that all reachable nodes are stored in the DB

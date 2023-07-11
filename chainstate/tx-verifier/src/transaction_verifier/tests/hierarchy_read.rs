@@ -75,27 +75,12 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         verifier
     };
 
-    assert_eq!(
-        verifier1.get_utxo(&outpoint0).unwrap().as_ref(),
-        Some(&utxo0)
-    );
-    assert_eq!(
-        verifier1.get_utxo(&outpoint1).unwrap().as_ref(),
-        Some(&utxo1)
-    );
+    assert_eq!(verifier1.get_utxo(&outpoint0).unwrap().as_ref(), Some(&utxo0));
+    assert_eq!(verifier1.get_utxo(&outpoint1).unwrap().as_ref(), Some(&utxo1));
     assert_eq!(verifier1.get_utxo(&outpoint2).unwrap(), None);
-    assert_eq!(
-        verifier2.get_utxo(&outpoint0).unwrap().as_ref(),
-        Some(&utxo0)
-    );
-    assert_eq!(
-        verifier2.get_utxo(&outpoint1).unwrap().as_ref(),
-        Some(&utxo1)
-    );
-    assert_eq!(
-        verifier2.get_utxo(&outpoint2).unwrap().as_ref(),
-        Some(&utxo2)
-    );
+    assert_eq!(verifier2.get_utxo(&outpoint0).unwrap().as_ref(), Some(&utxo0));
+    assert_eq!(verifier2.get_utxo(&outpoint1).unwrap().as_ref(), Some(&utxo1));
+    assert_eq!(verifier2.get_utxo(&outpoint2).unwrap().as_ref(), Some(&utxo2));
 }
 
 // Create the following hierarchy:
@@ -162,10 +147,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
-            UtxosBlockUndoEntry {
-                undo: block_undo_1.clone(),
-                is_fresh: true,
-            },
+            UtxosBlockUndoEntry { undo: block_undo_1.clone(), is_fresh: true },
         )]));
         verifier
     };
@@ -174,35 +156,17 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_2),
-            UtxosBlockUndoEntry {
-                undo: block_undo_2.clone(),
-                is_fresh: true,
-            },
+            UtxosBlockUndoEntry { undo: block_undo_2.clone(), is_fresh: true },
         )]));
         verifier
     };
 
-    assert_eq!(
-        verifier1.get_undo_data(block_undo_id_0).unwrap().as_ref(),
-        Some(&block_undo_0)
-    );
-    assert_eq!(
-        verifier1.get_undo_data(block_undo_id_1).unwrap().as_ref(),
-        Some(&block_undo_1)
-    );
+    assert_eq!(verifier1.get_undo_data(block_undo_id_0).unwrap().as_ref(), Some(&block_undo_0));
+    assert_eq!(verifier1.get_undo_data(block_undo_id_1).unwrap().as_ref(), Some(&block_undo_1));
     assert_eq!(verifier1.get_undo_data(block_undo_id_2).unwrap(), None);
-    assert_eq!(
-        verifier2.get_undo_data(block_undo_id_0).unwrap().as_ref(),
-        Some(&block_undo_0)
-    );
-    assert_eq!(
-        verifier2.get_undo_data(block_undo_id_1).unwrap().as_ref(),
-        Some(&block_undo_1)
-    );
-    assert_eq!(
-        verifier2.get_undo_data(block_undo_id_2).unwrap().as_ref(),
-        Some(&block_undo_2)
-    );
+    assert_eq!(verifier2.get_undo_data(block_undo_id_0).unwrap().as_ref(), Some(&block_undo_0));
+    assert_eq!(verifier2.get_undo_data(block_undo_id_1).unwrap().as_ref(), Some(&block_undo_1));
+    assert_eq!(verifier2.get_undo_data(block_undo_id_2).unwrap().as_ref(), Some(&block_undo_2));
 }
 
 // Create the following hierarchy:
@@ -263,28 +227,13 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
         verifier
     };
 
-    assert_eq!(
-        verifier1.get_mainchain_tx_index(&outpoint0).unwrap().as_ref(),
-        Some(&tx_index_0)
-    );
-    assert_eq!(
-        verifier1.get_mainchain_tx_index(&outpoint1).unwrap().as_ref(),
-        Some(&tx_index_1)
-    );
+    assert_eq!(verifier1.get_mainchain_tx_index(&outpoint0).unwrap().as_ref(), Some(&tx_index_0));
+    assert_eq!(verifier1.get_mainchain_tx_index(&outpoint1).unwrap().as_ref(), Some(&tx_index_1));
     assert_eq!(verifier1.get_mainchain_tx_index(&outpoint2).unwrap(), None);
 
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint0).unwrap(),
-        Some(tx_index_0)
-    );
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint1).unwrap(),
-        Some(tx_index_1)
-    );
-    assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint2).unwrap(),
-        Some(tx_index_2)
-    );
+    assert_eq!(verifier2.get_mainchain_tx_index(&outpoint0).unwrap(), Some(tx_index_0));
+    assert_eq!(verifier2.get_mainchain_tx_index(&outpoint1).unwrap(), Some(tx_index_1));
+    assert_eq!(verifier2.get_mainchain_tx_index(&outpoint2).unwrap(), Some(tx_index_2));
 }
 
 // Create the following hierarchy:
@@ -367,27 +316,12 @@ fn hierarchy_test_tokens(#[case] seed: Seed) {
         verifier
     };
 
-    assert_eq!(
-        verifier1.get_token_aux_data(&token_id_0).unwrap().as_ref(),
-        Some(&token_data_0)
-    );
-    assert_eq!(
-        verifier1.get_token_aux_data(&token_id_1).unwrap().as_ref(),
-        Some(&token_data_1)
-    );
+    assert_eq!(verifier1.get_token_aux_data(&token_id_0).unwrap().as_ref(), Some(&token_data_0));
+    assert_eq!(verifier1.get_token_aux_data(&token_id_1).unwrap().as_ref(), Some(&token_data_1));
     assert_eq!(verifier1.get_token_aux_data(&token_id_2).unwrap(), None);
-    assert_eq!(
-        verifier2.get_token_aux_data(&token_id_0).unwrap().as_ref(),
-        Some(&token_data_0)
-    );
-    assert_eq!(
-        verifier2.get_token_aux_data(&token_id_1).unwrap().as_ref(),
-        Some(&token_data_1)
-    );
-    assert_eq!(
-        verifier2.get_token_aux_data(&token_id_2).unwrap().as_ref(),
-        Some(&token_data_2)
-    );
+    assert_eq!(verifier2.get_token_aux_data(&token_id_0).unwrap().as_ref(), Some(&token_data_0));
+    assert_eq!(verifier2.get_token_aux_data(&token_id_1).unwrap().as_ref(), Some(&token_data_1));
+    assert_eq!(verifier2.get_token_aux_data(&token_id_2).unwrap().as_ref(), Some(&token_data_2));
 
     assert_eq!(
         verifier1
@@ -551,10 +485,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                AccountingBlockUndoEntry { undo: block_undo, is_fresh: true },
             )]));
         verifier
     };
@@ -576,64 +507,28 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                AccountingBlockUndoEntry { undo: block_undo, is_fresh: true },
             )]));
         verifier
     };
 
     // fetch pool balances
-    assert_eq!(
-        verifier1.get_pool_balance(pool_id_0).unwrap().as_ref(),
-        Some(&pool_balance0)
-    );
-    assert_eq!(
-        verifier1.get_pool_balance(pool_id_1).unwrap().as_ref(),
-        Some(&pool_balance1)
-    );
-    assert_eq!(
-        verifier1.get_pool_balance(pool_id_2).unwrap().as_ref(),
-        None
-    );
+    assert_eq!(verifier1.get_pool_balance(pool_id_0).unwrap().as_ref(), Some(&pool_balance0));
+    assert_eq!(verifier1.get_pool_balance(pool_id_1).unwrap().as_ref(), Some(&pool_balance1));
+    assert_eq!(verifier1.get_pool_balance(pool_id_2).unwrap().as_ref(), None);
 
-    assert_eq!(
-        verifier2.get_pool_balance(pool_id_0).unwrap().as_ref(),
-        Some(&pool_balance0)
-    );
-    assert_eq!(
-        verifier2.get_pool_balance(pool_id_1).unwrap().as_ref(),
-        Some(&pool_balance1)
-    );
-    assert_eq!(
-        verifier2.get_pool_balance(pool_id_2).unwrap().as_ref(),
-        Some(&pool_balance2)
-    );
+    assert_eq!(verifier2.get_pool_balance(pool_id_0).unwrap().as_ref(), Some(&pool_balance0));
+    assert_eq!(verifier2.get_pool_balance(pool_id_1).unwrap().as_ref(), Some(&pool_balance1));
+    assert_eq!(verifier2.get_pool_balance(pool_id_2).unwrap().as_ref(), Some(&pool_balance2));
 
     // fetch pool data
-    assert_eq!(
-        verifier1.get_pool_data(pool_id_0).unwrap(),
-        Some(pool_data0.clone().into())
-    );
-    assert_eq!(
-        verifier1.get_pool_data(pool_id_1).unwrap(),
-        Some(pool_data1.clone().into())
-    );
+    assert_eq!(verifier1.get_pool_data(pool_id_0).unwrap(), Some(pool_data0.clone().into()));
+    assert_eq!(verifier1.get_pool_data(pool_id_1).unwrap(), Some(pool_data1.clone().into()));
     assert_eq!(verifier1.get_pool_data(pool_id_2).unwrap(), None);
 
-    assert_eq!(
-        verifier2.get_pool_data(pool_id_0).unwrap(),
-        Some(pool_data0.into())
-    );
-    assert_eq!(
-        verifier2.get_pool_data(pool_id_1).unwrap(),
-        Some(pool_data1.into())
-    );
-    assert_eq!(
-        verifier2.get_pool_data(pool_id_2).unwrap(),
-        Some(pool_data2.into())
-    );
+    assert_eq!(verifier2.get_pool_data(pool_id_0).unwrap(), Some(pool_data0.into()));
+    assert_eq!(verifier2.get_pool_data(pool_id_1).unwrap(), Some(pool_data1.into()));
+    assert_eq!(verifier2.get_pool_data(pool_id_2).unwrap(), Some(pool_data2.into()));
 
     // fetch undo
     assert!(verifier1.get_accounting_undo(block_undo_id_0).unwrap().is_none());
@@ -693,26 +588,11 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
         verifier
     };
 
-    assert_eq!(
-        verifier1.get_account_nonce_count(account0).unwrap(),
-        Some(nonce0)
-    );
-    assert_eq!(
-        verifier1.get_account_nonce_count(account1).unwrap(),
-        Some(nonce1)
-    );
+    assert_eq!(verifier1.get_account_nonce_count(account0).unwrap(), Some(nonce0));
+    assert_eq!(verifier1.get_account_nonce_count(account1).unwrap(), Some(nonce1));
     assert_eq!(verifier1.get_account_nonce_count(account2).unwrap(), None);
 
-    assert_eq!(
-        verifier2.get_account_nonce_count(account0).unwrap(),
-        Some(nonce0)
-    );
-    assert_eq!(
-        verifier2.get_account_nonce_count(account1).unwrap(),
-        Some(nonce1)
-    );
-    assert_eq!(
-        verifier2.get_account_nonce_count(account2).unwrap(),
-        Some(nonce2)
-    );
+    assert_eq!(verifier2.get_account_nonce_count(account0).unwrap(), Some(nonce0));
+    assert_eq!(verifier2.get_account_nonce_count(account1).unwrap(), Some(nonce1));
+    assert_eq!(verifier2.get_account_nonce_count(account2).unwrap(), Some(nonce2));
 }

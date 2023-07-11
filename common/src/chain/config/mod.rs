@@ -472,11 +472,7 @@ fn create_mainnet_genesis() -> Genesis {
         genesis_mint_destination,
     );
 
-    Genesis::new(
-        genesis_message,
-        BlockTimestamp::from_int_seconds(1639975460),
-        vec![output],
-    )
+    Genesis::new(genesis_message, BlockTimestamp::from_int_seconds(1639975460), vec![output])
 }
 
 fn create_testnet_genesis() -> Genesis {
@@ -526,14 +522,8 @@ fn create_testnet_genesis() -> Genesis {
     )
 }
 
-pub fn regtest_genesis_values() -> (
-    PoolId,
-    Box<StakePoolData>,
-    PrivateKey,
-    PublicKey,
-    VRFPrivateKey,
-    VRFPublicKey,
-) {
+pub fn regtest_genesis_values(
+) -> (PoolId, Box<StakePoolData>, PrivateKey, PublicKey, VRFPrivateKey, VRFPublicKey) {
     let genesis_pool_id =
         decode_hex::<PoolId>("123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4");
 
@@ -603,11 +593,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
         premine_destination,
     );
 
-    Genesis::new(
-        genesis_message,
-        BlockTimestamp::from_int_seconds(1639975460),
-        vec![output],
-    )
+    Genesis::new(genesis_message, BlockTimestamp::from_int_seconds(1639975460), vec![output])
 }
 
 pub fn create_mainnet() -> ChainConfig {

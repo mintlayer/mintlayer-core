@@ -50,10 +50,7 @@ pub struct TokenIssuanceCache {
 
 impl TokenIssuanceCache {
     pub fn new() -> Self {
-        Self {
-            data: BTreeMap::new(),
-            txid_vs_tokenid: BTreeMap::new(),
-        }
+        Self { data: BTreeMap::new(), txid_vs_tokenid: BTreeMap::new() }
     }
 
     #[cfg(test)]
@@ -61,10 +58,7 @@ impl TokenIssuanceCache {
         data: BTreeMap<TokenId, CachedAuxDataOp>,
         txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,
     ) -> Self {
-        Self {
-            data,
-            txid_vs_tokenid,
-        }
+        Self { data, txid_vs_tokenid }
     }
 
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
@@ -112,9 +106,9 @@ impl TokenIssuanceCache {
     ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
             Entry::Occupied(mut entry) => match entry.get() {
-                CachedOperation::Write(_) | CachedOperation::Read(_) => Err(
-                    TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
-                ),
+                CachedOperation::Write(_) | CachedOperation::Read(_) => {
+                    Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id))
+                }
                 CachedOperation::Erase => {
                     entry.insert(new_op);
                     Ok(())
@@ -134,9 +128,7 @@ impl TokenIssuanceCache {
                 e.insert(CachedAuxDataOp::Erase);
             }
             Entry::Vacant(_) => {
-                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
-                    token_id,
-                ))
+                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(token_id))
             }
         }
         self.del_token_id(&tx.get_id())?;
@@ -208,10 +200,7 @@ impl TokenIssuanceCache {
     }
 
     pub fn consume(self) -> ConsumedTokenIssuanceCache {
-        ConsumedTokenIssuanceCache {
-            data: self.data,
-            txid_vs_tokenid: self.txid_vs_tokenid,
-        }
+        ConsumedTokenIssuanceCache { data: self.data, txid_vs_tokenid: self.txid_vs_tokenid }
     }
 }
 

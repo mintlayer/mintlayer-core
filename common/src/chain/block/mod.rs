@@ -74,10 +74,7 @@ impl Block {
         consensus_data: ConsensusData,
         reward: BlockReward,
     ) -> Result<Self, BlockCreationError> {
-        let body = BlockBody {
-            reward,
-            transactions,
-        };
+        let body = BlockBody { reward, transactions };
 
         let merkle_proxy = body.merkle_tree_proxy()?;
         let tx_merkle_root = merkle_proxy.merkle_tree().root();
@@ -261,10 +258,7 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let body = BlockBody {
-            reward: BlockReward::new(Vec::new()),
-            transactions: Vec::new(),
-        };
+        let body = BlockBody { reward: BlockReward::new(Vec::new()), transactions: Vec::new() };
 
         let header = header.with_no_signature();
 
@@ -293,10 +287,7 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let body = BlockBody {
-            reward: BlockReward::new(Vec::new()),
-            transactions: Vec::new(),
-        };
+        let body = BlockBody { reward: BlockReward::new(Vec::new()), transactions: Vec::new() };
 
         let header = header.with_no_signature();
 
@@ -333,10 +324,7 @@ mod tests {
             OutputValue::Coin(Amount::from_atoms(1)),
             Destination::AnyoneCanSpend,
         )]);
-        let body = BlockBody {
-            reward,
-            transactions: Vec::new(),
-        };
+        let body = BlockBody { reward, transactions: Vec::new() };
 
         let header = header.with_no_signature();
 
@@ -363,10 +351,8 @@ mod tests {
         let one_transaction =
             SignedTransaction::new(Transaction::new(0, Vec::new(), Vec::new()).unwrap(), vec![])
                 .expect("invalid witness count");
-        let body = BlockBody {
-            reward: BlockReward::new(Vec::new()),
-            transactions: vec![one_transaction],
-        };
+        let body =
+            BlockBody { reward: BlockReward::new(Vec::new()), transactions: vec![one_transaction] };
 
         let header = header.with_no_signature();
 
@@ -396,10 +382,8 @@ mod tests {
             vec![InputWitness::NoSignature(Some(b"abc".to_vec()))],
         )
         .expect("invalid witness count");
-        let body = BlockBody {
-            reward: BlockReward::new(Vec::new()),
-            transactions: vec![one_transaction],
-        };
+        let body =
+            BlockBody { reward: BlockReward::new(Vec::new()), transactions: vec![one_transaction] };
 
         let merkle_root = body.merkle_tree_proxy().unwrap().merkle_tree().root();
         let witness_merkle_root = body.merkle_tree_proxy().unwrap().witness_merkle_tree().root();
@@ -420,10 +404,7 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let body = BlockBody {
-            reward: BlockReward::new(Vec::new()),
-            transactions: Vec::new(),
-        };
+        let body = BlockBody { reward: BlockReward::new(Vec::new()), transactions: Vec::new() };
 
         let header = header.with_no_signature();
 

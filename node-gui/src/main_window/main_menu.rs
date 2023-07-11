@@ -35,9 +35,7 @@ pub struct MainMenu {
 
 impl MainMenu {
     pub fn new(backend_controller: NodeBackendController) -> Self {
-        Self {
-            _backend_controller: backend_controller,
-        }
+        Self { _backend_controller: backend_controller }
     }
 
     pub fn view(

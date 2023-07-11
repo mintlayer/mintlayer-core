@@ -42,10 +42,7 @@ struct NodeRpc {
 
 impl NodeRpc {
     fn new(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> Self {
-        Self {
-            shutdown_trigger,
-            chain_config,
-        }
+        Self { shutdown_trigger, chain_config }
     }
 }
 

@@ -46,10 +46,7 @@ pub struct AccountPrefixedId<Id> {
 
 impl<Id: Encode> AccountPrefixedId<Id> {
     pub fn new(account_id: AccountId, item_id: Id) -> AccountPrefixedId<Id> {
-        Self {
-            account_id,
-            item_id,
-        }
+        Self { account_id, item_id }
     }
 
     pub fn into_item_id(self) -> Id {

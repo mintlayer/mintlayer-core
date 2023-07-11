@@ -49,18 +49,13 @@ fn prepare_stake_pool(
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_owner(rng, amount_to_stake, vrf_pk);
 
-    let genesis_outpoint = UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-        0,
-    );
+    let genesis_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
     let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
     let tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(
-            pool_id,
-            Box::new(stake_pool_data),
-        ))
+        .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(amount_to_stake),
             Destination::AnyoneCanSpend,
@@ -79,13 +74,7 @@ fn prepare_stake_pool(
 fn prepare_delegation(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
-) -> (
-    PoolId,
-    UtxoOutPoint,
-    DelegationId,
-    UtxoOutPoint,
-    UtxoOutPoint,
-) {
+) -> (PoolId, UtxoOutPoint, DelegationId, UtxoOutPoint, UtxoOutPoint) {
     let (pool_id, stake_outpoint, transfer_outpoint) = prepare_stake_pool(rng, tf);
 
     let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
@@ -93,10 +82,7 @@ fn prepare_delegation(
     let delegation_id = pos_accounting::make_delegation_id(&transfer_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(transfer_outpoint.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateDelegationId(
-            Destination::AnyoneCanSpend,
-            pool_id,
-        ))
+        .add_output(TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, pool_id))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(available_amount),
             Destination::AnyoneCanSpend,
@@ -109,13 +95,7 @@ fn prepare_delegation(
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
-    (
-        pool_id,
-        stake_outpoint,
-        delegation_id,
-        delegation_outpoint,
-        transfer_outpoint,
-    )
+    (pool_id, stake_outpoint, delegation_id, delegation_outpoint, transfer_outpoint)
 }
 
 fn get_coin_amount_from_outpoint(store: &TestStore, outpoint: &UtxoOutPoint) -> Amount {
@@ -143,10 +123,7 @@ fn create_delegation(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateDelegationId(
-                delegation_spend_destination.clone(),
-                pool_id,
-            ))
+            .add_output(TxOutput::CreateDelegationId(delegation_spend_destination.clone(), pool_id))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(available_amount),
                 Destination::AnyoneCanSpend,
@@ -221,19 +198,14 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
-        let genesis_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0);
         let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
 
         // create pool and 2 transfer utxos
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
+            .add_output(TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_stake),
                 Destination::AnyoneCanSpend,
@@ -251,14 +223,8 @@ fn create_delegation_twice(#[case] seed: Seed) {
         // Try to create 2 delegations in 1 transaction
         let tx = TransactionBuilder::new()
             .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateDelegationId(
-                Destination::AnyoneCanSpend,
-                pool_id,
-            ))
-            .add_output(TxOutput::CreateDelegationId(
-                Destination::AnyoneCanSpend,
-                pool_id,
-            ))
+            .add_output(TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, pool_id))
+            .add_output(TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, pool_id))
             .build();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
@@ -454,10 +420,7 @@ fn delegate_staking(#[case] seed: Seed) {
         )
         .unwrap()
         .unwrap();
-        assert_eq!(
-            delegation_data,
-            DelegationData::new(pool_id, Destination::AnyoneCanSpend)
-        );
+        assert_eq!(delegation_data, DelegationData::new(pool_id, Destination::AnyoneCanSpend));
     });
 }
 

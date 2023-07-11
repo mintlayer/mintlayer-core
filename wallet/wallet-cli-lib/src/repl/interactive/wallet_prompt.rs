@@ -26,9 +26,7 @@ pub struct WalletPrompt {
 
 impl WalletPrompt {
     pub fn new() -> Self {
-        WalletPrompt {
-            prompt_left: "Wallet".into(),
-        }
+        WalletPrompt { prompt_left: "Wallet".into() }
     }
     pub fn set_status(&mut self, status: String) {
         self.prompt_left = format!("Wallet{}", status);
@@ -61,9 +59,6 @@ impl Prompt for WalletPrompt {
             PromptHistorySearchStatus::Failing => "failing ",
         };
 
-        Cow::Owned(format!(
-            "({}reverse-search: {}) ",
-            prefix, history_search.term
-        ))
+        Cow::Owned(format!("({}reverse-search: {}) ", prefix, history_search.term))
     }
 }

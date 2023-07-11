@@ -60,11 +60,9 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info, _) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    let (address, peer_info, _) =
+        connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+            .await;
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
@@ -72,10 +70,7 @@ where
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
-    assert!(std::matches!(
-        event,
-        Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
-    ));
+    assert!(std::matches!(event, Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })));
 }
 
 #[tokio::test]
@@ -109,11 +104,9 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info, _) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    let (address, peer_info, _) =
+        connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+            .await;
     let peer_id = peer_info.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
@@ -121,10 +114,7 @@ where
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
-    assert!(std::matches!(
-        event,
-        Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
-    ));
+    assert!(std::matches!(event, Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })));
 }
 
 #[tokio::test]
@@ -166,11 +156,9 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info1, _peer_info2) = connect_services::<T>(
-        &mut pm1.peer_connectivity_handle,
-        &mut pm2.peer_connectivity_handle,
-    )
-    .await;
+    let (address, peer_info1, _peer_info2) =
+        connect_services::<T>(&mut pm1.peer_connectivity_handle, &mut pm2.peer_connectivity_handle)
+            .await;
     let peer_id = peer_info1.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info1, None);
 
@@ -330,12 +318,9 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
-        A::make_transport(),
-        addr1,
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
+    let (mut pm1, _shutdown_sender, _subscribers_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::new(config::create_mainnet()))
+            .await;
     let (mut pm2, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,

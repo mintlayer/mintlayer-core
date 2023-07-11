@@ -79,18 +79,12 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_utxo_undo_data()
-        .with(
-            eq(TransactionSource::Chain(block_1_id)),
-            eq(block_1_undo.clone()),
-        )
+        .with(eq(TransactionSource::Chain(block_1_id)), eq(block_1_undo.clone()))
         .times(1)
         .return_const(Ok(()));
     store
         .expect_set_utxo_undo_data()
-        .with(
-            eq(TransactionSource::Chain(block_2_id)),
-            eq(block_2_undo.clone()),
-        )
+        .with(eq(TransactionSource::Chain(block_2_id)), eq(block_2_undo.clone()))
         .times(1)
         .return_const(Ok(()));
 
@@ -99,10 +93,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        UtxosBlockUndoEntry {
-            undo: block_1_undo,
-            is_fresh: true,
-        },
+        UtxosBlockUndoEntry { undo: block_1_undo, is_fresh: true },
     )]));
 
     let verifier2 = {
@@ -110,10 +101,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            UtxosBlockUndoEntry {
-                undo: block_2_undo,
-                is_fresh: true,
-            },
+            UtxosBlockUndoEntry { undo: block_2_undo, is_fresh: true },
         )]));
         verifier
     };
@@ -330,10 +318,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
     verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        UtxosBlockUndoEntry {
-            undo: block_1_undo,
-            is_fresh: false,
-        },
+        UtxosBlockUndoEntry { undo: block_1_undo, is_fresh: false },
     )]));
 
     let verifier2 = {
@@ -341,10 +326,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         verifier.utxo_cache.spend_utxo(&outpoint2).unwrap();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            UtxosBlockUndoEntry {
-                undo: block_2_undo,
-                is_fresh: false,
-            },
+            UtxosBlockUndoEntry { undo: block_2_undo, is_fresh: false },
         )]));
         verifier
     };
@@ -547,32 +529,20 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = UtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
-        BTreeMap::from([(
-            tx_1_id,
-            UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]),
-        )]),
+        BTreeMap::from([(tx_1_id, UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]))]),
     )
     .unwrap();
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_undo_2 = UtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
-        BTreeMap::from([(
-            tx_2_id,
-            UtxosTxUndoWithSources::new(vec![Some(utxo4.clone())], vec![]),
-        )]),
+        BTreeMap::from([(tx_2_id, UtxosTxUndoWithSources::new(vec![Some(utxo4.clone())], vec![]))]),
     )
     .unwrap();
     let expected_block_undo = UtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
         BTreeMap::from([
-            (
-                tx_1_id,
-                UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![]),
-            ),
-            (
-                tx_2_id,
-                UtxosTxUndoWithSources::new(vec![Some(utxo4)], vec![]),
-            ),
+            (tx_1_id, UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![])),
+            (tx_2_id, UtxosTxUndoWithSources::new(vec![Some(utxo4)], vec![])),
         ]),
     )
     .unwrap();
@@ -581,10 +551,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_set_utxo_undo_data()
-        .with(
-            eq(TransactionSource::Chain(block_id)),
-            eq(expected_block_undo),
-        )
+        .with(eq(TransactionSource::Chain(block_id)), eq(expected_block_undo))
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
@@ -597,20 +564,14 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
-        UtxosBlockUndoEntry {
-            undo: block_undo_1,
-            is_fresh: true,
-        },
+        UtxosBlockUndoEntry { undo: block_undo_1, is_fresh: true },
     )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_id),
-            UtxosBlockUndoEntry {
-                undo: block_undo_2,
-                is_fresh: true,
-            },
+            UtxosBlockUndoEntry { undo: block_undo_2, is_fresh: true },
         )]));
         verifier
     };
@@ -891,10 +852,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                AccountingBlockUndoEntry { undo: block_undo, is_fresh: true },
             )]));
         verifier
     };
@@ -917,10 +875,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: true,
-                },
+                AccountingBlockUndoEntry { undo: block_undo, is_fresh: true },
             )]));
         verifier
     };
@@ -971,10 +926,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                AccountingBlockUndoEntry { undo: Default::default(), is_fresh: false },
             )]));
         verifier
     };
@@ -985,10 +937,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
+                AccountingBlockUndoEntry { undo: Default::default(), is_fresh: false },
             )]));
         verifier
     };

@@ -50,17 +50,11 @@ pub fn password_to_sym_key(password: &String) -> crate::Result<(SymmetricKey, Kd
     };
     let kdf_result = hash_password(&mut rng, config, password.as_bytes())
         .map_err(|_| crate::Error::WalletInvalidPassword)?;
-    let KdfResult::Argon2id {
-        hashed_password,
-        config: _,
-        salt: _,
-    } = &kdf_result;
+    let KdfResult::Argon2id { hashed_password, config: _, salt: _ } = &kdf_result;
 
-    let sym_key = SymmetricKey::from_raw_key(
-        SymmetricKeyKind::XChacha20Poly1305,
-        hashed_password.as_slice(),
-    )
-    .expect("must be correct size");
+    let sym_key =
+        SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, hashed_password.as_slice())
+            .expect("must be correct size");
 
     let challenge = kdf_result.into_challenge();
 
@@ -87,18 +81,13 @@ pub fn challenge_to_sym_key(
     password: &String,
     kdf_challenge: KdfChallenge,
 ) -> crate::Result<SymmetricKey> {
-    let KdfResult::Argon2id {
-        hashed_password,
-        salt: _,
-        config: _,
-    } = hash_from_challenge(kdf_challenge, password.as_bytes())
-        .map_err(|_| crate::Error::WalletInvalidPassword)?;
+    let KdfResult::Argon2id { hashed_password, salt: _, config: _ } =
+        hash_from_challenge(kdf_challenge, password.as_bytes())
+            .map_err(|_| crate::Error::WalletInvalidPassword)?;
 
-    let sym_key = SymmetricKey::from_raw_key(
-        SymmetricKeyKind::XChacha20Poly1305,
-        hashed_password.as_slice(),
-    )
-    .expect("must be correct size");
+    let sym_key =
+        SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, hashed_password.as_slice())
+            .expect("must be correct size");
 
     Ok(sym_key)
 }

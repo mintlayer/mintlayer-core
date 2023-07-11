@@ -127,12 +127,7 @@ impl BlockProduction {
         input_data: GenerateBlockInputData,
         time_getter: TimeGetter,
     ) -> Result<
-        (
-            ConsensusData,
-            BlockReward,
-            GenBlockIndex,
-            FinalizeBlockInputData,
-        ),
+        (ConsensusData, BlockReward, GenBlockIndex, FinalizeBlockInputData),
         BlockProductionError,
     > {
         let consensus_data = self
@@ -198,12 +193,7 @@ impl BlockProduction {
                         input_data,
                     )?;
 
-                    Ok((
-                        consensus_data,
-                        block_reward,
-                        best_block_index,
-                        finalize_block_data,
-                    ))
+                    Ok((consensus_data, block_reward, best_block_index, finalize_block_data))
                 }
             })
             .await?

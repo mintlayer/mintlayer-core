@@ -81,13 +81,7 @@ impl OutputGroup {
             }
         };
 
-        Ok(Self {
-            outputs: vec![output],
-            value,
-            fee,
-            long_term_fee,
-            weight,
-        })
+        Ok(Self { outputs: vec![output], value, fee, long_term_fee, weight })
     }
 
     pub fn get_effective_value(&self, pay_fees: PayFee) -> Amount {

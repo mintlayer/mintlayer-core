@@ -68,12 +68,7 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
         cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
         conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
     ) -> Self {
-        Self {
-            local_addresses,
-            cmd_tx,
-            conn_rx,
-            _marker: PhantomData,
-        }
+        Self { local_addresses, cmd_tx, conn_rx, _marker: PhantomData }
     }
 }
 
@@ -90,9 +85,7 @@ impl<T: TransportSocket> MessagingHandle<T> {
 
 impl<T: TransportSocket> Clone for MessagingHandle<T> {
     fn clone(&self) -> Self {
-        Self {
-            command_sender: self.command_sender.clone(),
-        }
+        Self { command_sender: self.command_sender.clone() }
     }
 }
 
@@ -173,10 +166,7 @@ where
     T: TransportSocket,
 {
     fn connect(&mut self, address: S::Address) -> crate::Result<()> {
-        log::debug!(
-            "try to establish outbound connection, address {:?}",
-            address
-        );
+        log::debug!("try to establish outbound connection, address {:?}", address);
 
         Ok(self.cmd_tx.send(types::Command::Connect { address })?)
     }
@@ -194,10 +184,9 @@ where
     }
 
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
-        Ok(self.cmd_tx.send(types::Command::SendMessage {
-            peer,
-            message: message.into(),
-        })?)
+        Ok(self
+            .cmd_tx
+            .send(types::Command::SendMessage { peer, message: message.into() })?)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -211,10 +200,9 @@ where
 
 impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
-        Ok(self.command_sender.send(types::Command::SendMessage {
-            peer,
-            message: message.into(),
-        })?)
+        Ok(self
+            .command_sender
+            .send(types::Command::SendMessage { peer, message: message.into() })?)
     }
 
     fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()> {
@@ -226,16 +214,15 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
             | SyncMessage::BlockResponse(_)
             | SyncMessage::TransactionRequest(_)
             | SyncMessage::TransactionResponse(_) => {
-                return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                    format!("Unable to broadcast message: {message:?}"),
-                )))
+                return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(format!(
+                    "Unable to broadcast message: {message:?}"
+                ))))
             }
         };
 
-        Ok(self.command_sender.send(types::Command::AnnounceData {
-            service,
-            message: message.into(),
-        })?)
+        Ok(self
+            .command_sender
+            .send(types::Command::AnnounceData { service, message: message.into() })?)
     }
 }
 

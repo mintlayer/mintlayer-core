@@ -158,10 +158,7 @@ mod tests {
         let super_path = DerivationPath::from_str(super_path).unwrap();
         let result = result.map(|s| DerivationPath::from_str(s).unwrap().as_slice().to_vec());
 
-        assert_eq!(
-            super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()),
-            result
-        );
+        assert_eq!(super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()), result);
     }
 
     #[rstest]
@@ -192,26 +189,14 @@ mod tests {
         let sub_path = DerivationPath::try_from(sub_path_vec).unwrap();
         let super_path = DerivationPath::try_from(super_path_vec).unwrap();
 
-        assert_eq!(
-            super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()),
-            result
-        );
+        assert_eq!(super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()), result);
     }
 
     #[test]
     fn parse_derivation_path() {
-        assert_eq!(
-            DerivationPath::from_str(""),
-            Err(DerivationError::InvalidDerivationPathFormat)
-        );
-        assert_eq!(
-            DerivationPath::from_str("m/"),
-            Err(DerivationError::InvalidChildNumberFormat)
-        );
-        assert_eq!(
-            DerivationPath::from_str("m/h"),
-            Err(DerivationError::InvalidChildNumberFormat)
-        );
+        assert_eq!(DerivationPath::from_str(""), Err(DerivationError::InvalidDerivationPathFormat));
+        assert_eq!(DerivationPath::from_str("m/"), Err(DerivationError::InvalidChildNumberFormat));
+        assert_eq!(DerivationPath::from_str("m/h"), Err(DerivationError::InvalidChildNumberFormat));
         assert_eq!(
             DerivationPath::from_str("42"),
             Err(DerivationError::InvalidDerivationPathFormat)
@@ -277,10 +262,7 @@ mod tests {
             Err(DerivationError::InvalidChildNumberFormat)
         );
 
-        assert_eq!(
-            DerivationPath(vec![]),
-            DerivationPath::from_str("m").unwrap()
-        );
+        assert_eq!(DerivationPath(vec![]), DerivationPath::from_str("m").unwrap());
         assert_eq!(DerivationPath::from_str("m"), Ok(DerivationPath::empty()));
         assert_eq!(
             DerivationPath::from_str("m/0'"),
@@ -348,10 +330,7 @@ mod tests {
         let mut path = path_1_2.clone().into_vec();
         let index_3 = ChildNumber::from_hardened(3.try_into().unwrap());
         path.push(index_3);
-        assert_eq!(
-            path,
-            DerivationPath::from_str("m/1'/2'/3'").unwrap().into_vec()
-        );
+        assert_eq!(path, DerivationPath::from_str("m/1'/2'/3'").unwrap().into_vec());
         assert_eq!(path.pop(), Some(index_3));
         assert_eq!(path, path_1_2.into_vec());
         path.pop();

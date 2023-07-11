@@ -47,14 +47,8 @@ impl<P: PoSAccountingView> PoSAccountingDeltaAdapter<P> {
 
     pub fn consume(
         self,
-    ) -> (
-        PoSAccountingDeltaData,
-        BTreeMap<TransactionSource, PoSAccountingDeltaData>,
-    ) {
-        (
-            self.accounting_delta.consume(),
-            self.accounting_block_deltas,
-        )
+    ) -> (PoSAccountingDeltaData, BTreeMap<TransactionSource, PoSAccountingDeltaData>) {
+        (self.accounting_delta.consume(), self.accounting_block_deltas)
     }
 
     pub fn operations(&mut self, tx_source: TransactionSource) -> PoSAccountingOperationImpl<P> {

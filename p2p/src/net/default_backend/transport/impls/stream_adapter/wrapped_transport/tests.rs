@@ -131,10 +131,7 @@ pub struct TestListener {
 
 impl TestTransport {
     fn new() -> Self {
-        Self {
-            transport: MpscChannelTransport::new(),
-            port_open: Default::default(),
-        }
+        Self { transport: MpscChannelTransport::new(), port_open: Default::default() }
     }
 }
 
@@ -148,10 +145,7 @@ impl TransportSocket for TestTransport {
     async fn bind(&self, addresses: Vec<Self::Address>) -> crate::Result<Self::Listener> {
         let listener = self.transport.bind(addresses).await.unwrap();
         *self.port_open.lock().unwrap() = true;
-        Ok(TestListener {
-            listener,
-            port_open: Arc::clone(&self.port_open),
-        })
+        Ok(TestListener { listener, port_open: Arc::clone(&self.port_open) })
     }
 
     fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
@@ -263,11 +257,7 @@ async fn pending_handshakes() {
     sockets.pop();
 
     // Noise connection should succeed now
-    let pending_fut = timeout(
-        Duration::from_millis(10000),
-        transport.connect(local_addr[0]),
-    )
-    .await;
+    let pending_fut = timeout(Duration::from_millis(10000), transport.connect(local_addr[0])).await;
     assert!(matches!(pending_fut, Ok(Ok(_))));
 
     join_handle.abort();

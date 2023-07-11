@@ -41,9 +41,7 @@ where
 {
     pub fn new() -> Self {
         let value: T = <T as Atomic>::Type::zero().into();
-        Self {
-            value: Arc::new(value),
-        }
+        Self { value: Arc::new(value) }
     }
 
     pub fn wait_for_zero(&self) {

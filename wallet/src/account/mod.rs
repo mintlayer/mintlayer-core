@@ -78,12 +78,7 @@ impl Account {
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
         let output_cache = OutputCache::new(txs);
 
-        Ok(Account {
-            chain_config,
-            key_chain,
-            output_cache,
-            account_info,
-        })
+        Ok(Account { chain_config, key_chain, output_cache, account_info })
     }
 
     /// Create a new account by providing a key chain
@@ -107,12 +102,7 @@ impl Account {
 
         let output_cache = OutputCache::empty();
 
-        let mut account = Account {
-            chain_config,
-            key_chain,
-            output_cache,
-            account_info,
-        };
+        let mut account = Account { chain_config, key_chain, output_cache, account_info };
 
         account.scan_genesis(db_tx)?;
 
@@ -340,10 +330,8 @@ impl Account {
         db_tx: &impl WalletStorageReadUnlocked,
         median_time: BlockTimestamp,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let utxos = self.get_utxos(
-            UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
-            median_time,
-        );
+        let utxos = self
+            .get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake, median_time);
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
             utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
@@ -391,7 +379,7 @@ impl Account {
         let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
         if utxos.len() != inputs.len() {
             return Err(
-                TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
+                TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into()
             );
         }
 
@@ -548,10 +536,8 @@ impl Account {
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
+        let current_block_info =
+            BlockInfo { height: self.account_info.best_block_height(), timestamp: median_time };
         let mut all_outputs = self.output_cache.utxos_with_token_ids(current_block_info);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
@@ -642,10 +628,8 @@ impl Account {
             self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
 
             for signed_tx in block.transactions() {
-                let wallet_tx = WalletTx::Tx(TxData::new(
-                    signed_tx.transaction().clone().into(),
-                    tx_state,
-                ));
+                let wallet_tx =
+                    WalletTx::Tx(TxData::new(signed_tx.transaction().clone().into(), tx_state));
                 self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
             }
         }
@@ -661,10 +645,7 @@ impl Account {
     }
 
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
-        (
-            self.account_info.best_block_id(),
-            self.account_info.best_block_height(),
-        )
+        (self.account_info.best_block_id(), self.account_info.best_block_height())
     }
 
     pub fn has_transactions(&self) -> bool {

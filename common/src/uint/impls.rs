@@ -131,10 +131,7 @@ macro_rules! construct_uint {
             /// big endian encoding
             pub fn from_be_slice(bytes: &[u8]) -> Result<$name, ParseLengthError> {
                 if bytes.len() != $n_words * 8 {
-                    Err(ParseLengthError {
-                        actual: bytes.len(),
-                        expected: $n_words * 8,
-                    })
+                    Err(ParseLengthError { actual: bytes.len(), expected: $n_words * 8 })
                 } else {
                     Ok(Self::_from_be_slice(bytes))
                 }
@@ -173,10 +170,7 @@ macro_rules! construct_uint {
             /// little endian encoding
             pub fn from_slice(bytes: &[u8]) -> Result<$name, ParseLengthError> {
                 if bytes.len() != $n_words * 8 {
-                    Err(ParseLengthError {
-                        actual: bytes.len(),
-                        expected: $n_words * 8,
-                    })
+                    Err(ParseLengthError { actual: bytes.len(), expected: $n_words * 8 })
                 } else {
                     Ok(Self::inner_from_slice(bytes))
                 }
@@ -567,11 +561,7 @@ pub struct ParseLengthError {
 
 impl core::fmt::Display for ParseLengthError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(
-            f,
-            "Invalid length: got {}, expected {}",
-            self.actual, self.expected
-        )
+        write!(f, "Invalid length: got {}, expected {}", self.actual, self.expected)
     }
 }
 
@@ -817,48 +807,24 @@ mod tests {
         let shl = add << 88;
         assert_eq!(shl, Uint256([0u64, 0xDFBD5B7DDE000000, 0x1BD5B7D, 0]));
         let shr = shl >> 40;
-        assert_eq!(
-            shr,
-            Uint256([0x7DDE000000000000u64, 0x0001BD5B7DDFBD5B, 0, 0])
-        );
+        assert_eq!(shr, Uint256([0x7DDE000000000000u64, 0x0001BD5B7DDFBD5B, 0, 0]));
         // Increment
         let mut incr = shr;
         incr.increment();
-        assert_eq!(
-            incr,
-            Uint256([0x7DDE000000000001u64, 0x0001BD5B7DDFBD5B, 0, 0])
-        );
+        assert_eq!(incr, Uint256([0x7DDE000000000001u64, 0x0001BD5B7DDFBD5B, 0, 0]));
         // Subtraction
         let sub = incr - init;
-        assert_eq!(
-            sub,
-            Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
-        );
+        assert_eq!(sub, Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0]));
         // Multiplication
         let mult = sub.mul_u32(300);
-        assert_eq!(
-            mult,
-            Uint256([0x8C8C3EE70C644118u64, 0x0209E7378231E632, 0, 0])
-        );
+        assert_eq!(mult, Uint256([0x8C8C3EE70C644118u64, 0x0209E7378231E632, 0, 0]));
         // Division
-        assert_eq!(
-            Uint256::from_u64(105) / Uint256::from_u64(5),
-            Uint256::from_u64(21)
-        );
+        assert_eq!(Uint256::from_u64(105) / Uint256::from_u64(5), Uint256::from_u64(21));
         let div = mult / Uint256::from_u64(300);
-        assert_eq!(
-            div,
-            Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
-        );
+        assert_eq!(div, Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0]));
 
-        assert_eq!(
-            Uint256::from_u64(105) % Uint256::from_u64(5),
-            Uint256::from_u64(0)
-        );
-        assert_eq!(
-            Uint256::from_u64(35498456) % Uint256::from_u64(3435),
-            Uint256::from_u64(1166)
-        );
+        assert_eq!(Uint256::from_u64(105) % Uint256::from_u64(5), Uint256::from_u64(0));
+        assert_eq!(Uint256::from_u64(35498456) % Uint256::from_u64(3435), Uint256::from_u64(1166));
         let rem_src = mult * Uint256::from_u64(39842) + Uint256::from_u64(9054);
         assert_eq!(rem_src % Uint256::from_u64(39842), Uint256::from_u64(9054));
         // TODO: bit inversion
@@ -876,14 +842,8 @@ mod tests {
         let u256_res = u224_res.mul_u32(0xFFFFFFFF);
 
         assert_eq!(u96_res, Uint256([0xffffffff21524111u64, 0xDEADBEEE, 0, 0]));
-        assert_eq!(
-            u128_res,
-            Uint256([0x21524111DEADBEEFu64, 0xDEADBEEE21524110, 0, 0])
-        );
-        assert_eq!(
-            u160_res,
-            Uint256([0xBD5B7DDD21524111u64, 0x42A4822200000001, 0xDEADBEED, 0])
-        );
+        assert_eq!(u128_res, Uint256([0x21524111DEADBEEFu64, 0xDEADBEEE21524110, 0, 0]));
+        assert_eq!(u160_res, Uint256([0xBD5B7DDD21524111u64, 0x42A4822200000001, 0xDEADBEED, 0]));
         assert_eq!(
             u192_res,
             Uint256([0x63F6C333DEADBEEFu64, 0xBD5B7DDFBD5B7DDB, 0xDEADBEEC63F6C334, 0])
@@ -909,10 +869,7 @@ mod tests {
 
         let u128_res = u64_val * u64_val;
 
-        assert_eq!(
-            u128_res,
-            Uint256([0x048D1354216DA321u64, 0xC1B1CD13A4D13D46, 0, 0])
-        );
+        assert_eq!(u128_res, Uint256([0x048D1354216DA321u64, 0xC1B1CD13A4D13D46, 0, 0]));
 
         let u256_res = u128_res * u128_res;
 
@@ -1023,10 +980,7 @@ mod tests {
         let add = (init << 64) + init;
         assert_eq!(add, Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0]));
         assert_eq!(add >> 64, Uint256([0xDEADBEEFDEADBEEF, 0, 0, 0]));
-        assert_eq!(
-            add << 64,
-            Uint256([0, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0])
-        );
+        assert_eq!(add << 64, Uint256([0, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0]));
     }
 
     #[rstest]
@@ -1086,16 +1040,10 @@ mod tests {
         assert_eq!(Uint256::try_from(b).unwrap(), a);
 
         let a = Uint512::from(Uint256::MAX) + Uint512::ONE;
-        assert_eq!(
-            Uint256::try_from(a).unwrap_err(),
-            UintConversionError::ConversionOverflow
-        );
+        assert_eq!(Uint256::try_from(a).unwrap_err(), UintConversionError::ConversionOverflow);
 
         let a = Uint512::MAX;
-        assert_eq!(
-            Uint256::try_from(a).unwrap_err(),
-            UintConversionError::ConversionOverflow
-        );
+        assert_eq!(Uint256::try_from(a).unwrap_err(), UintConversionError::ConversionOverflow);
     }
 
     #[rstest]
@@ -1126,15 +1074,9 @@ mod tests {
         assert_eq!(u128::try_from(b).unwrap(), a);
 
         let a = Uint256::from(u128::MAX) + Uint256::ONE;
-        assert_eq!(
-            u128::try_from(a).unwrap_err(),
-            UintConversionError::ConversionOverflow
-        );
+        assert_eq!(u128::try_from(a).unwrap_err(), UintConversionError::ConversionOverflow);
 
         let a = Uint256::MAX;
-        assert_eq!(
-            u128::try_from(a).unwrap_err(),
-            UintConversionError::ConversionOverflow
-        );
+        assert_eq!(u128::try_from(a).unwrap_err(), UintConversionError::ConversionOverflow);
     }
 }

@@ -127,18 +127,12 @@ pub mod testcontext {
     impl TestContext {
         /// New test context
         pub fn new(transaction: Vec<u8>) -> Self {
-            Self {
-                transaction,
-                block_height: 0,
-            }
+            Self { transaction, block_height: 0 }
         }
 
         /// New test context at particular block height
         pub fn new_at_height(transaction: Vec<u8>, block_height: u64) -> Self {
-            Self {
-                transaction,
-                block_height,
-            }
+            Self { transaction, block_height }
         }
     }
 

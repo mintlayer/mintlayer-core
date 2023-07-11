@@ -74,9 +74,7 @@ mod tests {
         type Output = FeeRate;
         fn div(self, rhs: NonZeroUsize) -> Self::Output {
             let rhs = u128::try_from(usize::from(rhs)).expect("conversion");
-            FeeRate {
-                amount_per_kb: (self.amount_per_kb / rhs).expect("rhs is nonzero"),
-            }
+            FeeRate { amount_per_kb: (self.amount_per_kb / rhs).expect("rhs is nonzero") }
         }
     }
 
@@ -85,12 +83,7 @@ mod tests {
         let fee = Amount::from_atoms(7).into();
         let tx_size = usize::MAX;
         let rate = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap()).unwrap();
-        assert_eq!(
-            rate,
-            FeeRate {
-                amount_per_kb: Amount::from_atoms(0)
-            }
-        );
+        assert_eq!(rate, FeeRate { amount_per_kb: Amount::from_atoms(0) });
 
         let fee = Amount::from_atoms(u128::MAX).into();
         let tx_size = 1;

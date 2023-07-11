@@ -117,10 +117,7 @@ mod test {
     }
 
     fn test_back_and_forth(data: DataOrNoVec<u8>) {
-        assert_eq!(
-            DataOrNoVec::<u8>::decode_all(&mut data.encode().as_slice()),
-            Ok(data)
-        );
+        assert_eq!(DataOrNoVec::<u8>::decode_all(&mut data.encode().as_slice()), Ok(data));
     }
 
     #[test]

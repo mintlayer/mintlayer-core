@@ -174,13 +174,9 @@ impl From<SpendError> for TxIndexError {
         match err {
             SpendError::AlreadySpent(spender) => TxIndexError::DoubleSpendAttempt(spender),
             SpendError::AlreadyUnspent => TxIndexError::InvariantBrokenAlreadyUnspent,
-            SpendError::OutOfRange {
-                tx_id,
-                source_output_index,
-            } => TxIndexError::OutputIndexOutOfRange {
-                tx_id,
-                source_output_index,
-            },
+            SpendError::OutOfRange { tx_id, source_output_index } => {
+                TxIndexError::OutputIndexOutOfRange { tx_id, source_output_index }
+            }
         }
     }
 }
@@ -208,10 +204,7 @@ pub enum TxIndexError {
     #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
-    OutputIndexOutOfRange {
-        tx_id: Option<Spender>,
-        source_output_index: usize,
-    },
+    OutputIndexOutOfRange { tx_id: Option<Spender>, source_output_index: usize },
 }
 
 impl From<TxMainChainIndexError> for TxIndexError {

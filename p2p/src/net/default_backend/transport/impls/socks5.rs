@@ -39,9 +39,7 @@ pub struct Socks5TransportSocket {
 
 impl Socks5TransportSocket {
     pub fn new(proxy: &str) -> Self {
-        Self {
-            proxy: Arc::new(proxy.to_owned()),
-        }
+        Self { proxy: Arc::new(proxy.to_owned()) }
     }
 }
 

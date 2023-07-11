@@ -69,20 +69,15 @@ fn two_updates_second_fails() {
 fn mock_transaction_fail() {
     // Set up the mock store
     let mut store = MockStore::new();
-    let err_f = || {
-        Err(crate::Error::Storage(
-            storage::error::Recoverable::TransactionFailed,
-        ))
-    };
+    let err_f = || Err(crate::Error::Storage(storage::error::Recoverable::TransactionFailed));
     store.expect_transaction_ro().returning(err_f);
 
     // Check it returns an error
     match store.transaction_ro() {
         Ok(_) => panic!("Err expected"),
-        Err(e) => assert_eq!(
-            e,
-            crate::Error::Storage(storage::error::Recoverable::TransactionFailed)
-        ),
+        Err(e) => {
+            assert_eq!(e, crate::Error::Storage(storage::error::Recoverable::TransactionFailed))
+        }
     }
 }
 

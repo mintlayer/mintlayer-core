@@ -96,10 +96,7 @@ fn gen_enum2() -> impl Strategy<Value = Enum2> {
     prop_oneof![
         Just(Enum2::X(Enum0::This)),
         gen_enum1().prop_map(Enum2::Y),
-        any::<[u8; 3]>().prop_map(|three_bytes| Enum2::Z {
-            tag: Tag,
-            three_bytes
-        }),
+        any::<[u8; 3]>().prop_map(|three_bytes| Enum2::Z { tag: Tag, three_bytes }),
     ]
 }
 
@@ -203,17 +200,8 @@ fn check_enum2_encoding() {
     }
     check(Enum2::X(Enum0::This), [55]);
     check(Enum2::Y(Enum1::The(258, String::new())), [42, 2, 1, 0]);
-    check(
-        Enum2::Y(Enum1::The(257, String::from("d"))),
-        [42, 1, 1, 4, 100],
-    );
-    check(
-        Enum2::Z {
-            tag: Tag,
-            three_bytes: [1, 2, 3],
-        },
-        [7, 1, 2, 3],
-    );
+    check(Enum2::Y(Enum1::The(257, String::from("d"))), [42, 1, 1, 4, 100]);
+    check(Enum2::Z { tag: Tag, three_bytes: [1, 2, 3] }, [7, 1, 2, 3]);
 }
 
 #[test]
@@ -226,17 +214,8 @@ fn check_enum2_decoding() {
     }
 
     check_ok([55], Enum2::X(Enum0::This));
-    check_ok(
-        [7, 8, 9, 10],
-        Enum2::Z {
-            tag: Tag,
-            three_bytes: [8, 9, 10],
-        },
-    );
-    check_ok(
-        [42, 1, 1, 4, 101],
-        Enum2::Y(Enum1::The(257, String::from("e"))),
-    );
+    check_ok([7, 8, 9, 10], Enum2::Z { tag: Tag, three_bytes: [8, 9, 10] });
+    check_ok([42, 1, 1, 4, 101], Enum2::Y(Enum1::The(257, String::from("e"))));
 
     check_err([]);
     check_err([0]);

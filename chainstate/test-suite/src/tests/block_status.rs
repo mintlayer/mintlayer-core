@@ -88,10 +88,7 @@ fn bad_parent(#[case] seed: Seed) {
         // Now create a block with a legit tx, but using block1 as the parent.
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(some_coins(&mut rng)))
@@ -103,16 +100,10 @@ fn bad_parent(#[case] seed: Seed) {
             .build();
         let block2_id = block2.get_id();
         let error = tf.process_block(block2, BlockSource::Local).unwrap_err();
-        assert_eq!(
-            error,
-            ChainstateError::ProcessBlockError(BlockError::InvalidParent(block2_id))
-        );
+        assert_eq!(error, ChainstateError::ProcessBlockError(BlockError::InvalidParent(block2_id)));
 
         let block2_status = get_block_status(&tf, &block2_id);
-        assert_eq!(
-            block2_status.last_valid_stage(),
-            BlockValidationStage::Unchecked
-        );
+        assert_eq!(block2_status.last_valid_stage(), BlockValidationStage::Unchecked);
     });
 }
 
@@ -134,10 +125,7 @@ fn check_block_failure(#[case] seed: Seed) {
         tf.process_block(block, BlockSource::Local).unwrap_err();
 
         let block_status = get_block_status(&tf, &block_id);
-        assert_eq!(
-            block_status.last_valid_stage(),
-            BlockValidationStage::ParentOk
-        );
+        assert_eq!(block_status.last_valid_stage(), BlockValidationStage::ParentOk);
     });
 }
 
@@ -153,10 +141,7 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
         // In the first block, create a tx that burns some coins.
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::from_utxo(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
+                TxInput::from_utxo(OutPointSourceId::BlockReward(tf.genesis().get_id().into()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Burn(some_coins(&mut rng)))
@@ -174,10 +159,7 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
                 TxInput::from_utxo(tx1.transaction().get_id().into(), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::Transfer(
-                some_coins(&mut rng),
-                anyonecanspend_address(),
-            ))
+            .add_output(TxOutput::Transfer(some_coins(&mut rng), anyonecanspend_address()))
             .build();
 
         let block2 = tf.make_block_builder().with_transactions(vec![tx2]).build();
@@ -186,10 +168,7 @@ fn best_chain_activation_failure(#[case] seed: Seed) {
         tf.process_block(block2, BlockSource::Local).unwrap_err();
 
         let block2_status = get_block_status(&tf, &block2_id);
-        assert_eq!(
-            block2_status.last_valid_stage(),
-            BlockValidationStage::CheckBlockOk
-        );
+        assert_eq!(block2_status.last_valid_stage(), BlockValidationStage::CheckBlockOk);
     });
 }
 

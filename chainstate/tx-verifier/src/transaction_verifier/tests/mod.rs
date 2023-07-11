@@ -30,10 +30,8 @@ use crypto::{
 use utxo::Utxo;
 
 fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random_using(rng))), 0);
     let (_, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let output1 = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(value)),

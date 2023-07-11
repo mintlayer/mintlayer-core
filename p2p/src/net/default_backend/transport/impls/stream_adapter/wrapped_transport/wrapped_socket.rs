@@ -37,10 +37,7 @@ pub struct WrappedTransportSocket<S, T> {
 
 impl<S, T> WrappedTransportSocket<S, T> {
     pub fn new(stream_adapter: S, base_transport: T) -> Self {
-        Self {
-            stream_adapter,
-            base_transport,
-        }
+        Self { stream_adapter, base_transport }
     }
 }
 

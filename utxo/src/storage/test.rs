@@ -324,10 +324,7 @@ fn test_batch_write(#[case] seed: Seed) {
     let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
     let mut utxo_db = UtxosDB::new(&mut db_interface);
 
-    let utxos = ConsumedUtxoCache {
-        container: utxos,
-        best_block: new_best_block_hash,
-    };
+    let utxos = ConsumedUtxoCache { container: utxos, best_block: new_best_block_hash };
 
     utxo_db.batch_write(utxos.clone()).unwrap();
 
@@ -363,10 +360,8 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
     let entry = UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No);
     map.insert(outpoint.clone(), entry);
 
-    let cache = ConsumedUtxoCache {
-        container: map,
-        best_block: Id::new(H256::random_using(&mut rng)),
-    };
+    let cache =
+        ConsumedUtxoCache { container: map, best_block: Id::new(H256::random_using(&mut rng)) };
 
     utxo_db.batch_write(cache).unwrap();
 
@@ -383,18 +378,14 @@ fn try_flush_spent_utxo(#[case] seed: Seed) {
         UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
     let mut utxo_db = UtxosDB::new(&mut db_interface);
 
-    let outpoint = UtxoOutPoint::new(
-        OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
+    let outpoint =
+        UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))), 0);
     let mut map = BTreeMap::new();
     let entry = UtxoEntry::new(None, IsFresh::No, IsDirty::Yes);
     map.insert(outpoint.clone(), entry);
 
-    let cache = ConsumedUtxoCache {
-        container: map,
-        best_block: Id::new(H256::random_using(&mut rng)),
-    };
+    let cache =
+        ConsumedUtxoCache { container: map, best_block: Id::new(H256::random_using(&mut rng)) };
 
     utxo_db.batch_write(cache).unwrap();
 

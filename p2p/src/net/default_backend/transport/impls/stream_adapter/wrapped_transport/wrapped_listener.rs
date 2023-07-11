@@ -44,11 +44,7 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
 
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
     pub fn new(stream_adapter: S, listener: T::Listener) -> Self {
-        Self {
-            stream_adapter,
-            listener,
-            handshakes: FuturesUnordered::new(),
-        }
+        Self { stream_adapter, listener, handshakes: FuturesUnordered::new() }
     }
 }
 

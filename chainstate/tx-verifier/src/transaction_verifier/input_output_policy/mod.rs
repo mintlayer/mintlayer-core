@@ -118,10 +118,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..) => false,
                 });
-            ensure!(
-                all_lock_then_transfer,
-                ConnectTransactionError::InvalidOutputTypeInReward
-            );
+            ensure!(all_lock_then_transfer, ConnectTransactionError::InvalidOutputTypeInReward);
             Ok(())
         }
     }
@@ -176,10 +173,7 @@ fn is_valid_tx_with_accounting_input(tx: &Transaction) -> Result<(), ConnectTran
         })
         .exactly_one()
         .is_ok();
-    ensure!(
-        is_single_accounting_delegation_spend,
-        ConnectTransactionError::InvalidInputTypeInTx
-    );
+    ensure!(is_single_accounting_delegation_spend, ConnectTransactionError::InvalidInputTypeInTx);
 
     let all_lock_then_transfer_outputs = tx.outputs().iter().all(|output| match output {
         TxOutput::LockThenTransfer(..) => true,
@@ -190,10 +184,7 @@ fn is_valid_tx_with_accounting_input(tx: &Transaction) -> Result<(), ConnectTran
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..) => false,
     });
-    ensure!(
-        all_lock_then_transfer_outputs,
-        ConnectTransactionError::InvalidOutputTypeInTx
-    );
+    ensure!(all_lock_then_transfer_outputs, ConnectTransactionError::InvalidOutputTypeInTx);
 
     Ok(())
 }
@@ -243,10 +234,7 @@ fn is_valid_one_to_any_combination_for_tx(
         let valid_inputs = are_inputs_valid_for_tx(std::slice::from_ref(input_utxo));
         ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
         let valid_outputs = are_outputs_valid_for_tx(outputs);
-        ensure!(
-            valid_outputs,
-            ConnectTransactionError::InvalidOutputTypeInTx
-        );
+        ensure!(valid_outputs, ConnectTransactionError::InvalidOutputTypeInTx);
     }
     Ok(())
 }
@@ -282,10 +270,7 @@ fn is_valid_any_to_any_combination_for_tx(
     let valid_inputs = are_inputs_valid_for_tx(inputs_utxos);
     ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
     let valid_outputs = are_outputs_valid_for_tx(outputs);
-    ensure!(
-        valid_outputs,
-        ConnectTransactionError::InvalidOutputTypeInTx
-    );
+    ensure!(valid_outputs, ConnectTransactionError::InvalidOutputTypeInTx);
     Ok(())
 }
 

@@ -145,11 +145,7 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
             child_path.try_into()?
         };
 
-        Ok(Secp256k1ExtendedPrivateKey {
-            derivation_path,
-            chain_code,
-            private_key,
-        })
+        Ok(Secp256k1ExtendedPrivateKey { derivation_path, chain_code, private_key })
     }
 
     fn get_derivation_path(&self) -> &DerivationPath {
@@ -231,11 +227,7 @@ impl Derivable for Secp256k1ExtendedPublicKey {
             child_path.try_into()?
         };
 
-        Ok(Secp256k1ExtendedPublicKey {
-            derivation_path,
-            chain_code,
-            public_key,
-        })
+        Ok(Secp256k1ExtendedPublicKey { derivation_path, chain_code, public_key })
     }
 
     fn get_derivation_path(&self) -> &DerivationPath {

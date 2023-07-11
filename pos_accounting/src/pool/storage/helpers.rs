@@ -31,13 +31,7 @@ pub struct BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {
 
 impl<'a, T, S, Getter, Setter, Deleter> BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {
     pub fn new(store: &'a mut S, getter: Getter, setter: Setter, deleter: Deleter) -> Self {
-        Self {
-            store,
-            getter,
-            setter,
-            deleter,
-            _phantom: Default::default(),
-        }
+        Self { store, getter, setter, deleter, _phantom: Default::default() }
     }
 }
 

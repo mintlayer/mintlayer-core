@@ -137,9 +137,7 @@ mod tests {
 
         let mut encoder = EncoderDecoder::new(rng.gen_range(0..message_length));
         assert_eq!(
-            Err(P2pError::DialError(DialError::IoError(
-                ErrorKind::InvalidData
-            ))),
+            Err(P2pError::DialError(DialError::IoError(ErrorKind::InvalidData))),
             encoder.encode(message, &mut buf)
         );
     }
@@ -164,9 +162,7 @@ mod tests {
 
         let mut decoder = EncoderDecoder::new(rng.gen_range(0..(encoded.len() - HEADER_LEN)));
         assert_eq!(
-            Err(P2pError::DialError(DialError::IoError(
-                ErrorKind::InvalidData
-            ))),
+            Err(P2pError::DialError(DialError::IoError(ErrorKind::InvalidData))),
             decoder.decode(&mut encoded)
         );
     }

@@ -75,10 +75,7 @@ pub struct WrappedMerkleTree<MerkleTreeTag> {
 
 impl<T: tag::MerkleTreeTag> From<MerkleTree<H256, MerkleHasher>> for WrappedMerkleTree<T> {
     fn from(merkle_tree: MerkleTree<H256, MerkleHasher>) -> Self {
-        Self {
-            merkle_tree,
-            _tag: std::marker::PhantomData,
-        }
+        Self { merkle_tree, _tag: std::marker::PhantomData }
     }
 }
 

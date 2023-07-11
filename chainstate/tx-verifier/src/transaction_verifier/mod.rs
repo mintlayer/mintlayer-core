@@ -234,12 +234,10 @@ where
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
         if total_burned < self.chain_config.as_ref().token_min_issuance_fee() {
-            return Err(ConnectTransactionError::TokensError(
-                TokensError::InsufficientTokenFees(
-                    tx.get_id(),
-                    block_id.unwrap_or_else(|| H256::zero().into()),
-                ),
-            ));
+            return Err(ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
+                tx.get_id(),
+                block_id.unwrap_or_else(|| H256::zero().into()),
+            )));
         }
 
         Ok(())
@@ -293,9 +291,9 @@ where
                 let block_reward_transactable = block.block_reward_transactable();
 
                 let kernel_output = consensus::get_kernel_output(
-                    block_reward_transactable.inputs().ok_or(
-                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                    )?,
+                    block_reward_transactable
+                        .inputs()
+                        .ok_or(SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel))?,
                     &self.utxo_cache,
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
@@ -379,10 +377,8 @@ where
             )
         );
         // store new nonce
-        self.account_nonce.insert(
-            account.into(),
-            CachedOperation::Write(account_input.nonce()),
-        );
+        self.account_nonce
+            .insert(account.into(), CachedOperation::Write(account_input.nonce()));
 
         match account {
             AccountSpending::Delegation(delegation_id, withdraw_amount) => {
@@ -482,9 +478,9 @@ where
                         };
                         Some(res)
                     }
-                    None => Some(Err(
-                        ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
-                    )),
+                    None => {
+                        Some(Err(ConnectTransactionError::AttemptToCreateStakePoolFromAccounts))
+                    }
                 },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     match input_utxo_outpoint {
@@ -501,9 +497,9 @@ where
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        None => Some(Err(
-                            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
-                        )),
+                        None => {
+                            Some(Err(ConnectTransactionError::AttemptToCreateStakePoolFromAccounts))
+                        }
                     }
                 }
                 TxOutput::DelegateStaking(amount, delegation_id) => {
@@ -525,21 +521,17 @@ where
         let delete_delegation_undo = match check_for_delegation_cleanup {
             Some(delegation_id) => {
                 let accounting_view = self.accounting_delta_adapter.accounting_delta();
-                let delegation_balance =
-                    accounting_view.get_delegation_balance(delegation_id)?.ok_or(
-                        ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                    )?;
+                let delegation_balance = accounting_view
+                    .get_delegation_balance(delegation_id)?
+                    .ok_or(ConnectTransactionError::DelegationDataNotFound(delegation_id))?;
                 if delegation_balance == Amount::ZERO {
-                    let delegation_data =
-                        accounting_view.get_delegation_data(delegation_id)?.ok_or(
-                            ConnectTransactionError::DelegationDataNotFound(delegation_id),
-                        )?;
+                    let delegation_data = accounting_view
+                        .get_delegation_data(delegation_id)?
+                        .ok_or(ConnectTransactionError::DelegationDataNotFound(delegation_id))?;
                     if !accounting_view.pool_exists(*delegation_data.source_pool())? {
                         // clear the nonce
-                        self.account_nonce.insert(
-                            AccountType::Delegation(delegation_id),
-                            CachedOperation::Erase,
-                        );
+                        self.account_nonce
+                            .insert(AccountType::Delegation(delegation_id), CachedOperation::Erase);
 
                         Some(
                             self.accounting_delta_adapter
@@ -831,9 +823,7 @@ where
                 let best_block_height = self
                     .storage
                     .get_gen_block_index(&self.best_block)?
-                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
-                        self.best_block,
-                    ))?
+                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(self.best_block))?
                     .block_height();
 
                 if current_block_height < best_block_height {

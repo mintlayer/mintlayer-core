@@ -30,10 +30,7 @@ impl Tester {
         substringer: subsystem::Handle<Substringer>,
         counter: subsystem::Handle<Counter>,
     ) -> Self {
-        Self {
-            substringer,
-            counter,
-        }
+        Self { substringer, counter }
     }
 
     async fn run(&self, _: CallRequest<()>, _: ShutdownRequest) {

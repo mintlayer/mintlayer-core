@@ -202,10 +202,7 @@ mod tests {
             0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1,
             0, 1, 0, 0, 1, 0,
         ];
-        assert_eq!(
-            qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(),
-            expected
-        );
+        assert_eq!(qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(), expected);
 
         test_string_qrcode(&qr);
     }
@@ -238,10 +235,7 @@ mod tests {
             0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1,
             0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1,
         ];
-        assert_eq!(
-            qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(),
-            expected
-        );
+        assert_eq!(qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(), expected);
 
         test_string_qrcode(&qr);
     }

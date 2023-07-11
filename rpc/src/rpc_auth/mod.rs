@@ -37,11 +37,7 @@ pub struct RpcAuth {
 }
 
 const RPC_KDF_CONFIG: KdfConfig = KdfConfig::Argon2id {
-    config: Argon2Config {
-        m_cost_memory_size: 200,
-        t_cost_iterations: 10,
-        p_cost_parallelism: 2,
-    },
+    config: Argon2Config { m_cost_memory_size: 200, t_cost_iterations: 10, p_cost_parallelism: 2 },
     hash_length: match NonZeroUsize::new(32) {
         Some(v) => v,
         None => unreachable!(),
@@ -72,10 +68,7 @@ impl RpcAuth {
             hash_password(&mut make_true_rng(), RPC_KDF_CONFIG, password.as_bytes())
                 .expect("hash_password failed unexpectedly");
 
-        Self {
-            username: username.to_owned(),
-            password_hash,
-        }
+        Self { username: username.to_owned(), password_hash }
     }
 
     fn check_auth<B>(&self, request: &Request<B>) -> Result<bool, CheckError> {

@@ -55,13 +55,8 @@ fn cache_simulation_with_undo(
     let test_view = empty_test_utxos_view(H256::zero().into());
     let mut base = UtxosCache::new(test_view).unwrap_infallible();
 
-    let new_consumed_cache = simulation_step(
-        &mut rng,
-        &mut result,
-        &base,
-        iterations_per_cache,
-        nested_level,
-    );
+    let new_consumed_cache =
+        simulation_step(&mut rng, &mut result, &base, iterations_per_cache, nested_level);
     let new_consumed_cache = new_consumed_cache.unwrap();
     base.batch_write(new_consumed_cache).expect("batch write must succeed");
 
@@ -107,13 +102,8 @@ fn simulation_step<P: UtxosView<Error = Infallible>>(
         .append(&mut current_cache_outputs.outpoints_with_undo);
 
     // create the child
-    let child_cache_op = simulation_step(
-        rng,
-        all_outputs,
-        &current_cache,
-        iterations_per_cache,
-        nested_level - 1,
-    );
+    let child_cache_op =
+        simulation_step(rng, all_outputs, &current_cache, iterations_per_cache, nested_level - 1);
 
     // flush child into current cache
     if let Some(child_cache) = child_cache_op {
@@ -181,13 +171,9 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 //keep result updated
                 let new_outpoint = UtxoOutPoint::new(OutPointSourceId::from(tx.get_id()), 0);
                 result.utxo_outpoints.push(new_outpoint.clone());
-                result.outpoints_with_undo.insert(
-                    new_outpoint,
-                    UndoInfo {
-                        prev_outpoint: outpoint,
-                        tx_undo: undo,
-                    },
-                );
+                result
+                    .outpoints_with_undo
+                    .insert(new_outpoint, UndoInfo { prev_outpoint: outpoint, tx_undo: undo });
             }
         } else if !result.outpoints_with_undo.is_empty() {
             //undo random transaction spending from current utxo set

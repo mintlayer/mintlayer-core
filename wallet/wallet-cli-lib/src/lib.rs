@@ -33,13 +33,9 @@ use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 
 enum Mode {
-    Interactive {
-        logger: repl::interactive::log::InteractiveLogger,
-    },
+    Interactive { logger: repl::interactive::log::InteractiveLogger },
     NonInteractive,
-    CommandsList {
-        file_input: console::FileInput,
-    },
+    CommandsList { file_input: console::FileInput },
 }
 
 pub async fn run(
@@ -87,9 +83,9 @@ pub async fn run(
                 default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
             RpcAuthData::Cookie { cookie_file_path }
         }
-        (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
-            cookie_file_path: cookie_file_path.into(),
-        },
+        (Some(cookie_file_path), None, None) => {
+            RpcAuthData::Cookie { cookie_file_path: cookie_file_path.into() }
+        }
         (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
         _ => {
             return Err(WalletCliError::InvalidConfig(
@@ -121,10 +117,7 @@ pub async fn run(
     if start_staking {
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
-            .send(Event::HandleCommand {
-                command: WalletCommand::StartStaking,
-                res_tx,
-            })
+            .send(Event::HandleCommand { command: WalletCommand::StartStaking, res_tx })
             .expect("should not fail");
         startup_command_futures.push(res_rx);
     }

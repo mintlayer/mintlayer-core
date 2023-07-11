@@ -119,12 +119,8 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     const NEW_CHAIN_START_ON: usize = 6;
     const NEW_CHAIN_END_ON: usize = 11;
 
-    tf.create_chain(
-        &(*tf.index_at(NEW_CHAIN_START_ON).block_id()).into(),
-        5,
-        rng,
-    )
-    .unwrap();
+    tf.create_chain(&(*tf.index_at(NEW_CHAIN_START_ON).block_id()).into(), 5, rng)
+        .unwrap();
     check_last_event(tf, events);
 
     let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON - 1).block_id());
@@ -156,12 +152,8 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     //
     const NEW_CHAIN_START_ON: usize = 5;
     const NEW_CHAIN_END_ON: usize = 9;
-    tf.create_chain(
-        &(*tf.index_at(NEW_CHAIN_START_ON).block_id()).into(),
-        1,
-        rng,
-    )
-    .unwrap();
+    tf.create_chain(&(*tf.index_at(NEW_CHAIN_START_ON).block_id()).into(), 1, rng)
+        .unwrap();
     let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON).block_id());
     let spend_from = *tf.index_at(3).block_id();
     let double_spend_block = tf
@@ -380,14 +372,13 @@ fn check_last_event(tf: &mut TestFramework, events: &EventList) {
 fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     let events = Arc::clone(events);
     // Event handler
-    let subscribe_func = Arc::new(
-        move |chainstate_event: ChainstateEvent| match chainstate_event {
+    let subscribe_func =
+        Arc::new(move |chainstate_event: ChainstateEvent| match chainstate_event {
             ChainstateEvent::NewTip(block_id, block_height) => {
                 events.lock().unwrap().push((block_id, block_height));
                 assert!(!events.lock().unwrap().is_empty());
             }
-        },
-    );
+        });
     tf.chainstate.subscribe_to_events(subscribe_func);
 }
 

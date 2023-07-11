@@ -100,9 +100,7 @@ impl Address {
     }
 
     pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
-        let address = Self {
-            address: address.to_owned(),
-        };
+        let address = Self { address: address.to_owned() };
         address.data(cfg)?;
         Ok(address)
     }

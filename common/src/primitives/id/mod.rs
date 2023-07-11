@@ -144,10 +144,7 @@ impl<T> Id<T> {
     }
 
     pub const fn new(h: H256) -> Self {
-        Self {
-            id: h,
-            _shadow: std::marker::PhantomData,
-        }
+        Self { id: h, _shadow: std::marker::PhantomData }
     }
 }
 
@@ -293,10 +290,7 @@ mod tests {
             let hash: H256 = hex.parse().unwrap();
             // hash should serialize into its hex string
             serde_test::assert_tokens(&hash, &[serde_test::Token::Str(hex)]);
-            assert_eq!(
-                serde_json::to_value(hash).ok(),
-                Some(Value::String(format!("{hash:x}")))
-            );
+            assert_eq!(serde_json::to_value(hash).ok(), Some(Value::String(format!("{hash:x}"))));
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)
     }
@@ -308,10 +302,7 @@ mod tests {
             let id: Id<()> = Id::new(hex.parse().unwrap());
             // ID should serialize into its hex string
             serde_test::assert_tokens(&id, &[serde_test::Token::Str(hex)]);
-            assert_eq!(
-                serde_json::to_value(id).ok(),
-                Some(Value::String(format!("{:x}", id.id)))
-            );
+            assert_eq!(serde_json::to_value(id).ok(), Some(Value::String(format!("{:x}", id.id))));
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)
     }

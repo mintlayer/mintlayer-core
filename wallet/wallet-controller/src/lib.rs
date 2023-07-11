@@ -78,12 +78,7 @@ pub type HandlesController = Controller<WalletHandlesClient>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        Self {
-            chain_config,
-            rpc_client,
-            wallet,
-            staking_started: None,
-        }
+        Self { chain_config, rpc_client, wallet, staking_started: None }
     }
 
     pub fn create_wallet(
@@ -173,10 +168,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         account_index: U31,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
-            .get_balance(
-                account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer,
-            )
+            .get_balance(account_index, UtxoType::Transfer | UtxoType::LockThenTransfer)
             .map_err(ControllerError::WalletError)
     }
 
@@ -253,10 +245,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)?;
         let block = self
             .rpc_client
-            .generate_block(
-                GenerateBlockInputData::PoS(pos_data.into()),
-                transactions_opt,
-            )
+            .generate_block(GenerateBlockInputData::PoS(pos_data.into()), transactions_opt)
             .await
             .map_err(ControllerError::NodeCallError)?;
         Ok(block)
@@ -317,10 +306,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 let generate_res = self.generate_block(account_index, None).await;
 
                 if let Ok(block) = generate_res {
-                    log::info!(
-                        "New block generated successfully, block id: {}",
-                        block.get_id()
-                    );
+                    log::info!("New block generated successfully, block id: {}", block.get_id());
 
                     let submit_res = self.rpc_client.submit_block(block).await;
                     if let Err(e) = submit_res {

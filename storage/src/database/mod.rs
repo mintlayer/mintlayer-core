@@ -38,10 +38,7 @@ where
     B::Impl: ShallowClone,
 {
     fn clone(&self) -> Self {
-        Self {
-            backend: self.backend.clone(),
-            _schema: Default::default(),
-        }
+        Self { backend: self.backend.clone(), _schema: Default::default() }
     }
 }
 
@@ -50,10 +47,7 @@ where
     B::Impl: ShallowClone,
 {
     fn shallow_clone(&self) -> Self {
-        Self {
-            backend: self.backend.shallow_clone(),
-            _schema: self._schema.shallow_clone(),
-        }
+        Self { backend: self.backend.shallow_clone(), _schema: self._schema.shallow_clone() }
     }
 }
 
@@ -150,11 +144,7 @@ pub struct MapRef<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
     fn new(dbtx: &'tx Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
-        Self {
-            dbtx,
-            map_id,
-            _phantom,
-        }
+        Self { dbtx, map_id, _phantom }
     }
 }
 
@@ -203,11 +193,7 @@ pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
     fn new(dbtx: &'tx mut Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
-        Self {
-            dbtx,
-            map_id,
-            _phantom,
-        }
+        Self { dbtx, map_id, _phantom }
     }
 }
 

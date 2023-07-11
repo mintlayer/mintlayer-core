@@ -45,17 +45,11 @@ pub struct EpochDataCache<P> {
 
 impl<P: EpochStorageRead> EpochDataCache<P> {
     pub fn new(parent: P) -> Self {
-        Self {
-            parent,
-            data: BTreeMap::new(),
-        }
+        Self { parent, data: BTreeMap::new() }
     }
 
     pub fn from_data(parent: P, data: ConsumedEpochDataCache) -> Self {
-        Self {
-            parent,
-            data: data.data,
-        }
+        Self { parent, data: data.data }
     }
 
     pub fn consume(self) -> ConsumedEpochDataCache {

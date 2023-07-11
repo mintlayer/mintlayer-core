@@ -39,11 +39,7 @@ pub enum KdfError {
 /// supported algorithm
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KdfConfig {
-    Argon2id {
-        config: Argon2Config,
-        hash_length: NonZeroUsize,
-        salt_length: NonZeroUsize,
-    },
+    Argon2id { config: Argon2Config, hash_length: NonZeroUsize, salt_length: NonZeroUsize },
 }
 
 /// The result of hashing a password.
@@ -53,11 +49,7 @@ pub enum KdfConfig {
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum KdfResult {
     #[codec(index = 0)]
-    Argon2id {
-        config: Argon2Config,
-        salt: Vec<u8>,
-        hashed_password: Vec<u8>,
-    },
+    Argon2id { config: Argon2Config, salt: Vec<u8>, hashed_password: Vec<u8> },
 }
 
 impl KdfResult {
@@ -67,11 +59,7 @@ impl KdfResult {
     /// symmetric encryption key)
     pub fn into_challenge(self) -> KdfChallenge {
         match self {
-            KdfResult::Argon2id {
-                config,
-                salt,
-                hashed_password,
-            } => KdfChallenge::Argon2id {
+            KdfResult::Argon2id { config, salt, hashed_password } => KdfChallenge::Argon2id {
                 config,
                 salt,
                 password_hash_len: hashed_password.len() as u32,
@@ -108,22 +96,14 @@ pub fn hash_from_challenge(
     password: &[u8],
 ) -> Result<KdfResult, KdfError> {
     match challenge {
-        KdfChallenge::Argon2id {
-            config,
-            salt,
-            password_hash_len,
-        } => {
+        KdfChallenge::Argon2id { config, salt, password_hash_len } => {
             let hashed_password = argon2::argon2id_hash(
                 &config,
                 &salt,
                 (password_hash_len as usize).try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
             )?;
-            let result = KdfResult::Argon2id {
-                config,
-                salt,
-                hashed_password,
-            };
+            let result = KdfResult::Argon2id { config, salt, hashed_password };
             Ok(result)
         }
     }
@@ -140,18 +120,10 @@ pub fn hash_password<R: Rng + CryptoRng>(
     password: &[u8],
 ) -> Result<KdfResult, KdfError> {
     match kdf_config {
-        KdfConfig::Argon2id {
-            config,
-            hash_length,
-            salt_length,
-        } => {
+        KdfConfig::Argon2id { config, hash_length, salt_length } => {
             let salt = make_salt(rng, salt_length)?;
             let hashed_password = argon2::argon2id_hash(&config, &salt, hash_length, password)?;
-            let result = KdfResult::Argon2id {
-                config,
-                salt,
-                hashed_password,
-            };
+            let result = KdfResult::Argon2id { config, salt, hashed_password };
             Ok(result)
         }
     }
@@ -164,11 +136,7 @@ pub fn verify_password(
     equality_checker: SliceEqualityCheckMethod,
 ) -> Result<bool, KdfError> {
     match previously_password_hash {
-        KdfResult::Argon2id {
-            config,
-            salt,
-            hashed_password,
-        } => {
+        KdfResult::Argon2id { config, salt, hashed_password } => {
             let new_hashed_password = argon2::argon2id_hash(
                 config,
                 salt,
@@ -227,12 +195,8 @@ pub mod test {
         .unwrap());
 
         let wrong_password = b"RandomWrong____password?";
-        assert!(!verify_password(
-            wrong_password,
-            &password_hash,
-            SliceEqualityCheckMethod::Normal
-        )
-        .unwrap());
+        assert!(!verify_password(wrong_password, &password_hash, SliceEqualityCheckMethod::Normal)
+            .unwrap());
         assert!(!verify_password(
             wrong_password,
             &password_hash,

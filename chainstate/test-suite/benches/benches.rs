@@ -78,13 +78,7 @@ pub fn pos_reorg(c: &mut Criterion) {
     tf.progress_time_seconds_since_epoch(target_block_time.get());
 
     let common_block_id = tf
-        .create_chain_pos(
-            &tf.genesis().get_id().into(),
-            5,
-            &mut rng,
-            &staking_sk,
-            &vrf_sk,
-        )
+        .create_chain_pos(&tf.genesis().get_id().into(), 5, &mut rng, &staking_sk, &vrf_sk)
         .unwrap();
 
     tf.create_chain_pos(&common_block_id, 100, &mut rng, &staking_sk, &vrf_sk)

@@ -164,9 +164,9 @@ impl LeafKeySoftChain {
                     .derive_child(KeyPurpose::ReceiveFunds.get_deterministic_index())?,
                 addresses.receive,
                 public_keys.receive,
-                usage_states.remove(&KeyPurpose::ReceiveFunds).ok_or(
-                    KeyChainError::MissingDatabaseProperty("ReceiveFunds usage state"),
-                )?,
+                usage_states
+                    .remove(&KeyPurpose::ReceiveFunds)
+                    .ok_or(KeyChainError::MissingDatabaseProperty("ReceiveFunds usage state"))?,
             )?,
             LeafKeySoftChain::new_from_parts(
                 chain_config,

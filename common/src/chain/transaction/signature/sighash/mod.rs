@@ -50,9 +50,9 @@ fn stream_signature_hash<T: Signable>(
         None => return Err(TransactionSigError::SigHashRequestWithoutInputs),
     };
 
-    let target_input = inputs.get(target_input_num).ok_or(
-        TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()),
-    )?;
+    let target_input = inputs
+        .get(target_input_num)
+        .ok_or(TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()))?;
 
     hash_encoded_to(&mode.get(), stream);
 

@@ -83,9 +83,6 @@ mod tests {
         check_group("fe80::", AddressGroup::Private);
 
         check_group("1.2.3.4", AddressGroup::PublicV4([1, 2]));
-        check_group(
-            "2a00:1450:4017:815::200e",
-            AddressGroup::PublicV6([0x2a, 0x00, 0x14, 0x50]),
-        );
+        check_group("2a00:1450:4017:815::200e", AddressGroup::PublicV6([0x2a, 0x00, 0x14, 0x50]));
     }
 }

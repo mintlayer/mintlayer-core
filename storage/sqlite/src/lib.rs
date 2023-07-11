@@ -67,10 +67,7 @@ impl<'m> DbTx<'m> {
             .connection
             .lock()
             .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
-        let tx = DbTx {
-            connection,
-            queries: &sqlite.0.queries,
-        };
+        let tx = DbTx { connection, queries: &sqlite.0.queries };
         tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
         Ok(tx)
     }
@@ -227,9 +224,7 @@ pub struct Options {
 #[allow(clippy::derivable_impls)]
 impl Default for Options {
     fn default() -> Self {
-        Self {
-            disable_fsync: false,
-        }
+        Self { disable_fsync: false }
     }
 }
 
@@ -247,10 +242,7 @@ pub struct Sqlite {
 
 impl Sqlite {
     pub fn new_in_memory() -> Self {
-        Self {
-            backend: SqliteStorageMode::InMemory,
-            options: Default::default(),
-        }
+        Self { backend: SqliteStorageMode::InMemory, options: Default::default() }
     }
 
     /// New Sqlite database backend
@@ -262,10 +254,7 @@ impl Sqlite {
     }
 
     pub fn with_options(self, options: Options) -> Self {
-        Self {
-            backend: self.backend,
-            options,
-        }
+        Self { backend: self.backend, options }
     }
 
     fn open_db(self, desc: DbDesc) -> rusqlite::Result<Connection> {
@@ -345,9 +334,6 @@ impl backend::Backend for Sqlite {
 
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
-        Ok(SqliteImpl(Arc::new(SqliteConnection {
-            connection: Mutex::new(connection),
-            queries,
-        })))
+        Ok(SqliteImpl(Arc::new(SqliteConnection { connection: Mutex::new(connection), queries })))
     }
 }

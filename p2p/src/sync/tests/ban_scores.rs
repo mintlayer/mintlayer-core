@@ -62,9 +62,7 @@ async fn peer_handle_result() {
         P2pError::ChainstateError(ChainstateError::ProcessBlockError(
             BlockError::BlockAlreadyProcessed(Id::new(H256::zero())),
         )),
-        P2pError::MempoolError(mempool::error::Error::Policy(
-            MempoolPolicyError::MempoolFull,
-        )),
+        P2pError::MempoolError(mempool::error::Error::Policy(MempoolPolicyError::MempoolFull)),
         P2pError::MempoolError(mempool::error::Error::Validity(TxValidationError::TipMoved)),
     ] {
         let handle_res = Peer::<DefaultNetworkingService<TcpTransportSocket>>::handle_result(

@@ -295,10 +295,7 @@ pub fn run_script<'a, Ctx: Context>(
                             stack.push_bool(result);
                         }
                     }
-                    ensure!(
-                        !sig_opcode.is_verify() || stack.pop_bool()?,
-                        Error::VerifyFail
-                    );
+                    ensure!(!sig_opcode.is_verify() || stack.pop_bool()?, Error::VerifyFail);
                 }
                 opcodes::Class::ControlFlow(cf) => match cf {
                     opcodes::ControlFlow::OP_CODESEPARATOR => {
@@ -340,10 +337,7 @@ pub fn run_script<'a, Ctx: Context>(
             },
         }
 
-        ensure!(
-            (stack.len() + alt_stack.len()) <= Ctx::MAX_STACK_ELEMENTS,
-            Error::StackSize
-        );
+        ensure!((stack.len() + alt_stack.len()) <= Ctx::MAX_STACK_ELEMENTS, Error::StackSize);
         cur_instr_num = cur_instr_num.saturating_add(1);
     }
 

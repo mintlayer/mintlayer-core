@@ -55,10 +55,7 @@ fn process_genesis_block() {
         let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
 
         // Check the genesis block is properly set up
-        assert_eq!(
-            chainstate.query().unwrap().get_best_block_id().unwrap(),
-            genesis_id
-        );
+        assert_eq!(chainstate.query().unwrap().get_best_block_id().unwrap(), genesis_id);
         let genesis_index = chainstate_ref.get_gen_block_index(&genesis_id).unwrap().unwrap();
         assert_eq!(genesis_index.block_height(), BlockHeight::from(0));
         assert_eq!(genesis_index.block_id(), genesis_id);
@@ -111,10 +108,7 @@ mod with_rw_tx_tests {
 
     // Make some error that can be returned from "commit".
     fn make_commit_error() -> StorageError {
-        StorageError::Storage(storage::error::Recoverable::Io(
-            std::io::ErrorKind::Other,
-            "".into(),
-        ))
+        StorageError::Storage(storage::error::Recoverable::Io(std::io::ErrorKind::Other, "".into()))
     }
 
     fn make_chainstate(

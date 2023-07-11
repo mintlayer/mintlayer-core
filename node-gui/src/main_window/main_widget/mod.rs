@@ -31,9 +31,7 @@ pub struct MainWidget {
 
 impl MainWidget {
     pub fn new(backend_controller: NodeBackendController) -> Self {
-        Self {
-            tabs: tabs::TabsWidget::new(backend_controller),
-        }
+        Self { tabs: tabs::TabsWidget::new(backend_controller) }
     }
 
     pub fn start() -> impl IntoIterator<Item = Command<MainWidgetMessage>> {

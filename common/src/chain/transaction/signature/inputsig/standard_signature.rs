@@ -51,10 +51,7 @@ pub struct StandardInputSignature {
 
 impl StandardInputSignature {
     pub fn new(sighash_type: SigHashType, raw_signature: Vec<u8>) -> Self {
-        Self {
-            sighash_type,
-            raw_signature,
-        }
+        Self { sighash_type, raw_signature }
     }
 
     pub fn sighash_type(&self) -> SigHashType {
@@ -127,10 +124,7 @@ impl StandardInputSignature {
                 TransactionSigError::AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
             ),
         };
-        Ok(Self {
-            sighash_type,
-            raw_signature: serialized_sig,
-        })
+        Ok(Self { sighash_type, raw_signature: serialized_sig })
     }
 
     pub fn produce_classical_multisig_signature_for_input(
@@ -157,10 +151,7 @@ impl StandardInputSignature {
 
         let serialized_sig = authorization.encode();
 
-        Ok(Self {
-            sighash_type,
-            raw_signature: serialized_sig,
-        })
+        Ok(Self { sighash_type, raw_signature: serialized_sig })
     }
 
     pub fn raw_signature(&self) -> &[u8] {
@@ -176,10 +167,7 @@ impl Decode for StandardInputSignature {
             .map_err(|_| serialization::Error::from("Invalid sighash byte"))?;
         let raw_sig = Vec::decode(input)?;
 
-        Ok(Self {
-            sighash_type: sighash,
-            raw_signature: raw_sig,
-        })
+        Ok(Self { sighash_type: sighash, raw_signature: raw_sig })
     }
 }
 

@@ -164,24 +164,14 @@ where
                 // Ignored
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
-                log::debug!(
-                    "address announcement from peer {} ({})",
-                    peer_id,
-                    address.to_string()
-                );
+                log::debug!("address announcement from peer {} ({})", peer_id, address.to_string());
                 if let Some(address) = TransportAddress::from_peer_address(&address, false) {
-                    self.send_crawler_event(CrawlerEvent::NewAddress {
-                        address,
-                        sender: peer_id,
-                    });
+                    self.send_crawler_event(CrawlerEvent::NewAddress { address, sender: peer_id });
                 }
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
                 self.conn
-                    .send_message(
-                        peer_id,
-                        PeerManagerMessage::PingResponse(PingResponse { nonce }),
-                    )
+                    .send_message(peer_id, PeerManagerMessage::PingResponse(PingResponse { nonce }))
                     .expect("send_message must succeed");
             }
             PeerManagerMessage::AddrListResponse(_) => {}
@@ -194,11 +184,7 @@ where
             ConnectivityEvent::Message { peer, message } => {
                 self.handle_conn_message(peer, message);
             }
-            ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address: _,
-            } => {
+            ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address: _ } => {
                 // Allow reading input messages from the connected peer
                 self.conn.accept(peer_info.peer_id).expect("accept must succeed");
 
@@ -217,10 +203,7 @@ where
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });
             }
-            ConnectivityEvent::Misbehaved {
-                peer_id: _,
-                error: _,
-            } => {
+            ConnectivityEvent::Misbehaved { peer_id: _, error: _ } => {
                 // Ignore all misbehave reports
                 // TODO: Should we ban peers when they send unexpected messages?
             }
@@ -272,11 +255,7 @@ where
             CrawlerCommand::Disconnect { peer_id } => {
                 conn.disconnect(peer_id).expect("disconnect must succeed");
             }
-            CrawlerCommand::UpdateAddress {
-                address,
-                old_state,
-                new_state,
-            } => {
+            CrawlerCommand::UpdateAddress { address, old_state, new_state } => {
                 match (
                     Self::get_dns_ip(&address, config.default_p2p_port),
                     old_state.is_reachable(),

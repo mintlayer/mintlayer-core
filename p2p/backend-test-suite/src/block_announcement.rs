@@ -89,17 +89,11 @@ where
     )
     .unwrap();
     messaging_handle1
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .unwrap();
 
     let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
-        SyncingEvent::Connected {
-            peer_id: _,
-            services: _,
-            sync_rx,
-        } => sync_rx,
+        SyncingEvent::Connected { peer_id: _, services: _, sync_rx } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
@@ -123,17 +117,11 @@ where
     )
     .unwrap();
     messaging_handle2
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .unwrap();
 
     let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
-        SyncingEvent::Connected {
-            peer_id: _,
-            services: _,
-            sync_rx,
-        } => sync_rx,
+        SyncingEvent::Connected { peer_id: _, services: _, sync_rx } => sync_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
@@ -229,9 +217,7 @@ where
     )
     .unwrap();
     messaging_handle1
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])))
         .unwrap();
 
     shutdown.store(true);
