@@ -56,6 +56,7 @@ pub enum CliUtxoState {
 
 impl Display for CliUtxoState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // naming is kept the same as the default parse provided by ValueEnum
         match self {
             CliUtxoState::Confirmed => f.write_str("confirmed"),
             CliUtxoState::Conflicted => f.write_str("conflicted"),

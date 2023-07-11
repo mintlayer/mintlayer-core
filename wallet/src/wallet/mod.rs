@@ -380,12 +380,12 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(utxos)
     }
 
-    pub fn get_abandonable_transactions(
+    pub fn pending_transactions(
         &self,
         account_index: U31,
     ) -> WalletResult<Vec<&WithId<Transaction>>> {
         let account = self.get_account(account_index)?;
-        let transactions = account.get_abandonable_transactions();
+        let transactions = account.pending_transactions();
         Ok(transactions)
     }
 

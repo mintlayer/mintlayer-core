@@ -15,6 +15,7 @@ logging = { path = "../logging" }
 pos_accounting = { path = "../pos_accounting" }
 serialization = { path = "../serialization" }
 storage = { path = "../storage", features = ["inmemory"] }
+tx-verifier = { path = "../chainstate/tx-verifier" }
 utils = { path = "../utils" }
 utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }

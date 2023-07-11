@@ -20,7 +20,6 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::rpc::MempoolRpcClient;
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex_encoded::HexEncoded;
 
@@ -147,14 +146,6 @@ impl NodeInterface for NodeRpcClient {
     }
     async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
         P2pRpcClient::remove_reserved_node(&self.http_client, address)
-            .await
-            .map_err(NodeRpcError::ResponseError)
-    }
-
-    async fn get_all_mempool_transactions(
-        &self,
-    ) -> Result<Vec<HexEncoded<SignedTransaction>>, Self::Error> {
-        MempoolRpcClient::get_all_transactions(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

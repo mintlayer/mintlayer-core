@@ -17,11 +17,10 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        timelock::OutputTimeLock,
         tokens::{token_id, TokenId},
         OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, BlockDistance, Id},
+    primitives::{id::WithId, Id},
 };
 use wallet_types::{
     utxo_types::{get_utxo_state, UtxoStates},
@@ -135,7 +134,7 @@ impl OutputCache {
         utxo_states: UtxoStates,
     ) -> bool {
         !self.is_consumed(utxo_states, outpoint)
-            && valid_timelock(output, current_block_info, transaction_block_info)
+            && valid_timelock(output, current_block_info, transaction_block_info, outpoint)
     }
 
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {
@@ -188,7 +187,7 @@ impl OutputCache {
         utxos
     }
 
-    pub fn get_abandonable_transactions(&self) -> Vec<&WithId<Transaction>> {
+    pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
         self.txs
             .values()
             .filter_map(|tx| match tx {
@@ -242,29 +241,23 @@ impl OutputCache {
     }
 }
 
-// TODO: similar code from tx verifier
 fn valid_timelock(
     output: &TxOutput,
     current_block_info: &BlockInfo,
     transaction_block_info: &Option<BlockInfo>,
+    outpoint: &UtxoOutPoint,
 ) -> bool {
-    output.timelock().map_or(true, |timelock| match timelock {
-        OutputTimeLock::UntilHeight(height) => *height <= current_block_info.height,
-        OutputTimeLock::UntilTime(time) => *time <= current_block_info.timestamp,
-        OutputTimeLock::ForBlockCount(block_count) => {
-            (*block_count).try_into().map_or(false, |block_count: i64| {
-                transaction_block_info
-                    .as_ref()
-                    .and_then(|info| info.height + BlockDistance::new(block_count))
-                    .map_or(false, |height| height <= current_block_info.height)
-            })
-        }
-        OutputTimeLock::ForSeconds(for_seconds) => {
-            transaction_block_info.as_ref().map_or(false, |info| {
-                info.timestamp
-                    .add_int_seconds(*for_seconds)
-                    .map_or(false, |time| time <= current_block_info.timestamp)
-            })
-        }
+    output.timelock().map_or(true, |timelock| {
+        transaction_block_info.as_ref().map_or(false, |transaction_block_info| {
+            tx_verifier::timelock_check::check_timelock(
+                &transaction_block_info.height,
+                &transaction_block_info.timestamp,
+                timelock,
+                &current_block_info.height,
+                &current_block_info.timestamp,
+                outpoint,
+            )
+            .is_ok()
+        })
     })
 }

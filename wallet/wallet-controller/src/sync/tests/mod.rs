@@ -32,7 +32,6 @@ use node_comm::{
     rpc_client::NodeRpcError,
 };
 use rstest::rstest;
-use serialization::hex_encoded::HexEncoded;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
 
@@ -112,10 +111,6 @@ impl SyncingWallet for MockWallet {
         _blocks: Vec<Block>,
     ) -> WalletResult<()> {
         Err(wallet::WalletError::NoUnsyncedAccount)
-    }
-
-    fn scan_mempool(&mut self, _transactions: &[SignedTransaction]) -> WalletResult<()> {
-        Ok(())
     }
 }
 
@@ -211,12 +206,6 @@ impl NodeInterface for MockNode {
     }
     async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
         unreachable!()
-    }
-
-    async fn get_all_mempool_transactions(
-        &self,
-    ) -> Result<Vec<HexEncoded<SignedTransaction>>, Self::Error> {
-        Ok(vec![])
     }
 }
 

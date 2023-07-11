@@ -47,16 +47,14 @@ enum OutputTimelockCheckRequired {
     DecommissioningMaturity,
 }
 
-fn check_timelock(
-    source_block_index: &GenBlockIndex,
+pub fn check_timelock(
+    source_block_height: &BlockHeight,
+    source_block_time: &BlockTimestamp,
     timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
     outpoint: &UtxoOutPoint,
 ) -> Result<(), ConnectTransactionError> {
-    let source_block_height = source_block_index.block_height();
-    let source_block_time = source_block_index.block_timestamp();
-
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
         OutputTimeLock::UntilTime(t) => spending_time >= t,
@@ -66,7 +64,7 @@ fn check_timelock(
                 .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
             let d = BlockDistance::from(d);
             *spend_height
-                >= (source_block_height + d)
+                >= (*source_block_height + d)
                     .ok_or(ConnectTransactionError::BlockHeightArithmeticError)?
         }
         OutputTimeLock::ForSeconds(dt) => {
@@ -158,7 +156,8 @@ where
             })?;
 
             check_timelock(
-                &source_block_index,
+                &source_block_index.block_height(),
+                &source_block_index.block_timestamp(),
                 timelock,
                 &tx_source.expected_block_height(),
                 spending_time,

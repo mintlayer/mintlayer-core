@@ -46,8 +46,11 @@ pub enum TxState {
 impl Display for TxState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TxState::Confirmed(_, _) => f.write_str("Confirmed"),
-            TxState::Conflicted(_) => f.write_str("Conflicted"),
+            TxState::Confirmed(height, timestamp) => f.write_fmt(format_args!(
+                "Confirmed at height {}, on {}",
+                height, timestamp
+            )),
+            TxState::Conflicted(id) => f.write_fmt(format_args!("Conflicted by {}", id)),
             TxState::InMempool => f.write_str("InMempool"),
             TxState::Inactive => f.write_str("Inactive"),
             TxState::Abandoned => f.write_str("Abandoned"),

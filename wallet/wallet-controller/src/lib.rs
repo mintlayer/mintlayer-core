@@ -193,12 +193,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_abandonable_transactions(
+    pub fn pending_transactions(
         &self,
         account_index: U31,
     ) -> Result<Vec<&WithId<Transaction>>, ControllerError<T>> {
         self.wallet
-            .get_abandonable_transactions(account_index)
+            .pending_transactions(account_index)
             .map_err(ControllerError::WalletError)
     }
 

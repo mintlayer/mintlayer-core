@@ -167,8 +167,8 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
-    /// List the unconfirmed transactions that can be abandoned
-    ListAbandonableTransactions,
+    /// List the pending transactions that can be abandoned
+    ListPendingTransactions,
 
     /// Generate a new unused address
     NewAddress,
@@ -686,11 +686,11 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
             }
 
-            WalletCommand::ListAbandonableTransactions => {
+            WalletCommand::ListPendingTransactions => {
                 let utxos = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .get_abandonable_transactions(
+                    .pending_transactions(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                     )
                     .map_err(WalletCliError::Controller)?;

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use logging::log;
@@ -42,8 +42,6 @@ pub trait SyncingWallet {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()>;
-
-    fn scan_mempool(&mut self, transactions: &[SignedTransaction]) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
@@ -73,10 +71,6 @@ impl SyncingWallet for DefaultWallet {
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
         self.scan_new_blocks_for_unsynced_account(common_block_height, blocks)
-    }
-
-    fn scan_mempool(&mut self, transactions: &[SignedTransaction]) -> WalletResult<()> {
-        self.scan_mempool(transactions)
     }
 }
 

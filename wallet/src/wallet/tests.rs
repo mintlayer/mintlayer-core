@@ -1564,8 +1564,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, total_amount);
 
-    let abandonable_transactions =
-        wallet.get_abandonable_transactions(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let abandonable_transactions = wallet.pending_transactions(DEFAULT_ACCOUNT_INDEX).unwrap();
 
     assert_eq!(abandonable_transactions.len(), transactions.len());
 

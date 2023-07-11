@@ -730,8 +730,8 @@ impl Account {
         self.account_info.name()
     }
 
-    pub fn get_abandonable_transactions(&self) -> Vec<&WithId<Transaction>> {
-        self.output_cache.get_abandonable_transactions()
+    pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
+        self.output_cache.pending_transactions()
     }
 
     pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
