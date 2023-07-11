@@ -17,6 +17,7 @@
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
 mod peer;
+mod request_tracker;
 mod types;
 
 use std::collections::HashMap;
@@ -47,7 +48,11 @@ use crate::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    sync::peer::Peer,
+    sync::{
+        peer::Peer,
+        request_tracker::RequestTracker,
+        types::{PeerEvent, RequestTrackerEvent},
+    },
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
@@ -66,6 +71,11 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+
+    // Request tracker handle and sender channel.
+    _request_tracker_handle: JoinHandle<Never>,
+    request_tracker_sender: mpsc::UnboundedSender<RequestTrackerEvent>,
+    request_tracker_peer_event_sender: mpsc::UnboundedSender<PeerEvent>,
 
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
@@ -98,12 +108,24 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
     ) -> Self {
+        let (request_tracker_sender, request_tracker_receiver) = mpsc::unbounded_channel();
+        let (request_tracker_peer_event_sender, request_tracker_peer_event_receiver) =
+            mpsc::unbounded_channel();
+        let request_tracker = RequestTracker::new(
+            request_tracker_peer_event_receiver,
+            request_tracker_receiver,
+        );
+        let request_tracker_handle = tokio::spawn(request_tracker.run());
+
         Self {
             chain_config,
             p2p_config,
             messaging_handle,
             sync_event_receiver,
             peer_manager_sender,
+            _request_tracker_handle: request_tracker_handle,
+            request_tracker_sender,
+            request_tracker_peer_event_sender,
             chainstate_handle,
             mempool_handle,
             is_initial_block_download: Arc::new(true.into()),
@@ -135,7 +157,7 @@ where
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
-                    self.handle_peer_event(event?);
+                    self.handle_peer_event(event?)?;
                 },
             }
         }
@@ -158,6 +180,7 @@ where
             self.chainstate_handle.clone(),
             self.mempool_handle.clone(),
             self.peer_manager_sender.clone(),
+            self.request_tracker_sender.clone(),
             sync_rx,
             self.messaging_handle.clone(),
             Arc::clone(&self.is_initial_block_download),
@@ -209,15 +232,19 @@ where
     }
 
     /// Sends an event to the corresponding peer.
-    fn handle_peer_event(&mut self, event: SyncingEvent) {
+    fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
         match event {
             SyncingEvent::Connected {
                 peer_id,
                 services,
                 sync_rx,
             } => self.register_peer(peer_id, services, sync_rx),
-            SyncingEvent::Disconnected { peer_id } => self.unregister_peer(peer_id),
+            SyncingEvent::Disconnected { peer_id } => {
+                self.request_tracker_peer_event_sender.send(PeerEvent::Disconnected(peer_id))?;
+                self.unregister_peer(peer_id);
+            }
         }
+        Ok(())
     }
 }
 

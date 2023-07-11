@@ -15,6 +15,11 @@
 
 use std::time::Duration;
 
+use common::{chain::Transaction, primitives::Id};
+use tokio::sync::oneshot;
+
+use crate::{types::peer_id::PeerId, utils::oneshot_nofail};
+
 /// Activity with a peer.
 #[derive(Debug)]
 pub enum PeerActivity {
@@ -30,4 +35,45 @@ pub enum PeerActivity {
         /// A time when either the block list request was sent or last block response was received.
         time: Duration,
     },
+}
+
+#[derive(Debug)]
+pub enum PeerEvent {
+    Disconnected(PeerId),
+}
+
+#[derive(Debug)]
+pub enum RequestTrackerEvent {
+    /// Try to request a transaction from a peer. Note that only a single transaction request can
+    /// be in flight at a time. The tracker will handle synchronization and peer-communication.
+    RequestTransactionPermit(TransactionPermitRequest),
+
+    /// Notify the tracker that a transaction request was completed (either succeeded or failed).
+    CompleteTransaction(CompleteTransaction),
+}
+
+#[derive(Debug)]
+pub struct TransactionPermitRequest {
+    pub peer_id: PeerId,
+    pub tx_id: Id<Transaction>,
+    pub allow_tx: oneshot_nofail::Sender<oneshot::Receiver<()>>,
+}
+
+#[derive(Debug)]
+pub struct CompleteTransaction {
+    pub peer_id: PeerId,
+    pub tx_id: Id<Transaction>,
+    pub result: Result<(), TransactionRequestError>,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum TransactionRequestError {
+    #[error("Timed out waiting for transaction response")]
+    Timeout,
+}
+
+#[derive(Debug)]
+pub enum TransactionAction {
+    Proceed(Id<Transaction>),
+    Cancel(Id<Transaction>),
 }

@@ -14,4 +14,5 @@
 // limitations under the License.
 
 pub mod oneshot_nofail;
+pub mod oneshot_queue;
 pub mod rate_limiter;

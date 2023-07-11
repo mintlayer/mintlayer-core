@@ -18,19 +18,17 @@ use std::sync::Arc;
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{
-        config::create_unit_test_config, signature::inputsig::InputWitness, tokens::OutputValue,
-        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
-    },
-    primitives::{Amount, Id, Idable},
+    chain::{config::create_unit_test_config, SignedTransaction, Transaction},
+    primitives::Idable,
 };
 use mempool::error::{Error as MempoolError, MempoolPolicyError};
+use p2p_test_utils::{create_simple_transaction, P2pBasicTestTimeGetter};
 use test_utils::random::Seed;
 
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{SyncMessage, TransactionResponse},
+    message::{HeaderList, SyncMessage, TransactionResponse},
     sync::tests::helpers::SyncManagerHandle,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -106,7 +104,7 @@ async fn initial_block_download() {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = transaction(chain_config.genesis_block_id());
+    let tx = create_simple_transaction(chain_config.genesis_block_id());
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
@@ -166,7 +164,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = transaction(chain_config.genesis_block_id());
+    let tx = create_simple_transaction(chain_config.genesis_block_id());
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
@@ -230,7 +228,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = transaction(chain_config.genesis_block_id());
+    let tx = create_simple_transaction(chain_config.genesis_block_id());
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
@@ -271,7 +269,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = transaction(chain_config.genesis_block_id());
+    let tx = create_simple_transaction(chain_config.genesis_block_id());
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
@@ -326,7 +324,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = transaction(chain_config.genesis_block_id());
+    let tx = create_simple_transaction(chain_config.genesis_block_id());
     handle
         .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
@@ -353,13 +351,175 @@ async fn valid_transaction(#[case] seed: Seed) {
     handle.join_subsystem_manager().await;
 }
 
-/// Creates a simple transaction.
-fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
-    let tx = Transaction::new(
-        0x00,
-        vec![TxInput::from_utxo(OutPointSourceId::from(out_point), 0)],
-        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
-    )
-    .unwrap();
-    SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn same_announcements_first_succeeds_second_cancelled(#[case] seed: Seed) {
+    let SameAnnouncementsContext {
+        mut handle,
+        peer1_id,
+        peer2_id,
+        tx,
+        ..
+    } = create_same_announcements_context(seed).await;
+
+    // Both peers send the same transaction announcement.
+    let tx_id = tx.transaction().get_id();
+    let msg = SyncMessage::NewTransaction(tx_id);
+    handle.send_message(peer1_id, msg.clone()).await;
+    handle.send_message(peer2_id, msg).await;
+
+    // Ensure only one of the peers sends a transaction request.
+    let (permitted_peer_id, msg) = handle.message().await;
+    assert_eq!(msg, SyncMessage::TransactionRequest(tx_id));
+    handle.assert_no_event().await;
+
+    // Permitted peer receives a transaction response and broadcasts it.
+    handle
+        .send_message(
+            permitted_peer_id,
+            SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
+        )
+        .await;
+    let broadcast_msgs = [handle.message().await, handle.message().await];
+    assert!(broadcast_msgs.contains(&(peer1_id, SyncMessage::NewTransaction(tx_id))));
+    assert!(broadcast_msgs.contains(&(peer2_id, SyncMessage::NewTransaction(tx_id))));
+
+    // Denied peer's pending transaction request should get cancelled.
+    handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn same_announcements_first_disconnects_second_succeeds(#[case] seed: Seed) {
+    let SameAnnouncementsContext {
+        mut handle,
+        peer1_id,
+        peer2_id,
+        tx,
+        ..
+    } = create_same_announcements_context(seed).await;
+
+    // Both peers send the same transaction announcement.
+    let tx_id = tx.transaction().get_id();
+    let msg = SyncMessage::NewTransaction(tx_id);
+    handle.send_message(peer1_id, msg.clone()).await;
+    handle.send_message(peer2_id, msg).await;
+
+    // Ensure only one of the peers sends a transaction request.
+    let (permitted_peer_id, msg) = handle.message().await;
+    assert_eq!(msg, SyncMessage::TransactionRequest(tx_id));
+    handle.assert_no_event().await;
+
+    // Disconnect the permitted peer.
+    handle.disconnect_peer(permitted_peer_id);
+
+    // Denied should get notified to request a transaction.
+    let denied_peer_id = if permitted_peer_id == peer1_id {
+        peer2_id
+    } else {
+        peer1_id
+    };
+    let (peer_id, msg) = handle.message().await;
+    assert_eq!(peer_id, denied_peer_id);
+    assert_eq!(msg, SyncMessage::TransactionRequest(tx_id));
+
+    handle.join_subsystem_manager().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn same_announcements_first_times_out_second_succeeds(#[case] seed: Seed) {
+    let SameAnnouncementsContext {
+        mut handle,
+        time,
+        p2p_config,
+        peer1_id,
+        peer2_id,
+        tx,
+    } = create_same_announcements_context(seed).await;
+
+    // Both peers send the same transaction announcement.
+    let tx_id = tx.transaction().get_id();
+    let msg = SyncMessage::NewTransaction(tx_id);
+    handle.send_message(peer1_id, msg.clone()).await;
+    handle.send_message(peer2_id, msg).await;
+
+    // Ensure only one of the peers sends a transaction request.
+    let (permitted_peer_id, msg) = handle.message().await;
+    assert_eq!(msg, SyncMessage::TransactionRequest(tx_id));
+    handle.assert_no_event().await;
+
+    // Time out permitted peer.
+    time.advance_time(*p2p_config.sync_stalling_timeout);
+    // Send an arbitrary message to trigger a timeout check.
+    handle
+        .send_message(
+            permitted_peer_id,
+            SyncMessage::HeaderList(HeaderList::new(vec![])),
+        )
+        .await;
+
+    // Denied peer should get notified to request a transaction.
+    let denied_peer_id = if permitted_peer_id == peer1_id {
+        peer2_id
+    } else {
+        peer1_id
+    };
+    let (peer_id, msg) = handle.message().await;
+    assert_eq!(peer_id, denied_peer_id);
+    assert_eq!(msg, SyncMessage::TransactionRequest(tx_id));
+
+    handle.join_subsystem_manager().await;
+}
+
+async fn create_same_announcements_context(seed: Seed) -> SameAnnouncementsContext {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let time = P2pBasicTestTimeGetter::new();
+    let chain_config = Arc::new(create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    tf.make_block_builder().build_and_process().unwrap().unwrap();
+
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_chainstate(tf.into_chainstate())
+        .with_time_getter(time.get_time_getter())
+        .build()
+        .await;
+
+    // Connect two peers.
+    let peer1_id = PeerId::new();
+    let peer2_id = PeerId::new();
+    handle.connect_peer(peer1_id).await;
+    handle.connect_peer(peer2_id).await;
+
+    SameAnnouncementsContext {
+        handle,
+        time,
+        p2p_config,
+        peer1_id,
+        peer2_id,
+        tx: create_simple_transaction(chain_config.genesis_block_id()),
+    }
+}
+
+struct SameAnnouncementsContext {
+    pub handle: SyncManagerHandle,
+    pub time: P2pBasicTestTimeGetter,
+    pub p2p_config: Arc<P2pConfig>,
+    pub peer1_id: PeerId,
+    pub peer2_id: PeerId,
+    pub tx: SignedTransaction,
 }

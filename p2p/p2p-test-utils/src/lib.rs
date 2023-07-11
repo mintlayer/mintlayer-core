@@ -23,8 +23,11 @@ use chainstate::{
 };
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{config::ChainConfig, Block},
-    primitives::Idable,
+    chain::{
+        config::ChainConfig, signature::inputsig::InputWitness, tokens::OutputValue, Block,
+        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+    },
+    primitives::{Amount, Id, Idable},
     time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
@@ -88,6 +91,16 @@ pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
     }
 
     blocks
+}
+
+pub fn create_simple_transaction(out_point: Id<GenBlock>) -> SignedTransaction {
+    let tx = Transaction::new(
+        0x00,
+        vec![TxInput::from_utxo(OutPointSourceId::from(out_point), 0)],
+        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
+    )
+    .unwrap();
+    SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()
 }
 
 pub struct P2pBasicTestTimeGetter {

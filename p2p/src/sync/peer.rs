@@ -14,11 +14,12 @@
 // limitations under the License.
 
 use std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     mem,
     time::Duration,
 };
 
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use itertools::Itertools;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedSender},
@@ -54,7 +55,10 @@ use crate::{
         types::services::{Service, Services},
         NetworkingService,
     },
-    sync::types::PeerActivity,
+    sync::types::{
+        CompleteTransaction, PeerActivity, RequestTrackerEvent, TransactionAction,
+        TransactionPermitRequest, TransactionRequestError,
+    },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
@@ -72,6 +76,7 @@ pub struct Peer<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    request_tracker_sender: UnboundedSender<RequestTrackerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
     is_initial_block_download: Arc<AcqRelAtomicBool>,
@@ -96,6 +101,8 @@ pub struct Peer<T: NetworkingService> {
     /// disconnect the peer in case we haven't received expected data within a certain time period.
     last_activity: PeerActivity,
     time_getter: TimeGetter,
+    transaction_request_queue: FuturesUnordered<BoxFuture<'static, TransactionAction>>,
+    pending_transaction_requests: BTreeMap<Id<Transaction>, Duration>,
 }
 
 impl<T> Peer<T>
@@ -112,6 +119,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        request_tracker_sender: UnboundedSender<RequestTrackerEvent>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         is_initial_block_download: Arc<AcqRelAtomicBool>,
@@ -128,6 +136,7 @@ where
             chainstate_handle,
             mempool_handle,
             peer_manager_sender,
+            request_tracker_sender,
             messaging_handle,
             sync_rx,
             is_initial_block_download,
@@ -139,6 +148,8 @@ where
             unconnected_headers: 0,
             last_activity: PeerActivity::Pending,
             time_getter,
+            transaction_request_queue: FuturesUnordered::new(),
+            pending_transaction_requests: BTreeMap::new(),
         }
     }
 
@@ -177,7 +188,27 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                _ = stalling_interval.tick(), if !matches!(self.last_activity, PeerActivity::Pending) => {}
+                // Check if it's time to request any transaction. Note that the peer first needs to
+                // get a permission from the block sync manager, hence the request queue. This is so
+                // that the manager can better optimize resources and, for example, ensure that
+                // there is ever only a single request per transaction in flight.
+                tx_action = self.transaction_request_queue.select_next_some(),
+                    if !self.transaction_request_queue.is_empty() =>
+                {
+                    match tx_action {
+                        TransactionAction::Proceed(tx_id) => {
+                            self.request_transaction(tx_id)?
+                        },
+                        TransactionAction::Cancel(tx_id) => {
+                            self.announced_transactions.remove(&tx_id);
+                        },
+                    }
+                },
+
+                _ = stalling_interval.tick(),
+                    if !matches!(self.last_activity, PeerActivity::Pending)
+                    || !self.pending_transaction_requests.is_empty() =>
+                {}
             }
 
             // Run on each loop iteration, so it's easier to test
@@ -186,6 +217,7 @@ where
             {
                 self.handle_stalling_interval(time).await?;
             }
+            self.handle_stalled_transaction_requests()?;
         }
     }
 
@@ -216,7 +248,8 @@ where
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        Self::handle_result(&self.peer_manager_sender, self.id(), res).await
+        let peer_id = self.id();
+        Self::handle_result(&self.peer_manager_sender, peer_id, res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -321,7 +354,7 @@ where
     /// This is needed to allow the local or remote node to have slightly inaccurate clocks.
     /// Without it, even a 1 second difference can break block synchronization
     /// because one side may see the new block as invalid.
-    async fn wait_for_clock_diff(&self, block_timestamp: Duration) {
+    async fn wait_for_clock_diff(&mut self, block_timestamp: Duration) {
         let max_block_timestamp =
             self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
         if block_timestamp > max_block_timestamp {
@@ -535,6 +568,7 @@ where
         }
 
         if let Some(transaction) = tx {
+            self.complete_transaction(transaction.transaction().get_id(), Ok(()))?;
             super::process_incoming_transaction(
                 &self.mempool_handle,
                 &mut self.messaging_handle,
@@ -546,8 +580,6 @@ where
         Ok(())
     }
 
-    // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
-    // for details.
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!("Transaction announcement from {} peer: {tx}", self.id());
 
@@ -579,9 +611,45 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.messaging_handle
-                .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
+
+            let (allow_tx, allow_rx) = oneshot_nofail::channel();
+            self.request_tracker_sender.send(RequestTrackerEvent::RequestTransactionPermit(
+                TransactionPermitRequest {
+                    peer_id: self.id(),
+                    tx_id: tx,
+                    allow_tx,
+                },
+            ))?;
+
+            match allow_rx.await {
+                Ok(mut notify) => {
+                    if notify.try_recv().is_ok() {
+                        // If we are immediately notified, we can also send the transaction request
+                        // immediately and skip the queue.
+                        self.request_transaction(tx)?;
+                    } else {
+                        // Store the transaction request until notified.
+                        self.transaction_request_queue.push(
+                            async move {
+                                match notify.await {
+                                    Ok(_) => TransactionAction::Proceed(tx),
+                                    // Receiving an error is expected and signals that the transaction
+                                    // request is no longer valid.
+                                    Err(_) => TransactionAction::Cancel(tx),
+                                }
+                            }
+                            .boxed(),
+                        )
+                    }
+                }
+                Err(_) => {
+                    log::error!(
+                        "Transaction request channel with peer manager closed unexpectedly"
+                    );
+                    return Err(P2pError::ChannelClosed);
+                }
+            }
         }
 
         Ok(())
@@ -719,6 +787,28 @@ where
         )
     }
 
+    fn request_transaction(&mut self, tx_id: Id<Transaction>) -> Result<()> {
+        self.pending_transaction_requests.insert(tx_id, self.time_getter.get_time());
+        self.messaging_handle
+            .send_message(self.id(), SyncMessage::TransactionRequest(tx_id))
+    }
+
+    fn complete_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+        result: std::result::Result<(), TransactionRequestError>,
+    ) -> Result<()> {
+        self.request_tracker_sender.send(RequestTrackerEvent::CompleteTransaction(
+            CompleteTransaction {
+                peer_id: self.id(),
+                tx_id,
+                result,
+            },
+        ))?;
+        self.pending_transaction_requests.remove(&tx_id);
+        Ok(())
+    }
+
     async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
         if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
             return Ok(());
@@ -733,5 +823,26 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             e => Err(e),
         })
+    }
+
+    fn handle_stalled_transaction_requests(&mut self) -> Result<()> {
+        if self.pending_transaction_requests.is_empty() {
+            return Ok(());
+        }
+
+        let time = self.time_getter.get_time();
+        let timed_out_tx_ids: Vec<_> = self
+            .pending_transaction_requests
+            .iter()
+            .filter(|(_, &last_updated)| {
+                time >= last_updated + *self.p2p_config.sync_stalling_timeout
+            })
+            .map(|(tx_id, _)| *tx_id)
+            .collect();
+        for tx_id in timed_out_tx_ids {
+            self.complete_transaction(tx_id, Err(TransactionRequestError::Timeout))?;
+        }
+
+        Ok(())
     }
 }
