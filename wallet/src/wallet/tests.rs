@@ -39,6 +39,7 @@ use crypto::{
 use itertools::Itertools;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use wallet_storage::WalletStorageEncryptionRead;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoType};
 
 // TODO: Many of these tests require randomization...
@@ -644,9 +645,33 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     // success after unlock
     wallet.unlock_wallet(&password.unwrap()).unwrap();
-    wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
-        .unwrap();
+    if rng.gen::<bool>() {
+        wallet
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .unwrap();
+    } else {
+        // check if we remove the password it should fail to lock
+        wallet.encrypt_wallet(&None).unwrap();
+
+        let err = wallet.lock_wallet().unwrap_err();
+        assert_eq!(
+            err,
+            WalletError::DatabaseError(wallet_storage::Error::WalletLockedWithoutAPassword)
+        );
+
+        // check that the kdf challenge has been deleted
+        assert!(wallet
+            .db
+            .transaction_ro()
+            .unwrap()
+            .get_encryption_key_kdf_challenge()
+            .unwrap()
+            .is_none());
+
+        wallet
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .unwrap();
+    }
 }
 
 #[test]

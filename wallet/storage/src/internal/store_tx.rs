@@ -128,6 +128,11 @@ impl<'st, B: storage::Backend> StoreTxRwUnlocked<'st, B> {
             encryption_key,
         }
     }
+
+    // Delete a value for a well-known entry
+    fn delete_value<E: well_known::Entry>(&mut self) -> crate::Result<()> {
+        self.storage.get_mut::<db::DBValue, _>().del(E::KEY).map_err(Into::into)
+    }
 }
 
 macro_rules! impl_read_ops {
@@ -424,6 +429,9 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
         self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
             .map_err(Into::into)
+    }
+    fn del_encryption_kdf_challenge(&mut self) -> crate::Result<()> {
+        self.delete_value::<well_known::EncryptionKeyKdfChallenge>().map_err(Into::into)
     }
 
     fn encrypt_root_keys(
