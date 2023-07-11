@@ -38,9 +38,26 @@ mockall::mock! {
     }
 }
 
-impl TxStatus {
+pub trait TxOriginExt {
+    /// Origin that serves as a reasonable default for testing
+    const TEST: Self;
+}
+
+impl TxOriginExt for TxOrigin {
+    const TEST: Self = TxOrigin::LocalMempool;
+}
+
+pub trait TxStatusExt: Sized {
     /// Fetch status of given instruction from mempool, doing some integrity checks
-    pub fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
+    fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self>;
+
+    /// Assert the status of the transaction that the tx is in mempool
+    fn assert_in_mempool(&self);
+}
+
+impl TxStatusExt for TxStatus {
+    /// Fetch status of given instruction from mempool, doing some integrity checks
+    fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
         let in_mempool = mempool.contains_transaction(tx_id);
         let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
         match (in_mempool, in_orphan_pool) {
@@ -52,7 +69,7 @@ impl TxStatus {
     }
 
     /// Assert the status of the transaction that the tx is in mempool
-    pub fn assert_in_mempool(&self) {
+    fn assert_in_mempool(&self) {
         assert!(self.in_mempool());
     }
 }

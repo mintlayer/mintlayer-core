@@ -44,9 +44,3 @@ impl std::fmt::Display for TxOrigin {
         }
     }
 }
-
-#[cfg(test)]
-impl TxOrigin {
-    /// Origin that serves as a reasonable default for testing
-    pub const TEST: Self = Self::LocalMempool;
-}
