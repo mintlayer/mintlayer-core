@@ -82,6 +82,7 @@ pub struct SyncManagerHandle {
     shutdown_trigger: ShutdownTrigger,
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
+    mempool_handle: MempoolHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
     connected_peers: Arc<Mutex<BTreeMap<PeerId, Sender<SyncMessage>>>>,
 }
@@ -125,7 +126,7 @@ impl SyncManagerHandle {
             messaging_handle,
             sync_event_receiver,
             chainstate_handle.clone(),
-            mempool_handle,
+            mempool_handle.clone(),
             peer_manager_sender,
             time_getter,
         );
@@ -148,6 +149,7 @@ impl SyncManagerHandle {
             shutdown_trigger,
             subsystem_manager_handle,
             chainstate_handle,
+            mempool_handle,
             _new_tip_receiver: new_tip_receiver,
             connected_peers,
         }
@@ -155,6 +157,10 @@ impl SyncManagerHandle {
 
     pub fn chainstate(&self) -> &ChainstateHandle {
         &self.chainstate_handle
+    }
+
+    pub fn mempool(&self) -> &MempoolHandle {
+        &self.mempool_handle
     }
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
@@ -199,6 +205,15 @@ impl SyncManagerHandle {
             .await
             .expect("Failed to receive event in time")
             .unwrap()
+    }
+
+    /// Try to receive a message from the sync manager.
+    pub fn try_message(&mut self) -> Option<(PeerId, SyncMessage)> {
+        match self.sync_event_receiver.try_recv() {
+            Ok(message) => Some(message),
+            Err(mpsc::error::TryRecvError::Empty) => None,
+            Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
+        }
     }
 
     /// Panics if the sync manager returns an error.

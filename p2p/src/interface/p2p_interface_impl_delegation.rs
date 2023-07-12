@@ -56,7 +56,10 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().remove_reserved_node(addr).await
     }
 
-    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
+    async fn submit_transaction(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> crate::Result<mempool::TxStatus> {
         self.deref_mut().submit_transaction(tx).await
     }
 

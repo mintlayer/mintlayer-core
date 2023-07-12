@@ -509,6 +509,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
 
         tf.progress_time_seconds_since_epoch(3);
         let block = tf.make_block_builder().make_orphan(&mut rng).build();
+        let block_id = block.get_id();
 
         let err = tf.chainstate.preliminary_header_check(block.header().clone()).unwrap_err();
         assert_eq!(
@@ -535,7 +536,9 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let err = tf.chainstate.process_block(block, BlockSource::Peer).unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::PrevBlockNotFound)
+            ChainstateError::ProcessBlockError(
+                chainstate::BlockError::PrevBlockNotFoundForNewBlock(block_id)
+            )
         );
     });
 }

@@ -148,9 +148,11 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
-        self.p2p.call_async_mut(move |this| this.submit_transaction(tx)).await??;
-        Ok(())
+    async fn submit_transaction(
+        &self,
+        tx: SignedTransaction,
+    ) -> Result<mempool::TxStatus, Self::Error> {
+        Ok(self.p2p.call_async_mut(move |this| this.submit_transaction(tx)).await??)
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {

@@ -96,8 +96,23 @@ impl TestFramework {
         };
     }
 
-    /// Processes the given block.
-    pub fn process_block(
+    // This function is supposed to be called after each process_block call to update the saved
+    // block indices, which might have been invalidated.
+    // Note that if it's called after each block creation inside functions that create lots
+    // of blocks, like create_chain, it'll slow the tests down significantly, that's why we
+    // have a separate private do_process_block, which doesn't call refresh_block_indices.
+    fn refresh_block_indices(&mut self) -> Result<(), ChainstateError> {
+        for index in &mut self.block_indexes {
+            *index = self
+                .chainstate
+                .get_block_index(index.block_id())?
+                .expect("Old block index must still be present");
+        }
+
+        Ok(())
+    }
+
+    fn do_process_block(
         &mut self,
         block: Block,
         source: BlockSource,
@@ -105,11 +120,22 @@ impl TestFramework {
         let id = block.get_id();
         let block_index_result = self.chainstate.process_block(block, source)?;
         let index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
-            GenBlockIndex::Genesis(..) => panic!("we have processed a block"),
+            GenBlockIndex::Genesis(..) => panic!("we have processed the genesis block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
         self.block_indexes.push(index);
         Ok(block_index_result)
+    }
+
+    /// Processes the given block.
+    pub fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        let result = self.do_process_block(block, source);
+        self.refresh_block_indices()?;
+        result
     }
 
     /// Creates and processes a given amount of blocks. Returns the id of the last produced block.
@@ -123,17 +149,22 @@ impl TestFramework {
         rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
-        for _ in 0..blocks {
-            let block = self
-                .make_block_builder()
-                .add_test_transaction_with_parent(prev_block_id, rng)
-                .with_parent(prev_block_id)
-                .build();
-            prev_block_id = block.get_id().into();
-            self.process_block(block, BlockSource::Local)?;
-        }
+        let result = || -> Result<Id<GenBlock>, ChainstateError> {
+            for _ in 0..blocks {
+                let block = self
+                    .make_block_builder()
+                    .add_test_transaction_with_parent(prev_block_id, rng)
+                    .with_parent(prev_block_id)
+                    .build();
+                prev_block_id = block.get_id().into();
+                self.do_process_block(block, BlockSource::Local)?;
+            }
 
-        Ok(prev_block_id)
+            Ok(prev_block_id)
+        }();
+
+        self.refresh_block_indices()?;
+        result
     }
 
     pub fn create_chain_pos(
@@ -145,19 +176,24 @@ impl TestFramework {
         staking_vrf_sk: &VRFPrivateKey,
     ) -> Result<Id<GenBlock>, ChainstateError> {
         let mut prev_block_id = *parent_block;
-        for _ in 0..blocks {
-            let block = self
-                .make_pos_block_builder(rng)
-                .with_parent(prev_block_id)
-                .with_block_signing_key(staking_sk.clone())
-                .with_stake_spending_key(staking_sk.clone())
-                .with_vrf_key(staking_vrf_sk.clone())
-                .build();
-            prev_block_id = block.get_id().into();
-            self.process_block(block, BlockSource::Local)?;
-        }
+        let result = || -> Result<Id<GenBlock>, ChainstateError> {
+            for _ in 0..blocks {
+                let block = self
+                    .make_pos_block_builder(rng)
+                    .with_parent(prev_block_id)
+                    .with_block_signing_key(staking_sk.clone())
+                    .with_stake_spending_key(staking_sk.clone())
+                    .with_vrf_key(staking_vrf_sk.clone())
+                    .build();
+                prev_block_id = block.get_id().into();
+                self.do_process_block(block, BlockSource::Local)?;
+            }
 
-        Ok(prev_block_id)
+            Ok(prev_block_id)
+        }();
+
+        self.refresh_block_indices()?;
+        result
     }
 
     /// Returns the genesis block of the chain.
@@ -222,6 +258,10 @@ impl TestFramework {
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
+    }
+
+    pub fn make_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
+        block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
     }
 }
 

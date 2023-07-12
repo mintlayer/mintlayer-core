@@ -172,13 +172,16 @@ macro_rules! impl_read_ops {
 
             fn get_block_tree_by_height(
                 &self,
+                start_from: BlockHeight,
             ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
                 let map = self.0.get::<db::DBBlockIndex, _>();
                 let items = map.prefix_iter_decoded(&())?;
 
                 let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
                 for (_, bi) in items {
-                    result.entry(bi.block_height()).or_default().push(*bi.block_id());
+                    if bi.block_height() >= start_from {
+                        result.entry(bi.block_height()).or_default().push(*bi.block_id());
+                    }
                 }
 
                 Ok(result)

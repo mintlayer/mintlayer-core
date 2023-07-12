@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::SignedTransaction;
+use mempool::TxOrigin;
 
 use crate::{
     error::{ConversionError, P2pError},
@@ -90,13 +91,15 @@ where
         Ok(())
     }
 
-    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
-        crate::sync::process_incoming_transaction(
-            &self.mempool_handle,
-            &mut self.messaging_handle,
-            tx,
-        )
-        .await
+    async fn submit_transaction(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> crate::Result<mempool::TxStatus> {
+        let res = self
+            .mempool_handle
+            .call_mut(move |mempool| mempool.add_transaction(tx, TxOrigin::LocalP2p))
+            .await??;
+        Ok(res)
     }
 
     fn subscribe_to_events(

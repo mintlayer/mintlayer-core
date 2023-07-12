@@ -21,6 +21,7 @@ members = [
   "dns_server",                   # DNS-server.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
+  "mempool/types",                # Common mempool types.
   "merkletree",                   # Merkle tree implementation with merkle proofs.
   "mocks",                        # Mock implementations of our traits (used for testing)
   "node-daemon",                  # Node terminal binary.
@@ -115,6 +116,7 @@ chacha20poly1305 = "0.10"
 clap = "4"
 criterion = "0.4"
 crossterm = "0.26"
+derive_more = "0.99.16"
 directories = "5.0"
 enum-iterator = "1.4.1"
 env_logger = "0.10"

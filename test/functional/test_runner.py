@@ -102,6 +102,7 @@ BASE_SCRIPTS = [
     # vv Tests less than 30s vv
     'example_test.py',
     'p2p_ping.py',
+    'p2p_submit_orphan.py',
     'p2p_syncing_test.py',
     'p2p_relay_transactions.py',
     'feature_lmdb_backend_test.py',
