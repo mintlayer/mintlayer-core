@@ -34,16 +34,80 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["AnyoneCanSpend", "()"],
-                    # TODO other destination types
-                ]
+                    ["Address", "(PublicKeyHash)"],
+                    ["PublicKey", "PublicKey"],
+                    ["ScriptHash", "ScriptId"],
+                    ["ClassicMultiSig", "(PublicKeyHash)"],
+                ],
+            },
+
+            "PublicKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "PublicKeyHolder"],
+                ],
+            },
+
+            "PublicKeyHolder": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Secp256k1Schnorr", "(Secp256k1PublicKey)"],
+                ],
+            },
+
+            "Secp256k1PublicKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["pubkey_data", "[u8; 33]"],
+                ],
             },
 
             "TxOutput": {
                 "type": "enum",
                 "type_mapping": [
                     ["Transfer", "(OutputValue, Destination)"],
-                    # TODO other purpose types
+                    ["LockThenTransfer", "(OutputValue, Destination, OutputTimeLock)"],
+                    ["Burn", "(OutputValue)"],
+                    ["CreateStakePool", "(PoolId, Box<StakePoolData>)"],
+                    ["ProduceBlockFromStake", "(Destination, PoolId)"],
+                    ["CreateDeligationId", "(Destination, PoolId)"],
+                    ["DelegateStaking", "(Amount, DelegationId)"],
                 ]
+            },
+
+            "PoolId": "H256",
+
+            "StakePoolData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["value", "Amount"],
+                    ["staker", "Destination"],
+                    ["vrf_public_key", "VRFPublicKey"],
+                    ["decommission_key", "Destination"],
+                    ["margin_ratio_per_thousand", "u16"],
+                    ["cost_per_block", "Amount"]
+                ],
+            },
+
+            "VRFPublicKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "VRFPublicKeyHolder"],
+                ],
+            },
+
+            "VRFPublicKeyHolder": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Schnorrkel", "(SchnorrkelPublicKey)"],
+                ]
+            },
+
+            "SchnorrkelPublicKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "[u8; 32]"],
+                ],
             },
 
             "OutPointSourceId": {
@@ -252,9 +316,61 @@ def init_mintlayer_types():
                 "type_mapping": [
                     ["None", "()"],
                     ["PoW", "Box<PoWGenerateBlockInputData>"],
-                    ["PoS", "()"]
-                    # TODO PoS
+                    ["PoS", "Box<PoSGenerateBlockInputData>"]
                 ]
+            },
+
+            "PoSGenerateBlockInputData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["stake_private_key", "PrivateKey"],
+                    ["vrf_private_key", "VRFPrivateKey"],
+                    ["pool_id", "PoolId"],
+                    ["kernel_inputs", "Vec<TxInput>"],
+                    ["kernel_input_utxo", "Vec<TxOutput>"],
+                ],
+            },
+
+            "Privatekey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "PrivateKeyHolder"],
+                ],
+            },
+
+            "PrivateKeyHolder": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Secp256k1Schnorr", "(Secp256k1PrivateKey)"],
+                ],
+            },
+
+            "Secp256k1PrivateKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["data", "[u8; 32]"],
+                ],
+            },
+
+            "VRFPrivateKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "VRFPrivateKeyHolder"],
+                ],
+            },
+
+            "VRFPrivateKeyHolder": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Schnorrkel", "(SchnorrkelPrivateKey)"],
+                ],
+            },
+
+            "SchnorrkelPrivateKey": {
+                "type": "struct",
+                "type_mapping": [
+                    ["key", "[u8; 64]"]
+                ],
             },
 
             "PoWGenerateBlockInputData": {
