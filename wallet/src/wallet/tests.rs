@@ -672,7 +672,12 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     );
 
     assert_eq!(
-        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output.clone()]),
+        wallet.create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output.clone()],
+            Amount::ZERO,
+            Amount::ZERO
+        ),
         Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
         ))
@@ -682,7 +687,12 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     wallet.unlock_wallet(&password.unwrap()).unwrap();
     if rng.gen::<bool>() {
         wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![new_output],
+                Amount::ZERO,
+                Amount::ZERO,
+            )
             .unwrap();
     } else {
         // check if we remove the password it should fail to lock
@@ -704,7 +714,12 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .is_none());
 
         wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![new_output],
+                Amount::ZERO,
+                Amount::ZERO,
+            )
             .unwrap();
     }
 }
@@ -791,8 +806,15 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let pool_amount = (block1_amount - Amount::from_atoms(NETWORK_FEE)).unwrap();
 
-    let stake_pool_transaction =
-        wallet.create_stake_pool_tx(DEFAULT_ACCOUNT_INDEX, pool_amount, None).unwrap();
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            pool_amount,
+            None,
+            Amount::ZERO,
+            Amount::ZERO,
+        )
+        .unwrap();
     let block2 = Block::new(
         vec![stake_pool_transaction],
         block1_id.into(),
@@ -901,7 +923,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let token_issuance_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap();
 
     let block2 = Block::new(
@@ -955,7 +982,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let transfer_tokens_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap();
 
     let block3 = Block::new(
@@ -1015,7 +1047,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     );
 
     let transfer_tokens_error = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .err()
         .unwrap();
 
@@ -1113,7 +1150,12 @@ fn lock_then_transfer(#[case] seed: Seed) {
     );
 
     let lock_then_transfer_transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap();
 
     let block2 = Block::new(
@@ -1360,7 +1402,12 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         );
 
         let transaction = wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![new_output],
+                Amount::ZERO,
+                Amount::ZERO,
+            )
             .unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
@@ -1484,7 +1531,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             make_address_output(chain_config.as_ref(), address, amount_to_transfer).unwrap();
 
         let transaction = wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![new_output],
+                Amount::ZERO,
+                Amount::ZERO,
+            )
             .unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
@@ -1512,7 +1564,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         ),
     );
     let transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap();
 
     for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
@@ -1547,7 +1604,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         ),
     );
     let err = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap_err();
     assert_eq!(
         err,
@@ -1566,7 +1628,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     );
 
     let transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![new_output],
+            Amount::ZERO,
+            Amount::ZERO,
+        )
         .unwrap();
 
     let transaction_id = transaction.transaction().get_id();
@@ -1696,7 +1763,12 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
             make_address_output(chain_config.as_ref(), address, amount_to_transfer).unwrap();
 
         let transaction = wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![new_output],
+                Amount::ZERO,
+                Amount::ZERO,
+            )
             .unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {

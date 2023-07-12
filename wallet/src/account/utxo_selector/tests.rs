@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{tokens::OutputValue, Destination, GenBlock, OutPointSourceId},
+    chain::{tokens::OutputValue, Destination, GenBlock, OutPointSourceId, UtxoOutPoint},
     primitives::Id,
     Uint256,
 };
@@ -30,7 +30,7 @@ fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
     );
     let tx_output = TxOutput::Transfer(OutputValue::Coin(value), Destination::AnyoneCanSpend);
 
-    let outputs = vec![(outpoint, tx_output)];
+    let outputs = vec![(outpoint.into(), tx_output)];
 
     groups.push(OutputGroup {
         outputs,

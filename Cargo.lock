@@ -6432,6 +6432,7 @@ dependencies = [
  "hex",
  "itertools",
  "logging",
+ "mempool",
  "parity-scale-codec",
  "pos_accounting",
  "rstest",

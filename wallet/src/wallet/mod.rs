@@ -427,11 +427,19 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
+        current_fee_rate: Amount,
+        long_term_fee_rate: Amount,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.process_send_request(db_tx, request, latest_median_time)?;
+            let tx = account.process_send_request(
+                db_tx,
+                request,
+                latest_median_time,
+                current_fee_rate,
+                long_term_fee_rate,
+            )?;
             let txs = [tx];
             account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
 
@@ -445,11 +453,19 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
+        current_fee_rate: Amount,
+        long_term_fee_rate: Amount,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx =
-                account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)?;
+            let tx = account.create_stake_pool_tx(
+                db_tx,
+                amount,
+                decomission_key,
+                latest_median_time,
+                current_fee_rate,
+                long_term_fee_rate,
+            )?;
 
             let txs = [tx];
             account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;

@@ -27,6 +27,8 @@ mod pool;
 pub mod rpc;
 pub mod tx_accumulator;
 
+pub use pool::FeeRate;
+
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 
 pub type Result<T> = core::result::Result<T, error::Error>;

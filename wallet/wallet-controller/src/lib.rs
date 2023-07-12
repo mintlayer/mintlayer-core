@@ -279,9 +279,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
+        //TODO: get feerate from mempool
+        let current_fee_rate = Amount::ZERO;
+        let long_term_fee_rate = Amount::ZERO;
         let tx = self
             .wallet
-            .create_transaction_to_addresses(account_index, [output])
+            .create_transaction_to_addresses(
+                account_index,
+                [output],
+                current_fee_rate,
+                long_term_fee_rate,
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.clone())
@@ -295,9 +303,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> Result<TxStatus, ControllerError<T>> {
+        //TODO: get feerate from mempool
+        let current_fee_rate = Amount::ZERO;
+        let long_term_fee_rate = Amount::ZERO;
         let tx = self
             .wallet
-            .create_stake_pool_tx(account_index, amount, decomission_key)
+            .create_stake_pool_tx(
+                account_index,
+                amount,
+                decomission_key,
+                current_fee_rate,
+                long_term_fee_rate,
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.clone())

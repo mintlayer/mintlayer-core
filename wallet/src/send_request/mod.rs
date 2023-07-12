@@ -18,7 +18,6 @@ use common::chain::stakelock::StakePoolData;
 use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
@@ -122,12 +121,9 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(
-        mut self,
-        utxos: impl IntoIterator<Item = (UtxoOutPoint, TxOutput)>,
-    ) -> Self {
+    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (TxInput, TxOutput)>) -> Self {
         for (outpoint, txo) in utxos {
-            self.inputs.push(outpoint.into());
+            self.inputs.push(outpoint);
             self.utxos.push(txo);
         }
         self

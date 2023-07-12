@@ -125,6 +125,8 @@ impl Account {
         mut request: SendRequest,
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
+        current_fee_rate: Amount,
+        long_term_fee_rate: Amount,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
@@ -139,9 +141,8 @@ impl Account {
             Amount::ZERO,
         )?;
 
-        // TODO: get current_fee_rate and long_term_fee_rate
-        // let current_fee_rate = 1;
-        // let long_term_fee_rate = 1;
+        let current_fee_rate = mempool::FeeRate::new(current_fee_rate);
+        let long_term_fee_rate = mempool::FeeRate::new(long_term_fee_rate);
         //
         // TODO: Calculate network fee from fee rate and expected transaction size
         let network_fee = Amount::from_atoms(10000);
@@ -167,15 +168,27 @@ impl Account {
 
         let mut total_fees_not_payed = network_fee;
 
-        let utxo_to_output_group = |(outpoint, txo): &(UtxoOutPoint, TxOutput)| {
-            // TODO: using current_fee_rate and long_term_fee_rate and the size in bytes
-            // calculate the fee and long_term_fee_rate
-            let fee = Amount::ZERO;
-            let long_term_fee = Amount::ZERO;
-            // TODO: calculate weight from the size of the input
-            let weight = 0;
-            OutputGroup::new((outpoint.clone(), txo.clone()), fee, long_term_fee, weight)
-        };
+        let utxo_to_output_group =
+            |(outpoint, txo): &(UtxoOutPoint, TxOutput)| -> Result<OutputGroup, UtxoSelectorError> {
+                let tx_input: TxInput = outpoint.clone().into();
+                let input_size = serialization::Encode::encoded_size(&tx_input);
+
+                let fee = current_fee_rate
+                    .compute_fee(input_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
+                let long_term_fee = long_term_fee_rate
+                    .compute_fee(input_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
+
+                // TODO: calculate weight from the size of the input
+                let weight = 0;
+                OutputGroup::new(
+                    (tx_input, txo.clone()),
+                    fee.into(),
+                    long_term_fee.into(),
+                    weight,
+                )
+            };
 
         let mut selected_inputs: BTreeMap<_, _> = output_currency_amounts
             .iter()
@@ -259,8 +272,16 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         request: SendRequest,
         median_time: BlockTimestamp,
+        current_fee_rate: Amount,
+        long_term_fee_rate: Amount,
     ) -> WalletResult<SignedTransaction> {
-        let request = self.select_inputs_for_send_request(request, db_tx, median_time)?;
+        let request = self.select_inputs_for_send_request(
+            request,
+            db_tx,
+            median_time,
+            current_fee_rate,
+            long_term_fee_rate,
+        )?;
         // TODO: Randomize inputs and outputs
 
         let tx = self.sign_transaction(request, db_tx)?;
@@ -297,6 +318,8 @@ impl Account {
         amount: Amount,
         decomission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
+        current_fee_rate: Amount,
+        long_term_fee_rate: Amount,
     ) -> WalletResult<SignedTransaction> {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
@@ -319,7 +342,13 @@ impl Account {
             Amount::ZERO,
         )?;
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
-        let mut request = self.select_inputs_for_send_request(request, db_tx, median_time)?;
+        let mut request = self.select_inputs_for_send_request(
+            request,
+            db_tx,
+            median_time,
+            current_fee_rate,
+            long_term_fee_rate,
+        )?;
 
         let new_pool_id = match request
             .inputs()

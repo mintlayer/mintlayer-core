@@ -19,7 +19,7 @@ pub mod output_group;
 pub use output_group::{OutputGroup, PayFee};
 
 use common::{
-    chain::{TxOutput, UtxoOutPoint},
+    chain::{TxInput, TxOutput},
     primitives::{signed_amount::SignedAmount, Amount},
 };
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -27,7 +27,7 @@ use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 const TOTAL_TRIES: u32 = 100_000;
 
 pub struct SelectionResult {
-    outputs: Vec<(UtxoOutPoint, TxOutput)>,
+    outputs: Vec<(TxInput, TxOutput)>,
     effective_value: Amount,
     target: Amount,
     waste: SignedAmount,
@@ -55,7 +55,7 @@ impl SelectionResult {
         self.effective_value
     }
 
-    pub fn into_output_pairs(self) -> Vec<(UtxoOutPoint, TxOutput)> {
+    pub fn into_output_pairs(self) -> Vec<(TxInput, TxOutput)> {
         self.outputs
     }
 

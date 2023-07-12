@@ -44,11 +44,12 @@ use utils::{
     ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
 };
 
+pub use self::feerate::FeeRate;
 pub use self::memory_usage_estimator::MemoryUsageEstimator;
 use self::{
     entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
-    feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
+    feerate::{INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
     orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
     spends_unconfirmed::SpendsUnconfirmed,
