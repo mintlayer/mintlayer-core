@@ -685,31 +685,39 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
+
         for signed_tx in transactions {
             let wallet_tx = WalletTx::Tx(TxData::new(
                 signed_tx.transaction().clone().into(),
                 tx_state,
             ));
 
-            // in the case when 2 unconfirmed txs depend on each other, and the last one spends
-            // utxos that belong to this account (but has no outputs associated with this account)
-            // it is not possible to determine if that tx is for this account or not
-            // if we haven't processed the previous tx before it.
-            // This can only happen for the last one in the chain, as any other tx will have an
-            // output belonging to this account.
             if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
                 not_added.push(signed_tx);
             }
         }
 
         // check them again after adding all we could
-        for signed_tx in not_added {
-            let wallet_tx = WalletTx::Tx(TxData::new(
-                signed_tx.transaction().clone().into(),
-                TxState::InMempool,
-            ));
+        // and keep looping as long as we add a new tx
+        loop {
+            let mut not_added_next = vec![];
+            for signed_tx in not_added.iter() {
+                let wallet_tx = WalletTx::Tx(TxData::new(
+                    signed_tx.transaction().clone().into(),
+                    tx_state,
+                ));
 
-            self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
+                if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
+                    not_added_next.push(*signed_tx);
+                }
+            }
+
+            // if no new tx was added break
+            if not_added.len() == not_added_next.len() {
+                break;
+            }
+
+            not_added = not_added_next;
         }
 
         Ok(())
