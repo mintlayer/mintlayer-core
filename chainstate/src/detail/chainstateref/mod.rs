@@ -230,8 +230,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Read previous block from storage and return its BlockIndex.
-    // FIXME: rename it? Or maybe delete it and rename get_previous_block_index_by_header to
-    // get_previous_block_index?
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,

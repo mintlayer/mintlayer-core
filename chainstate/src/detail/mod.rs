@@ -339,7 +339,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         result
             .map_err(BlockError::CheckBlockFailed)
-            .map_err(block_integration_error_constructor(block_status))?;
+            .map_err(|err| BlockIntegrationError::OtherValidationError(err, block_status))?;
 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
 
@@ -347,7 +347,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref
             .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))
-            .map_err(block_integration_error_constructor(block_status))?;
+            .map_err(|err| BlockIntegrationError::OtherValidationError(err, block_status))?;
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
         // if we know that a reorg has occurred, because during a reorg multiple blocks get
@@ -484,7 +484,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .log_err()?);
 
             let block_index = get_existing_block_index(&chainstate_ref, block_id).log_err()?;
-            let next_block_height = get_next_block_height(block_index.block_height()).log_err()?;
+            let next_block_height = block_index.block_height().next_height();
 
             // TODO: get_block_id_tree_top_as_list here is an expensive call, because
             // under the hood it'll iterate over all block indices in the DB.
@@ -808,15 +808,6 @@ enum BlockIntegrationError {
     OtherDbError(#[from] chainstate_storage::Error),
 }
 
-fn block_integration_error_constructor<Err>(
-    status: BlockStatus,
-) -> impl FnOnce(Err) -> BlockIntegrationError
-where
-    Err: Into<BlockError>,
-{
-    move |err| BlockIntegrationError::OtherValidationError(err.into(), status)
-}
-
 fn get_block_index<S, V>(
     chainstate_ref: &chainstateref::ChainstateRef<S, V>,
     block_id: &Id<Block>,
@@ -841,10 +832,6 @@ where
     get_block_index(chainstate_ref, block_id)?.ok_or(BlockError::InvariantErrorBlockIndexNotFound(
         (*block_id).into(),
     ))
-}
-
-fn get_next_block_height(height: BlockHeight) -> Result<BlockHeight, BlockError> {
-    (height + 1.into()).ok_or(BlockError::BlockHeightTooBig(height))
 }
 
 #[cfg(test)]

@@ -146,15 +146,6 @@ mod tests {
 
     #[test]
     fn test_bit_range_of() {
-        // FIXME: each of the asserts below is below 100 characters in length, so they could be
-        // written in 4 lines of code, which IMO would make the test more readable overall.
-        // But rustfmt turned it into 16 lines, because it has different maximums depending
-        // on the kind of the line. The question is, are there any benefits to such behavior?
-        // I personally only see one big drawback - it results in too much vertical space being
-        // eaten up for no good reason, which makes functions appear longer and harder to read.
-        // Rustfmt has an option that controls this, "use_small_heuristics"; when set to "Max"
-        // it basically sets all those "code-specific" maximums to 100%.
-        // I suggest that we give it a try.
         assert_eq!(
             BlockStatus::bit_range_of(BlockStatusBitArea::ValidationStage),
             0..8
