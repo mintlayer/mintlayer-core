@@ -91,7 +91,6 @@ fn calculate_new_target(
     );
     let prev_target: Uint512 = (*prev_target).into();
 
-    // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = prev_target * actual_block_time / target_block_time;
     let difficulty_change_limit = prev_target
         * Uint512::from_u64(pos_config.difficulty_change_limit().value().into())
@@ -208,8 +207,7 @@ mod tests {
     use std::sync::Arc;
 
     use chainstate_types::{
-        pos_randomness::PoSRandomness, BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError,
-        PropertyQueryError,
+        BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError, PropertyQueryError,
     };
     use common::{
         chain::{
@@ -279,7 +277,7 @@ mod tests {
                 .map(|(i, t)| {
                     let height = i as u64 + 1;
                     let timestamp = BlockTimestamp::from_int_seconds(*t);
-                    let block = make_block(rng, best_block, timestamp, Uint256::MAX);
+                    let block = make_block(rng, best_block, timestamp, Uint256::ZERO);
                     let block_index = BlockIndex::new(
                         &block,
                         Uint256::ZERO,
@@ -770,8 +768,10 @@ mod tests {
         assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);
     }
 
-    // The test will calculate and print block times for block thats could be generated over 1_000_000 time slots
-    // which is ~8333 blocks for 120s target time
+    // The test can be enabled on demand to simulate the work of current DAA.
+    // It will calculate and print block times for blocks that could be generated over 1_000_000 time slots
+    // which is ideally 8333 blocks for 120s target time
+    #[ignore]
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -788,12 +788,14 @@ mod tests {
             ))
             .build();
 
+        // generator can be changed to provide different strategies for balance variation
         let pool_balance_generator = |_slot: u64| 1u64;
 
         let mut block_index_handle =
             TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[120]);
         let mut tip_height = BlockHeight::one();
         let pos_status = get_pos_status(&chain_config, tip_height.next_height());
+
         println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}", 
                                    pos_status.get_chain_config().block_count_to_average_for_blocktime(),
                                    pos_status.get_chain_config().difficulty_change_limit());
@@ -803,6 +805,7 @@ mod tests {
             let tip_id = (*tip.block_id()).into();
             let block_timestamp = BlockTimestamp::from_int_seconds(slot);
 
+            // calculate target based on the history data
             let target =
                 calculate_target_required(&chain_config, &pos_status, tip_id, &block_index_handle)
                     .unwrap();
@@ -821,7 +824,7 @@ mod tests {
             let target_u512: Uint512 = target.try_into().unwrap();
             let current_hash: Uint512 = current_hash.try_into().unwrap();
 
-            // check if hash satisfies the target
+            // add block if hash satisfies the target
             if current_hash <= target_u512 * pool_balance {
                 let block = make_block(&mut rng, tip_id, block_timestamp, target);
                 tip_height = tip_height.next_height();
@@ -838,10 +841,11 @@ mod tests {
         }
         println!("tip height {}", tip_height);
 
+        // print result block times
         block_index_handle.blocks_iter().tuple_windows::<(_, _)>().for_each(|(a, b)| {
             let block_time =
                 b.block_timestamp().as_int_seconds() - a.block_timestamp().as_int_seconds();
-            println!("{:?}", block_time);
+            println!("{}", block_time);
         });
     }
 }

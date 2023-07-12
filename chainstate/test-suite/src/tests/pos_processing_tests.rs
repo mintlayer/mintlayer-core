@@ -1429,7 +1429,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         1,
         block_timestamp,
         &PoSRandomness::new(initial_randomness),
-        &pos_data.vrf_data(),
+        &pos_data,
         &vrf_pk,
     )
     .unwrap();

@@ -196,7 +196,7 @@ where
         epoch_index,
         block.header().timestamp(),
         &sealed_epoch_randomness,
-        pos_data.vrf_data(),
+        pos_data,
         &vrf_pub_key,
     )
     .map_err(EpochSealError::RandomnessError)

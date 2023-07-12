@@ -106,14 +106,17 @@ impl PoSChainConfig {
 }
 
 pub fn create_testnet_pos_config() -> PoSChainConfig {
+    let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
+    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
+
     PoSChainConfig {
-        target_limit: Uint256::MAX,
-        target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
+        target_limit,
+        target_block_time,
         reward_maturity_distance: 2000.into(),
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 5,
-        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+        block_count_to_average_for_blocktime: 100,
+        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
 
@@ -124,15 +127,14 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         reward_maturity_distance: 2000.into(),
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 5,
-        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+        block_count_to_average_for_blocktime: 100,
+        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
 
 pub fn create_regtest_pos_config() -> PoSChainConfig {
     let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
-    //let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
-    let target_limit = Uint256::MAX;
+    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
 
     PoSChainConfig {
         target_limit,
@@ -140,7 +142,7 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
         reward_maturity_distance: 2000.into(),
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 50,
+        block_count_to_average_for_blocktime: 100,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
@@ -164,7 +166,8 @@ pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
             0xFFFFFFFFFFFFFFFF,
             0x00000000FFFFFFFF,
         ]),
-        // FIXME: Uint256::MAX / 120 ?
+        // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
+        // It's hardcoded because division for Uint256 is not const
         ChainType::Regtest => Uint256([
             0x2222222222222222,
             0x2222222222222222,
