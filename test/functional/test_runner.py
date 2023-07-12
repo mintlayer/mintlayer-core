@@ -100,6 +100,8 @@ BASE_SCRIPTS = [
     # vv Tests less than 60s vv
 
     # vv Tests less than 30s vv
+    'blockprod_generate_pos_blocks.py',
+    'blockprod_generate_pow_blocks.py',
     'example_test.py',
     'p2p_ping.py',
     'p2p_submit_orphan.py',
@@ -506,7 +508,7 @@ class TestResult():
 def check_script_prefixes():
     """Check that test scripts start with one of the allowed name prefixes."""
 
-    good_prefixes_re = re.compile("^(example|feature|interface|mempool|mining|p2p|rpc|wallet|tool)_")
+    good_prefixes_re = re.compile("^(blockprod|example|feature|interface|mempool|mining|p2p|rpc|wallet|tool)_")
     bad_script_names = [script for script in ALL_SCRIPTS if good_prefixes_re.match(script) is None]
 
     if bad_script_names:
