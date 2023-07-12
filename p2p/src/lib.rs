@@ -23,11 +23,12 @@ pub mod protocol;
 pub mod rpc;
 pub mod sync;
 pub mod testing_utils;
-pub mod types;
 pub mod utils;
 
 mod p2p_event;
 mod peer_manager_event;
+
+pub use p2p_types as types;
 
 pub use crate::{
     p2p_event::{P2pEvent, P2pEventHandler},
@@ -125,6 +126,7 @@ where
             bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
+            time_getter.clone(),
             Arc::clone(&shutdown),
             shutdown_receiver,
             subscribers_receiver,
@@ -141,7 +143,7 @@ where
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
-        let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
+        let peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
@@ -152,7 +154,7 @@ where
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
             match peer_manager.run().await {
-                Ok(_) => unreachable!(),
+                Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.
                 Err(P2pError::ChannelClosed) if shutdown_.load() => {
                     log::info!("Peer manager is shut down");
@@ -164,7 +166,7 @@ where
             }
         });
 
-        let mut sync_manager = sync::BlockSyncManager::<T>::new(
+        let sync_manager = sync::BlockSyncManager::<T>::new(
             chain_config,
             p2p_config,
             messaging_handle.clone(),
@@ -177,7 +179,7 @@ where
         let shutdown_ = Arc::clone(&shutdown);
         let sync_manager_task = tokio::spawn(async move {
             match sync_manager.run().await {
-                Ok(_) => unreachable!(),
+                Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.
                 Err(P2pError::ChannelClosed) if shutdown_.load() => {
                     log::info!("Sync manager is shut down");

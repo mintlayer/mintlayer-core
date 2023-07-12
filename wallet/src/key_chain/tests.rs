@@ -155,6 +155,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         key_chain.account_index(),
         key_chain.account_public_key().clone(),
         key_chain.lookahead_size(),
+        None,
     );
 
     drop(key_chain);
@@ -218,6 +219,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         key_chain.account_index(),
         key_chain.account_public_key().clone(),
         key_chain.lookahead_size(),
+        None,
     );
 
     drop(key_chain);

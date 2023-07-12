@@ -16,7 +16,6 @@
 //! Peer manager
 
 pub mod address_groups;
-pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
 mod peers_eviction;
@@ -1210,7 +1209,7 @@ where
         }
     }
 
-    pub async fn run(&mut self) -> crate::Result<Never> {
+    pub async fn run(mut self) -> crate::Result<Never> {
         self.run_internal(None).await
     }
 }

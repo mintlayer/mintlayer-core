@@ -35,8 +35,7 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
-    peer_manager::global_ip::IsGlobalIp,
-    types::{peer_address::PeerAddress, peer_id::PeerId},
+    types::{peer_address::PeerAddress, peer_id::PeerId, IsGlobalIp},
 };
 use tokio::sync::mpsc;
 

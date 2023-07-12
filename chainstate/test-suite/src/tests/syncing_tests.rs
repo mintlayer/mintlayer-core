@@ -490,3 +490,52 @@ fn initial_block_download(#[case] seed: Seed) {
         assert!(!tf.chainstate.is_initial_block_download().unwrap());
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn header_check_for_orphan(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chainstate_config(ChainstateConfig {
+                max_db_commit_attempts: Default::default(),
+                max_orphan_blocks: Default::default(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
+                tx_index_enabled: Default::default(),
+                max_tip_age: Default::default(),
+            })
+            .build();
+
+        tf.progress_time_seconds_since_epoch(3);
+        let block = tf.make_block_builder().make_orphan(&mut rng).build();
+
+        let err = tf.chainstate.preliminary_header_check(block.header().clone()).unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::PrevBlockNotFound(
+                    block.prev_block_id(),
+                    block.get_id(),
+                ),
+            ))
+        );
+
+        let err = tf.chainstate.preliminary_block_check(block.clone()).unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::PrevBlockNotFound(
+                    block.prev_block_id(),
+                    block.get_id(),
+                ),
+            ))
+        );
+
+        let err = tf.chainstate.process_block(block, BlockSource::Peer).unwrap_err();
+        assert_eq!(
+            err,
+            ChainstateError::ProcessBlockError(chainstate::BlockError::PrevBlockNotFound)
+        );
+    });
+}

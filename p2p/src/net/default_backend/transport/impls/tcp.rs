@@ -26,8 +26,7 @@ use crate::{
         },
         AsBannableAddress,
     },
-    peer_manager::global_ip::IsGlobalIp,
-    types::peer_address::PeerAddress,
+    types::{peer_address::PeerAddress, IsGlobalIp},
     Result,
 };
 

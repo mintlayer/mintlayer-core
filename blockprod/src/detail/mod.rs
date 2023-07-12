@@ -74,7 +74,7 @@ impl BlockProduction {
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
-        let job_manager_handle = Box::new(JobManagerImpl::new(chainstate_handle.clone()));
+        let job_manager_handle = Box::new(JobManagerImpl::new(Some(chainstate_handle.clone())));
 
         let block_production = Self {
             chain_config,
@@ -146,7 +146,7 @@ impl BlockProduction {
                 move |this| {
                     let best_block_index = this
                         .get_best_block_index()
-                        .expect("Best block index retrieval failed in block production");
+                        .map_err(|_| ConsensusCreationError::BestBlockIndexNotFound)?;
 
                     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
                         this.get_ancestor(

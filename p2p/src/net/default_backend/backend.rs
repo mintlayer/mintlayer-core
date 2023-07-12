@@ -25,7 +25,7 @@ use tokio::{
     time::timeout,
 };
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
@@ -49,7 +49,11 @@ use crate::{
     P2pEvent, P2pEventHandler,
 };
 
-use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
+use super::{
+    peer::PeerRole,
+    transport::TransportAddress,
+    types::{HandshakeNonce, P2pTimestamp},
+};
 
 /// Buffer size of the channel to the SyncManager peer task.
 /// How many unprocessed messages can be sent before the peer's event loop is blocked.
@@ -92,6 +96,8 @@ pub struct Backend<T: TransportSocket> {
 
     /// A p2p specific configuration.
     p2p_config: Arc<P2pConfig>,
+
+    time_getter: TimeGetter,
 
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
@@ -136,6 +142,7 @@ where
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
@@ -150,6 +157,7 @@ where
             conn_tx,
             chain_config,
             p2p_config,
+            time_getter,
             sync_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
@@ -261,7 +269,7 @@ where
     }
 
     /// Runs the backend events loop.
-    pub async fn run(&mut self) -> crate::Result<Never> {
+    pub async fn run(mut self) -> crate::Result<Never> {
         loop {
             tokio::select! {
                 // Select from the channels in the specified order
@@ -273,7 +281,7 @@ where
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
-                    callback(self)?;
+                    callback(&mut self)?;
                 },
                 // Handle peer events.
                 event = self.peer_chan.1.recv() => {
@@ -329,22 +337,21 @@ where
         };
 
         let backend_tx = self.peer_chan.0.clone();
-        let chain_config = Arc::clone(&self.chain_config);
-        let p2p_config = Arc::clone(&self.p2p_config);
-        let shutdown = Arc::clone(&self.shutdown);
 
+        let peer = peer::Peer::<T>::new(
+            remote_peer_id,
+            peer_role,
+            Arc::clone(&self.chain_config),
+            Arc::clone(&self.p2p_config),
+            socket,
+            receiver_address,
+            backend_tx,
+            peer_rx,
+        );
+        let shutdown = Arc::clone(&self.shutdown);
+        let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
         let handle = tokio::spawn(async move {
-            let mut peer = peer::Peer::<T>::new(
-                remote_peer_id,
-                peer_role,
-                chain_config,
-                p2p_config,
-                socket,
-                receiver_address,
-                backend_tx,
-                peer_rx,
-            );
-            match peer.run().await {
+            match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),

@@ -195,6 +195,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: NodeType::Full.into(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),

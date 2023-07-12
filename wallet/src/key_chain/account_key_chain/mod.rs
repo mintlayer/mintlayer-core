@@ -24,6 +24,7 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
+use crypto::vrf::ExtendedVRFPrivateKey;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
 use wallet_storage::{StoreTxRo, WalletStorageReadUnlocked, WalletStorageWriteLocked};
@@ -106,6 +107,17 @@ impl AccountKeyChain {
         let account_path = make_account_path(&self.chain_config, self.account_index);
 
         let root_key = MasterKeyChain::load_root_key(db_tx)?.derive_absolute_path(&account_path)?;
+        Ok(root_key)
+    }
+
+    fn derive_account_private_vrf_key(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<ExtendedVRFPrivateKey> {
+        let account_path = make_account_path(&self.chain_config, self.account_index);
+
+        let root_key =
+            MasterKeyChain::load_root_vrf_key(db_tx)?.derive_absolute_path(&account_path)?;
         Ok(root_key)
     }
 
@@ -213,6 +225,15 @@ impl AccountKeyChain {
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> KeyChainResult<ExtendedPrivateKey> {
         let xpriv = self.derive_account_private_key(db_tx)?;
+        xpriv.derive_absolute_path(path).map_err(KeyChainError::Derivation)
+    }
+
+    pub fn get_private_vrf_key_for_path(
+        &self,
+        path: &DerivationPath,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<ExtendedVRFPrivateKey> {
+        let xpriv = self.derive_account_private_vrf_key(db_tx)?;
         xpriv.derive_absolute_path(path).map_err(KeyChainError::Derivation)
     }
 

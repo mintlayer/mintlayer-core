@@ -38,7 +38,9 @@ use crate::{
     types::peer_id::PeerId,
     utils::oneshot_nofail,
 };
-use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use common::{
+    chain::config, primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter,
+};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
@@ -542,6 +544,7 @@ where
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
+    let time_getter = TimeGetter::default();
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, _) = T::start(
@@ -549,6 +552,7 @@ where
         vec![addr1],
         Arc::clone(&config),
         p2p_config,
+        time_getter,
         shutdown,
         shutdown_receiver,
         subscribers_receiver,
@@ -613,6 +617,7 @@ async fn connection_timeout_rpc_notified<T>(
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
+    let time_getter = TimeGetter::default();
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(
@@ -620,6 +625,7 @@ async fn connection_timeout_rpc_notified<T>(
         vec![addr1],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -628,12 +634,12 @@ async fn connection_timeout_rpc_notified<T>(
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
+    let peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
         rx,
-        Default::default(),
+        time_getter,
         peerdb_inmemory_store(),
     )
     .unwrap();
@@ -707,6 +713,7 @@ where
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
@@ -746,6 +753,7 @@ where
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
@@ -828,6 +836,7 @@ where
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
@@ -868,6 +877,7 @@ where
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
@@ -901,6 +911,7 @@ where
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),

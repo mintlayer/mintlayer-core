@@ -138,6 +138,7 @@ def init_mintlayer_types():
                     ["user_agent", "String"],
                     ["version", "SemVer"],
                     ["receiver_address", "Option<PeerAddress>"],
+                    ["current_time", "Compact<u64>"],
                     ["handshake_nonce", "u64"],
                 ]
             },
@@ -151,6 +152,7 @@ def init_mintlayer_types():
                     ["user_agent", "String"],
                     ["version", "SemVer"],
                     ["receiver_address", "Option<PeerAddress>"],
+                    ["current_time", "Compact<u64>"],
                 ]
             },
 

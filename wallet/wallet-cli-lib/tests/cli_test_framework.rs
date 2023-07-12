@@ -116,7 +116,7 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "007a0d90de05984977d4b3cb3f75342a81820a8ec79aa95181186b67fc93ed5a2e",
+        "0020b95f66e824fc0df1ff13ba63d6727e013e1ea465cc37c2415a69cc408cf375",
     );
 
     let mint_output = TxOutput::Transfer(
@@ -184,6 +184,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),

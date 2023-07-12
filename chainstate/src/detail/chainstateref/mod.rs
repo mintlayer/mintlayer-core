@@ -396,9 +396,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        let prev_block_index = self
-            .get_gen_block_index(header.prev_block_id())?
-            .expect("Previous block to exist");
+        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
+            CheckBlockError::PrevBlockNotFound(*header.prev_block_id(), header.get_id()),
+        )?;
         let current_height = prev_block_index.block_height().next_height();
 
         // If the block height is at the exact checkpoint height, we need to check that the block id matches the checkpoint id

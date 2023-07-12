@@ -33,8 +33,7 @@ mod with_purpose;
 
 pub use account_key_chain::AccountKeyChain;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PrivateKey;
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
+use crypto::vrf::VRFKeyKind;
 pub use master_key_chain::MasterKeyChain;
 
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -45,7 +44,6 @@ use crypto::key::extended::ExtendedKeyKind;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
 use crypto::key::hdkd::derivation_path::DerivationPath;
-use serialization::Encode;
 use wallet_types::keys::{KeyPurpose, KeyPurposeError};
 use wallet_types::AccountId;
 
@@ -58,6 +56,7 @@ pub const BIP44_KEY_INDEX: usize = 4;
 
 /// Default cryptography type
 const DEFAULT_KEY_KIND: ExtendedKeyKind = ExtendedKeyKind::Secp256k1Schnorr;
+const DEFAULT_VRF_KEY_KIND: VRFKeyKind = VRFKeyKind::Schnorrkel;
 /// Default size of the number of unused addresses that need to be checked after the
 /// last used address.
 pub const LOOKAHEAD_SIZE: u32 = 20;
@@ -89,8 +88,8 @@ pub enum KeyChainError {
     KeysNotInSameHierarchy,
     #[error("Invalid key purpose index {0}")]
     InvalidKeyPurpose(ChildNumber),
-    #[error("Only one root key is supported")]
-    OnlyOneRootKeyIsSupported,
+    #[error("KeyChain not initialized missing root keys")]
+    KeyChainNotInitialized,
     #[error("Cannot issue more keys, lookahead exceeded")]
     LookAheadExceeded,
     #[error("The provided key is not a root in a hierarchy")]
@@ -148,15 +147,6 @@ fn get_purpose_and_index(
     })?;
     let key_index = path[BIP44_KEY_INDEX];
     Ok((purpose, key_index))
-}
-
-/// Derive a VRF private key from a normal PrivateKey
-pub fn vrf_from_private_key(private_key: &PrivateKey) -> (VRFPrivateKey, VRFPublicKey) {
-    // TODO: This whole thing is a temporary solution. The proper way is to use BIP-44 secrets.
-    let bytes = private_key.encode();
-    let key_hash = crypto::hash::hash::<crypto::hash::Sha3_512, _>(bytes);
-    VRFPrivateKey::new_using_random_bytes(&key_hash[0..32], VRFKeyKind::Schnorrkel)
-        .expect("should not fail")
 }
 
 #[cfg(test)]

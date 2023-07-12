@@ -19,14 +19,14 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
-use common::address::Address;
+use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -44,6 +44,8 @@ pub enum Error {
     WalletAlreadyUnlocked,
     #[error("Cannot lock the wallet without setting a password")]
     WalletLockedWithoutAPassword,
+    #[error("Wallet file corrupted root keys expected 1 got {0}")]
+    WalletSanityErrorInvalidRootKeyCount(usize),
 }
 
 /// Possibly failing result of wallet storage query
@@ -64,7 +66,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
-    fn exactly_one_root_key(&self) -> Result<bool>;
+    fn check_root_keys_sanity(&self) -> Result<()>;
     fn get_keychain_usage_state(
         &self,
         id: &AccountKeyPurposeId,
@@ -78,12 +80,12 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
+    fn get_median_time(&self) -> Result<Option<BlockTimestamp>>;
 }
 
 /// Queries on persistent wallet data with access to encrypted data
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
-    fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
-    fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+    fn get_root_key(&self) -> Result<Option<RootKeys>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -114,17 +116,19 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         content: &ExtendedPublicKey,
     ) -> Result<()>;
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data
 pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
-    fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
-    fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
+    fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
+    fn del_root_key(&mut self) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data for encryption
 pub trait WalletStorageEncryptionWrite {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
+    fn del_encryption_kdf_challenge(&mut self) -> Result<()>;
     fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
 }
 

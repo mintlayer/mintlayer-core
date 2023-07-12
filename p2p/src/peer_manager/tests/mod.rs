@@ -72,6 +72,7 @@ where
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
@@ -133,7 +134,7 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (mut peer_manager, tx, shutdown_sender, subscribers_sender) =
+    let (peer_manager, tx, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();

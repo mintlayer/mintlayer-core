@@ -133,6 +133,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         max_inbound_connections,
         ban_threshold,
         ban_duration,
+        max_clock_diff,
         outbound_connection_timeout,
         ping_check_period,
         ping_timeout,
@@ -149,6 +150,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let ping_check_period = options.p2p_ping_check_period.or(ping_check_period);
     let ping_timeout = options.p2p_ping_timeout.or(ping_timeout);
+    let max_clock_diff = options.p2p_max_clock_diff.or(max_clock_diff);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
     let sync_stalling_timeout = options.p2p_sync_stalling_timeout.or(sync_stalling_timeout);
@@ -163,6 +165,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         max_inbound_connections,
         ban_threshold,
         ban_duration,
+        max_clock_diff,
         outbound_connection_timeout,
         ping_check_period,
         ping_timeout,

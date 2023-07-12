@@ -19,6 +19,7 @@ pub mod types;
 use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
+use common::time_getter::TimeGetter;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -74,17 +75,19 @@ pub trait NetworkingService {
     type ConnectivityHandle: Send;
 
     /// A handle for sending messages and announcements to peers.
-    type MessagingHandle: Send + Sync + Clone;
+    type MessagingHandle: Send + Sync;
 
     /// A receiver for syncing events.
     type SyncingEventReceiver: Send;
 
     /// Initializes the network service provider.
+    #[allow(clippy::too_many_arguments)]
     async fn start(
         transport: Self::Transport,
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
+        time_getter: TimeGetter,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,

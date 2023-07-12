@@ -19,7 +19,7 @@ use clap::Parser;
 use futures::never::Never;
 use tokio::sync::{mpsc, oneshot};
 
-use common::primitives::user_agent::UserAgent;
+use common::{primitives::user_agent::UserAgent, time_getter::TimeGetter};
 use config::DnsServerConfig;
 use crawler_p2p::crawler_manager::{
     storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
@@ -61,6 +61,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
         node_type: NodeType::DnsServer.into(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
@@ -78,11 +79,14 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
+    let time_getter = TimeGetter::default();
+
     let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        time_getter.clone(),
         shutdown,
         shutdown_receiver,
         subscribers_receiver,
@@ -106,8 +110,6 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         reserved_nodes: config.reserved_node.clone(),
         default_p2p_port: chain_config.p2p_port(),
     };
-
-    let time_getter = Default::default();
 
     let mut crawler_manager = CrawlerManager::<p2p::P2pNetworkingService, _>::new(
         time_getter,

@@ -17,9 +17,10 @@ use std::fmt::Display;
 
 use serialization::{Decode, Encode};
 
-use crate::peer_manager::global_ip::IsGlobalIp;
-
-use super::ip_address::{Ip4, Ip6};
+use crate::{
+    ip_address::{Ip4, Ip6},
+    IsGlobalIp,
+};
 
 #[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct PeerAddressIp4 {

@@ -21,6 +21,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
+use common::time_getter::TimeGetter;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -114,6 +115,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
@@ -129,24 +131,22 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
-        let p2p_config_ = Arc::clone(&p2p_config);
-        let shutdown_ = Arc::clone(&shutdown);
+        let backend = backend::Backend::<T>::new(
+            transport,
+            socket,
+            chain_config,
+            Arc::clone(&p2p_config),
+            time_getter.clone(),
+            cmd_rx,
+            conn_tx,
+            sync_tx,
+            Arc::clone(&shutdown),
+            shutdown_receiver,
+            subscribers_receiver,
+        );
         let backend_task = tokio::spawn(async move {
-            let mut backend = backend::Backend::<T>::new(
-                transport,
-                socket,
-                chain_config,
-                p2p_config_,
-                cmd_rx,
-                conn_tx,
-                sync_tx,
-                shutdown_,
-                shutdown_receiver,
-                subscribers_receiver,
-            );
-
             match backend.run().await {
-                Ok(_) => unreachable!(),
+                Ok(never) => match never {},
                 Err(P2pError::ChannelClosed) if shutdown.load() => {
                     log::info!("Backend is shut down");
                 }

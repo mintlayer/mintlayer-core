@@ -15,14 +15,17 @@
 
 use std::collections::BTreeMap;
 
-use common::address::Address;
+use common::{address::Address, chain::block::timestamp::BlockTimestamp};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
-use utils::maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError};
+use utils::{
+    ensure,
+    maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
+};
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
+    AccountKeyPurposeId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -32,6 +35,7 @@ use crate::{
 };
 
 mod well_known {
+    use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
 
     use super::Codec;
@@ -56,6 +60,7 @@ mod well_known {
 
     declare_entry!(StoreVersion: u32);
     declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
+    declare_entry!(MedianTime: BlockTimestamp);
 }
 
 #[derive(PartialEq, Clone)]
@@ -123,6 +128,11 @@ impl<'st, B: storage::Backend> StoreTxRwUnlocked<'st, B> {
             encryption_key,
         }
     }
+
+    // Delete a value for a well-known entry
+    fn delete_value<E: well_known::Entry>(&mut self) -> crate::Result<()> {
+        self.storage.get_mut::<db::DBValue, _>().del(E::KEY).map_err(Into::into)
+    }
 }
 
 macro_rules! impl_read_ops {
@@ -156,13 +166,19 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
-            fn exactly_one_root_key(&self) -> crate::Result<bool> {
+            fn check_root_keys_sanity(&self) -> crate::Result<()> {
                 self.storage
                     .get::<db::DBRootKeys, _>()
                     .prefix_iter_decoded(&())
                     .map_err(crate::Error::from)
                     .map(Iterator::count)
-                    .map(|count| count == 1)
+                    .and_then(|count| {
+                        ensure!(
+                            count == 1,
+                            crate::Error::WalletSanityErrorInvalidRootKeyCount(count)
+                        );
+                        Ok(())
+                    })
             }
 
             /// Collect and return all transactions from the storage
@@ -211,6 +227,10 @@ macro_rules! impl_read_ops {
                     .prefix_iter_decoded(account_id)
                     .map_err(crate::Error::from)
                     .map(Iterator::collect)
+            }
+
+            fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
+                self.read_value::<well_known::MedianTime>()
             }
         }
 
@@ -276,28 +296,12 @@ macro_rules! impl_read_unlocked_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
         impl<'st, B: storage::Backend> WalletStorageReadUnlocked for $TxType<'st, B> {
-            fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
-                Ok(self.read::<db::DBRootKeys, _, _>(id)?.map(|v| {
-                    v.try_take(self.encryption_key).expect("key was checked when unlocked")
-                }))
-            }
-
-            /// Collect and return all keys from the storage
-            fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
-                self.storage
-                    .get::<db::DBRootKeys, _>()
-                    .prefix_iter_decoded(&())
-                    .map_err(crate::Error::from)
-                    .map(|item| {
-                        item.map(|(k, v)| {
-                            (
-                                k,
-                                v.try_take(self.encryption_key)
-                                    .expect("key was checked when unlocked"),
-                            )
-                        })
-                    })
-                    .map(Iterator::collect)
+            fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
+                Ok(
+                    self.read::<db::DBRootKeys, _, _>(&RootKeyConstant {})?.map(|v| {
+                        v.try_take(self.encryption_key).expect("key was checked when unlocked")
+                    }),
+                )
             }
         }
     };
@@ -388,8 +392,13 @@ macro_rules! impl_write_ops {
             ) -> crate::Result<()> {
                 self.write::<db::DBPubKeys, _, _, _>(id, pub_key)
             }
+
             fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
+            }
+
+            fn set_median_time(&mut self, median_time: BlockTimestamp) -> crate::Result<()> {
+                self.write_value::<well_known::MedianTime>(&median_time)
             }
         }
 
@@ -421,6 +430,9 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
         self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
             .map_err(Into::into)
     }
+    fn del_encryption_kdf_challenge(&mut self) -> crate::Result<()> {
+        self.delete_value::<well_known::EncryptionKeyKdfChallenge>().map_err(Into::into)
+    }
 
     fn encrypt_root_keys(
         &mut self,
@@ -445,13 +457,16 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
 
 /// Wallet data storage transaction
 impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<'st, B> {
-    fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
+    fn set_root_key(&mut self, tx: &RootKeys) -> crate::Result<()> {
         let value = MaybeEncrypted::new(tx, self.encryption_key);
-        self.write::<db::DBRootKeys, _, _, _>(id, value)
+        self.write::<db::DBRootKeys, _, _, _>(RootKeyConstant, value)
     }
 
-    fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
-        self.storage.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+    fn del_root_key(&mut self) -> crate::Result<()> {
+        self.storage
+            .get_mut::<db::DBRootKeys, _>()
+            .del(&RootKeyConstant {})
+            .map_err(Into::into)
     }
 }
 

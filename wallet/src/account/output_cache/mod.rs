@@ -15,11 +15,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::chain::{
-    tokens::{token_id, TokenId},
-    TxInput, TxOutput, UtxoOutPoint,
+use common::{
+    chain::{
+        timelock::OutputTimeLock,
+        tokens::{token_id, TokenId},
+        TxInput, TxOutput, UtxoOutPoint,
+    },
+    primitives::BlockDistance,
 };
-use wallet_types::{AccountWalletTxId, WalletTx};
+use wallet_types::{
+    wallet_tx::{BlockInfo, TxState},
+    AccountWalletTxId, WalletTx,
+};
 
 /// A helper structure for the UTXO search.
 ///
@@ -91,17 +98,44 @@ impl OutputCache {
         }
     }
 
-    fn valid_utxo(&self, outpoint: &UtxoOutPoint) -> bool {
+    fn valid_utxo(
+        &self,
+        outpoint: &UtxoOutPoint,
+        output: &TxOutput,
+        transaction_block_info: &BlockInfo,
+        current_block_info: &BlockInfo,
+    ) -> bool {
         !self.consumed.contains(outpoint)
+            && output.timelock().map_or(true, |timelock| match timelock {
+                OutputTimeLock::UntilHeight(height) => *height <= current_block_info.height,
+                OutputTimeLock::UntilTime(time) => *time <= current_block_info.timestamp,
+                OutputTimeLock::ForBlockCount(block_count) => {
+                    (*block_count).try_into().map_or(false, |block_count: i64| {
+                        (transaction_block_info.height + BlockDistance::new(block_count))
+                            .map_or(false, |height| height <= current_block_info.height)
+                    })
+                }
+                OutputTimeLock::ForSeconds(for_seconds) => transaction_block_info
+                    .timestamp
+                    .add_int_seconds(*for_seconds)
+                    .map_or(false, |time| time <= current_block_info.timestamp),
+            })
     }
 
-    pub fn utxos_with_token_ids(&self) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+    pub fn utxos_with_token_ids(
+        &self,
+        current_block_info: BlockInfo,
+    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let mut utxos = BTreeMap::new();
 
         for tx in self.txs.values() {
+            let tx_block_info = match tx.state() {
+                TxState::Confirmed(height, timestamp) => BlockInfo { height, timestamp },
+                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => continue,
+            };
             for (index, output) in tx.outputs().iter().enumerate() {
                 let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
-                if self.valid_utxo(&outpoint) {
+                if self.valid_utxo(&outpoint, output, &tx_block_info, &current_block_info) {
                     let token_id = if output.is_token_or_nft_issuance() {
                         match tx {
                             WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),

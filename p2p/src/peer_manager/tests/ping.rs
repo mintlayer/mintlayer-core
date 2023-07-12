@@ -54,6 +54,7 @@ async fn ping_timeout() {
         outbound_connection_timeout: Default::default(),
         ping_check_period: Duration::from_secs(1).into(),
         ping_timeout: Duration::from_secs(5).into(),
+        max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
@@ -79,7 +80,7 @@ async fn ping_timeout() {
         conn_rx,
     );
 
-    let mut peer_manager = PeerManager::new(
+    let peer_manager = PeerManager::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

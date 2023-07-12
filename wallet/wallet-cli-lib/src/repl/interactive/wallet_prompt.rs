@@ -20,17 +20,24 @@ use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchS
 /// A very simple [Prompt] trait implementation
 /// ([reedline::DefaultPrompt] shows the current dir and the clock on the right, which we don't need)
 #[derive(Clone)]
-pub struct WalletPrompt {}
+pub struct WalletPrompt {
+    prompt_left: String,
+}
 
 impl WalletPrompt {
     pub fn new() -> Self {
-        WalletPrompt {}
+        WalletPrompt {
+            prompt_left: "Wallet".into(),
+        }
+    }
+    pub fn set_status(&mut self, status: String) {
+        self.prompt_left = format!("Wallet{}", status);
     }
 }
 
 impl Prompt for WalletPrompt {
     fn render_prompt_left(&self) -> Cow<str> {
-        Cow::Borrowed("Wallet")
+        Cow::Borrowed(self.prompt_left.as_str())
     }
 
     fn render_prompt_right(&self) -> Cow<str> {

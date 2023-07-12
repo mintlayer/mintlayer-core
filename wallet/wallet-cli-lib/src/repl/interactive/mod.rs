@@ -26,7 +26,7 @@ use reedline::{
     ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, Reedline,
     ReedlineMenu, Signal, Vi,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
@@ -132,11 +132,9 @@ pub fn run(
     logger: log::InteractiveLogger,
     history_file: Option<PathBuf>,
     vi_mode: bool,
+    startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError>>>,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
-
-    console.print_line("Use 'help' to see all available commands.");
-    console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),
@@ -145,7 +143,24 @@ pub fn run(
         vi_mode,
     )?;
 
-    let prompt = wallet_prompt::WalletPrompt::new();
+    let mut prompt = wallet_prompt::WalletPrompt::new();
+
+    // first wait for the results of any startup command before processing the rest
+    for res_rx in startup_command_futures {
+        let res = res_rx.blocking_recv().expect("Channel must be open");
+        if let Some(value) = handle_response(
+            res.map(Some),
+            &mut console,
+            &mut prompt,
+            &mut line_editor,
+            true,
+        ) {
+            return value;
+        }
+    }
+
+    console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'exit' or Ctrl-D to quit.");
 
     loop {
         logger.set_print_directly(false);
@@ -154,29 +169,55 @@ pub fn run(
 
         let res = process_line(&repl_command, &event_tx, sig);
 
-        match res {
-            Ok(Some(ConsoleCommand::Print(text))) => {
-                console.print_line(&text);
-            }
-            Ok(Some(ConsoleCommand::ClearScreen)) => {
-                line_editor.clear_scrollback().expect("Should not fail normally");
-            }
-            Ok(Some(ConsoleCommand::ClearHistory)) => {
-                line_editor.history_mut().clear().expect("Should not fail normally");
-            }
-            Ok(Some(ConsoleCommand::PrintHistory)) => {
-                line_editor.print_history().expect("Should not fail normally");
-            }
-            Ok(Some(ConsoleCommand::Exit)) => return Ok(()),
-
-            Ok(None) => {}
-
-            Err(err) => {
-                if exit_on_error {
-                    return Err(err);
-                }
-                console.print_error(err);
-            }
+        if let Some(value) = handle_response(
+            res,
+            &mut console,
+            &mut prompt,
+            &mut line_editor,
+            exit_on_error,
+        ) {
+            return value;
         }
     }
+}
+
+fn handle_response(
+    res: Result<Option<ConsoleCommand>, WalletCliError>,
+    console: &mut impl ConsoleOutput,
+    prompt: &mut wallet_prompt::WalletPrompt,
+    line_editor: &mut Reedline,
+    exit_on_error: bool,
+) -> Option<Result<(), WalletCliError>> {
+    match res {
+        Ok(Some(ConsoleCommand::Print(text))) => {
+            console.print_line(&text);
+        }
+        Ok(Some(ConsoleCommand::SetStatus {
+            status,
+            print_message,
+        })) => {
+            prompt.set_status(status);
+            console.print_line(&print_message);
+        }
+        Ok(Some(ConsoleCommand::ClearScreen)) => {
+            line_editor.clear_scrollback().expect("Should not fail normally");
+        }
+        Ok(Some(ConsoleCommand::ClearHistory)) => {
+            line_editor.history_mut().clear().expect("Should not fail normally");
+        }
+        Ok(Some(ConsoleCommand::PrintHistory)) => {
+            line_editor.print_history().expect("Should not fail normally");
+        }
+        Ok(Some(ConsoleCommand::Exit)) => return Some(Ok(())),
+
+        Ok(None) => {}
+
+        Err(err) => {
+            if exit_on_error {
+                return Some(Err(err));
+            }
+            console.print_error(err);
+        }
+    }
+    None
 }
