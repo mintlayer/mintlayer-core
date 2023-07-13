@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::ConsensusData;
 use serialization::{Decode, Encode};
@@ -35,6 +37,25 @@ pub enum TxState {
     /// Transaction that is not confirmed or conflicted and is not in the mempool.
     #[codec(index = 3)]
     Inactive,
+    /// Transaction that is not confirmed or conflicted and is not in the mempool and marked as
+    /// abandoned by the user
+    #[codec(index = 4)]
+    Abandoned,
+}
+
+impl Display for TxState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TxState::Confirmed(height, timestamp) => f.write_fmt(format_args!(
+                "Confirmed at height {}, on {}",
+                height, timestamp
+            )),
+            TxState::Conflicted(id) => f.write_fmt(format_args!("Conflicted by {}", id)),
+            TxState::InMempool => f.write_str("InMempool"),
+            TxState::Inactive => f.write_str("Inactive"),
+            TxState::Abandoned => f.write_str("Abandoned"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
@@ -115,6 +136,18 @@ impl TxData {
 
     pub fn get_transaction(&self) -> &Transaction {
         WithId::get(&self.tx)
+    }
+
+    pub fn get_transaction_with_id(&self) -> &WithId<Transaction> {
+        &self.tx
+    }
+
+    pub fn state(&self) -> &TxState {
+        &self.state
+    }
+
+    pub fn set_state(&mut self, state: TxState) {
+        self.state = state
     }
 }
 

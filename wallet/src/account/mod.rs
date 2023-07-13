@@ -17,6 +17,7 @@ mod output_cache;
 mod utxo_selector;
 
 use common::chain::block::timestamp::BlockTimestamp;
+use common::primitives::id::WithId;
 use common::Uint256;
 pub use utxo_selector::UtxoSelectorError;
 
@@ -31,8 +32,8 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, TxInput, TxOutput,
-    UtxoOutPoint,
+    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -48,7 +49,7 @@ use wallet_storage::{
     StoreTxRo, StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
+use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
 
@@ -146,8 +147,12 @@ impl Account {
         let network_fee = Amount::from_atoms(10000);
 
         let utxos_by_currency = group_utxos_for_input(
-            self.get_utxos(UtxoType::Transfer | UtxoType::LockThenTransfer, median_time)
-                .into_iter(),
+            self.get_utxos(
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                median_time,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+            )
+            .into_iter(),
             |(_, (tx_output, _))| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
                 grouped.push((element.0.clone(), element.1 .0.clone()));
@@ -204,6 +209,7 @@ impl Account {
         let amount_to_be_paied_in_currency_with_fees = (amount_to_be_paied_in_currency_with_fees
             + total_fees_not_payed)
             .ok_or(WalletError::OutputAmountOverflow)?;
+
         let selection_result = select_coins(
             utxos,
             amount_to_be_paied_in_currency_with_fees,
@@ -343,6 +349,7 @@ impl Account {
         let utxos = self.get_utxos(
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
             median_time,
+            UtxoState::Confirmed.into(),
         );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
@@ -528,10 +535,11 @@ impl Account {
     pub fn get_balance(
         &self,
         utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
         median_time: BlockTimestamp,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time).into_iter(),
+            self.get_utxos(utxo_types, median_time, utxo_states).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -547,12 +555,14 @@ impl Account {
         &self,
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        let mut all_outputs = self.output_cache.utxos_with_token_ids(current_block_info);
+        let mut all_outputs =
+            self.output_cache.utxos_with_token_ids(current_block_info, utxo_states);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -566,45 +576,53 @@ impl Account {
     ) -> WalletResult<()> {
         let revoked_txs = self
             .output_cache
-            .txs()
-            .iter()
+            .txs_with_unconfirmed()
             .filter_map(|(id, tx)| match tx.state() {
                 TxState::Confirmed(height, _) => {
                     if height > common_block_height {
-                        Some(id.clone())
+                        Some(AccountWalletTxId::new(self.get_account_id(), id.clone()))
                     } else {
                         None
                     }
                 }
-                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
+                TxState::Inactive
+                | TxState::Conflicted(_)
+                | TxState::InMempool
+                | TxState::Abandoned => None,
             })
             .collect::<Vec<_>>();
 
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
-            self.output_cache.remove_tx(&tx_id);
+            self.output_cache.remove_tx(&tx_id.into_item_id());
         }
 
         Ok(())
     }
 
     /// Store a block or tx in the DB if any of the inputs or outputs belong to this wallet
+    /// returns true if tx was added false otherwise
     fn add_wallet_tx_if_relevant(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         tx: WalletTx,
-    ) -> WalletResult<()> {
+    ) -> WalletResult<bool> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
-            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(outpoint),
+            TxInput::Utxo(outpoint) => self
+                .output_cache
+                .get_txo(outpoint)
+                .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(_) => false,
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
-            self.output_cache.add_tx(id, tx);
+            self.output_cache.add_tx(id.into_item_id(), tx);
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     fn scan_genesis(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> WalletResult<()> {
@@ -660,6 +678,51 @@ impl Account {
         Ok(())
     }
 
+    pub fn scan_new_unconfirmed_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        tx_state: TxState,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        let mut not_added = vec![];
+
+        for signed_tx in transactions {
+            let wallet_tx = WalletTx::Tx(TxData::new(
+                signed_tx.transaction().clone().into(),
+                tx_state,
+            ));
+
+            if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
+                not_added.push(signed_tx);
+            }
+        }
+
+        // check them again after adding all we could
+        // and keep looping as long as we add a new tx
+        loop {
+            let mut not_added_next = vec![];
+            for signed_tx in not_added.iter() {
+                let wallet_tx = WalletTx::Tx(TxData::new(
+                    signed_tx.transaction().clone().into(),
+                    tx_state,
+                ));
+
+                if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
+                    not_added_next.push(*signed_tx);
+                }
+            }
+
+            // if no new tx was added break
+            if not_added.len() == not_added_next.len() {
+                break;
+            }
+
+            not_added = not_added_next;
+        }
+
+        Ok(())
+    }
+
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         (
             self.account_info.best_block_id(),
@@ -668,11 +731,19 @@ impl Account {
     }
 
     pub fn has_transactions(&self) -> bool {
-        !self.output_cache.txs().is_empty()
+        self.output_cache.txs_with_unconfirmed().next().is_some()
     }
 
     pub fn name(&self) -> &Option<String> {
         self.account_info.name()
+    }
+
+    pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
+        self.output_cache.pending_transactions()
+    }
+
+    pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
+        self.output_cache.abandon_transaction(tx_id)
     }
 }
 

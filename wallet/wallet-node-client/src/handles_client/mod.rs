@@ -46,6 +46,8 @@ pub enum WalletHandlesClientError {
     BlockProduction(#[from] BlockProductionError),
     #[error("Decode error: {0}")]
     Hex(#[from] HexError),
+    #[error("Mempool error: {0}")]
+    MempoolError(#[from] mempool::error::Error),
 }
 
 impl WalletHandlesClient {

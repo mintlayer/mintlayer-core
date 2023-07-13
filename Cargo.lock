@@ -6439,6 +6439,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "thiserror",
+ "tx-verifier",
  "utils",
  "utxo",
  "wallet-storage",
