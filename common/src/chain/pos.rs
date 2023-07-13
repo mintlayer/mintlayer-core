@@ -105,6 +105,9 @@ impl PoSChainConfig {
     }
 }
 
+const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
+const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
+
 pub fn create_testnet_pos_config() -> PoSChainConfig {
     let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
     let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
@@ -112,10 +115,10 @@ pub fn create_testnet_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit,
         target_block_time,
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 100,
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
@@ -124,10 +127,10 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit: Uint256::MAX,
         target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 100,
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
@@ -139,10 +142,10 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit,
         target_block_time,
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 100,
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
