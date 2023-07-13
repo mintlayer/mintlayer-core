@@ -15,7 +15,10 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::pos::{calculate_new_target, create_stake_pool_data_with_all_reward_to_owner};
+use super::helpers::pos::{
+    calculate_new_target, create_custom_genesis_with_stake_pool,
+    create_stake_pool_data_with_all_reward_to_owner,
+};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
@@ -71,38 +74,6 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
-
-fn create_custom_genesis(
-    initial_amount: Amount,
-    staker_pk: PublicKey,
-    vrf_pk: VRFPublicKey,
-) -> Genesis {
-    let initial_pool_amount = (initial_amount / 3).unwrap();
-    let mint_output_amount = (initial_amount - initial_pool_amount).unwrap();
-
-    let mint_output = TxOutput::Transfer(
-        OutputValue::Coin(mint_output_amount),
-        Destination::PublicKey(staker_pk.clone()),
-    );
-
-    let initial_pool = TxOutput::CreateStakePool(
-        H256::zero().into(),
-        Box::new(StakePoolData::new(
-            initial_pool_amount,
-            Destination::PublicKey(staker_pk.clone()),
-            vrf_pk,
-            Destination::PublicKey(staker_pk),
-            PerThousand::new(10).expect("Per thousand should be valid"),
-            Amount::from_atoms(100),
-        )),
-    );
-
-    Genesis::new(
-        "Genesis message".to_string(),
-        BlockTimestamp::from_int_seconds(1685025323),
-        vec![mint_output, initial_pool],
-    )
-}
 
 fn add_block_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
@@ -1656,7 +1627,6 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
-                    2000.into(),
                     50.into(),
                     50.into(),
                     5,
@@ -1672,7 +1642,6 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
-                    2000.into(),
                     100.into(), // decommission maturity increased
                     50.into(),
                     5,
@@ -1803,8 +1772,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let genesis_pool_id = PoolId::new(H256::zero());
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let genesis_amount = Amount::from_atoms(100_000_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
-    let genesis = create_custom_genesis(genesis_amount, staker_pk, vrf_pk);
+    let genesis = create_custom_genesis_with_stake_pool(staker_pk, vrf_pk);
 
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::new(ChainType::Testnet)
@@ -2173,7 +2141,6 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
 
     // Process block_2: distribute some reward
     tf.make_pos_block_builder(&mut rng)
@@ -2182,7 +2149,6 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
 
     // Process block_3: spend part of the share including reward
     let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
@@ -2209,7 +2175,6 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .add_transaction(tx)
         .build_and_process()
         .unwrap();
-    tf.progress_time_seconds_since_epoch(target_block_time.get());
 
     // Process block_4 and spend some share including reward
     let delegation_balance = (amount_to_delegate - amount_to_withdraw)

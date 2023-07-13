@@ -117,7 +117,7 @@ where
             let consensus_data = ConsensusData::None;
 
             let time_lock = {
-                let block_distance = consensus_data.reward_maturity_distance(chain_config);
+                let block_distance = chain_config.empty_consensus_reward_maturity_distance();
 
                 let reward_maturity_distance_i64: i64 =
                     block_distance.try_into().map_err(|_| {

@@ -13,11 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::{chaintrust, ChainConfig, PoolId};
 use crate::{
-    chain::TxInput,
-    primitives::{BlockDistance, Compact},
+    chain::{chaintrust, signature::inputsig::InputWitness, PoolId, TxInput},
+    primitives::Compact,
     Uint256,
 };
 use crypto::vrf::VRFReturn;
@@ -56,16 +54,6 @@ impl ConsensusData {
                 let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
                 Some(block_proof)
             }
-        }
-    }
-
-    pub fn reward_maturity_distance(&self, chain_config: &ChainConfig) -> BlockDistance {
-        match self {
-            ConsensusData::None => chain_config.empty_consensus_reward_maturity_distance(),
-            ConsensusData::PoW(_) => {
-                chain_config.get_proof_of_work_config().reward_maturity_distance()
-            }
-            ConsensusData::PoS(_) => BlockDistance::new(2000),
         }
     }
 }

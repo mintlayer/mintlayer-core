@@ -16,12 +16,15 @@
 use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{stakelock::StakePoolData, Destination, RequiredConsensus},
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact},
+    chain::{
+        block::timestamp::BlockTimestamp, stakelock::StakePoolData, tokens::OutputValue,
+        Destination, Genesis, RequiredConsensus, TxOutput,
+    },
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, H256},
 };
 use consensus::ConsensusPoSError;
 use crypto::{
-    key::{KeyKind, PrivateKey},
+    key::{KeyKind, PrivateKey, PublicKey},
     random::{CryptoRng, Rng},
     vrf::VRFPublicKey,
 };
@@ -71,5 +74,37 @@ pub fn create_stake_pool_data_with_all_reward_to_owner(
             Amount::ZERO,
         ),
         sk,
+    )
+}
+
+pub fn create_custom_genesis_with_stake_pool(
+    staker_pk: PublicKey,
+    vrf_pk: VRFPublicKey,
+) -> Genesis {
+    let initial_amount = Amount::from_atoms(100_000_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let initial_pool_amount = (initial_amount / 3).unwrap();
+    let mint_output_amount = (initial_amount - initial_pool_amount).unwrap();
+
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
+        Destination::AnyoneCanSpend,
+    );
+
+    let initial_pool = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            initial_pool_amount,
+            Destination::PublicKey(staker_pk.clone()),
+            vrf_pk,
+            Destination::PublicKey(staker_pk),
+            PerThousand::new(10).expect("Per thousand should be valid"),
+            Amount::from_atoms(100),
+        )),
+    );
+
+    Genesis::new(
+        "Genesis message".to_string(),
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, initial_pool],
     )
 }

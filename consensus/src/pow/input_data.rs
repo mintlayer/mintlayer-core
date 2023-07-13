@@ -16,12 +16,11 @@
 use crate::pow::{calculate_work_required, error::ConsensusPoWError};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::block::{
-        consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData,
-    },
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, PoWStatus,
-        TxOutput,
+        block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        timelock::OutputTimeLock,
+        tokens::OutputValue,
+        ChainConfig, Destination, PoWStatus, TxOutput,
     },
     primitives::BlockHeight,
 };
@@ -66,7 +65,7 @@ where
     let consensus_data = ConsensusData::PoW(Box::new(PoWData::new(work_required, 0)));
 
     let time_lock = {
-        let block_distance = consensus_data.reward_maturity_distance(chain_config);
+        let block_distance = chain_config.get_proof_of_work_config().reward_maturity_distance();
 
         let reward_maturity_distance_i64: i64 = block_distance
             .try_into()
