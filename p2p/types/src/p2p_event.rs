@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use crate::{net::types::services::Services, types::peer_id::PeerId};
+use crate::{peer_id::PeerId, services::Services};
 
 pub type P2pEventHandler = Arc<dyn Fn(P2pEvent) + Send + Sync>;
 

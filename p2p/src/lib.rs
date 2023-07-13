@@ -25,14 +25,13 @@ pub mod sync;
 pub mod testing_utils;
 pub mod utils;
 
-mod p2p_event;
 mod peer_manager_event;
 
 pub use p2p_types as types;
 
 pub use crate::{
-    p2p_event::{P2pEvent, P2pEventHandler},
     peer_manager_event::PeerManagerEvent,
+    types::p2p_event::{P2pEvent, P2pEventHandler},
 };
 
 use std::{
