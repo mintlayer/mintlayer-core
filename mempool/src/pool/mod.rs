@@ -57,8 +57,9 @@ use self::{
 use crate::{
     config,
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
+    event::{self, MempoolEvent},
     tx_accumulator::TransactionAccumulator,
-    MempoolEvent, TxStatus,
+    TxOrigin, TxStatus,
 };
 
 use crate::config::*;
@@ -835,9 +836,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
 // Mempool Interface and Event Reactions
 impl<M: MemoryUsageEstimator> Mempool<M> {
-    pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
+    pub fn add_transaction(
+        &mut self,
+        tx: SignedTransaction,
+        origin: TxOrigin,
+    ) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
-        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time))
+        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time, origin))
     }
 
     /// Add given transaction entry and potentially its descendants sourced from the orphan pool
@@ -858,10 +863,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
                 match self.add_transaction_entry(orphan) {
                     Ok(TxStatus::InMempool) => {
+                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
                         let former_orphan =
                             self.store.get_entry(&orphan_tx_id).expect("just added");
                         work_queue.extend(self.orphans.ready_children_of(former_orphan.tx_entry()));
-                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
                     }
                     Ok(TxStatus::InOrphanPool) => {
                         log::debug!("Orphan tx {orphan_tx_id} stays in the orphan pool");
@@ -880,23 +885,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::debug!("Adding transaction {:?}", tx.tx_id());
         log::trace!("Adding transaction {tx:?}");
 
-        match self.validate_transaction(tx).log_err_pfx("Transaction rejected")? {
-            ValidationOutcome::Valid {
+        let tx_id = *tx.tx_id();
+        let origin = tx.origin();
+
+        match self.validate_transaction(tx).log_err_pfx("Transaction rejected") {
+            Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
                 delta,
-            } => {
+            }) => {
                 if ENABLE_RBF {
                     self.store.drop_conflicts(conflicts);
                 }
                 tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
                 self.finalize_tx(transaction)?;
                 self.store.assert_valid();
+
+                let event = event::TransactionProcessed::accepted(tx_id, origin);
+                self.events_controller.broadcast(event.into());
+
                 Ok(TxStatus::InMempool)
             }
-            ValidationOutcome::Orphan { transaction } => {
+            Ok(ValidationOutcome::Orphan { transaction }) => {
                 self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?;
                 Ok(TxStatus::InOrphanPool)
+            }
+            Err(err) => {
+                let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
+                self.events_controller.broadcast(event.into());
+                Err(err)
             }
         }
     }
@@ -947,15 +964,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
             chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.new_tip_set(block_id, block_height);
+                self.on_new_tip(block_id, block_height);
             }
         }
     }
 
-    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn on_new_tip(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
         reorg::handle_new_tip(self, block_id);
-        self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
+        let event = event::NewTip::new(block_id, block_height);
+        self.events_controller.broadcast(event.into());
     }
 }
 

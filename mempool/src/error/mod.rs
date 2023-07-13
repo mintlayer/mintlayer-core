@@ -24,7 +24,7 @@ use common::primitives::H256;
 
 use crate::pool::fee::Fee;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum Error {
     #[error(transparent)]
     Validity(#[from] TxValidationError),
@@ -34,7 +34,7 @@ pub enum Error {
     Orphan(#[from] OrphanPoolError),
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum MempoolPolicyError {
     #[error(transparent)]
     Conflict(#[from] MempoolConflictError),
@@ -81,7 +81,7 @@ pub enum MempoolPolicyError {
     RelayFeeOverflow,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum TxValidationError {
     #[error("Chainstate error")]
     ChainstateError(#[from] ChainstateError),

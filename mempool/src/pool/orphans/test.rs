@@ -73,7 +73,7 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Time::from_secs(rng.gen());
 
-    TxEntry::new(transaction, insertion_time)
+    TxEntry::new(transaction, insertion_time, crate::TxOrigin::LocalMempool)
 }
 
 #[rstest]

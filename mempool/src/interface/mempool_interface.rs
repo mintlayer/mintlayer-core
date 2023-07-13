@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent, MempoolMaxSize, TxStatus,
+    error::Error, event::MempoolEvent, tx_accumulator::TransactionAccumulator, MempoolMaxSize,
+    TxOrigin, TxStatus,
 };
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -25,7 +26,11 @@ use subsystem::{CallRequest, ShutdownRequest};
 
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction to mempool
-    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error>;
+    fn add_transaction(
+        &mut self,
+        tx: SignedTransaction,
+        origin: TxOrigin,
+    ) -> Result<TxStatus, Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Vec<SignedTransaction>;
@@ -52,10 +57,7 @@ pub trait MempoolInterface: Send + Sync {
     ) -> Result<Box<dyn TransactionAccumulator>, Error>;
 
     /// Subscribe to events emitted by mempool
-    fn subscribe_to_events(
-        &mut self,
-        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error>;
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
 
     /// Get current memory usage
     fn memory_usage(&self) -> usize;

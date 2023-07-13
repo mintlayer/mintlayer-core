@@ -24,7 +24,10 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use mempool::error::{Error as MempoolError, MempoolPolicyError};
+use mempool::{
+    error::{Error as MempoolError, MempoolPolicyError},
+    TxOrigin,
+};
 use test_utils::random::Seed;
 
 use crate::{
@@ -349,6 +352,97 @@ async fn valid_transaction(#[case] seed: Seed) {
         SyncMessage::NewTransaction(tx.transaction().get_id()),
         handle.message().await.1
     );
+
+    handle.join_subsystem_manager().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
+    logging::init_logging(None::<&str>);
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    tf.make_block_builder().build_and_process().unwrap().unwrap();
+
+    let p2p_config = Arc::new(test_p2p_config());
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_chainstate(tf.into_chainstate())
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let mut txs = std::collections::BTreeMap::<Id<Transaction>, _>::new();
+
+    let tx0 = Transaction::new(
+        0x00,
+        vec![TxInput::from_utxo(chain_config.genesis_block_id().into(), 0)],
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100_000_000)),
+            common::chain::Destination::AnyoneCanSpend,
+        )],
+    )
+    .unwrap();
+    let tx0 = SignedTransaction::new(tx0, vec![InputWitness::NoSignature(None)]).unwrap();
+    let tx0_id = tx0.transaction().get_id();
+    txs.insert(tx0_id, tx0.clone());
+
+    let tx1 = Transaction::new(
+        0x00,
+        vec![TxInput::from_utxo(tx0.transaction().get_id().into(), 0)],
+        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(90_000_000)))],
+    )
+    .unwrap();
+    let tx1 = SignedTransaction::new(tx1, vec![InputWitness::NoSignature(None)]).unwrap();
+    let tx1_id = tx1.transaction().get_id();
+    txs.insert(tx1_id, tx1.clone());
+
+    let res = handle
+        .mempool()
+        .call_mut(|m| m.add_transaction(tx1, TxOrigin::LocalP2p))
+        .await
+        .unwrap();
+    assert_eq!(res, Ok(mempool::TxStatus::InOrphanPool));
+
+    // The transaction should be held up in the orphan pool for now, so we don't expect it to be
+    // propagated at this point
+    assert_eq!(handle.try_message(), None);
+
+    let res = handle
+        .mempool()
+        .call_mut(|m| m.add_transaction(tx0, TxOrigin::LocalP2p))
+        .await
+        .unwrap();
+    assert_eq!(res, Ok(mempool::TxStatus::InMempool));
+
+    for tid in txs.keys() {
+        logging::log::error!("Tx: {tid:?}");
+    }
+
+    // Now the orphan has been resolved, both transactions should be announced.
+    for _ in 0..2 {
+        let (_peer, msg) = handle.message().await;
+        logging::log::error!("Msg new: {msg:?}");
+        let tx_id = match msg {
+            SyncMessage::NewTransaction(tx_id) => tx_id,
+            msg => panic!("Unexpected message {msg:?}"),
+        };
+
+        let _expected_tx = txs.remove(&tx_id).expect("An existing transaction");
+    }
+
+    // A small sanity check that we have sent all transactions
+    assert!(txs.is_empty());
 
     handle.join_subsystem_manager().await;
 }

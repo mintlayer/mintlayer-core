@@ -39,6 +39,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use logging::log;
+use mempool_types::TxStatus;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -214,7 +215,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         account_index: U31,
         address: Address,
         amount: Amount,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
@@ -231,7 +232,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-    ) -> Result<(), ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let tx = self
             .wallet
             .create_stake_pool_tx(account_index, amount, decomission_key)

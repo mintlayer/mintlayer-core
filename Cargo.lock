@@ -3240,6 +3240,7 @@ dependencies = [
  "hex",
  "jsonrpsee",
  "logging",
+ "mempool-types",
  "mockall",
  "parking_lot 0.12.1",
  "pos_accounting",
@@ -3254,6 +3255,14 @@ dependencies = [
  "tokio",
  "utils",
  "utxo",
+]
+
+[[package]]
+name = "mempool-types"
+version = "0.1.0"
+dependencies = [
+ "p2p-types",
+ "serde",
 ]
 
 [[package]]
@@ -6493,6 +6502,7 @@ dependencies = [
  "consensus",
  "crypto",
  "logging",
+ "mempool-types",
  "node-comm",
  "rstest",
  "serialization",
