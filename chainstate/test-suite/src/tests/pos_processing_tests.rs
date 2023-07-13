@@ -924,7 +924,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2 and an epoch is sealed at height 2.
 // Try to crete block_2 with PoS data that has refer to staked pool.
-#[ignore = "Disabled because of switch from SealedStorageTag to TipStorageTag"]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1939,6 +1938,7 @@ fn mine_pos_block(
     );
 
     let new_block_height = parent.block_height().next_height();
+    let epoch_index = tf.chainstate.get_chain_config().epoch_index_from_height(&new_block_height);
     let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pool_balance =
@@ -1953,7 +1953,7 @@ fn mine_pos_block(
         PoSRandomness::new(initial_randomness),
         pool_id,
         pool_balance,
-        0,
+        epoch_index,
         current_difficulty,
     )
     .unwrap();
@@ -1980,19 +1980,6 @@ fn pos_reorg(#[case] seed: Seed) {
     logging::init_logging::<std::path::PathBuf>(None);
 
     let mut rng = make_seedable_rng(seed);
-    let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
-        (
-            BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
-                config: create_unittest_pos_config(),
-            }),
-        ),
-    ];
     let genesis_pool_id = PoolId::new(H256::zero());
     let (vrf1_sk, vrf1_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staker1_sk, staker1_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -2022,10 +2009,12 @@ fn pos_reorg(#[case] seed: Seed) {
         vec![mint_output, pool1],
     );
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
+    let net_upgrades = NetUpgrades::regtest_with_pos();
     let chain_config = ConfigBuilder::new(ChainType::Regtest)
         .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
+        .epoch_length(NonZeroU64::new(1).unwrap()) // required to be able to stake at once
+        .sealed_epoch_distance_from_tip(0) // required to be able to stake at once
         .build();
 
     let mut tf1 = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
