@@ -1031,6 +1031,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());
     }
+
+    pub fn current_fee_rate(&self) -> u128 {
+        self.rolling_fee_rate.read().rolling_minimum_fee_rate().atoms_per_kb()
+    }
 }
 
 #[cfg(test)]

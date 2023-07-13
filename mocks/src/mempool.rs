@@ -138,6 +138,10 @@ impl MempoolInterface for MempoolInterfaceMock {
     fn set_max_size(&mut self, _max_size: MempoolMaxSize) -> Result<(), Error> {
         unimplemented!()
     }
+
+    fn get_fee_rate(&self) -> u128 {
+        0
+    }
 }
 
 #[async_trait::async_trait]

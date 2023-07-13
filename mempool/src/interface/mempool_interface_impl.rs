@@ -158,6 +158,10 @@ impl MempoolInterface for Mempool {
     fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
         self.set_max_size(max_size)
     }
+
+    fn get_fee_rate(&self) -> u128 {
+        self.current_fee_rate()
+    }
 }
 
 /// Mempool constructor

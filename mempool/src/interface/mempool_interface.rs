@@ -68,6 +68,9 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Set the maximum mempool size
     fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
+
+    /// Get current fee rate
+    fn get_fee_rate(&self) -> u128;
 }
 
 #[async_trait::async_trait]

@@ -60,4 +60,6 @@ pub trait NodeInterface {
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;
     async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error>;
     async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error>;
+
+    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error>;
 }

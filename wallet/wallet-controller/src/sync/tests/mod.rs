@@ -208,6 +208,10 @@ impl NodeInterface for MockNode {
     async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
         unreachable!()
     }
+
+    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error> {
+        Ok(0)
+    }
 }
 
 fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
