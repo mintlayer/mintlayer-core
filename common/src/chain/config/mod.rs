@@ -94,7 +94,7 @@ impl ChainType {
     const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
-            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
+            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf7],
             ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
             ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
         }
@@ -489,17 +489,17 @@ fn create_testnet_genesis() -> Genesis {
     // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
 
     let genesis_mint_destination = decode_hex::<PublicKey>(
-        "0003727094d1a790ac49b0753fe6f7e2caccf9c0040ba9ef30309b25f8be59b61dec",
+        "0003e9d79eb6487c28dad9679461faa1ffcdbc52a10033e1ad625101a97db1ba8edd",
     );
     let decommission_pub_key = decode_hex::<PublicKey>(
         "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
     );
     let staker_pub_key = decode_hex::<PublicKey>(
-        "000296fde6aaccc723fc0aeb86223bbc83608f730d60875874a5abf64f6fdc7575da",
+        "00039d905e919a49d42af16daf8719bde9a8745624affe299ddc7c5ce8091b60e41e",
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "009a1a375735d0e252f206c90a6daf637ba88044b80473afdebe33eee62e840257",
+        "002895247c82f904ce01b13c89f17fecb7b670b4f3271a7f0459ad32056734757b",
     );
 
     let mint_output = TxOutput::Transfer(
@@ -521,7 +521,7 @@ fn create_testnet_genesis() -> Genesis {
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1686148208),
+        BlockTimestamp::from_int_seconds(1689344000),
         vec![mint_output, initial_pool],
     )
 }
