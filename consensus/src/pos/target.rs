@@ -49,12 +49,12 @@ where
     // Average is calculated based on 2 timestamps and then is divided by number of blocks in between.
     // Choose a block from the history that would be the start of a timespan.
     // It shouldn't cross net version range or genesis.
-    let block_count_to_average =
-        BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64);
-    let block_height_to_stare_averaging =
-        (block_index.block_height() - block_count_to_average).unwrap_or(BlockHeight::zero());
+    let block_distance_to_average =
+        BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64 - 1);
+    let block_height_to_start_averaging =
+        (block_index.block_height() - block_distance_to_average).unwrap_or(BlockHeight::zero());
     let timespan_start_height =
-        std::cmp::max(net_version_range.start, block_height_to_stare_averaging);
+        std::cmp::max(net_version_range.start, block_height_to_start_averaging);
 
     let time_span_start = get_ancestor(block_index, timespan_start_height)?
         .block_timestamp()
@@ -64,11 +64,11 @@ where
     let timespan_difference = current_block_time
         .checked_sub(time_span_start)
         .ok_or(ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime)?;
-    let blocks_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
+    let block_distance_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
         .expect("cannot be negative")
         .into();
 
-    let average = timespan_difference / blocks_in_timespan as u64;
+    let average = timespan_difference / block_distance_in_timespan as u64;
 
     Ok(average)
 }
@@ -540,7 +540,7 @@ mod tests {
             get_ancestor,
         )
         .unwrap();
-        assert_eq!(average_block_time, 20);
+        assert_eq!(average_block_time, 22);
 
         let average_block_time = calculate_average_block_time(
             &chain_config,
@@ -549,7 +549,7 @@ mod tests {
             get_ancestor,
         )
         .unwrap();
-        assert_eq!(average_block_time, 8);
+        assert_eq!(average_block_time, 5);
     }
 
     #[rstest]
