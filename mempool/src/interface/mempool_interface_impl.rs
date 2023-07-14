@@ -139,7 +139,7 @@ impl MempoolInterface for Mempool {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error> {
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
         Ok(self.collect_txs(tx_accumulator))
     }
 

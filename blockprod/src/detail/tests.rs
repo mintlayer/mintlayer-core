@@ -76,6 +76,8 @@ mod collect_transactions {
             }
         });
 
+        let current_tip = Id::new(H256::zero());
+
         manager.add_subsystem_with_custom_eventloop(
             "test-call",
             move |_: CallRequest<()>, _| async move {
@@ -88,7 +90,7 @@ mod collect_transactions {
                 )
                 .expect("Error initializing blockprod");
 
-                let accumulator = block_production.collect_transactions().await;
+                let accumulator = block_production.collect_transactions(current_tip).await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");
@@ -124,6 +126,8 @@ mod collect_transactions {
         // shutdown straight after startup, *then* call collect_transactions()
         manager.main().await;
 
+        let current_tip = Id::new(H256::zero());
+
         // spawn rather than adding a subsystem as manager is moved into main() above
         tokio::spawn(async move {
             let block_production = BlockProduction::new(
@@ -135,7 +139,7 @@ mod collect_transactions {
             )
             .expect("Error initializing blockprod");
 
-            let accumulator = block_production.collect_transactions().await;
+            let accumulator = block_production.collect_transactions(current_tip).await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load();
             assert!(
@@ -165,6 +169,8 @@ mod collect_transactions {
             }
         });
 
+        let current_tip = Id::new(H256::zero());
+
         let block_production = BlockProduction::new(
             chain_config,
             chainstate,
@@ -182,7 +188,7 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator = block_production.collect_transactions().await;
+                let accumulator = block_production.collect_transactions(current_tip).await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");

@@ -113,13 +113,13 @@ impl MempoolInterface for MempoolInterfaceMock {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error> {
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
         self.collect_txs_called.store(true);
 
         if self.collect_txs_should_error.load() {
             Err(SUBSYSTEM_ERROR)
         } else {
-            Ok(tx_accumulator)
+            Ok(Some(tx_accumulator))
         }
     }
 

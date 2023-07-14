@@ -27,9 +27,9 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, SignedTransaction,
+        Block, ChainConfig, GenBlock, SignedTransaction,
     },
-    primitives::BlockHeight,
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::{
@@ -110,12 +110,16 @@ impl BlockProduction {
 
     pub async fn collect_transactions(
         &self,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
+        current_tip: Id<GenBlock>,
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
         let max_block_size = self.chain_config.max_block_size_from_txs();
         let returned_accumulator = self
             .mempool_handle
             .call(move |mempool| {
-                mempool.collect_txs(Box::new(DefaultTxAccumulator::new(max_block_size)))
+                mempool.collect_txs(Box::new(DefaultTxAccumulator::new(
+                    max_block_size,
+                    current_tip,
+                )))
             })
             .await?
             .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
@@ -326,7 +330,18 @@ impl BlockProduction {
             // TODO: see if we can simplify this
             let transactions = match transactions_source.clone() {
                 TransactionsSource::Mempool => {
-                    self.collect_transactions().await?.transactions().clone()
+                    let accumulator =
+                        self.collect_transactions(current_tip_index.block_id()).await?;
+                    match accumulator {
+                        Some(acc) => acc.transactions().clone(),
+                        None => {
+                            // If the mempool rejects the accumulator (due to tip mismatch, or otherwise), we should start over and try again
+                            log::info!(
+                                "Mempool rejected the transaction accumulator. Restarting the block production attempt."
+                            );
+                            continue;
+                        }
+                    }
                 }
                 TransactionsSource::Provided(txs) => txs,
             };

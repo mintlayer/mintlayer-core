@@ -930,7 +930,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Box<dyn TransactionAccumulator> {
+    ) -> Option<Box<dyn TransactionAccumulator>> {
+        if tx_accumulator.expected_tip() != self.best_block_id() {
+            log::debug!(
+                "Mempool rejected transaction accumulator due to different tip: expected tip {:?} (current tip {:?})",
+                tx_accumulator.expected_tip(),
+                self.best_block_id(),
+            );
+            return None;
+        }
+
         let mut tx_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
@@ -953,7 +962,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 break;
             }
         }
-        tx_accumulator
+        Some(tx_accumulator)
     }
 
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
