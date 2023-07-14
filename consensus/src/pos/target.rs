@@ -91,7 +91,6 @@ fn calculate_new_target(
     );
     let prev_target: Uint512 = (*prev_target).into();
 
-    // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = prev_target * actual_block_time / target_block_time;
     let difficulty_change_limit = prev_target
         * Uint512::from_u64(pos_config.difficulty_change_limit().value().into())
@@ -223,6 +222,7 @@ mod tests {
         random::{CryptoRng, Rng},
         vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
     };
+    use itertools::Itertools;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -232,6 +232,7 @@ mod tests {
         rng: &mut (impl Rng + CryptoRng),
         prev_block: Id<GenBlock>,
         timestamp: BlockTimestamp,
+        target: Uint256,
     ) -> Block {
         let (sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
@@ -244,7 +245,7 @@ mod tests {
                 vec![],
                 PoolId::new(H256::zero()),
                 vrf_data,
-                Compact(rng.gen_range(1..1000)),
+                Compact::from(target),
             ))),
             BlockReward::new(vec![]),
         )
@@ -276,7 +277,7 @@ mod tests {
                 .map(|(i, t)| {
                     let height = i as u64 + 1;
                     let timestamp = BlockTimestamp::from_int_seconds(*t);
-                    let block = make_block(rng, best_block, timestamp);
+                    let block = make_block(rng, best_block, timestamp, Uint256::ZERO);
                     let block_index = BlockIndex::new(
                         &block,
                         Uint256::ZERO,
@@ -296,11 +297,19 @@ mod tests {
             }
         }
 
+        pub fn blocks_iter(&self) -> impl Iterator<Item = &BlockIndex> {
+            self.blocks.iter().map(|(_, block_index)| block_index)
+        }
+
         pub fn get_block_index_by_height(&self, height: BlockHeight) -> Option<&BlockIndex> {
             self.blocks
                 .iter()
                 .find(|(block_height, _)| height == *block_height)
                 .map(|(_, b)| b)
+        }
+
+        pub fn add_block_index(&mut self, height: BlockHeight, block_index: BlockIndex) {
+            self.blocks.push((height, block_index))
         }
     }
 
@@ -474,7 +483,16 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_average_block_time_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = create_unittest_pos_config();
+        let pos_config = PoSChainConfig::new(
+            Uint256::MAX,
+            2 * 60,
+            2000.into(),
+            2000.into(),
+            2000.into(),
+            5,
+            PerThousand::new(100).expect("must be valid"),
+        )
+        .unwrap();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -545,20 +563,13 @@ mod tests {
     fn calculate_average_block_time_no_ancestor(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let pos_config = create_unittest_pos_config();
-        let upgrades = vec![(
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
-                config: pos_config.clone(),
-            }),
-        )];
-        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
 
         let block_index_handle = TestBlockIndexHandle::new(&chain_config);
         let timestamp = BlockTimestamp::from_int_seconds(100);
         let random_block_id = Id::<Block>::new(H256::random_using(&mut rng));
-        let random_block = make_block(&mut rng, random_block_id.into(), timestamp);
+        let random_block = make_block(&mut rng, random_block_id.into(), timestamp, Uint256::MAX);
         let random_block_index = BlockIndex::new(
             &random_block,
             Uint256::ZERO,
@@ -730,20 +741,7 @@ mod tests {
     fn not_monotonic_block_time(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let pos_config = create_unittest_pos_config();
-        let upgrades = vec![
-            (
-                BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            ),
-            (
-                BlockHeight::new(1),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Uint256::MAX.into(),
-                    config: pos_config.clone(),
-                }),
-            ),
-        ];
-        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain()
             .net_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
@@ -768,5 +766,86 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);
+    }
+
+    // The test can be enabled on demand to simulate the work of current DAA.
+    // It will calculate and print block times for blocks that could be generated over 1_000_000 time slots
+    // which is ideally 8333 blocks for 120s target time
+    #[ignore]
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn difficulty_adjustment_simulation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let net_upgrades = NetUpgrades::regtest_with_pos();
+        let chain_config = ConfigBuilder::test_chain()
+            .net_upgrades(net_upgrades)
+            .genesis_custom(Genesis::new(
+                "msg".to_owned(),
+                BlockTimestamp::from_int_seconds(0),
+                vec![],
+            ))
+            .build();
+
+        // generator can be changed to provide different strategies for balance variation
+        let pool_balance_generator = |_slot: u64| 1u64;
+
+        let mut block_index_handle =
+            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[120]);
+        let mut tip_height = BlockHeight::one();
+        let pos_status = get_pos_status(&chain_config, tip_height.next_height());
+
+        println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}", 
+                                   pos_status.get_chain_config().block_count_to_average_for_blocktime(),
+                                   pos_status.get_chain_config().difficulty_change_limit());
+
+        for slot in 121..1_000_000 {
+            let tip = block_index_handle.get_block_index_by_height(tip_height).unwrap();
+            let tip_id = (*tip.block_id()).into();
+            let block_timestamp = BlockTimestamp::from_int_seconds(slot);
+
+            // calculate target based on the history data
+            let target =
+                calculate_target_required(&chain_config, &pos_status, tip_id, &block_index_handle)
+                    .unwrap();
+            let target = Uint256::try_from(target).unwrap();
+
+            // generate random hash with uniform distr instead of using VRF that is much slower
+            let current_hash = {
+                let mut words = [0u64; 4];
+                for w in &mut words {
+                    *w = rng.gen::<u64>();
+                }
+                Uint256(words)
+            };
+
+            let pool_balance = Uint512::from_u64(pool_balance_generator(slot));
+            let target_u512: Uint512 = target.try_into().unwrap();
+            let current_hash: Uint512 = current_hash.try_into().unwrap();
+
+            // add block if hash satisfies the target
+            if current_hash <= target_u512 * pool_balance {
+                let block = make_block(&mut rng, tip_id, block_timestamp, target);
+                tip_height = tip_height.next_height();
+                let new_tip = BlockIndex::new(
+                    &block,
+                    Uint256::ZERO,
+                    tip_id,
+                    tip_height,
+                    block_timestamp,
+                    BlockStatus::new(),
+                );
+                block_index_handle.add_block_index(tip_height, new_tip);
+            }
+        }
+        println!("tip height {}", tip_height);
+
+        // print result block times
+        block_index_handle.blocks_iter().tuple_windows::<(_, _)>().for_each(|(a, b)| {
+            let block_time =
+                b.block_timestamp().as_int_seconds() - a.block_timestamp().as_int_seconds();
+            println!("{}", block_time);
+        });
     }
 }

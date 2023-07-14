@@ -105,15 +105,21 @@ impl PoSChainConfig {
     }
 }
 
+const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
+const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
+
 pub fn create_testnet_pos_config() -> PoSChainConfig {
+    let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
+    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
+
     PoSChainConfig {
-        target_limit: Uint256::MAX,
-        target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 5,
-        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+        target_limit,
+        target_block_time,
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
 
@@ -121,23 +127,26 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit: Uint256::MAX,
         target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 5,
-        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
 
 pub fn create_regtest_pos_config() -> PoSChainConfig {
+    let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
+    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
+
     PoSChainConfig {
-        target_limit: Uint256::MAX,
-        target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        reward_maturity_distance: 2000.into(),
-        decommission_maturity_distance: 2000.into(),
-        spend_share_maturity_distance: 2000.into(),
-        block_count_to_average_for_blocktime: 5,
-        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
+        target_limit,
+        target_block_time,
+        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
+        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
     }
 }
 
@@ -154,11 +163,19 @@ pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
             0xFFFFFFFFFFFFFFFF,
             0x00000000FFFFFFFF,
         ]),
-        ChainType::Signet | ChainType::Regtest => Uint256([
+        ChainType::Signet => Uint256([
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
             0x00000000FFFFFFFF,
+        ]),
+        // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
+        // It's hardcoded because division for Uint256 is not const
+        ChainType::Regtest => Uint256([
+            0x2222222222222222,
+            0x2222222222222222,
+            0x2222222222222222,
+            0x0222222222222222,
         ]),
     }
 }
