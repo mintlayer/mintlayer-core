@@ -62,6 +62,8 @@ use crate::{
 mod collect_transactions {
     use super::*;
 
+    // TODO: add tests for mempool rejecting transaction accumulator
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_txs_failed() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
