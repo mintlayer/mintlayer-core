@@ -57,6 +57,30 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
     (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
 }
 
+fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOutput {
+    let destination = Destination::PublicKey(
+        crypto::key::PrivateKey::new_from_rng(rng, crypto::key::KeyKind::Secp256k1Schnorr).1,
+    );
+    match rng.gen::<bool>() {
+        true => TxOutput::Transfer(OutputValue::Coin(amount), destination),
+        false => {
+            let lock_for_blocks = rng.gen::<u32>() as u64;
+            let current_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
+            let seconds_between_blocks = rng.gen::<u32>() as u64;
+            let current_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u32>() as u64);
+            gen_random_lock_then_transfer(
+                rng,
+                amount,
+                destination,
+                lock_for_blocks,
+                current_block_height,
+                seconds_between_blocks,
+                current_timestamp,
+            )
+        }
+    }
+}
+
 fn gen_random_lock_then_transfer(
     rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
@@ -747,8 +771,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount =
-        Amount::from_atoms(rng.gen_range(NETWORK_FEE + 10000..NETWORK_FEE + 100000));
+    let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
     let address = get_address(
         &chain_config,
         MNEMONIC,
@@ -784,22 +807,20 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
-    let amount_to_transfer =
-        Amount::from_atoms(rng.gen_range(1..=(block1_amount.into_atoms() - NETWORK_FEE)));
-
-    let new_output = TxOutput::Transfer(
-        OutputValue::Coin(amount_to_transfer),
-        Destination::PublicKey(
-            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr)
-                .1,
-        ),
+    let num_outputs = rng.gen_range(1..10);
+    let amount_to_transfer = Amount::from_atoms(
+        rng.gen_range(1..=(block1_amount.into_atoms() / num_outputs - NETWORK_FEE)),
     );
+
+    let outputs: Vec<TxOutput> = (0..num_outputs)
+        .map(|_| gen_random_transfer(&mut rng, amount_to_transfer))
+        .collect();
 
     let amount_fee_per_kb = Amount::from_atoms(1000);
     let transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            outputs,
             amount_fee_per_kb,
             amount_fee_per_kb,
         )

@@ -971,9 +971,11 @@ fn input_signature_size(destination: &Destination) -> usize {
         )
         .encode(),
         Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
-        Destination::AnyoneCanSpend
-        | Destination::ScriptHash(_)
-        | Destination::ClassicMultisig(_) => unimplemented!(),
+        Destination::AnyoneCanSpend => {
+            let input_sig = InputWitness::NoSignature(None);
+            return serialization::Encode::encoded_size(&input_sig);
+        }
+        Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => unimplemented!(),
     };
 
     let input_sig = InputWitness::Standard(StandardInputSignature::new(
