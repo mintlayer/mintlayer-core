@@ -370,6 +370,22 @@ impl BlockProduction {
                         Err(_) => continue,
                     };
 
+                    if current_tip_index.block_id() != tip_at_start.block_id() {
+                        log::info!(
+                            "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
+                            tip_at_start.block_id(),
+                            tip_at_start.block_height(),
+                            current_tip_index.block_id(),
+                            current_tip_index.block_height(),
+                        );
+                        return Err(BlockProductionError::TipChanged(
+                            tip_at_start.block_id(),
+                            tip_at_start.block_height(),
+                            current_tip_index.block_id(),
+                            current_tip_index.block_height(),
+                        ));
+                    }
+
                     let block = Block::new_from_header(signed_block_header, block_body.clone())?;
                     return Ok((block, job_finished_receiver));
                 }
