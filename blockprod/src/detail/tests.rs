@@ -208,7 +208,7 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterfaceMock::new());
-            mock_chainstate.expect_subscribe_to_events().times(1).returning(|_| ());
+            mock_chainstate.expect_subscribe_to_events().times(..).returning(|_| ());
 
             mock_chainstate.expect_get_best_block_index().times(1).returning(|| {
                 Err(ChainstateError::FailedToReadProperty(
