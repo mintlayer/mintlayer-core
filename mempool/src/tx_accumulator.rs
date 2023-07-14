@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::SignedTransaction, primitives::Amount};
+use common::{
+    chain::{GenBlock, SignedTransaction},
+    primitives::{Amount, Id},
+};
 use serialization::Encode;
 
 use crate::pool::fee::Fee;
@@ -33,6 +36,10 @@ pub trait TransactionAccumulator: Send {
     fn done(&self) -> bool;
     fn transactions(&self) -> &Vec<SignedTransaction>;
     fn total_fees(&self) -> Fee;
+
+    /// The tip that the accumulator expects. This is used so that the mempool remains in sync with block production,
+    /// and to prevent having transactions pulled for a different state than the one the block producer is working on.
+    fn expected_tip(&self) -> Id<GenBlock>;
 }
 
 pub struct DefaultTxAccumulator {
@@ -41,16 +48,18 @@ pub struct DefaultTxAccumulator {
     target_size: usize,
     done: bool,
     total_fees: Fee,
+    expected_tip: Id<GenBlock>,
 }
 
 impl DefaultTxAccumulator {
-    pub fn new(target_size: usize) -> Self {
+    pub fn new(target_size: usize, expected_tip: Id<GenBlock>) -> Self {
         Self {
             txs: Vec::new(),
             total_size: 0,
             target_size,
             done: false,
             total_fees: Amount::ZERO.into(),
+            expected_tip,
         }
     }
 }
@@ -79,5 +88,9 @@ impl TransactionAccumulator for DefaultTxAccumulator {
 
     fn total_fees(&self) -> Fee {
         self.total_fees
+    }
+
+    fn expected_tip(&self) -> Id<GenBlock> {
+        self.expected_tip
     }
 }

@@ -1694,9 +1694,9 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     let size_limit: usize = 1_000;
-    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit, genesis.get_id().into());
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap().transactions().clone();
     let expected_num_txs_collected: usize = 0;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
 
@@ -1730,23 +1730,23 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     }
 
     let size_limit = 1_000;
-    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit, genesis.get_id().into());
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap().transactions().clone();
     log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
     let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
     assert!(total_tx_size <= size_limit);
 
-    let tx_accumulator = DefaultTxAccumulator::new(0);
+    let tx_accumulator = DefaultTxAccumulator::new(0, genesis.get_id().into());
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap().transactions().clone();
     assert_eq!(collected_txs.len(), 0);
 
-    let tx_accumulator = DefaultTxAccumulator::new(1);
+    let tx_accumulator = DefaultTxAccumulator::new(1, genesis.get_id().into());
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.transactions();
+    let collected_txs = returned_accumulator.unwrap().transactions().clone();
     assert_eq!(collected_txs.len(), 0);
     Ok(())
 }
