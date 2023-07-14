@@ -552,6 +552,104 @@ mod tests {
         assert_eq!(average_block_time, 5);
     }
 
+    // Average time between 2 block is the time difference itself
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_average_time_between_2_blocks(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let pos_config = PoSChainConfig::new(
+            Uint256::MAX,
+            2 * 60,
+            2000.into(),
+            2000.into(),
+            2, // block_count_to_average
+            PerThousand::new(100).expect("must be valid"),
+        )
+        .unwrap();
+        let upgrades = vec![(
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: pos_config.clone(),
+            }),
+        )];
+        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let chain_config = ConfigBuilder::test_chain()
+            .net_upgrades(net_upgrades)
+            .genesis_custom(Genesis::new(
+                "msg".to_owned(),
+                BlockTimestamp::from_int_seconds(0),
+                vec![],
+            ))
+            .build();
+
+        let block_index_handle =
+            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[10, 30]);
+
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
+        // calculating average between 2 blocks with timestamps 10 and 30 should give 20
+        let average_block_time = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            block_index_handle.get_block_index_by_height(BlockHeight::new(2)).unwrap(),
+            get_ancestor,
+        )
+        .unwrap();
+        assert_eq!(average_block_time, 20);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_average_time_between_3_blocks(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let pos_config = PoSChainConfig::new(
+            Uint256::MAX,
+            2 * 60,
+            2000.into(),
+            2000.into(),
+            3, // block_count_to_average
+            PerThousand::new(100).expect("must be valid"),
+        )
+        .unwrap();
+        let upgrades = vec![(
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: pos_config.clone(),
+            }),
+        )];
+        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let chain_config = ConfigBuilder::test_chain()
+            .net_upgrades(net_upgrades)
+            .genesis_custom(Genesis::new(
+                "msg".to_owned(),
+                BlockTimestamp::from_int_seconds(0),
+                vec![],
+            ))
+            .build();
+
+        let block_index_handle =
+            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[10, 20, 40]);
+
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
+        let average_block_time = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            block_index_handle.get_block_index_by_height(BlockHeight::new(3)).unwrap(),
+            get_ancestor,
+        )
+        .unwrap();
+        assert_eq!(average_block_time, 15);
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
