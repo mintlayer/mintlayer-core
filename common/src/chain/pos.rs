@@ -38,8 +38,6 @@ pub struct PoSChainConfig {
     target_limit: Uint256,
     /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
     target_block_time: NonZeroU64,
-    /// The distance required to pass to allow spending the block reward
-    reward_maturity_distance: BlockDistance,
     /// The distance required to pass to allow spending the decommission pool
     decommission_maturity_distance: BlockDistance,
     /// The distance required to pass to allow spending delegation share
@@ -54,7 +52,6 @@ impl PoSChainConfig {
     pub fn new(
         target_limit: Uint256,
         target_block_time: u64,
-        reward_maturity_distance: BlockDistance,
         decommission_maturity_distance: BlockDistance,
         spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
@@ -68,7 +65,6 @@ impl PoSChainConfig {
         Some(Self {
             target_limit,
             target_block_time,
-            reward_maturity_distance,
             decommission_maturity_distance,
             spend_share_maturity_distance,
             block_count_to_average_for_blocktime,
@@ -82,10 +78,6 @@ impl PoSChainConfig {
 
     pub fn target_block_time(&self) -> NonZeroU64 {
         self.target_block_time
-    }
-
-    pub fn reward_maturity_distance(&self) -> BlockDistance {
-        self.reward_maturity_distance
     }
 
     pub fn decommission_maturity_distance(&self) -> BlockDistance {
@@ -115,7 +107,6 @@ pub fn create_testnet_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit,
         target_block_time,
-        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
@@ -127,7 +118,6 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit: Uint256::MAX,
         target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
@@ -142,7 +132,6 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit,
         target_block_time,
-        reward_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,

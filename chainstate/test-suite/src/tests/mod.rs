@@ -45,6 +45,7 @@ mod nft_reorgs;
 mod nft_transfer;
 mod output_timelock;
 mod pos_accounting_reorg;
+mod pos_maturity_settings;
 mod pos_processing_tests;
 mod pos_retargeting_tests;
 mod processing_tests;

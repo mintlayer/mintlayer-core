@@ -405,7 +405,6 @@ mod tests {
                 target_block_time,
                 1.into(),
                 1.into(),
-                1.into(),
                 2,
                 PerThousand::new(100).unwrap(),
             )
@@ -425,7 +424,6 @@ mod tests {
             let config = PoSChainConfig::new(
                 Uint256::MAX,
                 target_block_time,
-                1.into(),
                 1.into(),
                 1.into(),
                 2,
@@ -448,7 +446,6 @@ mod tests {
             1,
             1.into(),
             1.into(),
-            1.into(),
             2,
             PerThousand::new(100).unwrap(),
         )
@@ -465,7 +462,6 @@ mod tests {
         let config = PoSChainConfig::new(
             Uint256::ONE,
             1,
-            1.into(),
             1.into(),
             1.into(),
             2,
@@ -486,7 +482,6 @@ mod tests {
         let pos_config = PoSChainConfig::new(
             Uint256::MAX,
             2 * 60,
-            2000.into(),
             2000.into(),
             2000.into(),
             5,
@@ -619,7 +614,6 @@ mod tests {
             10,
             1.into(),
             1.into(),
-            1.into(),
             2,
             PerThousand::new(100).unwrap(),
         )
@@ -627,7 +621,6 @@ mod tests {
         let pos_config_2 = PoSChainConfig::new(
             target_limit_2,
             20,
-            1.into(),
             1.into(),
             1.into(),
             5,

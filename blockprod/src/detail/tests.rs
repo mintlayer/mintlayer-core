@@ -1023,7 +1023,6 @@ mod produce_block {
                 NonZeroU64::new(2 * 60).expect("cannot be 0").into(),
                 2000.into(),
                 2000.into(),
-                2000.into(),
                 5,
                 PerThousand::new(1).expect("must be valid"),
             )

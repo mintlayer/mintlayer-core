@@ -36,7 +36,7 @@ use common::{
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
         Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -551,12 +551,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .iter()
             .enumerate()
             .try_for_each(|(index, output)| {
+                let required = match block.consensus_data() {
+                    ConsensusData::None => {
+                        self.chain_config.empty_consensus_reward_maturity_distance()
+                    }
+                    ConsensusData::PoW(_) => {
+                        self.chain_config.get_proof_of_work_config().reward_maturity_distance()
+                    }
+                    ConsensusData::PoS(_) => BlockDistance::new(0),
+                };
+
                 match block.consensus_data() {
                     ConsensusData::None | ConsensusData::PoW(_) => match output {
                         TxOutput::LockThenTransfer(_, _, tl) => {
                             let outpoint = UtxoOutPoint::new(block.get_id().into(), index as u32);
-                            let required =
-                                block.consensus_data().reward_maturity_distance(self.chain_config);
                             tx_verifier::timelock_check::check_output_maturity_setting(
                                 tl, required, outpoint,
                             )
