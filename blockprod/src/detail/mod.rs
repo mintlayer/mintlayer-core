@@ -370,19 +370,21 @@ impl BlockProduction {
                         Err(_) => continue,
                     };
 
-                    if current_tip_index.block_id() != tip_at_start.block_id() {
+                    let tip_at_end = self.pull_best_block_index().await?;
+
+                    if tip_at_end.block_id() != tip_at_start.block_id() {
                         log::info!(
                             "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
                             tip_at_start.block_id(),
                             tip_at_start.block_height(),
-                            current_tip_index.block_id(),
-                            current_tip_index.block_height(),
+                            tip_at_end.block_id(),
+                            tip_at_end.block_height(),
                         );
                         return Err(BlockProductionError::TipChanged(
                             tip_at_start.block_id(),
                             tip_at_start.block_height(),
-                            current_tip_index.block_id(),
-                            current_tip_index.block_height(),
+                            tip_at_end.block_id(),
+                            tip_at_end.block_height(),
                         ));
                     }
 
