@@ -27,6 +27,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
+use mempool::FeeRate;
 use mempool_types::TxStatus;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
@@ -209,8 +210,8 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
-    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error> {
-        Ok(0)
+    async fn mempool_get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        Ok(FeeRate::new(Amount::ZERO))
     }
 }
 

@@ -22,6 +22,7 @@ use common::chain::signature::inputsig::authorize_pubkey_spend::AuthorizedPublic
 use common::chain::signature::inputsig::authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend;
 use common::primitives::id::WithId;
 use common::Uint256;
+use mempool::FeeRate;
 use serialization::encoded::Encoded;
 use serialization::Encode;
 pub use utxo_selector::UtxoSelectorError;
@@ -130,8 +131,8 @@ impl Account {
         mut request: SendRequest,
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
-        current_fee_rate: Amount,
-        long_term_fee_rate: Amount,
+        current_fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
@@ -145,9 +146,6 @@ impl Account {
             },
             Amount::ZERO,
         )?;
-
-        let current_fee_rate = mempool::FeeRate::new(current_fee_rate);
-        let long_term_fee_rate = mempool::FeeRate::new(long_term_fee_rate);
 
         let network_fee: Amount = current_fee_rate
             .compute_fee(tx_size_with_outputs(request.outputs()))
@@ -175,7 +173,7 @@ impl Account {
         let amount_to_be_paied_in_currency_with_fees =
             output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or(Amount::ZERO);
 
-        let mut total_fees_not_payed = network_fee;
+        let mut total_fees_not_paied = network_fee;
 
         let utxo_to_output_group =
             |(outpoint, txo): &(UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -230,12 +228,12 @@ impl Account {
                     cost_of_change,
                 )?;
 
-                total_fees_not_payed = (total_fees_not_payed + selection_result.get_total_fees())
+                total_fees_not_paied = (total_fees_not_paied + selection_result.get_total_fees())
                     .ok_or(WalletError::OutputAmountOverflow)?;
 
                 let change_amount = selection_result.get_change();
                 if change_amount > Amount::ZERO {
-                    total_fees_not_payed = (total_fees_not_payed + cost_of_change)
+                    total_fees_not_paied = (total_fees_not_paied + cost_of_change)
                         .ok_or(WalletError::OutputAmountOverflow)?;
                 }
 
@@ -252,7 +250,7 @@ impl Account {
             .try_collect()?;
 
         let mut amount_to_be_paied_in_currency_with_fees =
-            (amount_to_be_paied_in_currency_with_fees + total_fees_not_payed)
+            (amount_to_be_paied_in_currency_with_fees + total_fees_not_paied)
                 .ok_or(WalletError::OutputAmountOverflow)?;
 
         let cost_of_change = match pay_fee_with_currency {
@@ -314,8 +312,8 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         request: SendRequest,
         median_time: BlockTimestamp,
-        current_fee_rate: Amount,
-        long_term_fee_rate: Amount,
+        current_fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = self.select_inputs_for_send_request(
             request,
@@ -360,8 +358,8 @@ impl Account {
         amount: Amount,
         decomission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
-        current_fee_rate: Amount,
-        long_term_fee_rate: Amount,
+        current_fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;

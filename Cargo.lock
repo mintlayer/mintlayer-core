@@ -6506,6 +6506,7 @@ dependencies = [
  "crypto",
  "futures",
  "logging",
+ "mempool",
  "mempool-types",
  "node-comm",
  "rstest",

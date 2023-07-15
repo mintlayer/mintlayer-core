@@ -15,7 +15,7 @@
 
 use crate::{
     error::Error, event::MempoolEvent, pool::memory_usage_estimator::StoreMemoryUsageEstimator,
-    tx_accumulator::TransactionAccumulator, MempoolInterface, MempoolMaxSize,
+    tx_accumulator::TransactionAccumulator, FeeRate, MempoolInterface, MempoolMaxSize,
     MempoolSubsystemInterface, TxOrigin, TxStatus,
 };
 use chainstate::chainstate_interface::ChainstateInterface;
@@ -159,8 +159,8 @@ impl MempoolInterface for Mempool {
         self.set_max_size(max_size)
     }
 
-    fn get_fee_rate(&self) -> u128 {
-        self.current_fee_rate()
+    fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
+        self.current_fee_rate(in_top_x_mb).map_err(Error::Policy)
     }
 }
 

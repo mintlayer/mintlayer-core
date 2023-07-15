@@ -279,14 +279,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
-        let amount_fee_per_kb = self
+        let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate()
+            .mempool_get_fee_rate(5)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        let current_fee_rate = Amount::from_atoms(amount_fee_per_kb);
-        let long_term_fee_rate = Amount::from_atoms(amount_fee_per_kb);
+        let long_term_fee_rate = current_fee_rate;
+
         let tx = self
             .wallet
             .create_transaction_to_addresses(
@@ -308,14 +308,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> Result<TxStatus, ControllerError<T>> {
-        let amount_fee_per_kb = self
+        let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate()
+            .mempool_get_fee_rate(5)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        let current_fee_rate = Amount::from_atoms(amount_fee_per_kb);
-        let long_term_fee_rate = Amount::from_atoms(amount_fee_per_kb);
+        let long_term_fee_rate = current_fee_rate;
         let tx = self
             .wallet
             .create_stake_pool_tx(

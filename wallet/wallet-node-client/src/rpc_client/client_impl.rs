@@ -20,8 +20,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::rpc::MempoolRpcClient;
 use mempool::TxStatus;
+use mempool::{rpc::MempoolRpcClient, FeeRate};
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex_encoded::HexEncoded;
 
@@ -153,8 +153,8 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error> {
-        MempoolRpcClient::get_fee_rate(&self.http_client)
+    async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        MempoolRpcClient::get_fee_rate(&self.http_client, in_top_x_mb)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

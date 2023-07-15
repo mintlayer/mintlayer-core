@@ -36,6 +36,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
+use mempool::FeeRate;
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
@@ -427,8 +428,8 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
-        current_fee_rate: Amount,
-        long_term_fee_rate: Amount,
+        current_fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -453,8 +454,8 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-        current_fee_rate: Amount,
-        long_term_fee_rate: Amount,
+        current_fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {

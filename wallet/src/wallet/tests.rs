@@ -699,8 +699,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         wallet.create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output.clone()],
-            Amount::ZERO,
-            Amount::ZERO
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         ),
         Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
@@ -714,8 +714,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
-                Amount::ZERO,
-                Amount::ZERO,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
             )
             .unwrap();
     } else {
@@ -741,8 +741,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
-                Amount::ZERO,
-                Amount::ZERO,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
             )
             .unwrap();
     }
@@ -816,17 +816,11 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         .map(|_| gen_random_transfer(&mut rng, amount_to_transfer))
         .collect();
 
-    let amount_fee_per_kb = Amount::from_atoms(1000);
+    let feerate = FeeRate::new(Amount::from_atoms(1000));
     let transaction = wallet
-        .create_transaction_to_addresses(
-            DEFAULT_ACCOUNT_INDEX,
-            outputs,
-            amount_fee_per_kb,
-            amount_fee_per_kb,
-        )
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, feerate, feerate)
         .unwrap();
 
-    let feerate = mempool::FeeRate::new(amount_fee_per_kb);
     let tx_size = serialization::Encode::encoded_size(&transaction);
     let fee = feerate.compute_fee(tx_size).unwrap();
 
@@ -930,8 +924,8 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             pool_amount,
             None,
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
     let block2 = Block::new(
@@ -1045,8 +1039,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
@@ -1104,8 +1098,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
@@ -1169,8 +1163,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .err()
         .unwrap();
@@ -1272,8 +1266,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
@@ -1520,8 +1514,8 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
-                Amount::ZERO,
-                Amount::ZERO,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
             )
             .unwrap();
 
@@ -1662,8 +1656,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
-                Amount::ZERO,
-                Amount::ZERO,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
             )
             .unwrap();
 
@@ -1693,8 +1687,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
@@ -1730,8 +1724,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
@@ -1754,8 +1748,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
-            Amount::ZERO,
-            Amount::ZERO,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
@@ -1902,8 +1896,8 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
-                Amount::ZERO,
-                Amount::ZERO,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
             )
             .unwrap();
 

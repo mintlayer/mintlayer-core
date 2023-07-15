@@ -20,7 +20,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::MempoolHandle;
+use mempool::{FeeRate, MempoolHandle};
 use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
 use serialization::hex::HexError;
 
@@ -189,8 +189,8 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
-    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error> {
-        let res = self.mempool.call(|this| this.get_fee_rate()).await?;
+    async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await??;
         Ok(res)
     }
 }

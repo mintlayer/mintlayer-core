@@ -20,6 +20,7 @@ use common::{
 };
 
 use consensus::GenerateBlockInputData;
+use mempool::FeeRate;
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
@@ -61,5 +62,5 @@ pub trait NodeInterface {
     async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error>;
     async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error>;
 
-    async fn mempool_get_fee_rate(&self) -> Result<u128, Self::Error>;
+    async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
 }
