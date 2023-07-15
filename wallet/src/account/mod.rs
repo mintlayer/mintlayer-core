@@ -18,13 +18,9 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::signature::inputsig::authorize_pubkey_spend::AuthorizedPublicKeySpend;
-use common::chain::signature::inputsig::authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend;
 use common::primitives::id::WithId;
 use common::Uint256;
 use mempool::FeeRate;
-use serialization::encoded::Encoded;
-use serialization::Encode;
 pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -45,7 +41,7 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::{PrivateKey, PublicKey};
+use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
 use std::collections::BTreeMap;
@@ -152,7 +148,8 @@ impl Account {
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
             .into();
 
-        let (coin_change_fee, token_change_fee) = coin_and_token_output_fees(current_fee_rate)?;
+        let (coin_change_fee, token_change_fee) =
+            coin_and_token_output_change_fees(current_fee_rate)?;
 
         let utxos_by_currency = group_utxos_for_input(
             self.get_utxos(
@@ -958,32 +955,16 @@ pub fn tx_size_with_outputs(outputs: &[TxOutput]) -> usize {
 }
 
 fn input_signature_size(destination: &Destination) -> usize {
-    let sig_hex = "003c002dd5ea8f05240394eb109b8e9b52716db2720cebbc5dd66394afdf761d2ef76dc8a292d3a44e4d9f1f8fd8e17dc404e317082f5a2ce8adafde01e766aaa6";
-    let sig_bin: Vec<u8> = hex::FromHex::from_hex(sig_hex).expect("valid hex");
-    let signature = Encoded::from_bytes_unchecked(sig_bin.as_slice()).decode();
-
-    let raw_signature = match destination {
-        Destination::Address(_) => AuthorizedPublicKeyHashSpend::new(
-            PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr).1,
-            signature,
-        )
-        .encode(),
-        Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
-        Destination::AnyoneCanSpend => {
-            let input_sig = InputWitness::NoSignature(None);
-            return serialization::Encode::encoded_size(&input_sig);
-        }
+    // Sizes calculated upfront
+    match destination {
+        Destination::Address(_) => 103,
+        Destination::PublicKey(_) => 69,
+        Destination::AnyoneCanSpend => 2,
         Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => unimplemented!(),
-    };
-
-    let input_sig = InputWitness::Standard(StandardInputSignature::new(
-        SigHashType::default(),
-        raw_signature,
-    ));
-    serialization::Encode::encoded_size(&input_sig)
+    }
 }
 
-fn coin_and_token_output_fees(feerate: mempool::FeeRate) -> WalletResult<(Amount, Amount)> {
+fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<(Amount, Amount)> {
     let pub_key_hash = PublicKeyHash::from_low_u64_ne(0);
 
     let destination = Destination::Address(pub_key_hash);

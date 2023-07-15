@@ -1043,7 +1043,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     .iter()
                     .map(|tx_id| self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size()))
                     .sum::<usize>();
-                (total_size / 1000000) < in_top_x_mb
+                (total_size / 1000000) >= in_top_x_mb
             })
             .map_or_else(
                 || Ok(self.rolling_fee_rate.read().rolling_minimum_fee_rate()),
