@@ -15,7 +15,7 @@
 
 use common::address::Address;
 use common::chain::stakelock::StakePoolData;
-use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
+use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
@@ -23,8 +23,9 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
+use utils::ensure;
 
-use crate::WalletResult;
+use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet
 /// on the precise method of sending funds to a designated destination.
@@ -65,6 +66,49 @@ pub fn make_address_output_token(
         }))),
         destination,
     ))
+}
+
+pub fn make_issue_token_outputs(
+    address: Address,
+    token_ticker: Vec<u8>,
+    amount_to_issue: Amount,
+    number_of_decimals: u8,
+    metadata_uri: Vec<u8>,
+    chain_config: &ChainConfig,
+) -> WalletResult<Vec<TxOutput>> {
+    let destination = address.destination(chain_config)?;
+
+    ensure!(
+        metadata_uri.len() <= chain_config.token_max_uri_len(),
+        WalletError::InvalidTokenMetadataUri(metadata_uri.len(), chain_config.token_max_uri_len())
+    );
+
+    ensure!(
+        number_of_decimals <= chain_config.token_max_dec_count(),
+        WalletError::InvalidTokenDecimals(number_of_decimals, chain_config.token_max_dec_count())
+    );
+
+    ensure!(
+        token_ticker.len() <= chain_config.token_max_ticker_len(),
+        WalletError::InvalidTokenTicker(token_ticker.len(), chain_config.token_max_ticker_len())
+    );
+
+    let issuance_output = TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(
+            TokenIssuance {
+                token_ticker,
+                amount_to_issue,
+                number_of_decimals,
+                metadata_uri,
+            },
+        )))),
+        destination,
+    );
+
+    let token_issuance_fee =
+        TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
+
+    Ok(vec![issuance_output, token_issuance_fee])
 }
 
 pub fn make_stake_output(

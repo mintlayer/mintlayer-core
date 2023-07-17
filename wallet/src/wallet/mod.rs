@@ -19,12 +19,14 @@ use std::sync::Arc;
 
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+use crate::send_request::make_issue_token_outputs;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
+use common::chain::tokens::{token_id, TokenId};
 use common::chain::{
     Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -102,6 +104,12 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
     InvalidAddress(String, PublicKeyHashError),
+    #[error("Token issuance metadata_uri longer than max allowed {0}, max: {1}")]
+    InvalidTokenMetadataUri(usize, usize),
+    #[error("Token issuance ticker longer than max allowed {0}, max: {1}")]
+    InvalidTokenTicker(usize, usize),
+    #[error("Token issuance num decimals bigger than max allowed {0}, max: {1}")]
+    InvalidTokenDecimals(u8, u8),
     #[error("No UTXOs")]
     NoUtxos,
     #[error("Coin selection error: {0}")]
@@ -464,6 +472,45 @@ impl<B: storage::Backend> Wallet<B> {
 
             let [tx] = txs;
             Ok(tx)
+        })
+    }
+
+    pub fn issue_new_token(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        token_ticker: Vec<u8>,
+        amount_to_issue: Amount,
+        number_of_decimals: u8,
+        metadata_uri: Vec<u8>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(TokenId, SignedTransaction)> {
+        let outputs = make_issue_token_outputs(
+            address,
+            token_ticker,
+            amount_to_issue,
+            number_of_decimals,
+            metadata_uri,
+            self.chain_config.as_ref(),
+        )?;
+
+        let request = SendRequest::new().with_outputs(outputs);
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let tx = account.process_send_request(
+                db_tx,
+                request,
+                latest_median_time,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+
+            let [tx] = txs;
+            let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
+            Ok((token_id, tx))
         })
     }
 

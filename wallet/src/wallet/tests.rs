@@ -28,7 +28,7 @@ use common::{
         config::{create_mainnet, create_regtest, Builder, ChainType},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{OutputValue, TokenData, TokenIssuance, TokenTransfer},
+        tokens::{OutputValue, TokenData, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::Idable,
@@ -978,7 +978,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.token_min_issuance_fee())
+    .unwrap();
     let address = get_address(
         &chain_config,
         MNEMONIC,
@@ -1018,27 +1020,18 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let destination = address2.destination(chain_config.as_ref()).unwrap();
 
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
-
     let token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
-    let new_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(
-            TokenIssuance {
-                token_ticker: "XXXX".as_bytes().to_vec(),
-                amount_to_issue: token_amount_to_issue,
-                number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: "http://uri".as_bytes().to_vec(),
-            },
-        )))),
-        destination,
-    );
 
-    let token_issuance_transaction = wallet
-        .create_transaction_to_addresses(
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            address2,
+            "XXXX".as_bytes().to_vec(),
+            token_amount_to_issue,
+            rng.gen_range(1..18),
+            "http://uri".as_bytes().to_vec(),
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1067,9 +1060,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             UtxoState::Confirmed.into(),
         )
         .unwrap();
-    assert!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO)
-            <= (block1_amount * 2).unwrap()
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        ((block1_amount * 2).unwrap() - chain_config.token_min_issuance_fee()).unwrap()
     );
     let token_balances = currency_balances
         .into_iter()
@@ -1080,6 +1073,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .collect_vec();
     assert_eq!(token_balances.len(), 1);
     let (token_id, token_amount) = token_balances.first().expect("some");
+    assert_eq!(*token_id, issued_token_id);
     assert_eq!(*token_amount, token_amount_to_issue);
 
     let tokens_to_transfer =
@@ -1125,9 +1119,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             UtxoState::Confirmed.into(),
         )
         .unwrap();
-    assert!(
-        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO)
-            <= (block1_amount * 3).unwrap()
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        ((block1_amount * 3).unwrap() - chain_config.token_min_issuance_fee()).unwrap()
     );
     let token_balances = currency_balances
         .into_iter()
