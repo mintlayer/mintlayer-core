@@ -476,7 +476,10 @@ where
                                 ))
                             }
                         } else {
-                            Err(ConnectTransactionError::UnexpectedPoolId(*pool_id, expected_pool_id))
+                            Err(ConnectTransactionError::UnexpectedPoolId(
+                                *pool_id,
+                                expected_pool_id,
+                            ))
                         };
                         Some(res)
                     }
