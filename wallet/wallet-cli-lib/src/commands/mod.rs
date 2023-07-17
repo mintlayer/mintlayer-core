@@ -32,7 +32,7 @@ use wallet_controller::{
 
 use crate::errors::WalletCliError;
 
-use self::helper_types::{CliUtxoState, CliUtxoTypes};
+use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -169,6 +169,9 @@ pub enum WalletCommand {
 
     /// List the pending transactions that can be abandoned
     ListPendingTransactions,
+
+    /// List available Pool Ids
+    ListPoolIds,
 
     /// Generate a new unused address
     NewAddress,
@@ -765,6 +768,21 @@ impl CommandHandler {
             WalletCommand::NodeVersion => {
                 let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print(version))
+            }
+
+            WalletCommand::ListPoolIds => {
+                let pool_ids: Vec<_> = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .get_pool_ids(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .await
+                    .map_err(WalletCliError::Controller)?
+                    .into_iter()
+                    .map(|(pool_id, block_info, balance)| {
+                        format_pool_info(pool_id, balance, block_info.height, block_info.timestamp)
+                    })
+                    .collect();
+                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
             }
 
             WalletCommand::NodeShutdown => {

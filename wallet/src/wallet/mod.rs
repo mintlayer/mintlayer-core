@@ -26,7 +26,7 @@ use common::address::Address;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
-    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
+    Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TransactionCreationError,
     TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
@@ -44,7 +44,7 @@ use wallet_storage::{
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
-use wallet_types::{AccountId, KeyPurpose};
+use wallet_types::{AccountId, BlockInfo, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -397,6 +397,11 @@ impl<B: storage::Backend> Wallet<B> {
         let account =
             Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
         account.abandon_transaction(tx_id)
+    }
+
+    pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, BlockInfo)>> {
+        let pool_ids = self.get_account(account_index)?.get_pool_ids();
+        Ok(pool_ids)
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {

@@ -18,7 +18,7 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{token_id, TokenId},
-        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Id},
 };
@@ -45,6 +45,7 @@ pub struct OutputCache {
     txs: BTreeMap<OutPointSourceId, WalletTx>,
     consumed: BTreeMap<UtxoOutPoint, TxState>,
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+    pools: BTreeMap<PoolId, (UtxoOutPoint, BlockInfo)>,
 }
 
 impl OutputCache {
@@ -53,6 +54,7 @@ impl OutputCache {
             txs: BTreeMap::new(),
             consumed: BTreeMap::new(),
             unconfirmed_descendants: BTreeMap::new(),
+            pools: BTreeMap::new(),
         }
     }
 
@@ -74,6 +76,15 @@ impl OutputCache {
         self.txs
             .get(&outpoint.tx_id())
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
+    }
+
+    pub fn pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+        self.pools
+            .iter()
+            .filter_map(|(pool_id, (outpoint, block_info))| {
+                (!self.consumed.contains_key(outpoint)).then_some((*pool_id, *block_info))
+            })
+            .collect()
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) {
@@ -105,6 +116,33 @@ impl OutputCache {
             }
         }
 
+        let tx_block_info = match tx.state() {
+            TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
+            TxState::Inactive
+            | TxState::Conflicted(_)
+            | TxState::InMempool
+            | TxState::Abandoned => None,
+        };
+        if let Some(block_info) = tx_block_info {
+            for (idx, output) in tx.outputs().iter().enumerate() {
+                match output {
+                    TxOutput::ProduceBlockFromStake(_, pool_id)
+                    | TxOutput::CreateStakePool(pool_id, _) => {
+                        self.pools
+                            .entry(*pool_id)
+                            .and_modify(|entry| entry.0 = UtxoOutPoint::new(tx.id(), idx as u32))
+                            .or_insert_with(|| {
+                                (UtxoOutPoint::new(tx.id(), idx as u32), block_info)
+                            });
+                    }
+                    TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _) => {}
+                };
+            }
+        }
         self.txs.insert(tx_id, tx);
     }
 

@@ -280,6 +280,10 @@ impl Account {
         Ok(vrf_keys.1)
     }
 
+    pub fn get_pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
+        self.output_cache.pool_ids()
+    }
+
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,

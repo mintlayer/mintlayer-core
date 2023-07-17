@@ -28,9 +28,11 @@ use std::{
     time::Duration,
 };
 
+use utils::tap_error_log::LogError;
+
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use consensus::GenerateBlockInputData;
@@ -38,6 +40,8 @@ use crypto::{
     key::{hdkd::u31::U31, PublicKey},
     vrf::VRFPublicKey,
 };
+use futures::stream::FuturesUnordered;
+use futures::TryStreamExt;
 use logging::log;
 use mempool_types::TxStatus;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
@@ -45,6 +49,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{account::Currency, send_request::make_address_output, DefaultWallet};
+use wallet_types::BlockInfo;
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
@@ -221,6 +226,40 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet
             .get_new_public_key(account_index)
             .map_err(ControllerError::WalletError)
+    }
+
+    async fn get_pool_info(
+        &self,
+        pool_id: PoolId,
+        block_info: BlockInfo,
+    ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
+        self.rpc_client
+            .get_stake_pool_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .and_then(|balance| {
+                balance.ok_or(ControllerError::SyncError(format!(
+                    "Pool id {} from wallet not found in node",
+                    pool_id
+                )))
+            })
+            .map(|balance| (pool_id, block_info, balance))
+            .log_err()
+    }
+
+    pub async fn get_pool_ids(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
+        let pools =
+            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+
+        let tasks: FuturesUnordered<_> = pools
+            .into_iter()
+            .map(|(pool_id, block_info)| self.get_pool_info(pool_id, block_info))
+            .collect();
+
+        tasks.try_collect().await
     }
 
     pub fn get_vrf_public_key(
