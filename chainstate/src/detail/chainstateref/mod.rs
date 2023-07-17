@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use thiserror::Error;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, BlockStatus,
@@ -487,7 +487,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.check_block_height_vs_max_reorg_depth(header)?;
 
         let utxos_db = UtxosDB::new(&self.db_tx);
-        let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
 
         let is_pos = match header.consensus_data() {
             ConsensusData::None | ConsensusData::PoW(_) => false,
