@@ -68,11 +68,21 @@ def init_mintlayer_types():
                     ["Transfer", "(OutputValue, Destination)"],
                     ["LockThenTransfer", "(OutputValue, Destination, OutputTimeLock)"],
                     ["Burn", "(OutputValue)"],
-                    ["CreateStakePool", "(PoolId, Box<StakePoolData>)"],
+                    ["CreateStakePool", "(PoolId, StakePoolData)"],
                     ["ProduceBlockFromStake", "(Destination, PoolId)"],
-                    ["CreateDeligationId", "(Destination, PoolId)"],
+                    ["CreateDelegationId", "(Destination, PoolId)"],
                     ["DelegateStaking", "(Amount, DelegationId)"],
                 ]
+            },
+
+            "OutputTimeLock": {
+                "type": "enum",
+                "type_mapping": [
+                    ["UntilHeight", "(BlockHeight)"],
+                    ["UntilTime", "(BlockTimestamp)"],
+                    ["ForBlockCount", "Compact<u64>"],
+                    ["ForSeconds", "Compat<u64>"],
+                ],
             },
 
             "PoolId": "H256",
@@ -130,8 +140,23 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["Utxo", "OutPoint"],
-                    # TODO account
+                    ["Account", "(AccountOutPoint)"],
                 ]
+            },
+
+            "AccountOutPoint": {
+                "type": "struct",
+                "type_mapping": [
+                    ["nonce", "Compact<u64>"],
+                    ["account", "AccountSpending"],
+                ],
+            },
+
+            "AccountSpending": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Delegation", "(H256, Amount)"],
+                ],
             },
 
             "TransactionV1": {
@@ -148,8 +173,16 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["NoSignature", "Option<Vec<u8>>"],
-                    # TODO Standard
-                ]
+                    ["Standard", "StandardInputSignature"],
+                ],
+            },
+
+            "StandardInputSignature": {
+                "type": "struct",
+                "type_mapping": [
+                    ["sighash_type", "u8"],
+                    ["raw_signature", "Vec<u8>"],
+                ],
             },
 
             "SignedTransaction": {
@@ -259,8 +292,22 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["None", "()"],
-                    # TODO remaining signature kinds
+                    ["HeaderSignature", "(BlockHeaderSignatureData)"],
                 ]
+            },
+
+            "BlockHeaderSignatureData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["signature", "(Signature)"],
+                ]
+            },
+
+            "Signature": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Secp256k1Schnorr", "[u8; 64]"],
+                ],
             },
 
             "ConsensusData": {
@@ -268,7 +315,7 @@ def init_mintlayer_types():
                 "type_mapping": [
                     ["None", "()"],
                     ["PoW", "PoWData"],
-                    # TODO remaining consensus types
+                    ["PoS", "PoSData"],
                 ]
             },
 
@@ -280,12 +327,62 @@ def init_mintlayer_types():
                 ]
             },
 
+            "PoSData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["kernel_inputs", "Vec<TxInput>"],
+                    ["kernel_witness", "Vec<InputWitness>"],
+                    ["stake_pool_id", "PoolId"],
+                    ["vrf_data", "VRFReturn"],
+                    ["compact_target", "u32"],
+                ]
+            },
+
+            "VRFReturn": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Schnorrkel", "(SchnorrkelVRFReturn)"],
+                ],
+            },
+
+            "SchnorrkelVRFReturn": {
+                "type": "struct",
+                "type_mapping": [
+                    ["preout", "[u8; 32]"],
+                    ["proof", "[u8; 64]"],
+                ],
+            },
+
+            "BlockIdAtHeight": "H256",
+
+            "BlockBody": {
+                "type": "struct",
+                "type_mapping": [
+                    ["reward", "BlockReward"],
+                    ["transactions", "Vec<SignedTransaction>"],
+                ],
+            },
+
+            "BlockReward": {
+                "type": "struct",
+                "type_mapping": [
+                    ["reward_outputs", "Vec<TxOutput>"],
+                ],
+            },
+
+
+            "Block": {
+                "type": "enum",
+                "type_mapping": [
+                    ["V1", "(BlockV1)"],
+                ],
+            },
+
             "BlockV1": {
                 "type": "struct",
                 "type_mapping": [
                     ["header", "SignedBlockHeader"],
-                    ["reward", "Vec<TxOutput>"],
-                    ["transactions", "Vec<SignedTransaction>"],
+                    ["body", "BlockBody"],
                 ]
             },
 
@@ -315,8 +412,8 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["None", "()"],
-                    ["PoW", "Box<PoWGenerateBlockInputData>"],
-                    ["PoS", "Box<PoSGenerateBlockInputData>"]
+                    ["PoW", "PoWGenerateBlockInputData"],
+                    ["PoS", "PoSGenerateBlockInputData"]
                 ]
             },
 
