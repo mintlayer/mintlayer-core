@@ -160,7 +160,7 @@ impl MempoolInterface for Mempool {
     }
 
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
-        self.current_fee_rate(in_top_x_mb).map_err(Error::Policy)
+        self.get_fee_rate(in_top_x_mb).map_err(Error::Policy)
     }
 }
 

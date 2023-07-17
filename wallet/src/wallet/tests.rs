@@ -64,10 +64,10 @@ fn gen_random_transfer(rng: &mut (impl Rng + CryptoRng), amount: Amount) -> TxOu
     match rng.gen::<bool>() {
         true => TxOutput::Transfer(OutputValue::Coin(amount), destination),
         false => {
-            let lock_for_blocks = rng.gen::<u32>() as u64;
-            let current_block_height = BlockHeight::new(rng.gen::<u32>() as u64);
-            let seconds_between_blocks = rng.gen::<u32>() as u64;
-            let current_timestamp = BlockTimestamp::from_int_seconds(rng.gen::<u32>() as u64);
+            let lock_for_blocks = rng.gen_range(0..1000);
+            let current_block_height = BlockHeight::new(rng.gen_range(0..1000));
+            let seconds_between_blocks = rng.gen_range(1..1000);
+            let current_timestamp = BlockTimestamp::from_int_seconds(rng.gen_range(0..1000));
             gen_random_lock_then_transfer(
                 rng,
                 amount,

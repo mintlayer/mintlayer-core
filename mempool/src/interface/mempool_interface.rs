@@ -69,7 +69,8 @@ pub trait MempoolInterface: Send + Sync {
     /// Set the maximum mempool size
     fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
 
-    /// Get current fee rate
+    /// Get the fee rate such that it would put the new transaction in the top X MB of the mempool
+    /// making it less likely to get rejected or trimmed in the case the mempool is full
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error>;
 }
 

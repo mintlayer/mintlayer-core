@@ -285,7 +285,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        let long_term_fee_rate = current_fee_rate;
+        let consolidate_fee_rate = current_fee_rate;
 
         let tx = self
             .wallet
@@ -293,7 +293,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 account_index,
                 [output],
                 current_fee_rate,
-                long_term_fee_rate,
+                consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
@@ -314,7 +314,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        let long_term_fee_rate = current_fee_rate;
+        let consolidate_fee_rate = current_fee_rate;
         let tx = self
             .wallet
             .create_stake_pool_tx(
@@ -322,7 +322,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 amount,
                 decomission_key,
                 current_fee_rate,
-                long_term_fee_rate,
+                consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client

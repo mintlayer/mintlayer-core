@@ -1032,7 +1032,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         self.events_controller.broadcast(event.into());
     }
 
-    pub fn current_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
+    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
         let mut total_size = 0;
         self.store
             .txs_by_descendant_score
@@ -1043,14 +1043,20 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     .iter()
                     .map(|tx_id| self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size()))
                     .sum::<usize>();
-                (total_size / 1000000) >= in_top_x_mb
+                (total_size / 1_000_000) >= in_top_x_mb
             })
             .map_or_else(
                 || Ok(self.rolling_fee_rate.read().rolling_minimum_fee_rate()),
                 |(score, _txs)| {
                     (Amount::from_atoms(score.into_atoms()) * 1000)
-                        .map(FeeRate::new)
                         .ok_or(MempoolPolicyError::FeeOverflow)
+                        .map(|amount| {
+                            let feerate = FeeRate::new(amount);
+                            std::cmp::max(
+                                feerate,
+                                self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+                            )
+                        })
                 },
             )
     }
