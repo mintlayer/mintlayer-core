@@ -14,10 +14,13 @@
 // limitations under the License.
 
 pub use crate::chain::mlt::Mlt;
-use crate::primitives::BlockHeight;
+use crate::primitives::{Amount, BlockHeight};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::Duration;
+
+// The initial supply that will be handed in the genesis block (besides the emission schedule)
+pub const DEFAULT_INITIAL_MINT: Amount = Amount::from_atoms(100_000_000 * Mlt::ATOMS_PER_MLT);
 
 /// Internal emission schedule representation
 pub type EmissionScheduleFn = dyn Fn(BlockHeight) -> Mlt + Sync + Send + 'static;

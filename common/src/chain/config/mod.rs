@@ -42,6 +42,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use self::checkpoints::Checkpoints;
+use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
@@ -468,7 +469,7 @@ fn create_mainnet_genesis() -> Genesis {
 
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000)),
+        OutputValue::Coin(DEFAULT_INITIAL_MINT),
         genesis_mint_destination,
     );
 
@@ -480,7 +481,9 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    let total_amount = Amount::from_atoms(100_000_000 * Mlt::ATOMS_PER_MLT);
+    // We add 3_600_000_000 MLT to the genesis mint account since it's just for testing. Nothing else changes.
+    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * Mlt::ATOMS_PER_MLT);
+    let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
 
@@ -583,10 +586,8 @@ pub fn create_regtest_pos_genesis(premine_destination: Destination) -> Genesis {
     let create_genesis_pool_txoutput =
         TxOutput::CreateStakePool(genesis_pool_id, genesis_stake_pool_data);
 
-    let premine_output = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000_000_000)),
-        premine_destination,
-    );
+    let premine_output =
+        TxOutput::Transfer(OutputValue::Coin(DEFAULT_INITIAL_MINT), premine_destination);
 
     Genesis::new(
         String::new(),
@@ -598,10 +599,7 @@ pub fn create_regtest_pos_genesis(premine_destination: Destination) -> Genesis {
 fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
     let genesis_message = String::new();
 
-    let output = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000_000_000)),
-        premine_destination,
-    );
+    let output = TxOutput::Transfer(OutputValue::Coin(DEFAULT_INITIAL_MINT), premine_destination);
 
     Genesis::new(
         genesis_message,
