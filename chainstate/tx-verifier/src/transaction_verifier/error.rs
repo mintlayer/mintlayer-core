@@ -121,6 +121,8 @@ pub enum ConnectTransactionError {
         "Reward in block {0} for owner of the pool {1} which is {2:?} cannot be bigger than total reward {3:?}"
     )]
     PoolOwnerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    #[error("Unexpected pool id in kernel {0} doesn't match pool id {1}")]
+    UnexpectedPoolId(PoolId, PoolId),
     #[error("Failed to sum block {0} reward for pool {1} delegations")]
     DelegationsRewardSumFailed(Id<Block>, PoolId),
     #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
@@ -280,7 +282,7 @@ pub enum SpendStakeError {
     InvalidBlockRewardOutputType,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
-    #[error("Pool id in kernel {0} doesn't match id in block reward output {1}")]
+    #[error("Pool id in kernel {0} doesn't match the expected pool id {1}")]
     StakePoolIdMismatch(PoolId, PoolId),
     #[error("Consensus PoS error: {0}")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),
