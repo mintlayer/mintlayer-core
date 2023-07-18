@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use iced::{
-    widget::{Column, Container, Radio, Text},
-    Command, Element,
+    widget::{column, Column, Container, Radio, Text},
+    Command, Element, Length,
 };
 use iced_aw::tab_bar::TabLabel;
 
@@ -116,6 +116,11 @@ impl Tab for SettingsTab {
         )
         .into();
 
-        content.map(TabsMessage::Settings)
+        column![content.map(TabsMessage::Settings)]
+            .padding(10)
+            .spacing(15)
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .into()
     }
 }

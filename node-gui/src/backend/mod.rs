@@ -33,6 +33,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use utils::tap_error_log::LogError;
 use wallet::account::transaction_list::TransactionList;
+use wallet::account::Currency;
 use wallet::DefaultWallet;
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
 
@@ -76,6 +77,10 @@ struct WalletData {
 
 struct AccountData {
     transaction_list_skip: usize,
+
+    /// If set, pool balances should be updated in the UI.
+    /// This is necessary because the pool balances load requres RPC call and may fail.
+    update_pool_balance: bool,
 }
 
 struct Backend {
@@ -149,7 +154,17 @@ impl Backend {
     fn get_account_data(_controller: &HandlesController, _account_index: U31) -> AccountData {
         AccountData {
             transaction_list_skip: 0,
+            update_pool_balance: true,
         }
+    }
+
+    fn get_account_balance(
+        controller: &HandlesController,
+        account_index: U31,
+    ) -> BTreeMap<Currency, Amount> {
+        controller
+            .get_balance(account_index, UtxoState::Confirmed.into())
+            .expect("get_balance should not fail normally")
     }
 
     fn get_account_info(controller: &HandlesController, account_index: U31) -> AccountInfo {
@@ -167,7 +182,7 @@ impl Backend {
                 .get_all_issued_addresses(account_index)
                 .expect("get_all_issued_addresses should not fail normally"),
             staking_enabled: false,
-            balance: BTreeMap::new(),
+            balance: Self::get_account_balance(controller, account_index),
             staking_balance: BTreeMap::new(),
             transaction_list,
         }
@@ -535,44 +550,21 @@ impl Backend {
             }
 
             for (account_id, account_data) in wallet_data.accounts.iter_mut() {
-                // GuiWalletEvents will notify about wallet balance update (when a wallet transaction is added/updated/removed)
-                let balance_res = wallet_data
-                    .controller
-                    .get_balance(account_id.account_index(), UtxoState::Confirmed.into());
-                match balance_res {
-                    Ok(balance) => {
-                        Self::send_event(
-                            &self.event_tx,
-                            BackendEvent::Balance(*wallet_id, *account_id, balance.clone()),
-                        );
-                    }
-                    Err(err) => {
-                        log::error!("Balance check failed: {err}");
-                    }
-                }
+                // GuiWalletEvents will notify about wallet balance update
+                // (when a wallet transaction is added/updated/removed)
+                let balance =
+                    Self::get_account_balance(&wallet_data.controller, account_id.account_index());
+                Self::send_event(
+                    &self.event_tx,
+                    BackendEvent::Balance(*wallet_id, *account_id, balance),
+                );
 
-                // GuiWalletEvents will notify about stake pool balance update (when a new wallet block is added/removed from the DB)
-                let staking_balance_res = wallet_data
-                    .controller
-                    .get_stake_pool_balances(account_id.account_index())
-                    .await;
-                match staking_balance_res {
-                    Ok(staking_balance) => {
-                        Self::send_event(
-                            &self.event_tx,
-                            BackendEvent::StakingBalance(
-                                *wallet_id,
-                                *account_id,
-                                staking_balance.clone(),
-                            ),
-                        );
-                    }
-                    Err(err) => {
-                        log::error!("Staking balance check failed: {err}");
-                    }
-                }
+                // GuiWalletEvents will notify about stake pool balance update
+                // (when a new wallet block is added/removed from the DB)
+                account_data.update_pool_balance = true;
 
-                // GuiWalletEvents will notify about transaction list (when a wallet transaction is added/updated/removed)
+                // GuiWalletEvents will notify about transaction list
+                // (when a wallet transaction is added/updated/removed)
                 let transaction_list = wallet_data
                     .controller
                     .get_transaction_list(
@@ -585,6 +577,33 @@ impl Backend {
                     &self.event_tx,
                     BackendEvent::TransactionList(*wallet_id, *account_id, transaction_list),
                 );
+            }
+        }
+
+        for (wallet_id, wallet_data) in self.wallets.iter_mut() {
+            for (account_id, account_data) in wallet_data.accounts.iter_mut() {
+                if account_data.update_pool_balance {
+                    let staking_balance_res = wallet_data
+                        .controller
+                        .get_stake_pool_balances(account_id.account_index())
+                        .await;
+                    match staking_balance_res {
+                        Ok(staking_balance) => {
+                            Self::send_event(
+                                &self.event_tx,
+                                BackendEvent::StakingBalance(
+                                    *wallet_id,
+                                    *account_id,
+                                    staking_balance.clone(),
+                                ),
+                            );
+                            account_data.update_pool_balance = false;
+                        }
+                        Err(err) => {
+                            log::error!("Staking balance loading failed: {err}");
+                        }
+                    }
+                }
             }
         }
     }

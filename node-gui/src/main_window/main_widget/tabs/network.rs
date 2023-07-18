@@ -16,8 +16,8 @@
 use std::fmt::Debug;
 
 use iced::{
-    widget::{container, Column, Text},
-    Command, Element,
+    widget::{column, container, Text},
+    Command, Element, Length,
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
 
@@ -70,11 +70,11 @@ impl Tab for NetworkTab {
                 .push(field(peer.version.to_string()));
         }
 
-        Column::new()
+        column![peers]
+            .padding(10)
             .spacing(15)
-            .max_width(600)
-            .align_items(iced::Alignment::Center)
-            .push(peers)
+            .height(Length::Fill)
+            .width(Length::Fill)
             .into()
     }
 }

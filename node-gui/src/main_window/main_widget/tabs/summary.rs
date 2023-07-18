@@ -16,8 +16,8 @@
 use std::fmt::Debug;
 
 use iced::{
-    widget::{Column, Text},
-    Command, Element,
+    widget::{column, Text},
+    Command, Element, Length,
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
 
@@ -60,11 +60,11 @@ impl Tab for SummaryTab {
             .push(Text::new("Best block height "))
             .push(Text::new(node_state.best_block_height.to_string()));
 
-        Column::new()
+        column![chainstate]
+            .padding(10)
             .spacing(15)
-            .max_width(600)
-            .align_items(iced::Alignment::Center)
-            .push(chainstate)
+            .height(Length::Fill)
+            .width(Length::Fill)
             .into()
     }
 }

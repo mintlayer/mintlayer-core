@@ -151,7 +151,7 @@ trait Tab {
     fn tab_label(&self) -> TabLabel;
 
     fn view(&self, node_state: &NodeState) -> Element<Self::Message> {
-        self.content(node_state).into()
+        self.content(node_state)
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message>;
