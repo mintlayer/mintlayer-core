@@ -47,7 +47,6 @@ use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunct
 use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use test_rpc_functions::make_rpc_test_functions;
-use tokio::sync::oneshot;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
@@ -60,6 +59,7 @@ use crate::{
 
 pub struct Node {
     manager: subsystem::Manager,
+    controller: NodeController,
     lock_file: File,
 }
 
@@ -68,6 +68,10 @@ impl Node {
         self.manager.main().await;
         drop(self.lock_file);
     }
+
+    pub fn controller(&self) -> &NodeController {
+        &self.controller
+    }
 }
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
@@ -75,8 +79,7 @@ async fn initialize(
     chain_config: ChainConfig,
     data_dir: PathBuf,
     node_config: NodeConfigFile,
-    node_controller: Option<oneshot::Sender<NodeController>>,
-) -> Result<subsystem::Manager> {
+) -> Result<(subsystem::Manager, NodeController)> {
     let chain_config = Arc::new(chain_config);
 
     // INITIALIZE SUBSYSTEMS
@@ -147,8 +150,6 @@ async fn initialize(
 
     // RPC subsystem
     let rpc_config = node_config.rpc.unwrap_or_default();
-    let rpc_http_address;
-    let rpc_websocket_address;
     if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
@@ -169,39 +170,22 @@ async fn initialize(
             .register(rpc_test_functions.into_rpc())
             .build();
         let rpc = rpc.await?;
-        rpc_http_address = rpc.http_address().cloned();
-        rpc_websocket_address = rpc.websocket_address().cloned();
         let _rpc = manager.add_subsystem("rpc", rpc);
-    } else {
-        rpc_http_address = None;
-        rpc_websocket_address = None;
     };
 
-    if let Some(sender) = node_controller {
-        let runtime_info = crate::node_controller::RuntimeInfo {
-            rpc_http_address,
-            rpc_websocket_address,
-        };
+    let controller = NodeController {
+        shutdown_trigger: manager.make_shutdown_trigger(),
+        chainstate: chainstate.clone(),
+        block_prod: block_prod.clone(),
+        mempool: mempool.clone(),
+        p2p: p2p.clone(),
+    };
 
-        let controller = NodeController {
-            shutdown_trigger: manager.make_shutdown_trigger(),
-            chainstate: chainstate.clone(),
-            block_prod: block_prod.clone(),
-            mempool: mempool.clone(),
-            p2p: p2p.clone(),
-            runtime_info,
-        };
-        sender.send(controller).expect("RemoteController channel closed");
-    }
-
-    Ok(manager)
+    Ok((manager, controller))
 }
 
 /// Processes options and potentially runs the node.
-pub async fn setup(
-    options: Options,
-    node_controller_sender: Option<oneshot::Sender<NodeController>>,
-) -> Result<Node> {
+pub async fn setup(options: Options) -> Result<Node> {
     let command = options.command.clone().unwrap_or(Command::Testnet(RunOptions::default()));
     match command {
         Command::Mainnet(ref run_options) => {
@@ -211,7 +195,6 @@ pub async fn setup(
                 &options.data_dir,
                 run_options,
                 chain_config,
-                node_controller_sender,
             )
             .await
         }
@@ -222,7 +205,6 @@ pub async fn setup(
                 &options.data_dir,
                 run_options,
                 chain_config,
-                node_controller_sender,
             )
             .await
         }
@@ -233,7 +215,6 @@ pub async fn setup(
                 &options.data_dir,
                 &regtest_options.run_options,
                 chain_config,
-                node_controller_sender,
             )
             .await
         }
@@ -255,7 +236,6 @@ async fn start(
     datadir_path_opt: &Option<PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
-    node_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<Node> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
@@ -272,10 +252,13 @@ async fn start(
     let lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let manager: subsystem::Manager =
-        initialize(chain_config, data_dir, node_config, node_controller_sender).await?;
+    let (manager, controller) = initialize(chain_config, data_dir, node_config).await?;
 
-    Ok(Node { manager, lock_file })
+    Ok(Node {
+        manager,
+        controller,
+        lock_file,
+    })
 }
 
 fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {

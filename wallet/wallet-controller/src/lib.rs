@@ -22,7 +22,7 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -32,23 +32,33 @@ use utils::tap_error_log::LogError;
 
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
+    },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
-    key::{hdkd::u31::U31, PublicKey},
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PublicKey,
+    },
     vrf::VRFPublicKey,
 };
 use futures::stream::FuturesUnordered;
 use futures::TryStreamExt;
 use logging::log;
-use mempool_types::TxStatus;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use wallet::{account::Currency, send_request::make_address_output, DefaultWallet};
+use wallet::{
+    account::{transaction_list::TransactionList, Currency},
+    send_request::make_address_output,
+    wallet_events::WalletEvents,
+    DefaultWallet,
+};
 use wallet_types::BlockInfo;
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -69,14 +79,20 @@ pub enum ControllerError<T: NodeInterface> {
     WalletError(wallet::wallet::WalletError),
 }
 
-pub struct Controller<T: NodeInterface> {
+pub struct Controller<T> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
 
     wallet: DefaultWallet,
 
-    staking_started: Option<U31>,
+    staking_started: BTreeSet<U31>,
+}
+
+impl<T> std::fmt::Debug for Controller<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Controller").finish()
+    }
 }
 
 pub type RpcController = Controller<NodeRpcClient>;
@@ -88,7 +104,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             chain_config,
             rpc_client,
             wallet,
-            staking_started: None,
+            staking_started: BTreeSet::new(),
         }
     }
 
@@ -174,6 +190,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
+    pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {
+        self.wallet.account_names()
+    }
+
     pub fn get_balance(
         &self,
         account_index: U31,
@@ -218,7 +238,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_address(&mut self, account_index: U31) -> Result<Address, ControllerError<T>> {
+    pub fn new_address(
+        &mut self,
+        account_index: U31,
+    ) -> Result<(ChildNumber, Address), ControllerError<T>> {
         self.wallet.get_new_address(account_index).map_err(ControllerError::WalletError)
     }
 
@@ -271,37 +294,29 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub async fn send_to_address(
+    pub fn send_to_address(
         &mut self,
         account_index: U31,
         address: Address,
         amount: Amount,
-    ) -> Result<TxStatus, ControllerError<T>> {
+        wallet_events: &mut impl WalletEvents,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
         let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
-        let tx = self
-            .wallet
-            .create_transaction_to_addresses(account_index, [output])
-            .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
+        self.wallet
+            .create_transaction_to_addresses(account_index, [output], wallet_events)
+            .map_err(ControllerError::WalletError)
     }
 
-    pub async fn create_stake_pool_tx(
+    pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-    ) -> Result<TxStatus, ControllerError<T>> {
-        let tx = self
-            .wallet
-            .create_stake_pool_tx(account_index, amount, decomission_key)
-            .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
+        wallet_events: &mut impl WalletEvents,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.wallet
+            .create_stake_pool_tx(account_index, amount, decomission_key, wallet_events)
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn generate_block(
@@ -328,16 +343,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         &mut self,
         account_index: U31,
         count: u32,
+        wallet_events: &mut impl WalletEvents,
     ) -> Result<(), ControllerError<T>> {
         for _ in 0..count {
-            self.sync_once().await?;
+            self.sync_once(wallet_events).await?;
             let block = self.generate_block(account_index, None).await?;
             self.rpc_client
                 .submit_block(block)
                 .await
                 .map_err(ControllerError::NodeCallError)?;
         }
-        self.sync_once().await
+        self.sync_once(wallet_events).await
     }
 
     pub fn create_account(
@@ -347,27 +363,99 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.create_account(name).map_err(ControllerError::WalletError)
     }
 
+    pub fn get_transaction_list(
+        &self,
+        account_index: U31,
+        skip: usize,
+        count: usize,
+    ) -> Result<TransactionList, ControllerError<T>> {
+        self.wallet
+            .get_transaction_list(account_index, skip, count)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
-        self.staking_started = Some(account_index);
+        self.staking_started.insert(account_index);
         Ok(())
     }
 
-    pub fn stop_staking(&mut self) -> Result<(), ControllerError<T>> {
-        self.staking_started = None;
+    pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        self.staking_started.remove(&account_index);
         Ok(())
+    }
+
+    /// Wallet sync progress
+    pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
+        self.wallet
+            .get_best_block_for_unsynced_account()
+            .unwrap_or_else(|| self.wallet.get_best_block())
+    }
+
+    pub async fn get_stake_pool_balances(
+        &self,
+        account_index: U31,
+    ) -> Result<BTreeMap<PoolId, Amount>, ControllerError<T>> {
+        let stake_pool_utxos = self
+            .wallet
+            .get_utxos(
+                account_index,
+                UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
+                UtxoState::Confirmed.into(),
+            )
+            .map_err(ControllerError::WalletError)?;
+        let pool_ids = stake_pool_utxos.values().filter_map(|utxo| match utxo {
+            TxOutput::ProduceBlockFromStake(_, pool_id) | TxOutput::CreateStakePool(pool_id, _) => {
+                Some(pool_id)
+            }
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => None,
+        });
+        let mut balances = BTreeMap::new();
+        for pool_id in pool_ids {
+            let balance_opt = self
+                .rpc_client
+                .get_stake_pool_balance(*pool_id)
+                .await
+                .map_err(ControllerError::NodeCallError)?;
+            if let Some(balance) = balance_opt {
+                balances.insert(*pool_id, balance);
+            }
+        }
+        Ok(balances)
+    }
+
+    pub fn get_all_issued_addresses(
+        &self,
+        account_index: U31,
+    ) -> Result<BTreeMap<ChildNumber, Address>, ControllerError<T>> {
+        self.wallet
+            .get_all_issued_addresses(account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     /// Synchronize the wallet to the current node tip height and return
-    pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
-        sync::sync_once(&self.chain_config, &self.rpc_client, &mut self.wallet).await?;
+    pub async fn sync_once(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+    ) -> Result<(), ControllerError<T>> {
+        sync::sync_once(
+            &self.chain_config,
+            &self.rpc_client,
+            &mut self.wallet,
+            wallet_events,
+        )
+        .await?;
         Ok(())
     }
 
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self, wallet_events: &mut impl WalletEvents) {
         loop {
-            let sync_res = self.sync_once().await;
+            let sync_res = self.sync_once(wallet_events).await;
 
             if let Err(e) = sync_res {
                 log::error!("Wallet sync error: {e}");
@@ -375,8 +463,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 continue;
             }
 
-            if let Some(account_index) = self.staking_started {
-                let generate_res = self.generate_block(account_index, None).await;
+            for account_index in self.staking_started.clone().iter() {
+                let generate_res = self.generate_block(*account_index, None).await;
 
                 if let Ok(block) = generate_res {
                     log::info!(

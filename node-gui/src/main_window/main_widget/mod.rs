@@ -13,15 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tabs;
+pub mod tabs;
 
 use iced::{Command, Element};
 
-use crate::backend_controller::NodeBackendController;
+use crate::backend::{messages::WalletId, BackendSender};
+
+use super::NodeState;
 
 #[derive(Debug, Clone)]
 pub enum MainWidgetMessage {
-    Start,
+    WalletAdded(WalletId),
+    WalletRemoved(WalletId),
     TabsMessage(tabs::TabsMessage),
 }
 
@@ -30,31 +33,32 @@ pub struct MainWidget {
 }
 
 impl MainWidget {
-    pub fn new(backend_controller: NodeBackendController) -> Self {
+    pub fn new() -> Self {
         Self {
-            tabs: tabs::TabsWidget::new(backend_controller),
+            tabs: tabs::TabsWidget::new(),
         }
     }
 
-    pub fn start() -> impl IntoIterator<Item = Command<MainWidgetMessage>> {
-        [iced::Command::perform(async {}, |_| {
-            MainWidgetMessage::TabsMessage(tabs::TabsMessage::Start)
-        })]
-    }
-
-    pub fn update(&mut self, msg: MainWidgetMessage) -> Command<MainWidgetMessage> {
+    pub fn update(
+        &mut self,
+        msg: MainWidgetMessage,
+        backend_sender: &BackendSender,
+    ) -> Command<MainWidgetMessage> {
         match msg {
-            MainWidgetMessage::Start => iced::Command::batch(Self::start()),
-            MainWidgetMessage::TabsMessage(tabs_message) => {
-                self.tabs.update(tabs_message).map(MainWidgetMessage::TabsMessage)
-            }
+            MainWidgetMessage::WalletAdded(wallet_id) => Command::perform(async {}, move |_| {
+                MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletAdded(wallet_id))
+            }),
+            MainWidgetMessage::WalletRemoved(wallet_id) => Command::perform(async {}, move |_| {
+                MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletRemoved(wallet_id))
+            }),
+            MainWidgetMessage::TabsMessage(tabs_message) => self
+                .tabs
+                .update(tabs_message, backend_sender)
+                .map(MainWidgetMessage::TabsMessage),
         }
     }
 
-    pub fn view(
-        &self,
-        backend_controller: &NodeBackendController,
-    ) -> Element<'_, MainWidgetMessage, iced::Renderer> {
-        self.tabs.view(backend_controller).map(MainWidgetMessage::TabsMessage)
+    pub fn view(&self, node_state: &NodeState) -> Element<MainWidgetMessage> {
+        self.tabs.view(node_state).map(MainWidgetMessage::TabsMessage)
     }
 }

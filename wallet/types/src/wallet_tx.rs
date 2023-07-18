@@ -83,7 +83,7 @@ pub struct TxData {
 /// Spent outputs are found by looking at all locally stored transactions
 /// and blocks. In case of reorg, top blocks are simply removed from the DB.
 /// We use the same approach as the Bitcoin Core wallet, but unlike Bitcoin
-/// we don't have coinbase transactions, so the additional `OwnedBlockRewardData`
+/// we don't have coinbase transactions, so the additional `BlockData`
 /// struct is invented here.
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct BlockData {

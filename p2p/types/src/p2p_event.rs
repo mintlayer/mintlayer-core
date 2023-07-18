@@ -15,12 +15,21 @@
 
 use std::sync::Arc;
 
+use common::primitives::{semver::SemVer, user_agent::UserAgent};
+
 use crate::{peer_id::PeerId, services::Services};
 
 pub type P2pEventHandler = Arc<dyn Fn(P2pEvent) + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum P2pEvent {
-    PeerConnected { id: PeerId, services: Services },
+    PeerConnected {
+        id: PeerId,
+        services: Services,
+        address: String,
+        inbound: bool,
+        user_agent: UserAgent,
+        version: SemVer,
+    },
     PeerDisconnected(PeerId),
 }

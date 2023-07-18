@@ -19,7 +19,9 @@ use iced::{
 };
 use iced_aw::tab_bar::TabLabel;
 
-use super::{Icon, Tab, TabsMessage};
+use crate::main_window::NodeState;
+
+use super::{Tab, TabsMessage};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TabBarPosition {
     #[default]
@@ -54,7 +56,6 @@ impl TabSettings {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
-    Start,
     PositionSelected(TabBarPosition),
 }
 
@@ -73,13 +74,8 @@ impl SettingsTab {
         &self.settings
     }
 
-    pub fn start() -> impl IntoIterator<Item = Command<SettingsMessage>> {
-        []
-    }
-
     pub fn update(&mut self, message: SettingsMessage) -> Command<SettingsMessage> {
         match message {
-            SettingsMessage::Start => iced::Command::batch(Self::start()),
             SettingsMessage::PositionSelected(position) => {
                 self.settings.tab_bar_position = Some(position);
                 Command::none()
@@ -96,12 +92,11 @@ impl Tab for SettingsTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        // TabLabel::Text(self.title())
-        TabLabel::IconText(Icon::CogAlt.into(), self.title())
+        TabLabel::IconText(iced_aw::Icon::Gear.into(), self.title())
     }
 
-    fn content(&self) -> Element<'_, Self::Message> {
-        let content: Element<'_, SettingsMessage> = Container::new(
+    fn content(&self, _node_state: &NodeState) -> Element<Self::Message> {
+        let content: Element<SettingsMessage> = Container::new(
             Column::new().push(Text::new("Tabs position").size(20)).push(
                 TabBarPosition::ALL.iter().cloned().fold(
                     Column::new().padding(10).spacing(10),

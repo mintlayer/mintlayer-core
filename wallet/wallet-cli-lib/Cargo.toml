@@ -17,6 +17,7 @@ utils = { path = "../../utils" }
 wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
+wallet-types = { path = "../types" }
 
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,19 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub async fn run() -> anyhow::Result<()> {
-    let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
-    logging::log::info!("Command line options: {opts:?}");
-    let node = node_lib::setup(opts).await?;
-    node.main().await;
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() {
-    run().await.unwrap_or_else(|err| {
-        eprintln!("Mintlayer node launch failed: {err:?}");
-        std::process::exit(1)
-    })
-}
+pub mod popup_dialog;
+pub mod wallet_mnemonic;
+pub mod wallet_set_password;
+pub mod wallet_unlock;

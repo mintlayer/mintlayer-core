@@ -60,7 +60,7 @@ fn account_addresses() {
 
     let mut db_tx = db.transaction_rw(None).unwrap();
     for (purpose, address_str) in test_vec {
-        let address = account.get_new_address(&mut db_tx, purpose).unwrap();
+        let address = account.get_new_address(&mut db_tx, purpose).unwrap().1;
         assert_eq!(address.get(), address_str);
     }
 }
@@ -138,8 +138,10 @@ fn sign_transaction(#[case] seed: Seed) {
             TxOutput::Transfer(
                 OutputValue::Coin(*a),
                 Destination::Address(
-                    PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, purpose).unwrap())
-                        .unwrap(),
+                    PublicKeyHash::try_from(
+                        &account.get_new_address(&mut db_tx, purpose).unwrap().1,
+                    )
+                    .unwrap(),
                 ),
             )
         })
@@ -182,7 +184,7 @@ fn sign_transaction(#[case] seed: Seed) {
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
             Destination::Address(
-                PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, Change).unwrap())
+                PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, Change).unwrap().1)
                     .unwrap(),
             ),
         ),

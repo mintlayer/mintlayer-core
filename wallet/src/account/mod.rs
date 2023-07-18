@@ -14,16 +14,19 @@
 // limitations under the License.
 
 mod output_cache;
+pub mod transaction_list;
 mod utxo_selector;
 
 use common::chain::block::timestamp::BlockTimestamp;
 use common::primitives::id::WithId;
 use common::Uint256;
+use crypto::key::hdkd::child_number::ChildNumber;
 pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{make_address_output, make_address_output_token, make_stake_output};
+use crate::wallet_events::{WalletEvents, WalletEventsNop};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -54,6 +57,7 @@ use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
 
 use self::output_cache::OutputCache;
+use self::transaction_list::{get_transaction_list, TransactionList};
 use self::utxo_selector::PayFee;
 
 pub struct Account {
@@ -115,7 +119,7 @@ impl Account {
             account_info,
         };
 
-        account.scan_genesis(db_tx)?;
+        account.scan_genesis(db_tx, &mut WalletEventsNop)?;
 
         Ok(account)
     }
@@ -232,7 +236,7 @@ impl Account {
             let change_amount = (input_amount - output_amount)
                 .ok_or(WalletError::NotEnoughUtxo(input_amount, output_amount))?;
             if change_amount > Amount::ZERO {
-                let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
+                let (_, change_address) = self.get_new_address(db_tx, KeyPurpose::Change)?;
                 let change_output = match currency {
                     Currency::Coin => make_address_output(change_address, change_amount)?,
                     Currency::Token(token_id) => {
@@ -460,7 +464,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
-    ) -> WalletResult<Address> {
+    ) -> WalletResult<(ChildNumber, Address)> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
@@ -471,6 +475,10 @@ impl Account {
         purpose: KeyPurpose,
     ) -> WalletResult<PublicKey> {
         Ok(self.key_chain.issue_key(db_tx, purpose)?.into_public_key())
+    }
+
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+        self.key_chain.get_all_issued_addresses()
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
@@ -573,9 +581,14 @@ impl Account {
         all_outputs
     }
 
+    pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {
+        get_transaction_list(&self.key_chain, &self.output_cache, skip, count)
+    }
+
     fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
+        wallet_events: &mut impl WalletEvents,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
         let revoked_txs = self
@@ -598,6 +611,7 @@ impl Account {
 
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
+            wallet_events.del_transaction(&tx_id);
             self.output_cache.remove_tx(&tx_id.into_item_id());
         }
 
@@ -609,6 +623,7 @@ impl Account {
     fn add_wallet_tx_if_relevant(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &mut impl WalletEvents,
         tx: WalletTx,
     ) -> WalletResult<bool> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
@@ -622,6 +637,7 @@ impl Account {
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
+            wallet_events.set_transaction(&id, &tx);
             self.output_cache.add_tx(id.into_item_id(), tx);
             Ok(true)
         } else {
@@ -629,11 +645,15 @@ impl Account {
         }
     }
 
-    fn scan_genesis(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> WalletResult<()> {
+    fn scan_genesis(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &mut impl WalletEvents,
+    ) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
         let block = BlockData::from_genesis(chain_config.genesis_block());
-        self.add_wallet_tx_if_relevant(db_tx, WalletTx::Block(block))?;
+        self.add_wallet_tx_if_relevant(db_tx, wallet_events, WalletTx::Block(block))?;
 
         Ok(())
     }
@@ -641,6 +661,7 @@ impl Account {
     pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
+        wallet_events: &mut impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
@@ -653,7 +674,7 @@ impl Account {
         );
 
         if self.account_info.best_block_height() > common_block_height {
-            self.reset_to_height(db_tx, common_block_height)?;
+            self.reset_to_height(db_tx, wallet_events, common_block_height)?;
         }
 
         for (index, block) in blocks.iter().enumerate() {
@@ -661,14 +682,14 @@ impl Account {
             let tx_state = TxState::Confirmed(block_height, block.timestamp());
 
             let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
-            self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
+            self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
 
             for signed_tx in block.transactions() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
                     tx_state,
                 ));
-                self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
+                self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
             }
         }
 
@@ -687,6 +708,7 @@ impl Account {
         transactions: &[SignedTransaction],
         tx_state: TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
 
@@ -696,7 +718,7 @@ impl Account {
                 tx_state,
             ));
 
-            if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
+            if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                 not_added.push(signed_tx);
             }
         }
@@ -711,7 +733,7 @@ impl Account {
                     tx_state,
                 ));
 
-                if !self.add_wallet_tx_if_relevant(db_tx, wallet_tx)? {
+                if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                     not_added_next.push(*signed_tx);
                 }
             }

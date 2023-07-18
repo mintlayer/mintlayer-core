@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub async fn run() -> anyhow::Result<()> {
-    let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
-    logging::log::info!("Command line options: {opts:?}");
-    let node = node_lib::setup(opts).await?;
-    node.main().await;
-    Ok(())
+use wallet_types::{AccountWalletTxId, WalletTx};
+
+pub trait WalletEvents {
+    fn new_block(&mut self);
+    fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx);
+    fn del_transaction(&mut self, id: &AccountWalletTxId);
 }
 
-#[tokio::main]
-async fn main() {
-    run().await.unwrap_or_else(|err| {
-        eprintln!("Mintlayer node launch failed: {err:?}");
-        std::process::exit(1)
-    })
+pub struct WalletEventsNop;
+
+impl WalletEvents for WalletEventsNop {
+    fn new_block(&mut self) {}
+    fn set_transaction(&mut self, _id: &AccountWalletTxId, _tx: &WalletTx) {}
+    fn del_transaction(&mut self, _id: &AccountWalletTxId) {}
 }

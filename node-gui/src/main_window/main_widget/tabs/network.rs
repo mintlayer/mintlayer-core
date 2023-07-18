@@ -16,7 +16,7 @@
 use std::fmt::Debug;
 
 use iced::{
-    widget::{Column, Text},
+    widget::{container, Column, Text},
     Command, Element,
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
@@ -25,46 +25,56 @@ use crate::main_window::NodeState;
 
 use super::{Tab, TabsMessage};
 
-use serialization::hex::HexEncode;
-
 #[derive(Debug, Clone)]
-pub enum SummaryMessage {}
+pub enum NetworkMessage {}
 
-pub struct SummaryTab {}
+pub struct NetworkTab {}
 
-impl SummaryTab {
+impl NetworkTab {
     pub fn new() -> Self {
-        SummaryTab {}
+        NetworkTab {}
     }
 
-    pub fn update(&mut self, message: SummaryMessage) -> Command<SummaryMessage> {
+    pub fn update(&mut self, message: NetworkMessage) -> Command<NetworkMessage> {
         match message {}
     }
 }
 
-impl Tab for SummaryTab {
+impl Tab for NetworkTab {
     type Message = TabsMessage;
 
     fn title(&self) -> String {
-        String::from("Summary")
+        String::from("Network")
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Icon::Info.into(), self.title())
+        TabLabel::IconText(iced_aw::Icon::Wifi.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
-        let chainstate = Grid::with_columns(2)
-            .push(Text::new("Best block id "))
-            .push(Text::new(node_state.best_block_id.hex_encode()))
-            .push(Text::new("Best block height "))
-            .push(Text::new(node_state.best_block_height.to_string()));
+        let header = |text: &'static str| container(Text::new(text)).padding(5);
+        let field = |text: String| container(Text::new(text)).padding(5);
+        let mut peers = Grid::with_columns(5)
+            .push(header("id"))
+            .push(header("Socket"))
+            .push(header("Inbound"))
+            .push(header("User agent"))
+            .push(header("Version"));
+        for (peer_id, peer) in node_state.connected_peers.iter() {
+            let inbound_str = if peer.inbound { "Inbound" } else { "Outbound" };
+            peers = peers
+                .push(field(peer_id.to_string()))
+                .push(field(peer.address.clone()))
+                .push(field(inbound_str.to_string()))
+                .push(field(peer.user_agent.to_string()))
+                .push(field(peer.version.to_string()));
+        }
 
         Column::new()
             .spacing(15)
             .max_width(600)
             .align_items(iced::Alignment::Center)
-            .push(chainstate)
+            .push(peers)
             .into()
     }
 }
