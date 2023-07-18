@@ -210,6 +210,8 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+        fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
+
         fn get_mainchain_tx_index(
             &self,
             tx_id: &OutPointSourceId,
@@ -362,6 +364,8 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
+        fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
+
         fn set_mainchain_tx_index(
             &mut self,
             tx_id: &OutPointSourceId,

@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::chainstate_interface::integration_tests_support;
 use crate::{
     detail::{
         self,
@@ -27,6 +28,7 @@ use crate::{
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
+use common::Uint256;
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
@@ -68,6 +70,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::ProcessBlockError)
     }
 
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.chainstate
+            .invalidate_block(block_id)
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.chainstate
+            .reset_block_failure_flags(block_id)
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
         self.chainstate
             .preliminary_header_check(header)
@@ -95,6 +109,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .query()
             .map_err(ChainstateError::from)?
             .is_block_in_main_chain(block_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_min_height_with_allowed_reorg()
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -184,8 +206,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .query()
             .map_err(ChainstateError::from)?
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("Best block index could not be found");
+            .map_err(ChainstateError::FailedToReadProperty)?;
         Ok(best_block_index.block_height())
     }
 
@@ -198,13 +219,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
-        Ok(self
-            .chainstate
+        self.chainstate
             .query()
             .map_err(ChainstateError::from)?
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("Best block index could not be found"))
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_block_index(&self, block_id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
@@ -566,6 +585,21 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_account_nonce_count(account)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+}
+
+impl<S: BlockchainStorage + 'static, V: TransactionVerificationStrategy + 'static>
+    integration_tests_support::ChainstateTestInterface for ChainstateInterfaceImpl<S, V>
+{
+    fn get_best_chain_candidates(
+        &self,
+        min_chain_trust: Uint256,
+    ) -> Result<integration_tests_support::BestChainCandidates, ChainstateError> {
+        Ok(self.chainstate.get_best_chain_candidates(min_chain_trust)?)
+    }
+
+    fn cast_boxed_self(self: Box<Self>) -> Box<dyn ChainstateInterface> {
+        self
     }
 }
 

@@ -77,6 +77,9 @@ pub trait BlockchainStorageRead:
 
     fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
 
+    /// Get the height below which reorgs should not be allowed.
+    fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
+
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
         &self,
@@ -148,6 +151,9 @@ pub trait BlockchainStorageWrite:
 
     /// Change tx indexing state flag
     fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> Result<()>;
+
+    /// Set the height below which reorgs should not be allowed.
+    fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
 
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(

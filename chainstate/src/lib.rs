@@ -99,3 +99,35 @@ pub fn make_chainstate<
     let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
     Ok(Box::new(chainstate_interface))
 }
+
+#[doc(hidden)]
+pub mod integration_tests_support {
+    use super::*;
+
+    pub use crate::interface::chainstate_interface::integration_tests_support::*;
+
+    // This is the same as the normal make_chainstate, but it returns ChainstateTestInterface
+    // instead.
+    pub fn make_chainstate<
+        S: chainstate_storage::BlockchainStorage + 'static,
+        V: TransactionVerificationStrategy + 'static,
+    >(
+        chain_config: Arc<ChainConfig>,
+        chainstate_config: ChainstateConfig,
+        chainstate_storage: S,
+        tx_verification_strategy: V,
+        custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
+        time_getter: TimeGetter,
+    ) -> Result<Box<dyn ChainstateTestInterface>, ChainstateError> {
+        let chainstate = Chainstate::new(
+            chain_config,
+            chainstate_config,
+            chainstate_storage,
+            tx_verification_strategy,
+            custom_orphan_error_hook,
+            time_getter,
+        )?;
+        let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
+        Ok(Box::new(chainstate_interface))
+    }
+}

@@ -15,12 +15,16 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
+use chainstate::{
+    chainstate_interface::ChainstateInterface, integration_tests_support::BestChainCandidates,
+    BlockSource, ChainstateError,
+};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{Block, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
+    Uint256,
 };
 use crypto::{
     key::PrivateKey,
@@ -56,8 +60,13 @@ impl TestFramework {
         TestFrameworkBuilder::new(rng)
     }
 
-    pub fn chainstate(self) -> TestChainstate {
-        self.chainstate
+    pub fn reload(self) -> Self {
+        TestFrameworkBuilder::from_existing_framework(self).build()
+    }
+
+    // TODO: remove this, because there is the 'into_chainstate' function below, which does the same.
+    pub fn chainstate(self) -> Box<dyn chainstate::chainstate_interface::ChainstateInterface> {
+        self.chainstate.cast_boxed_self()
     }
 
     /// Returns a block builder instance that can be used for block construction and processing.
@@ -213,6 +222,10 @@ impl TestFramework {
         self.best_block_index().block_id()
     }
 
+    pub fn parent_block_id(&self, id: &Id<GenBlock>) -> Id<GenBlock> {
+        self.block_index(id).prev_block_id().expect("The block has no parent")
+    }
+
     /// Returns a block identifier for the specified height.
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
@@ -221,6 +234,8 @@ impl TestFramework {
             .unwrap()
             .unwrap()
     }
+
+    // TODO: make the functions below accept block Id's by ref.
 
     /// Returns the list of outputs from the selected block.
     #[track_caller]
@@ -252,16 +267,27 @@ impl TestFramework {
     }
 
     /// Consumes a test framework and returns chainstate.
-    pub fn into_chainstate(self) -> TestChainstate {
-        self.chainstate
+    pub fn into_chainstate(self) -> Box<dyn chainstate::chainstate_interface::ChainstateInterface> {
+        self.chainstate.cast_boxed_self()
     }
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
     }
 
-    pub fn make_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
-        block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
+    pub fn to_chain_block_id<'a>(&self, block_id: &'a Id<GenBlock>) -> &'a Id<Block> {
+        block_id
+            .classify_ref(self.chainstate.get_chain_config())
+            .chain_block_id()
+            .unwrap()
+    }
+
+    pub fn get_best_chain_candidates(&self) -> BestChainCandidates {
+        self.chainstate.get_best_chain_candidates(Uint256::ZERO).unwrap()
+    }
+
+    pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {
+        self.chainstate.get_min_height_with_allowed_reorg().unwrap()
     }
 }
 

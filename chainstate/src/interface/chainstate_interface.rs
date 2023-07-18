@@ -44,10 +44,13 @@ pub trait ChainstateInterface: Send {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError>;
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;
     fn get_block_height_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,
@@ -77,7 +80,7 @@ pub trait ChainstateInterface: Send {
     /// Returns a list of block headers starting from the last locator's block that is in the main
     /// chain.
     ///
-    /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
+    /// The number of returned headers is limited by `header_count_limit`. The genesis block
     /// header is returned in case there is no common ancestor with a better block height.
     fn get_headers(
         &self,
@@ -233,4 +236,23 @@ pub trait ChainstateInterface: Send {
         &self,
         account: AccountType,
     ) -> Result<Option<AccountNonce>, ChainstateError>;
+}
+
+#[doc(hidden)]
+pub mod integration_tests_support {
+    use common::Uint256;
+
+    use super::*;
+    pub use crate::detail::best_chain_candidates::{
+        BestChainCandidates, BestChainCandidatesError, BestChainCandidatesItem,
+    };
+
+    pub trait ChainstateTestInterface: super::ChainstateInterface {
+        fn get_best_chain_candidates(
+            &self,
+            min_chain_trust: Uint256,
+        ) -> Result<BestChainCandidates, ChainstateError>;
+
+        fn cast_boxed_self(self: Box<Self>) -> Box<dyn super::ChainstateInterface>;
+    }
 }

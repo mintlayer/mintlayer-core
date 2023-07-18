@@ -15,6 +15,7 @@
 
 //! Generalized block, or [GenBlock]
 
+use ref_cast::RefCast;
 use typename::TypeName;
 
 use super::{Block, Genesis};
@@ -33,9 +34,21 @@ impl From<Id<Block>> for Id<GenBlock> {
     }
 }
 
+impl<'a> From<&'a Id<Block>> for &'a Id<GenBlock> {
+    fn from(id: &Id<Block>) -> &Id<GenBlock> {
+        Id::<GenBlock>::ref_cast(id.get_ref())
+    }
+}
+
 impl From<Id<Genesis>> for Id<GenBlock> {
     fn from(id: Id<Genesis>) -> Id<GenBlock> {
         Id::new(id.get())
+    }
+}
+
+impl<'a> From<&'a Id<Genesis>> for &'a Id<GenBlock> {
+    fn from(id: &Id<Genesis>) -> &Id<GenBlock> {
+        Id::<GenBlock>::ref_cast(id.get_ref())
     }
 }
 
@@ -72,6 +85,15 @@ impl Id<GenBlock> {
             GenBlockId::Block(Id::new(self.get()))
         }
     }
+
+    /// Figure out if this [Id] refers to a [Genesis] or a proper [Block].
+    pub fn classify_ref(&self, c: &crate::chain::config::ChainConfig) -> GenBlockIdRef<'_> {
+        if self.get() == c.genesis_block_id().get() {
+            GenBlockIdRef::Genesis(Id::<Genesis>::ref_cast(self.get_ref()))
+        } else {
+            GenBlockIdRef::Block(Id::<Block>::ref_cast(self.get_ref()))
+        }
+    }
 }
 
 /// Classified generalized block
@@ -90,6 +112,26 @@ impl GenBlockId {
         match self {
             GenBlockId::Genesis(_) => None,
             GenBlockId::Block(id) => Some(id),
+        }
+    }
+}
+
+/// Classified generalized block reference
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum GenBlockIdRef<'a> {
+    Genesis(&'a Id<Genesis>),
+    Block(&'a Id<Block>),
+}
+
+impl<'a> GenBlockIdRef<'a> {
+    pub fn is_genesis(&self) -> bool {
+        matches!(self, GenBlockIdRef::Genesis(_))
+    }
+
+    pub fn chain_block_id(&self) -> Option<&'a Id<Block>> {
+        match self {
+            GenBlockIdRef::Genesis(_) => None,
+            GenBlockIdRef::Block(id) => Some(id),
         }
     }
 }

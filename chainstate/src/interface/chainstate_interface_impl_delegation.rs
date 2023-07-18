@@ -64,6 +64,14 @@ where
         self.deref_mut().process_block(block, source)
     }
 
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.deref_mut().invalidate_block(block_id)
+    }
+
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.deref_mut().reset_block_failure_flags(block_id)
+    }
+
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         self.deref().preliminary_block_check(block)
     }
@@ -78,6 +86,10 @@ where
 
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.deref().is_block_in_main_chain(block_id)
+    }
+
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError> {
+        self.deref().get_min_height_with_allowed_reorg()
     }
 
     fn get_block_height_in_main_chain(

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::{
+    best_chain_candidates::BestChainCandidatesError,
     chainstateref::EpochSealError,
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
@@ -47,8 +48,6 @@ pub enum BlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("The previous block not found when adding new block {0}")]
     PrevBlockNotFoundForNewBlock(Id<Block>),
-    #[error("Block at height {0} not found")]
-    BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Block {0} has already been processed")]
@@ -69,28 +68,30 @@ pub enum BlockError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
-    #[error("The block height {0} is too big")]
-    BlockHeightTooBig(BlockHeight),
+    #[error("The block {0} is too deep to invalidate")]
+    BlockTooDeepToInvalidate(Id<Block>),
+    #[error("Error manipulating best chain candidates: {0}")]
+    BestChainCandidatesError(#[from] BestChainCandidatesError),
+    #[error("Block not found : {0}")]
+    BlockNotFound(Id<Block>),
 
     #[error("Failed to obtain best block id")]
     BestBlockIdQueryError(PropertyQueryError),
+    #[error("Failed to obtain best block index")]
+    BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to determine if the block {0} is in mainchain")]
     IsBlockInMainChainQueryError(PropertyQueryError, Id<GenBlock>),
-    #[error("Failed to obtain block tree starting at height {0}")]
-    BlockIdTreeTopQueryError(PropertyQueryError, BlockHeight),
     #[error("Failed to obtain block index for block {0}")]
     BlockIndexQueryError(PropertyQueryError, Id<GenBlock>),
+    #[error("Failed to obtain best block index")]
+    BlockIndicesForBranchQueryError(PropertyQueryError),
+    #[error("Failed to obtain the minimum height with allowed reorgs")]
+    MinHeightForReorgQueryError(PropertyQueryError),
 
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block {0} that isn't on the tip")]
     InvariantErrorInvalidTip(Id<GenBlock>),
-    #[error("Inconsistent db, block not found after connect: {0}")]
-    InvariantErrorBlockNotFoundAfterConnect(Id<GenBlock>),
-    #[error("Inconsistent db, block index for block {0} not found")]
-    InvariantErrorBlockIndexNotFound(Id<GenBlock>),
-    #[error("Couldn't find block index for the best block {0}")]
-    InvariantErrorBestBlockIndexNotFound(Id<GenBlock>),
     #[error("Attempt to connect invalid block {0}")]
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
 }
@@ -104,8 +105,12 @@ pub enum DbCommittingContext {
     Block(Id<Block>),
     #[display(fmt = "committing block status for block {}", _0)]
     BlockStatus(Id<Block>),
-    #[display(fmt = "committing invalidated blocks statuses")]
-    InvalidatedBlockStatuses,
+    #[display(fmt = "committing invalidated blocks statuses (root block: {})", _0)]
+    InvalidatedBlockTreeStatuses(Id<Block>),
+    #[display(fmt = "committing cleared blocks statuses (root block: {})", _0)]
+    ClearedBlockTreeStatuses(Id<Block>),
+    #[display(fmt = "committing block tree disconnection (root block: {})", _0)]
+    BlockTreeDisconnection(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -120,16 +125,12 @@ pub enum CheckBlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
-    #[error("Block has an invalid witness merkle root")]
-    WitnessMerkleRootMismatch,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<GenBlock>, Id<Block>),
     #[error("Block {0} not found in database")]
     BlockNotFound(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
-    #[error("Block time must be a notch higher than the previous block")]
-    BlockTimeStrictOrderInvalid,
     #[error("Block time too far into the future")]
     BlockFromTheFuture,
     #[error("Block size is too large: {0}")]
@@ -160,8 +161,6 @@ pub enum CheckBlockError {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockTransactionsError {
-    #[error("Blockchain storage error: {0}")]
-    StorageError(chainstate_storage::Error),
     #[error("Duplicate input in transaction {0} in block {1}")]
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
@@ -206,6 +205,8 @@ pub enum InitializationError {
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
     GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
+    #[error("Error initializing best chain candidates: {0}")]
+    BestChainCandidatesError(#[from] BestChainCandidatesError),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

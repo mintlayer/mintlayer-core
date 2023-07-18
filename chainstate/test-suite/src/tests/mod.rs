@@ -27,6 +27,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 mod basic_tests;
+mod block_invalidation;
 mod block_status;
 mod bootstrap;
 mod chainstate_accounting_storage_tests;

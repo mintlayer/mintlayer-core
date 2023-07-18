@@ -22,6 +22,7 @@ use std::fmt::{Debug, Display};
 
 use crate::Uint256;
 use generic_array::{typenum, GenericArray};
+use ref_cast::RefCast;
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
@@ -89,7 +90,8 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize, RefCast)]
+#[repr(transparent)]
 #[serde(transparent)]
 pub struct Id<T> {
     id: H256,
@@ -141,6 +143,10 @@ impl<T: Eq> From<H256> for Id<T> {
 impl<T> Id<T> {
     pub const fn get(&self) -> H256 {
         self.id
+    }
+
+    pub const fn get_ref(&self) -> &H256 {
+        &self.id
     }
 
     pub const fn new(h: H256) -> Self {

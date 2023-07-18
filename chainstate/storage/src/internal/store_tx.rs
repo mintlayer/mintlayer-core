@@ -41,7 +41,7 @@ use crate::{
 };
 
 mod well_known {
-    use super::{Codec, GenBlock, Id};
+    use super::{BlockHeight, Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -65,6 +65,7 @@ mod well_known {
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
     declare_entry!(TxIndexEnabled: bool);
+    declare_entry!(MinHeightForReorg: BlockHeight);
 }
 
 /// Read-only chainstate storage transaction
@@ -120,6 +121,10 @@ macro_rules! impl_read_ops {
 
             fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
                 self.read_value::<well_known::TxIndexEnabled>()
+            }
+
+            fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
+                self.read_value::<well_known::MinHeightForReorg>()
             }
 
             fn get_mainchain_tx_index(
@@ -406,6 +411,10 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()> {
         self.write_value::<well_known::TxIndexEnabled>(&enabled)
+    }
+
+    fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()> {
+        self.write_value::<well_known::MinHeightForReorg>(&height)
     }
 
     fn set_mainchain_tx_index(

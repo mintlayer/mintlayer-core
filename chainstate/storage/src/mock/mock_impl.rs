@@ -52,6 +52,8 @@ mockall::mock! {
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+        fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
+
         fn get_mainchain_tx_index(
             &self,
             tx_id: &OutPointSourceId,
@@ -152,7 +154,10 @@ mockall::mock! {
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+
         fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
+        fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
+
         fn set_mainchain_tx_index(
             &mut self,
             tx_id: &OutPointSourceId,
@@ -304,6 +309,8 @@ mockall::mock! {
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+        fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
+
         fn get_mainchain_tx_index(
             &self,
             tx_id: &OutPointSourceId,
@@ -416,6 +423,7 @@ mockall::mock! {
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+        fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
         fn get_mainchain_tx_index(
             &self,
@@ -517,6 +525,8 @@ mockall::mock! {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
+        fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
+
         fn set_mainchain_tx_index(
             &mut self,
             tx_id: &OutPointSourceId,
