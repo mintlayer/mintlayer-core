@@ -325,7 +325,9 @@ where
         let max_block_timestamp =
             self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
         if block_timestamp > max_block_timestamp {
-            let clock_diff = max_block_timestamp - block_timestamp;
+            let clock_diff = block_timestamp
+                .checked_sub(max_block_timestamp)
+                .expect("Subtracting durations for block times overflow");
             let sleep_time = std::cmp::min(clock_diff, *self.p2p_config.max_clock_diff);
             log::debug!(
                 "Block timestamp from the future ({} seconds), peer_id: {}",
