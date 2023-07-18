@@ -82,10 +82,15 @@ def make_empty_block(parent_id, nonce, transactions = []):
         'header': header,
         'signature': { 'None': None },
     }
+    block_body = {
+        'reward': {
+            'reward_outputs': [],
+        },
+        'transactions': transactions,
+    }
     block = {
         'header': signed_header,
-        'reward': [],
-        'transactions': transactions,
+        'body': block_body,
     }
     block_id = hash_object(block_header_obj, header)
     encoded_block = block_obj.encode(block).to_hex()[2:]

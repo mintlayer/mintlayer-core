@@ -76,6 +76,7 @@ impl OrphanType {
             | CTE::PoolDataNotFound(_)
             | CTE::PoolOwnerRewardCalculationFailed(_, _)
             | CTE::PoolOwnerRewardCannotExceedTotalReward(..)
+            | CTE::UnexpectedPoolId(_, _)
             | CTE::DelegationsRewardSumFailed(..)
             | CTE::DelegationRewardOverflow(..)
             | CTE::DistributedDelegationsRewardExceedTotal(..)

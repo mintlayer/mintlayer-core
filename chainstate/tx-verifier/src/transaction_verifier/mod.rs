@@ -476,8 +476,9 @@ where
                                 ))
                             }
                         } else {
-                            Err(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
+                            Err(ConnectTransactionError::UnexpectedPoolId(
+                                *pool_id,
+                                expected_pool_id,
                             ))
                         };
                         Some(res)
