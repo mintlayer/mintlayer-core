@@ -23,9 +23,8 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use utils::ensure;
 
-use crate::{WalletError, WalletResult};
+use crate::WalletResult;
 
 /// The `SendRequest` struct provides the necessary information to the wallet
 /// on the precise method of sending funds to a designated destination.
@@ -78,20 +77,13 @@ pub fn make_issue_token_outputs(
 ) -> WalletResult<Vec<TxOutput>> {
     let destination = address.destination(chain_config)?;
 
-    ensure!(
-        metadata_uri.len() <= chain_config.token_max_uri_len(),
-        WalletError::InvalidTokenMetadataUri(metadata_uri.len(), chain_config.token_max_uri_len())
-    );
-
-    ensure!(
-        number_of_decimals <= chain_config.token_max_dec_count(),
-        WalletError::InvalidTokenDecimals(number_of_decimals, chain_config.token_max_dec_count())
-    );
-
-    ensure!(
-        token_ticker.len() <= chain_config.token_max_ticker_len(),
-        WalletError::InvalidTokenTicker(token_ticker.len(), chain_config.token_max_ticker_len())
-    );
+    chainstate::check_tokens_issuance_data(
+        chain_config,
+        token_ticker.as_slice(),
+        &amount_to_issue,
+        &number_of_decimals,
+        metadata_uri.as_slice(),
+    )?;
 
     let issuance_output = TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(

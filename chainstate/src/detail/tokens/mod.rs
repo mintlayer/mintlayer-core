@@ -24,6 +24,7 @@ use common::{
     primitives::{Amount, Id, Idable},
 };
 use serialization::{DecodeAll, Encode};
+use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 
 mod check_utils;
@@ -47,65 +48,48 @@ pub fn check_tokens_transfer_data(
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
     issuance: &NftIssuance,
-    tx_id: Id<Transaction>,
-    source_block_id: Id<Block>,
-) -> Result<(), TokensError> {
-    check_token_ticker(
-        chain_config,
-        &issuance.metadata.ticker,
-        tx_id,
-        source_block_id,
-    )?;
-    check_nft_name(
-        chain_config,
-        &issuance.metadata.name,
-        tx_id,
-        source_block_id,
-    )?;
-    check_nft_description(
-        chain_config,
-        &issuance.metadata.description,
-        tx_id,
-        source_block_id,
-    )?;
+) -> Result<(), TokenIssuanceError> {
+    check_token_ticker(chain_config, &issuance.metadata.ticker)?;
+    check_nft_name(chain_config, &issuance.metadata.name)?;
+    check_nft_description(chain_config, &issuance.metadata.description)?;
 
     let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
-        .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
+        .map_err(|_| TokenIssuanceError::IssueErrorIncorrectIconURI)?;
     if !icon_uri.is_empty() {
         ensure!(
             icon_uri.len() <= chain_config.token_max_uri_len(),
-            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectIconURI
         );
         ensure!(
             is_uri_valid(&icon_uri),
-            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectIconURI
         );
     }
 
     let additional_metadata_uri =
         Vec::<u8>::decode_all(&mut issuance.metadata.additional_metadata_uri.encode().as_slice())
-            .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?;
+            .map_err(|_| TokenIssuanceError::IssueErrorIncorrectMetadataURI)?;
     if !additional_metadata_uri.is_empty() {
         ensure!(
             additional_metadata_uri.len() <= chain_config.token_max_uri_len(),
-            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectMetadataURI
         );
         ensure!(
             is_uri_valid(&additional_metadata_uri),
-            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectMetadataURI
         );
     }
 
     let media_uri = Vec::<u8>::decode_all(&mut issuance.metadata.media_uri.encode().as_slice())
-        .map_err(|_| TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id))?;
+        .map_err(|_| TokenIssuanceError::IssueErrorIncorrectMediaURI)?;
     if !media_uri.is_empty() {
         ensure!(
             media_uri.len() <= chain_config.token_max_uri_len(),
-            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectMediaURI
         );
         ensure!(
             is_uri_valid(&media_uri),
-            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+            TokenIssuanceError::IssueErrorIncorrectMediaURI
         );
     }
     check_media_hash(chain_config, &issuance.metadata.media_hash)?;
@@ -118,34 +102,29 @@ pub fn check_tokens_issuance_data(
     amount_to_issue: &Amount,
     number_of_decimals: &u8,
     metadata_uri: &[u8],
-    tx_id: Id<Transaction>,
-    source_block_id: Id<Block>,
-) -> Result<(), TokensError> {
+) -> Result<(), TokenIssuanceError> {
     // Check token ticker
-    check_token_ticker(chain_config, token_ticker, tx_id, source_block_id)?;
+    check_token_ticker(chain_config, token_ticker)?;
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
-        return Err(TokensError::IssueAmountIsZero(tx_id, source_block_id));
+        return Err(TokenIssuanceError::IssueAmountIsZero);
     }
 
     // Check decimals
     if number_of_decimals > &chain_config.token_max_dec_count() {
-        return Err(TokensError::IssueErrorTooManyDecimals(
-            tx_id,
-            source_block_id,
-        ));
+        return Err(TokenIssuanceError::IssueErrorTooManyDecimals);
     }
 
     // Check URI
     ensure!(
         is_uri_valid(metadata_uri),
-        TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        TokenIssuanceError::IssueErrorIncorrectMetadataURI
     );
 
     ensure!(
         metadata_uri.len() <= chain_config.token_max_uri_len(),
-        TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        TokenIssuanceError::IssueErrorIncorrectMetadataURI
     );
     Ok(())
 }
@@ -158,22 +137,17 @@ pub fn check_tokens_data(
 ) -> Result<(), TokensError> {
     match token_data {
         TokenData::TokenTransfer(transfer) => {
-            check_tokens_transfer_data(source_block_id, tx, &transfer.amount)?;
+            check_tokens_transfer_data(source_block_id, tx, &transfer.amount)
         }
-        TokenData::TokenIssuance(issuance) => {
-            check_tokens_issuance_data(
-                chain_config,
-                &issuance.token_ticker,
-                &issuance.amount_to_issue,
-                &issuance.number_of_decimals,
-                &issuance.metadata_uri,
-                tx.get_id(),
-                source_block_id,
-            )?;
-        }
-        TokenData::NftIssuance(issuance) => {
-            check_nft_issuance_data(chain_config, issuance, tx.get_id(), source_block_id)?
-        }
+        TokenData::TokenIssuance(issuance) => check_tokens_issuance_data(
+            chain_config,
+            &issuance.token_ticker,
+            &issuance.amount_to_issue,
+            &issuance.number_of_decimals,
+            &issuance.metadata_uri,
+        )
+        .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
+        TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
+            .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
     }
-    Ok(())
 }

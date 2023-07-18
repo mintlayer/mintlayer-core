@@ -26,9 +26,10 @@ pub mod rpc;
 pub use crate::{
     config::ChainstateConfig,
     detail::{
-        ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
-        ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-        InitializationError, Locator, OrphanCheckError, SpendStakeError, TokensError,
+        ban_score, calculate_median_time_past, check_nft_issuance_data, check_tokens_issuance_data,
+        is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
+        CheckBlockTransactionsError, ConnectTransactionError, InitializationError, Locator,
+        OrphanCheckError, SpendStakeError, TokenIssuanceError, TokensError,
         TransactionVerifierStorageError, TxIndexError,
     },
 };

@@ -39,6 +39,7 @@ use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use mempool::FeeRate;
+use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
@@ -104,12 +105,8 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
     InvalidAddress(String, PublicKeyHashError),
-    #[error("Token issuance metadata_uri longer than max allowed {0}, max: {1}")]
-    InvalidTokenMetadataUri(usize, usize),
-    #[error("Token issuance ticker longer than max allowed {0}, max: {1}")]
-    InvalidTokenTicker(usize, usize),
-    #[error("Token issuance num decimals bigger than max allowed {0}, max: {1}")]
-    InvalidTokenDecimals(u8, u8),
+    #[error("Token issuance error: {0}")]
+    TokenIssuance(#[from] TokenIssuanceError),
     #[error("No UTXOs")]
     NoUtxos,
     #[error("Coin selection error: {0}")]

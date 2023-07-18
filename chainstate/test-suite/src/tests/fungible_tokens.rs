@@ -39,6 +39,7 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
+use tx_verifier::error::TokenIssuanceError;
 
 #[rstest]
 #[trace]
@@ -81,9 +82,11 @@ fn token_issue_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                        TokenIssuanceError::IssueErrorInvalidTickerLength,
+                        _,
+                        _
+                    ))
                 ))
             ))
         ));
@@ -116,9 +119,11 @@ fn token_issue_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorInvalidTickerLength(_, _)
-                    )
+                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                        TokenIssuanceError::IssueErrorInvalidTickerLength,
+                        _,
+                        _
+                    ))
                 ))
             ))
         ));
@@ -169,9 +174,11 @@ fn token_issue_test(#[case] seed: Seed) {
                     result,
                     Err(ChainstateError::ProcessBlockError(
                         BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                            CheckBlockTransactionsError::TokensError(
-                                TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
-                            )
+                            CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                                TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
+                                _,
+                                _
+                            ))
                         ))
                     ))
                 ));
@@ -206,7 +213,11 @@ fn token_issue_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::IssueAmountIsZero(_, _))
+                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                        TokenIssuanceError::IssueAmountIsZero,
+                        _,
+                        _
+                    ))
                 ))
             ))
         ));
@@ -242,9 +253,11 @@ fn token_issue_test(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(
-                            TokensError::IssueErrorTooManyDecimals(_, _)
-                        )
+                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorTooManyDecimals,
+                            _,
+                            _
+                        ))
                     ))
                 ))
             ));
@@ -284,9 +297,11 @@ fn token_issue_test(#[case] seed: Seed) {
                 result,
                 Err(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                        CheckBlockTransactionsError::TokensError(
-                            TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                        )
+                        CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                            TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                            _,
+                            _
+                        ))
                     ))
                 ))
             ));
@@ -320,9 +335,11 @@ fn token_issue_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                    )
+                    CheckBlockTransactionsError::TokensError(TokensError::IssueError(
+                        TokenIssuanceError::IssueErrorIncorrectMetadataURI,
+                        _,
+                        _
+                    ))
                 ))
             ))
         ));
