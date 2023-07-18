@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use super::*;
-use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::config::create_unit_test_config;
+use common::{address::pubkeyhash::PublicKeyHash, chain::Destination::Address};
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
@@ -181,12 +181,11 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Err(KeyChainError::LookAheadExceeded)
     );
 
-    key_chain
-        .mark_public_key_hash_as_used(
-            &mut db_tx,
-            &PublicKeyHash::try_from(last_address.data(&chain_config).unwrap()).unwrap(),
-        )
-        .unwrap();
+    if let Address(pkh) = last_address.destination(chain_config.as_ref()).unwrap() {
+        key_chain.mark_public_key_hash_as_used(&mut db_tx, &pkh).unwrap();
+    } else {
+        panic!("Address is not a public key hash destination");
+    }
 
     // Should be able to issue more addresses
     for _ in 0..key_chain.lookahead_size() {

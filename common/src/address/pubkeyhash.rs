@@ -17,7 +17,7 @@ use crypto::key::PublicKey;
 use generic_array::sequence::Split;
 use serialization::{Decode, Encode};
 
-use crate::address::{Address, AddressError};
+use crate::address::AddressError;
 use crate::{chain::classic_multisig::ClassicMultisigChallenge, primitives::id::DefaultHashAlgo};
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -46,14 +46,6 @@ impl From<&ClassicMultisigChallenge> for PublicKeyHash {
     fn from(challenge: &ClassicMultisigChallenge) -> Self {
         let hash = crypto::hash::hash::<DefaultHashAlgo, _>(challenge.encode()).split().0.into();
         Self(hash)
-    }
-}
-
-impl TryFrom<&Address> for PublicKeyHash {
-    type Error = PublicKeyHashError;
-
-    fn try_from(address: &Address) -> Result<Self, Self::Error> {
-        Self::try_from(address.data_internal()?)
     }
 }
 

@@ -112,7 +112,6 @@ impl GenesisBlockInit {
 #[derive(Clone)]
 pub struct Builder {
     chain_type: ChainType,
-    address_prefix: String,
     bip44_coin_type: ChildNumber,
     magic_bytes: [u8; 4],
     p2p_port: u16,
@@ -149,7 +148,6 @@ impl Builder {
     pub fn new(chain_type: ChainType) -> Self {
         Self {
             chain_type,
-            address_prefix: chain_type.default_address_prefix().to_string(),
             bip44_coin_type: chain_type.default_bip44_coin_type(),
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
@@ -194,7 +192,6 @@ impl Builder {
     pub fn build(self) -> ChainConfig {
         let Self {
             chain_type,
-            address_prefix,
             bip44_coin_type,
             coin_decimals,
             magic_bytes,
@@ -251,7 +248,6 @@ impl Builder {
 
         ChainConfig {
             chain_type,
-            address_prefix,
             bip44_coin_type,
             coin_decimals,
             magic_bytes,
@@ -299,7 +295,6 @@ macro_rules! builder_method {
 
 impl Builder {
     builder_method!(chain_type: ChainType);
-    builder_method!(address_prefix: String);
     builder_method!(bip44_coin_type: ChildNumber);
     builder_method!(magic_bytes: [u8; 4]);
     builder_method!(p2p_port: u16);

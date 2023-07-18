@@ -27,10 +27,6 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug)]
 pub struct ChainConfigOptions {
-    /// Address prefix.
-    #[clap(long)]
-    pub chain_address_prefix: Option<String>,
-
     /// The maximum future block offset in seconds.
     #[clap(long)]
     pub chain_max_future_block_time_offset: Option<u64>,
