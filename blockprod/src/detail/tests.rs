@@ -484,7 +484,7 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterfaceMock::new());
-            mock_chainstate.expect_subscribe_to_events().times(1).returning(|_| ());
+            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
 
             let mut expected_return_values = vec![
                 Ok(GenBlockIndex::Genesis(Arc::clone(
@@ -546,7 +546,7 @@ mod produce_block {
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterfaceMock::new());
-            mock_chainstate.expect_subscribe_to_events().times(1).returning(|_| ());
+            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
 
             let mut expected_return_values = vec![
                 Ok(GenBlockIndex::Genesis(Arc::clone(
