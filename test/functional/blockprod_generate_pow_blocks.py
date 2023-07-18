@@ -15,12 +15,13 @@
 #  limitations under the License.
 
 from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
+from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
 )
 
-import random, scalecodec
+import random, scalecodec, time
 
 block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
 
@@ -53,11 +54,14 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
 
-        try:
-            block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
-        except JSONRPCException:
-            # Block production may fail the first time if the Job Manager found a new tip
-            block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+        # Block production may fail if the Job Manager found a new tip, so try and sleep
+        for _ in range(5):
+            try:
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                break
+            except JSONRPCException:
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                time.sleep(1)
 
         block_hex_array = bytearray.fromhex(block_hex)
         block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(block_hex_array)).decode()
