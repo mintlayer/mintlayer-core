@@ -67,7 +67,13 @@ class GeneratePoSGenesisBlocksTest(BitcoinTestFramework):
 
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
-        block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+
+        try:
+            block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+        except JSONRPCException:
+            # Block production may fail the first time if the Job Manager found a new tip
+            block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+
         block_hex_array = bytearray.fromhex(block_hex)
         block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(block_hex_array)).decode()
 
