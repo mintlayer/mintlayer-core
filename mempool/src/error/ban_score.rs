@@ -141,6 +141,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
+            ConnectTransactionError::IOPolicyError(_) => todo!(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,

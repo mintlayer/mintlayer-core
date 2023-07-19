@@ -28,7 +28,7 @@ use pos_accounting::PoSAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
-        storage::TransactionVerifierStorageRef, Fee, Subsidy, TransactionSourceForConnect,
+        storage::TransactionVerifierStorageRef, Fee, TransactionSourceForConnect,
         TransactionVerifier,
     },
     TransactionSource,
@@ -72,9 +72,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         M: TransactionVerifierMakerFn<C, S, U, A>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        let block_subsidy =
-            chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
-
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
 
@@ -106,7 +103,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
             .log_err()?;
 
         base_tx_verifier
-            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
+            .check_block_reward(block, Fee(total_fees), block_index.block_height())
             .log_err()?;
 
         base_tx_verifier

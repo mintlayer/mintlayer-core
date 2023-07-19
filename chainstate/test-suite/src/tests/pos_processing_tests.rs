@@ -1533,10 +1533,6 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     )
     .expect("should be able to mine");
 
-    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
-    let initially_staked = Amount::from_atoms(1);
-    let total_reward = (subsidy + initially_staked).unwrap();
-
     tf.make_block_builder()
         .with_block_signing_key(staking_sk1)
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -1578,6 +1574,10 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
+
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
+    let total_reward = (subsidy + initially_staked).unwrap();
 
     let tx = TransactionBuilder::new()
         .add_input(block_2_reward_outpoint.into(), empty_witness(&mut rng))

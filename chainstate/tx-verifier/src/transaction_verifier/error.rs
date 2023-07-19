@@ -29,6 +29,7 @@ use thiserror::Error;
 use crate::timelock_check;
 
 use super::{
+    input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
@@ -161,6 +162,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateDelegationFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
+    #[error("Input output policy error: `{0}`")]
+    IOPolicyError(#[from] IOPolicyError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

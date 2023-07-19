@@ -924,6 +924,7 @@ fn pow(#[case] seed: Seed) {
         .get_proof_of_work_config()
         .reward_maturity_distance()
         .into();
+    let reward = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::new(1));
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
@@ -931,7 +932,7 @@ fn pow(#[case] seed: Seed) {
     let mut random_invalid_block = tf
         .make_block_builder()
         .with_reward(vec![TxOutput::LockThenTransfer(
-            OutputValue::Coin(Amount::from_atoms(10)),
+            OutputValue::Coin(reward),
             Destination::PublicKey(pub_key),
             OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
         )])

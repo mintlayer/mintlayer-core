@@ -70,7 +70,7 @@ use common::{
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id, Idable, H256},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
@@ -334,15 +334,20 @@ where
         &self,
         block: &WithId<Block>,
         total_fees: Fee,
-        block_subsidy_at_height: Subsidy,
+        block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
         input_output_policy::check_reward_inputs_outputs_purposes(
             &block.block_reward_transactable(),
+            self.chain_config.as_ref(),
+            block_height,
             &self.utxo_cache,
+            total_fees,
         )?;
 
         self.check_stake_outputs_in_reward(block)?;
 
+        let block_subsidy_at_height =
+            Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
         check_transferred_amount_in_reward(
             &self.utxo_cache,
             &self.accounting_delta_adapter.accounting_delta(),
@@ -631,7 +636,13 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
+        input_output_policy::check_tx_inputs_outputs_purposes(
+            tx.transaction(),
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            &self.accounting_delta_adapter.accounting_delta(),
+            &self.utxo_cache,
+        )?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache.precache_token_issuance(

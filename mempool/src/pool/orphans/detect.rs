@@ -91,7 +91,8 @@ impl OrphanType {
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
             | CTE::AttemptToCreateDelegationFromAccounts
-            | CTE::FailedToIncrementAccountNonce => None,
+            | CTE::FailedToIncrementAccountNonce
+            | CTE::IOPolicyError(_) => None,
         }
     }
 }

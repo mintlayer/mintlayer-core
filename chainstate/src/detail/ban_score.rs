@@ -153,6 +153,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
+            ConnectTransactionError::IOPolicyError(_) => todo!(),
         }
     }
 }
