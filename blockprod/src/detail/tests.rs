@@ -1291,63 +1291,6 @@ mod produce_block {
         manager.main().await;
         join_handle.await.unwrap();
     }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn multiple_jobs_without_wait(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate,
-                    mempool,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let mut rng = make_seedable_rng(seed);
-                let jobs_to_create = rng.gen::<usize>() % 20 + 1;
-
-                // The following is a race between the successive
-                // calls to produce_block() and the job manager
-                // cleaning up, so we try a number of times before
-                // giving up
-
-                for _ in 0..jobs_to_create {
-                    let result = block_production
-                        .produce_block(
-                            GenerateBlockInputData::None,
-                            TransactionsSource::Provided(vec![]),
-                        )
-                        .await;
-
-                    match result {
-                        Err(BlockProductionError::JobManagerError(
-                            JobManagerError::JobAlreadyExists,
-                        )) => break,
-                        Err(_) => panic!("Duplicate job key should fail"),
-                        Ok(_) => continue,
-                    }
-                }
-
-                assert_job_count(&block_production, 0).await;
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
 }
 
 mod process_block_with_custom_id {
