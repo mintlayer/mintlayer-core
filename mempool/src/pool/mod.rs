@@ -15,7 +15,7 @@
 
 use parking_lot::RwLock;
 use std::{
-    collections::{BTreeSet, VecDeque},
+    collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap, VecDeque},
     mem,
     num::NonZeroUsize,
     ops::Deref,
@@ -931,7 +931,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Option<Box<dyn TransactionAccumulator>> {
-        if tx_accumulator.expected_tip() != self.best_block_id() {
+        let mempool_tip = self.best_block_id();
+
+        if tx_accumulator.expected_tip() != mempool_tip {
             log::debug!(
                 "Mempool rejected transaction accumulator due to different tip: expected tip {:?} (current tip {:?})",
                 tx_accumulator.expected_tip(),
@@ -940,28 +942,72 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             return None;
         }
 
-        let mut tx_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
-        // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
-        while !tx_accumulator.done() {
-            if let Some(tx_id) = tx_iter.next() {
-                let next_tx = self.store.txs_by_id.get(tx_id).expect("tx to exist");
-                log::debug!(
-                    "collect_txs: next tx has ancestor score {:?}",
-                    next_tx.ancestor_score()
-                );
+        let tx_id_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
+        let mut tx_iter = tx_id_iter
+            .filter_map(|tx_id| self.store.txs_by_id.get(tx_id).map(Deref::deref))
+            .fuse()
+            .peekable();
 
-                match tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
-                    Ok(_) => (),
-                    Err(err) => log::error!(
-                        "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
-                        next_tx.tx_id(),
-                        err
-                    ),
+        // Set of transactions already placed into the accumulator
+        let mut emitted = BTreeSet::new();
+        // Set of transaction waiting for one or more parents to be emitted
+        let mut pending = BTreeMap::new();
+        // A queue of transactions that can be emitted
+        let mut ready = BinaryHeap::<store::TxMempoolEntryByScore<&TxMempoolEntry>>::new();
+
+        while !tx_accumulator.done() {
+            // Take out the transactions from tx_iter until there is one ready
+            while let Some(tx) = tx_iter.peek() {
+                let missing_parents: usize = tx.parents().filter(|p| !emitted.contains(p)).count();
+                if missing_parents == 0 {
+                    break;
+                } else {
+                    pending.insert(tx.tx_id(), missing_parents);
+                    let _ = tx_iter.next();
                 }
-            } else {
+            }
+
+            let next_tx = match (tx_iter.peek(), ready.peek_mut()) {
+                (Some(store_tx), Some(ready_tx)) => {
+                    if store_tx.ancestor_score() > ready_tx.ancestor_score() {
+                        tx_iter.next().expect("just checked")
+                    } else {
+                        binary_heap::PeekMut::pop(ready_tx).take_entry()
+                    }
+                }
+                (Some(_store_tx), None) => tx_iter.next().expect("just checked"),
+                (None, Some(ready_tx)) => binary_heap::PeekMut::pop(ready_tx).take_entry(),
+                (None, None) => break,
+            };
+
+            if let Err(err) = tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
+                log::error!(
+                    "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
+                    next_tx.tx_id(),
+                    err
+                );
                 break;
             }
+
+            emitted.insert(next_tx.tx_id());
+
+            // Release newly ready transactions
+            for child in next_tx.children() {
+                match pending.entry(child) {
+                    btree_map::Entry::Vacant(_) => (),
+                    btree_map::Entry::Occupied(mut c) => match c.get_mut() {
+                        0 => panic!("pending with 0 missing parents"),
+                        1 => {
+                            // This was the last missing parent, put the tx into the ready queue
+                            ready.push(self.store.txs_by_id[c.key()].deref().into());
+                            c.remove();
+                        }
+                        n => *n -= 1,
+                    },
+                }
+            }
         }
+
         Some(tx_accumulator)
     }
 

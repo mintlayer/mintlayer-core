@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{memory_usage_estimator::StoreMemoryUsageEstimator, *};
-use crate::{config::MempoolMaxSize, tx_accumulator::DefaultTxAccumulator};
+use crate::config::MempoolMaxSize;
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
@@ -32,6 +32,7 @@ use common::{
 };
 use std::sync::Arc;
 
+mod accumulator;
 mod expiry;
 mod orphans;
 mod reorg;
@@ -1680,73 +1681,5 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     assert!(mempool.store.txs_by_descendant_score.is_empty());
     assert!(mempool.store.txs_by_creation_time.is_empty());
     mempool.store.assert_valid();
-    Ok(())
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
-    let mut rng = make_seedable_rng(seed);
-    let tf = TestFramework::builder(&mut rng).build();
-    let genesis = tf.genesis();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-
-    let size_limit: usize = 1_000;
-    let tx_accumulator = DefaultTxAccumulator::new(size_limit, genesis.get_id().into());
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.unwrap().transactions().clone();
-    let expected_num_txs_collected: usize = 0;
-    assert_eq!(collected_txs.len(), expected_num_txs_collected);
-
-    let target_txs = 10;
-
-    let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
-        empty_witness(&mut rng),
-    );
-    for i in 0..target_txs {
-        tx_builder = tx_builder.add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
-            Destination::AnyoneCanSpend,
-        ))
-    }
-    let initial_tx = tx_builder.build();
-    let initial_tx_id = initial_tx.transaction().get_id();
-    mempool.add_transaction(initial_tx, TxOrigin::TEST)?.assert_in_mempool();
-    for i in 0..target_txs {
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_utxo(OutPointSourceId::Transaction(initial_tx_id), i as u32),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(0)),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
-        mempool.add_transaction(tx.clone(), TxOrigin::TEST)?.assert_in_mempool();
-    }
-
-    let size_limit = 1_000;
-    let tx_accumulator = DefaultTxAccumulator::new(size_limit, genesis.get_id().into());
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.unwrap().transactions().clone();
-    log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
-    let expected_num_txs_collected = 6;
-    assert_eq!(collected_txs.len(), expected_num_txs_collected);
-    let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
-    assert!(total_tx_size <= size_limit);
-
-    let tx_accumulator = DefaultTxAccumulator::new(0, genesis.get_id().into());
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.unwrap().transactions().clone();
-    assert_eq!(collected_txs.len(), 0);
-
-    let tx_accumulator = DefaultTxAccumulator::new(1, genesis.get_id().into());
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.unwrap().transactions().clone();
-    assert_eq!(collected_txs.len(), 0);
     Ok(())
 }

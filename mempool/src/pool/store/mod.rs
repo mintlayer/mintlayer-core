@@ -216,7 +216,7 @@ impl MempoolStore {
 
     fn append_to_parents(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
-            for parent_id in entry.unconfirmed_parents() {
+            for parent_id in entry.parents() {
                 tracker.modify(
                     txs_by_id.get_mut(parent_id).expect("append_to_parents"),
                     |parent, _| parent.get_children_mut().insert(*entry.tx_id()),
@@ -227,7 +227,7 @@ impl MempoolStore {
 
     fn remove_from_parents(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
-            for parent_id in entry.unconfirmed_parents() {
+            for parent_id in entry.parents() {
                 tracker.modify(
                     txs_by_id.get_mut(parent_id).expect("remove_from_parents"),
                     |parent, _| parent.get_children_mut().remove(entry.tx_id()),
@@ -238,7 +238,7 @@ impl MempoolStore {
 
     fn remove_from_children(&mut self, entry: &TxMempoolEntry) {
         self.mem_tracker.modify(&mut self.txs_by_id, |txs_by_id, tracker| {
-            for child_id in entry.unconfirmed_children() {
+            for child_id in entry.children() {
                 tracker.modify(
                     txs_by_id.get_mut(child_id).expect("remove_from_children"),
                     |child, _| child.get_parents_mut().remove(entry.tx_id()),
@@ -701,11 +701,11 @@ impl TxMempoolEntry {
         self.entry.creation_time()
     }
 
-    fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
+    pub fn parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.parents.iter()
     }
 
-    fn unconfirmed_children(&self) -> impl Iterator<Item = &Id<Transaction>> {
+    pub fn children(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.children.iter()
     }
 
@@ -797,5 +797,42 @@ impl PartialEq for TxMempoolEntry {
 impl Ord for TxMempoolEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         other.tx_id().cmp(self.tx_id())
+    }
+}
+
+/// Wrapper over [TxMempoolEntry] but ordered by ancestor score from highest to lowest
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TxMempoolEntryByScore<T>(T);
+
+impl<T> TxMempoolEntryByScore<T> {
+    pub fn take_entry(self) -> T {
+        self.0
+    }
+}
+
+impl<T: std::borrow::Borrow<TxMempoolEntry>> From<T> for TxMempoolEntryByScore<T> {
+    fn from(entry: T) -> Self {
+        Self(entry)
+    }
+}
+
+impl<T: std::borrow::Borrow<TxMempoolEntry>> std::ops::Deref for TxMempoolEntryByScore<T> {
+    type Target = TxMempoolEntry;
+    fn deref(&self) -> &Self::Target {
+        self.0.borrow()
+    }
+}
+
+impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> PartialOrd for TxMempoolEntryByScore<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> Ord for TxMempoolEntryByScore<T> {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        rhs.ancestor_score()
+            .cmp(&self.ancestor_score())
+            .then_with(|| self.tx_id().cmp(rhs.tx_id()))
     }
 }
