@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use common::chain::ChainConfig;
 use crate::interface::rpc_test_interface::RpcTestFunctionsInterface;
+use common::chain::ChainConfig;
 
 // Empty implementation to exclude test functions under certain conditions, such as mainnet
 pub struct EmptyRpcTestFunctionsRpc;

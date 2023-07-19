@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use common::chain::ChainConfig;
 use crate::RpcTestFunctions;
+use common::chain::ChainConfig;
 
 use super::rpc_test_interface::RpcTestFunctionsInterface;
 
