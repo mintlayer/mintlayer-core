@@ -1131,10 +1131,6 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
                         RequiredConsensus::PoS(_) => {
@@ -1156,10 +1152,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoW input data for PoS consensus
 
                             let input_data_pow_result = block_production
@@ -1175,10 +1167,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoS input data for PoS consensus
 
                             let (new_block, job_finished_receiver) = block_production
@@ -1187,10 +1175,6 @@ mod produce_block {
                                 .expect("Failed to produce a job: {:?}");
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
-
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
 
                             let result = assert_process_block(&chainstate, new_block).await;
 
@@ -1227,10 +1211,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoS input data for PoW consensus
 
                             let input_data_pos_result = block_production
@@ -1246,10 +1226,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoW input data for PoW consensus
 
                             let (new_block, job_finished_receiver) = block_production
@@ -1258,10 +1234,6 @@ mod produce_block {
                                 .expect("Failed to produce a block: {:?}");
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
-
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
 
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
