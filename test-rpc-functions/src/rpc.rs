@@ -29,19 +29,19 @@ use crate::RpcTestFunctionsError;
 #[rpc::rpc(server, namespace = "test_functions")]
 trait RpcTestFunctionsRpc {
     #[method(name = "genesis_pool_id")]
-    async fn genesis_pool_id(&self) -> rpc::Result<String>;
+    async fn genesis_pool_id(&self) -> rpc::Result<Option<String>>;
 
     #[method(name = "genesis_private_key")]
-    async fn genesis_private_key(&self) -> rpc::Result<String>;
+    async fn genesis_private_key(&self) -> rpc::Result<Option<String>>;
 
     #[method(name = "genesis_public_key")]
-    async fn genesis_public_key(&self) -> rpc::Result<String>;
+    async fn genesis_public_key(&self) -> rpc::Result<Option<String>>;
 
     #[method(name = "genesis_vrf_private_key")]
-    async fn genesis_vrf_private_key(&self) -> rpc::Result<String>;
+    async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>>;
 
     #[method(name = "genesis_vrf_public_key")]
-    async fn genesis_vrf_public_key(&self) -> rpc::Result<String>;
+    async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>>;
 
     #[method(name = "new_private_key")]
     async fn new_private_key(&self) -> rpc::Result<String>;
