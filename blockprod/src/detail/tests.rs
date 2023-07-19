@@ -1131,10 +1131,6 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
                         RequiredConsensus::PoS(_) => {
@@ -1156,10 +1152,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoW input data for PoS consensus
 
                             let input_data_pow_result = block_production
@@ -1175,10 +1167,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoS input data for PoS consensus
 
                             let (new_block, job_finished_receiver) = block_production
@@ -1187,10 +1175,6 @@ mod produce_block {
                                 .expect("Failed to produce a job: {:?}");
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
-
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
 
                             let result = assert_process_block(&chainstate, new_block).await;
 
@@ -1227,10 +1211,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoS input data for PoW consensus
 
                             let input_data_pos_result = block_production
@@ -1246,10 +1226,6 @@ mod produce_block {
                                 _ => panic!("Unexpected return value"),
                             }
 
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
-
                             // Try PoW input data for PoW consensus
 
                             let (new_block, job_finished_receiver) = block_production
@@ -1258,10 +1234,6 @@ mod produce_block {
                                 .expect("Failed to produce a block: {:?}");
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
-
-                            // TODO: until duplicate job keys is fixed
-                            // (Issue #1003), manually stop all jobs
-                            _ = block_production.stop_all_jobs().await;
 
                             assert_process_block(&chainstate, new_block.clone()).await;
                         }
@@ -1313,63 +1285,6 @@ mod produce_block {
                     job.await.unwrap();
                     assert_job_count(&block_production, 0).await;
                 }
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn multiple_jobs_without_wait(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate,
-                    mempool,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let mut rng = make_seedable_rng(seed);
-                let jobs_to_create = rng.gen::<usize>() % 20 + 1;
-
-                // The following is a race between the successive
-                // calls to produce_block() and the job manager
-                // cleaning up, so we try a number of times before
-                // giving up
-
-                for _ in 0..jobs_to_create {
-                    let result = block_production
-                        .produce_block(
-                            GenerateBlockInputData::None,
-                            TransactionsSource::Provided(vec![]),
-                        )
-                        .await;
-
-                    match result {
-                        Err(BlockProductionError::JobManagerError(
-                            JobManagerError::JobAlreadyExists,
-                        )) => break,
-                        Err(_) => panic!("Duplicate job key should fail"),
-                        Ok(_) => continue,
-                    }
-                }
-
-                assert_job_count(&block_production, 0).await;
             }
         });
 
