@@ -336,12 +336,9 @@ where
         total_fees: Fee,
         block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
-        input_output_policy::check_reward_inputs_outputs_purposes(
+        input_output_policy::check_reward_inputs_outputs_policy(
             &block.block_reward_transactable(),
-            self.chain_config.as_ref(),
-            block_height,
             &self.utxo_cache,
-            total_fees,
         )?;
 
         self.check_stake_outputs_in_reward(block)?;
@@ -636,7 +633,7 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        input_output_policy::check_tx_inputs_outputs_purposes(
+        input_output_policy::check_tx_inputs_outputs_policy(
             tx.transaction(),
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),

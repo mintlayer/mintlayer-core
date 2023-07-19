@@ -35,6 +35,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
+use super::purposes_check::*;
 use super::*;
 
 fn transfer() -> TxOutput {
