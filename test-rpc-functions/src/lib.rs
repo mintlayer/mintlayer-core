@@ -13,9 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chainstate_types::vrf_tools::ProofOfStakeVRFError;
+use common::chain::ChainConfig;
 use crypto::key::SignatureError;
-use interface::rpc_test_interface::RpcTestFunctionsInterface;
+use interface::{
+    rpc_test_interface::RpcTestFunctionsInterface, rpc_test_interface_impl::RpcTestFunctionsImpl,
+};
 use subsystem::subsystem::CallError;
 
 pub mod empty;
@@ -32,11 +37,13 @@ pub enum RpcTestFunctionsError {
     ProofOfStakeVRFError(#[from] ProofOfStakeVRFError),
 }
 
-pub struct RpcTestFunctions {}
+pub struct RpcTestFunctions {
+    chain_config: Arc<ChainConfig>,
+}
 
 impl RpcTestFunctions {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(chain_config: Arc<ChainConfig>) -> Self {
+        Self { chain_config }
     }
 }
 
@@ -44,6 +51,10 @@ pub type RpcTestFunctionsHandle = subsystem::Handle<Box<dyn RpcTestFunctionsInte
 
 impl subsystem::Subsystem for Box<dyn RpcTestFunctionsInterface> {}
 
-pub fn make_rpc_test_functions() -> Box<dyn RpcTestFunctionsInterface> {
-    Box::new(RpcTestFunctions::new())
+pub fn make_rpc_test_functions(
+    chain_config: Arc<ChainConfig>,
+) -> Box<dyn RpcTestFunctionsInterface> {
+    let rpc_test_functions = RpcTestFunctions::new(chain_config);
+    let rpc_test_functions_interface = RpcTestFunctionsImpl::new(rpc_test_functions);
+    Box::new(rpc_test_functions_interface)
 }

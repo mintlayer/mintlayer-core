@@ -136,7 +136,10 @@ async fn initialize(
     // RPC Functions for tests
     let rpc_test_functions = if chain_config.chain_type() == &ChainType::Regtest {
         // We add the test rpc functions only if we are in regtest mode
-        manager.add_subsystem("rpc_test_functions", make_rpc_test_functions())
+        manager.add_subsystem(
+            "rpc_test_functions",
+            make_rpc_test_functions(Arc::clone(&chain_config)),
+        )
     } else {
         // Otherwise we add empty rpc functions
         manager.add_subsystem("rpc_test_functions", make_empty_rpc_test_functions())

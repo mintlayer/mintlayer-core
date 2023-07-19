@@ -13,5 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
+
 #[async_trait::async_trait]
-pub trait RpcTestFunctionsInterface: Send {}
+pub trait RpcTestFunctionsInterface: Send {
+    fn get_chain_config(&self) -> Option<Arc<ChainConfig>>;
+}

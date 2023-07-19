@@ -17,16 +17,35 @@
 
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex},
+    chain::config::regtest_genesis_values,
+    chain::{
+        block::timestamp::BlockTimestamp, config::EpochIndex, stakelock::StakePoolData, PoolId,
+        TxOutput,
+    },
     primitives::H256,
 };
 use crypto::key::Signature;
 use serialization::{hex::HexDecode, hex::HexEncode};
 
-use crate::RpcTestFunctionsError;
+use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 
 #[rpc::rpc(server, namespace = "test_functions")]
 trait RpcTestFunctionsRpc {
+    #[method(name = "genesis_pool_id")]
+    async fn genesis_pool_id(&self) -> rpc::Result<Option<String>>;
+
+    #[method(name = "genesis_private_key")]
+    async fn genesis_private_key(&self) -> rpc::Result<Option<String>>;
+
+    #[method(name = "genesis_public_key")]
+    async fn genesis_public_key(&self) -> rpc::Result<Option<String>>;
+
+    #[method(name = "genesis_vrf_private_key")]
+    async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>>;
+
+    #[method(name = "genesis_vrf_public_key")]
+    async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>>;
+
     #[method(name = "new_private_key")]
     async fn new_private_key(&self) -> rpc::Result<String>;
 
@@ -77,6 +96,60 @@ trait RpcTestFunctionsRpc {
 
 #[async_trait::async_trait]
 impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
+    async fn genesis_pool_id(&self) -> rpc::Result<Option<String>> {
+        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) = regtest_genesis_values();
+
+        Ok(
+            assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
+                .await
+                .then_some(genesis_pool_id.hex_encode()),
+        )
+    }
+
+    async fn genesis_private_key(&self) -> rpc::Result<Option<String>> {
+        let (genesis_pool_id, genesis_stake_pool_data, genesis_stake_private_key, _, _, _) =
+            regtest_genesis_values();
+
+        Ok(
+            assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
+                .await
+                .then_some(genesis_stake_private_key.hex_encode()),
+        )
+    }
+
+    async fn genesis_public_key(&self) -> rpc::Result<Option<String>> {
+        let (genesis_pool_id, genesis_stake_pool_data, _, genesis_stake_public_key, _, _) =
+            regtest_genesis_values();
+
+        Ok(
+            assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
+                .await
+                .then_some(genesis_stake_public_key.hex_encode()),
+        )
+    }
+
+    async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>> {
+        let (genesis_pool_id, genesis_stake_pool_data, _, _, genesis_vrf_private_key, _) =
+            regtest_genesis_values();
+
+        Ok(
+            assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
+                .await
+                .then_some(genesis_vrf_private_key.hex_encode()),
+        )
+    }
+
+    async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>> {
+        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, genesis_vrf_public_key) =
+            regtest_genesis_values();
+
+        Ok(
+            assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
+                .await
+                .then_some(genesis_vrf_public_key.hex_encode()),
+        )
+    }
+
     async fn new_private_key(&self) -> rpc::Result<String> {
         let keys =
             crypto::key::PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
@@ -192,5 +265,30 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let vrf_output: H256 = rpc::handle_result(vrf_output)?;
 
         Ok(vrf_output.hex_encode())
+    }
+}
+
+async fn assert_genesis_values(
+    handle: &RpcTestFunctionsHandle,
+    genesis_pool_id: PoolId,
+    genesis_stake_pool_data: Box<StakePoolData>,
+) -> bool {
+    let expected_genesis_pool_txoutput =
+        TxOutput::CreateStakePool(genesis_pool_id, genesis_stake_pool_data);
+
+    let current_create_genesis_pool_txoutput = handle
+        .call(|this| {
+            this.get_chain_config()
+                .and_then(|chain| chain.genesis_block().utxos().get(1).map(|u| u.hex_encode()))
+        })
+        .await
+        .expect("Subsystem call ok");
+
+    match current_create_genesis_pool_txoutput {
+        None => false,
+        Some(txoutput) => {
+            assert!(txoutput == expected_genesis_pool_txoutput.hex_encode());
+            true
+        }
     }
 }
