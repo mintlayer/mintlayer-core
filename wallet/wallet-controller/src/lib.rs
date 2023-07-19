@@ -33,8 +33,8 @@ use utils::tap_error_log::LogError;
 use common::{
     address::Address,
     chain::{
-        tokens::TokenId, Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::{Metadata, TokenId, TokenIssuance},
+        Block, ChainConfig, PoolId, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -234,15 +234,56 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
         let (token_id, tx) = self
             .wallet
             .issue_new_token(
                 account_index,
                 address,
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
+                TokenIssuance {
+                    token_ticker,
+                    amount_to_issue,
+                    number_of_decimals,
+                    metadata_uri,
+                },
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .map(|status| (token_id, status))
+    }
+
+    pub async fn issue_new_nft(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        metadata: Metadata,
+    ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+        let (token_id, tx) = self
+            .wallet
+            .issue_new_nft(
+                account_index,
+                address,
+                metadata,
+                current_fee_rate,
+                consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
@@ -343,12 +384,24 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         address: Address,
         amount: Amount,
     ) -> Result<TxStatus, ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
         let output =
             make_address_output_token(self.chain_config.as_ref(), address, amount, token_id)
                 .map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
-            .create_transaction_to_addresses(account_index, [output])
+            .create_transaction_to_addresses(
+                account_index,
+                [output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.clone())

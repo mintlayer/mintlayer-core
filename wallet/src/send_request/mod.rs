@@ -15,7 +15,9 @@
 
 use common::address::Address;
 use common::chain::stakelock::StakePoolData;
-use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer};
+use common::chain::tokens::{
+    Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer,
+};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
@@ -69,31 +71,43 @@ pub fn make_address_output_token(
 
 pub fn make_issue_token_outputs(
     address: Address,
-    token_ticker: Vec<u8>,
-    amount_to_issue: Amount,
-    number_of_decimals: u8,
-    metadata_uri: Vec<u8>,
+    token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
     let destination = address.destination(chain_config)?;
 
     chainstate::check_tokens_issuance_data(
         chain_config,
-        token_ticker.as_slice(),
-        &amount_to_issue,
-        &number_of_decimals,
-        metadata_uri.as_slice(),
+        &token_issuance.token_ticker,
+        &token_issuance.amount_to_issue,
+        &token_issuance.number_of_decimals,
+        &token_issuance.metadata_uri,
     )?;
 
     let issuance_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(
-            TokenIssuance {
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
-            },
-        )))),
+        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),
+        destination,
+    );
+
+    let token_issuance_fee =
+        TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
+
+    Ok(vec![issuance_output, token_issuance_fee])
+}
+
+pub fn make_issue_nft_outputs(
+    address: Address,
+    nft_metadata: Metadata,
+    chain_config: &ChainConfig,
+) -> WalletResult<Vec<TxOutput>> {
+    let destination = address.destination(chain_config)?;
+    let nft_issuance = Box::new(NftIssuance {
+        metadata: nft_metadata,
+    });
+    chainstate::check_nft_issuance_data(chain_config, &nft_issuance)?;
+
+    let issuance_output = TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::NftIssuance(nft_issuance))),
         destination,
     );
 

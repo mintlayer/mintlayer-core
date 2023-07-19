@@ -19,14 +19,14 @@ use std::sync::Arc;
 
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
-use crate::send_request::make_issue_token_outputs;
+use crate::send_request::{make_issue_nft_outputs, make_issue_token_outputs};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{token_id, TokenId};
+use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuance};
 use common::chain::{
     Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -476,39 +476,41 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         address: Address,
-        token_ticker: Vec<u8>,
-        amount_to_issue: Amount,
-        number_of_decimals: u8,
-        metadata_uri: Vec<u8>,
+        token_issuance: TokenIssuance,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(TokenId, SignedTransaction)> {
-        let outputs = make_issue_token_outputs(
-            address,
-            token_ticker,
-            amount_to_issue,
-            number_of_decimals,
-            metadata_uri,
-            self.chain_config.as_ref(),
+        let outputs =
+            make_issue_token_outputs(address, token_issuance, self.chain_config.as_ref())?;
+
+        let tx = self.create_transaction_to_addresses(
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
         )?;
+        let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
+        Ok((token_id, tx))
+    }
 
-        let request = SendRequest::new().with_outputs(outputs);
-        let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.process_send_request(
-                db_tx,
-                request,
-                latest_median_time,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )?;
-            let txs = [tx];
-            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+    pub fn issue_new_nft(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        metadata: Metadata,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(TokenId, SignedTransaction)> {
+        let outputs = make_issue_nft_outputs(address, metadata, self.chain_config.as_ref())?;
 
-            let [tx] = txs;
-            let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
-            Ok((token_id, tx))
-        })
+        let tx = self.create_transaction_to_addresses(
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
+        Ok((token_id, tx))
     }
 
     pub fn create_stake_pool_tx(

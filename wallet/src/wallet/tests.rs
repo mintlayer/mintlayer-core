@@ -39,6 +39,7 @@ use crypto::{
 };
 use itertools::Itertools;
 use rstest::rstest;
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::WalletStorageEncryptionRead;
 use wallet_types::{
@@ -1022,20 +1023,44 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
 
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
-    let token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
+    let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
-    let (issued_token_id, token_issuance_transaction) = wallet
-        .issue_new_token(
-            DEFAULT_ACCOUNT_INDEX,
-            address2,
-            "XXXX".as_bytes().to_vec(),
-            token_amount_to_issue,
-            rng.gen_range(1..18),
-            "http://uri".as_bytes().to_vec(),
-            FeeRate::new(Amount::ZERO),
-            FeeRate::new(Amount::ZERO),
-        )
-        .unwrap();
+    let (issued_token_id, token_issuance_transaction) = if rng.gen::<bool>() {
+        wallet
+            .issue_new_token(
+                DEFAULT_ACCOUNT_INDEX,
+                address2,
+                TokenIssuance {
+                    token_ticker: "XXXX".as_bytes().to_vec(),
+                    amount_to_issue: token_amount_to_issue,
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                },
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
+            )
+            .unwrap()
+    } else {
+        token_amount_to_issue = Amount::from_atoms(1);
+        wallet
+            .issue_new_nft(
+                DEFAULT_ACCOUNT_INDEX,
+                address2,
+                Metadata {
+                    creator: None,
+                    name: "Name".as_bytes().to_vec(),
+                    description: "SomeNFT".as_bytes().to_vec(),
+                    ticker: "XXXX".as_bytes().to_vec(),
+                    icon_uri: DataOrNoVec::from(None),
+                    additional_metadata_uri: DataOrNoVec::from(None),
+                    media_uri: DataOrNoVec::from(None),
+                    media_hash: "123456".as_bytes().to_vec(),
+                },
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
+            )
+            .unwrap()
+    };
 
     let block2 = Block::new(
         vec![token_issuance_transaction],
