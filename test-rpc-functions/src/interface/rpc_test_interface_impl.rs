@@ -13,9 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
 use crate::RpcTestFunctions;
 
 use super::rpc_test_interface::RpcTestFunctionsInterface;
 
+pub struct RpcTestFunctionsImpl {
+    rpc_test_functions: RpcTestFunctions,
+}
+
+impl RpcTestFunctionsImpl {
+    pub fn new(rpc_test_functions: RpcTestFunctions) -> Self {
+        Self { rpc_test_functions }
+    }
+}
+
 #[async_trait::async_trait]
-impl RpcTestFunctionsInterface for RpcTestFunctions {}
+impl RpcTestFunctionsInterface for RpcTestFunctionsImpl {
+    fn get_chain_config(&self) -> Option<Arc<ChainConfig>> {
+        Some(Arc::clone(&self.rpc_test_functions.chain_config))
+    }
+}

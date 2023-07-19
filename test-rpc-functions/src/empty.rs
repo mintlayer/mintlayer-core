@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
 use crate::interface::rpc_test_interface::RpcTestFunctionsInterface;
 
 // Empty implementation to exclude test functions under certain conditions, such as mainnet
@@ -34,4 +37,8 @@ pub fn make_empty_rpc_test_functions() -> Box<dyn RpcTestFunctionsInterface> {
     Box::new(EmptyRpcTestFunctionsRpc::new())
 }
 
-impl RpcTestFunctionsInterface for EmptyRpcTestFunctionsRpc {}
+impl RpcTestFunctionsInterface for EmptyRpcTestFunctionsRpc {
+    fn get_chain_config(&self) -> Option<Arc<ChainConfig>> {
+        None
+    }
+}
