@@ -176,7 +176,8 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
 
                 //spent the transaction
                 let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
-                let undo = cache.connect_transaction(&tx, block_height).unwrap();
+                let undo =
+                    cache.connect_transaction(&tx, UtxoSource::Blockchain(block_height)).unwrap();
 
                 //keep result updated
                 let new_outpoint = UtxoOutPoint::new(OutPointSourceId::from(tx.get_id()), 0);

@@ -365,12 +365,19 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
             let mut tx_verifier = self.tx_verifier.derive_child();
 
+            let verifier_time =
+                self.clock.get_time().saturating_add(config::FUTURE_TIMELOCK_TOLERANCE_SECS);
+            let effective_height = (current_best.block_height()
+                + config::FUTURE_TIMELOCK_TOLERANCE_BLOCKS)
+                .expect("Block height overflow");
+
             let res = tx_verifier.connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &current_best,
-                },
+                &TransactionSourceForConnect::for_mempool_with_height(
+                    &current_best,
+                    effective_height,
+                ),
                 transaction.transaction(),
-                &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
+                &BlockTimestamp::from_duration_since_epoch(verifier_time),
                 None,
             );
 
@@ -941,9 +948,33 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             return None;
         }
 
+        let chainstate = tx_verifier::ChainstateHandle::new(self.chainstate_handle.shallow_clone());
+        let chain_config = self.chain_config.deref();
+        let utxo_view = tx_verifier::MempoolUtxoView::new(self, chainstate.clone());
+
+        let best_index = self
+            .blocking_chainstate_handle()
+            .call(|c| c.get_best_block_index())
+            .expect("chainstate to live")
+            .expect("best index to exist");
+        let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
+
+        let block_timestamp = tx_accumulator.block_timestamp();
         let tx_id_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
         let mut tx_iter = tx_id_iter
-            .filter_map(|tx_id| self.store.txs_by_id.get(tx_id).map(Deref::deref))
+            .filter_map(|tx_id| {
+                let tx = self.store.txs_by_id.get(tx_id)?.deref();
+                chainstate::tx_verifier::timelock_check::check_timelocks(
+                    &chainstate,
+                    &chain_config,
+                    &utxo_view,
+                    tx.transaction(),
+                    &tx_source,
+                    &block_timestamp,
+                )
+                .ok()?;
+                Some(tx)
+            })
             .fuse()
             .peekable();
 
@@ -1005,6 +1036,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     },
                 }
             }
+        }
+
+        let final_chainstate_tip =
+            utxo::UtxosView::best_block_hash(&chainstate).expect("cannot fetch tip");
+        if final_chainstate_tip != mempool_tip {
+            log::debug!(
+                "Chainstate moved while collecting txns: mempool {:?}, chainstate {:?}",
+                mempool_tip,
+                final_chainstate_tip,
+            );
+            return None;
         }
 
         Some(tx_accumulator)

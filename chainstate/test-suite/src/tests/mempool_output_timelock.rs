@@ -75,9 +75,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None
@@ -96,9 +94,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -142,9 +138,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None,
@@ -166,9 +160,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -233,9 +225,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
                     None,
@@ -258,9 +248,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 None,
@@ -326,9 +314,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             let best_block_index = tf.best_block_index();
             assert!(matches!(
                 verifier.connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &best_block_index,
-                    },
+                    &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
                     &mtp,
                     None
@@ -356,9 +342,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &best_block_index,
-                },
+                &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(time::get_time()),
                 None,

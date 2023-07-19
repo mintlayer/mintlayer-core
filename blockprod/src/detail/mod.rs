@@ -119,6 +119,7 @@ impl BlockProduction {
     pub async fn collect_transactions(
         &self,
         current_tip: Id<GenBlock>,
+        min_block_timestamp: BlockTimestamp,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
         let max_block_size = self.chain_config.max_block_size_from_std_scripts();
         let returned_accumulator = self
@@ -127,6 +128,7 @@ impl BlockProduction {
                 mempool.collect_txs(Box::new(DefaultTxAccumulator::new(
                     max_block_size,
                     current_tip,
+                    min_block_timestamp,
                 )))
             })
             .await?
@@ -305,17 +307,15 @@ impl BlockProduction {
             Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
         };
 
-        let max_block_timestamp = {
-            let current_timestamp =
-                BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
-
-            current_timestamp
-                .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
-                .ok_or(ConsensusCreationError::TimestampOverflow(
-                    current_timestamp,
-                    self.chain_config.max_future_block_time_offset().as_secs(),
-                ))?
-        };
+        // Range of timestamps for the block we attempt to construct.
+        let min_constructed_block_timestamp =
+            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+        let max_constructed_block_timestamp = min_constructed_block_timestamp
+            .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+            .ok_or(ConsensusCreationError::TimestampOverflow(
+                min_constructed_block_timestamp,
+                self.chain_config.max_future_block_time_offset().as_secs(),
+            ))?;
 
         loop {
             {
@@ -323,7 +323,7 @@ impl BlockProduction {
                 let last_used_block_timestamp =
                     BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
-                if last_used_block_timestamp >= max_block_timestamp {
+                if last_used_block_timestamp >= max_constructed_block_timestamp {
                     stop_flag.store(true);
                     return Err(BlockProductionError::TryAgainLater);
                 }
@@ -351,8 +351,18 @@ impl BlockProduction {
             // TODO: see if we can simplify this
             let transactions = match transactions_source.clone() {
                 TransactionsSource::Mempool => {
-                    let accumulator =
-                        self.collect_transactions(current_tip_index.block_id()).await?;
+                    // We conservatively use the minimum timestamp here in order to figure out
+                    // which transactions are valid for the block.
+                    // TODO: Alternatively, we can construct the transaction sequence from the
+                    // scratch every time a different timestamp is attempted. That is more costly
+                    // in terms of computational resources but will allow the node to include more
+                    // transactions since the passing time may release some time locks.
+                    let accumulator = self
+                        .collect_transactions(
+                            current_tip_index.block_id(),
+                            min_constructed_block_timestamp,
+                        )
+                        .await?;
                     match accumulator {
                         Some(acc) => acc.transactions().clone(),
                         None => {

@@ -18,6 +18,7 @@ use common::{
     chain::Block,
     primitives::{BlockHeight, Id},
 };
+use utxo::UtxoSource;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum TransactionSource {
@@ -31,35 +32,85 @@ impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
             TransactionSourceForConnect::Chain { new_block_index } => {
                 TransactionSource::Chain(*new_block_index.block_id())
             }
-            TransactionSourceForConnect::Mempool { current_best: _ } => TransactionSource::Mempool,
+            TransactionSourceForConnect::Mempool {
+                current_best: _,
+                effective_height: _,
+            } => TransactionSource::Mempool,
         }
     }
 }
 
 pub enum TransactionSourceForConnect<'a> {
-    Chain { new_block_index: &'a BlockIndex },
-    Mempool { current_best: &'a GenBlockIndex },
+    Chain {
+        new_block_index: &'a BlockIndex,
+    },
+    Mempool {
+        // Blockchain tip according to mempool
+        current_best: &'a GenBlockIndex,
+        // Effective block height used for mempool transaction validation (e.g. timelocks)
+        effective_height: BlockHeight,
+    },
 }
 
 impl<'a> TransactionSourceForConnect<'a> {
+    pub fn for_chain(new_block_index: &'a BlockIndex) -> Self {
+        Self::Chain { new_block_index }
+    }
+
+    pub fn for_mempool(current_best: &'a GenBlockIndex) -> Self {
+        let effective_height = current_best.block_height().next_height();
+        Self::for_mempool_with_height(current_best, effective_height)
+    }
+
+    /// Source is mempool with given declared block height
+    ///
+    /// The height has to be strictly greater than the height of chain tip
+    pub fn for_mempool_with_height(
+        current_best: &'a GenBlockIndex,
+        effective_height: BlockHeight,
+    ) -> Self {
+        assert!(current_best.block_height() < effective_height);
+        Self::Mempool {
+            current_best,
+            effective_height,
+        }
+    }
+
     /// The block height of the transaction to be connected
-    /// For the mempool, it's the height of the next-to-be block
-    /// For the chain, it's for the block being connected
+    ///
+    /// * For the mempool, it's the height greater than tip, as specified by mempool
+    /// * For the chain, it's for the block being connected
     pub fn expected_block_height(&self) -> BlockHeight {
         match self {
             TransactionSourceForConnect::Chain { new_block_index } => {
                 new_block_index.block_height()
             }
             TransactionSourceForConnect::Mempool {
-                current_best: best_block_index,
-            } => best_block_index.block_height().next_height(),
+                current_best: _,
+                effective_height,
+            } => *effective_height,
         }
     }
 
     pub fn chain_block_index(&self) -> Option<&BlockIndex> {
         match self {
             TransactionSourceForConnect::Chain { new_block_index } => Some(new_block_index),
-            TransactionSourceForConnect::Mempool { current_best: _ } => None,
+            TransactionSourceForConnect::Mempool {
+                current_best: _,
+                effective_height: _,
+            } => None,
+        }
+    }
+
+    pub fn to_utxo_source(&self) -> UtxoSource {
+        match self {
+            Self::Chain {
+                new_block_index: idx,
+            } => UtxoSource::Blockchain(idx.block_height()),
+            Self::Mempool {
+                current_best: _,
+                effective_height: _,
+            } => UtxoSource::Mempool,
         }
     }
 }

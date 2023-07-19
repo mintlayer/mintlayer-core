@@ -257,3 +257,18 @@ pub fn generate_transaction_graph(
         TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
     })
 }
+
+pub fn make_test_block(
+    txs: Vec<SignedTransaction>,
+    parent: impl Into<Id<GenBlock>>,
+    time: BlockTimestamp,
+) -> Block {
+    Block::new(
+        txs,
+        parent.into(),
+        time,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap()
+}

@@ -532,7 +532,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     let new_tx = Transaction::new(0x00, to_spend.clone(), vec![]).expect("should succeed");
     // let's test `connect_transaction`
     let tx_undo = cache
-        .connect_transaction(&new_tx, BlockHeight::new(2))
+        .connect_transaction(&new_tx, UtxoSource::Blockchain(BlockHeight::new(2)))
         .expect("should return tx undo");
 
     // check that these utxos came from the tx's output
@@ -603,7 +603,9 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     // spend the utxo in a transaction
     let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
-    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo1 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);
 
@@ -614,7 +616,9 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
-    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo2 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
 }
@@ -636,7 +640,9 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     // burn output in a tx
     let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output]).unwrap();
-    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo1 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);
 
@@ -647,7 +653,9 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
-    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo2 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
 }
@@ -869,7 +877,9 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     );
     let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output1, output2]).unwrap();
-    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo1 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);
 
@@ -880,7 +890,9 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
-    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo2 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
 }
@@ -904,7 +916,9 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
     let new_utxo_outpoint = UtxoOutPoint::new(tx.get_id().into(), 0);
 
-    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo1 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert!(cache.has_utxo_in_cache(&new_utxo_outpoint));
     assert_eq!(undo1.utxos(), vec![None]);
     assert_eq!(cache.utxos.len(), 1);
@@ -917,7 +931,9 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
     assert!(cache.utxos.is_empty());
 
     //spend the transaction again
-    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    let undo2 = cache
+        .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
+        .unwrap();
     assert_eq!(undo2.utxos(), vec![None]);
 
     let consumed_cache = cache.consume();

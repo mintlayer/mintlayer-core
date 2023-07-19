@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{GenBlock, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, GenBlock, SignedTransaction},
     primitives::{Amount, Id},
 };
 use serialization::Encode;
@@ -40,6 +40,9 @@ pub trait TransactionAccumulator: Send {
     /// The tip that the accumulator expects. This is used so that the mempool remains in sync with block production,
     /// and to prevent having transactions pulled for a different state than the one the block producer is working on.
     fn expected_tip(&self) -> Id<GenBlock>;
+
+    /// Candidate block timestamp to verify time locks against
+    fn block_timestamp(&self) -> BlockTimestamp;
 }
 
 pub struct DefaultTxAccumulator {
@@ -49,10 +52,11 @@ pub struct DefaultTxAccumulator {
     done: bool,
     total_fees: Fee,
     expected_tip: Id<GenBlock>,
+    timestamp: BlockTimestamp,
 }
 
 impl DefaultTxAccumulator {
-    pub fn new(target_size: usize, expected_tip: Id<GenBlock>) -> Self {
+    pub fn new(target_size: usize, expected_tip: Id<GenBlock>, timestamp: BlockTimestamp) -> Self {
         Self {
             txs: Vec::new(),
             total_size: 0,
@@ -60,6 +64,7 @@ impl DefaultTxAccumulator {
             done: false,
             total_fees: Amount::ZERO.into(),
             expected_tip,
+            timestamp,
         }
     }
 }
@@ -92,5 +97,9 @@ impl TransactionAccumulator for DefaultTxAccumulator {
 
     fn expected_tip(&self) -> Id<GenBlock> {
         self.expected_tip
+    }
+
+    fn block_timestamp(&self) -> BlockTimestamp {
+        self.timestamp
     }
 }

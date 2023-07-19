@@ -19,7 +19,7 @@ use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::*,
-    FlushableUtxoView, UtxosView,
+    FlushableUtxoView, UtxoSource, UtxosView,
 };
 use common::{
     chain::{
@@ -166,7 +166,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             0,
             num_of_txs,
         );
-        let block_height = BlockHeight::new(1);
+        let source = UtxoSource::Blockchain(BlockHeight::new(1));
         // spend the block
         let block_undo = {
             let mut block_undo: UtxosBlockUndo = Default::default();
@@ -177,7 +177,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
                     (
                         tx.transaction().get_id(),
                         cache
-                            .connect_transaction(tx.transaction(), block_height)
+                            .connect_transaction(tx.transaction(), source.clone())
                             .expect("should spend okay."),
                     )
                 })
@@ -307,8 +307,9 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let mut view = UtxosCache::new(&db).unwrap();
     let tx = block.transactions().get(0).unwrap();
 
+    let source = UtxoSource::Blockchain(BlockHeight::new(2));
     assert_eq!(
-        view.connect_transaction(tx.transaction(), BlockHeight::new(2)).unwrap_err(),
+        view.connect_transaction(tx.transaction(), source).unwrap_err(),
         NoUtxoFound
     );
 }
