@@ -16,10 +16,13 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{chain::GenBlock, primitives::Id};
+use crypto::random::{make_true_rng, Rng};
 use logging::log;
 use tokio::sync::oneshot;
 
 use super::{JobHandle, JobKey, JobManagerError, NewJobEvent};
+
+pub const JOBKEY_DEFAULT_LEN: usize = 32;
 
 #[derive(Default)]
 pub struct JobsContainer {
@@ -33,11 +36,16 @@ impl JobsContainer {
 
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
         let NewJobEvent {
-            custom_id,
+            mut custom_id,
             current_tip_id,
             cancel_sender,
             result_sender,
         } = event;
+
+        if custom_id.is_none() {
+            let mut rng = make_true_rng();
+            custom_id = Some(rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into())
+        }
 
         let job_key = JobKey::new(custom_id, current_tip_id);
 
