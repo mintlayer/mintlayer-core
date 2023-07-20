@@ -29,6 +29,9 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+        self.extra_args = [[
+            "--blockprod-min-peers-to-produce-blocks=0",
+        ]]
 
     def assert_chain(self, block, previous_tip):
         assert_equal(block["header"]["header"]["prev_block_id"][2:], previous_tip)
