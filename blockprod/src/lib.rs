@@ -102,6 +102,12 @@ pub fn make_blockproduction(
     Ok(Box::new(result))
 }
 
+pub fn test_blockprod_config() -> BlockProdConfig {
+    BlockProdConfig {
+        min_peers_to_produce_blocks: 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -335,11 +341,5 @@ mod tests {
         });
 
         manager.main().await;
-    }
-}
-
-pub fn test_blockprod_config() -> BlockProdConfig {
-    BlockProdConfig {
-        min_peers_to_produce_blocks: 0,
     }
 }
