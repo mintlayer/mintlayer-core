@@ -74,5 +74,5 @@ pub fn check_tx_inputs_outputs_policy(
     Ok(())
 }
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;
