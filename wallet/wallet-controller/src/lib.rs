@@ -277,7 +277,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         address: Address,
         amount: Amount,
     ) -> Result<TxStatus, ControllerError<T>> {
-        let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
+        let output = make_address_output(self.chain_config.as_ref(), address, amount)
+            .map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
             .create_transaction_to_addresses(account_index, [output])

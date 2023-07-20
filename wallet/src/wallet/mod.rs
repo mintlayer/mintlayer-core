@@ -22,7 +22,7 @@ use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
-use common::address::Address;
+use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
@@ -107,6 +107,8 @@ pub enum WalletError {
     CannotAbandonTransaction(TxState),
     #[error("Transaction with Id {0} not found")]
     CannotFindTransactionWithId(Id<Transaction>),
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
 }
 
 /// Result type used for the wallet

@@ -15,7 +15,6 @@
 
 use super::*;
 use crate::key_chain::MasterKeyChain;
-use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::config::create_regtest;
 use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
@@ -53,9 +52,9 @@ fn account_addresses() {
     db_tx.commit().unwrap();
 
     let test_vec = vec![
-        (ReceiveFunds, "rmt14qdg6kvlkpfwcw6zjc3dlxpj0g6ddknf54evpv"),
-        (Change, "rmt1867l3cva9qprxny6yanula7k6scuj9xy9rv7m2"),
-        (ReceiveFunds, "rmt1vnqqfgfccs2sg7c0feptrw03qm8ejq5vqqvpql"),
+        (ReceiveFunds, "rmt1qx5p4r2en7c99mpmg2tz9hucxfarf4k6dypq388a"),
+        (Change, "rmt1qyltm78pn55qyv6vngnk0nlh6m2rrjg5cs5p5xsm"),
+        (ReceiveFunds, "rmt1q9jvqp9p8rzp2prmpa8y9vde7yrvlxgz3s54n787"),
     ];
 
     let mut db_tx = db.transaction_rw(None).unwrap();
@@ -137,10 +136,11 @@ fn sign_transaction(#[case] seed: Seed) {
 
             TxOutput::Transfer(
                 OutputValue::Coin(*a),
-                Destination::Address(
-                    PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, purpose).unwrap())
-                        .unwrap(),
-                ),
+                account
+                    .get_new_address(&mut db_tx, purpose)
+                    .unwrap()
+                    .destination(config.as_ref())
+                    .unwrap(),
             )
         })
         .collect();
@@ -181,10 +181,11 @@ fn sign_transaction(#[case] seed: Seed) {
         TxOutput::Burn(OutputValue::Coin(burn_amount)),
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            Destination::Address(
-                PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, Change).unwrap())
-                    .unwrap(),
-            ),
+            account
+                .get_new_address(&mut db_tx, Change)
+                .unwrap()
+                .destination(config.as_ref())
+                .unwrap(),
         ),
     ];
 

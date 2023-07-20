@@ -234,10 +234,17 @@ impl Account {
             if change_amount > Amount::ZERO {
                 let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
                 let change_output = match currency {
-                    Currency::Coin => make_address_output(change_address, change_amount)?,
-                    Currency::Token(token_id) => {
-                        make_address_output_token(change_address, change_amount, token_id)?
-                    }
+                    Currency::Coin => make_address_output(
+                        self.chain_config.as_ref(),
+                        change_address,
+                        change_amount,
+                    )?,
+                    Currency::Token(token_id) => make_address_output_token(
+                        self.chain_config.as_ref(),
+                        change_address,
+                        change_amount,
+                        token_id,
+                    )?,
                 };
                 request = request.with_outputs([change_output]);
             }

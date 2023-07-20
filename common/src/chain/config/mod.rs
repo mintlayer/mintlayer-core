@@ -83,15 +83,6 @@ impl ChainType {
         }
     }
 
-    const fn default_address_prefix(&self) -> &'static str {
-        match self {
-            ChainType::Mainnet => "mtc",
-            ChainType::Testnet => "tmt",
-            ChainType::Regtest => "rmt",
-            ChainType::Signet => "smt",
-        }
-    }
-
     const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
@@ -118,10 +109,42 @@ impl ChainType {
     }
 }
 
+fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static str {
+    match chain_type {
+        ChainType::Mainnet => match destination {
+            Destination::AnyoneCanSpend => "",
+            Destination::Address(_) => "mtc",
+            Destination::PublicKey(_) => "mptc",
+            Destination::ScriptHash(_) => "mstc",
+            Destination::ClassicMultisig(_) => "mmtc",
+        },
+        ChainType::Testnet => match destination {
+            Destination::AnyoneCanSpend => "",
+            Destination::Address(_) => "tmt",
+            Destination::PublicKey(_) => "tpmt",
+            Destination::ScriptHash(_) => "tstc",
+            Destination::ClassicMultisig(_) => "mmtc",
+        },
+        ChainType::Regtest => match destination {
+            Destination::AnyoneCanSpend => "",
+            Destination::Address(_) => "rmt",
+            Destination::PublicKey(_) => "rpmt",
+            Destination::ScriptHash(_) => "tstc",
+            Destination::ClassicMultisig(_) => "mmtc",
+        },
+        ChainType::Signet => match destination {
+            Destination::AnyoneCanSpend => "",
+            Destination::Address(_) => "smt",
+            Destination::PublicKey(_) => "spmt",
+            Destination::ScriptHash(_) => "tstc",
+            Destination::ClassicMultisig(_) => "mmtc",
+        },
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
-    address_prefix: String,
     bip44_coin_type: ChildNumber,
     height_checkpoint_data: Checkpoints,
     net_upgrades: NetUpgrades<UpgradeVersion>,
@@ -157,8 +180,8 @@ pub struct ChainConfig {
 impl ChainConfig {
     /// Bech32m addresses in this chain will use this prefix
     #[must_use]
-    pub fn address_prefix(&self) -> &str {
-        &self.address_prefix
+    pub fn address_prefix(&self, destination: &Destination) -> &str {
+        address_prefix(self.chain_type, destination)
     }
 
     /// The BIP44 coin type for this chain

@@ -60,7 +60,7 @@ fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
 fn gen_random_lock_then_transfer(
     rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
-    pkh: PublicKeyHash,
+    destination: Destination,
     lock_for_blocks: u64,
     current_block_height: BlockHeight,
     seconds_between_blocks: u64,
@@ -69,22 +69,22 @@ fn gen_random_lock_then_transfer(
     match rng.gen_range(0..4) {
         0 => TxOutput::LockThenTransfer(
             OutputValue::Coin(amount),
-            Destination::Address(pkh),
+            destination,
             OutputTimeLock::ForBlockCount(lock_for_blocks),
         ),
         1 => TxOutput::LockThenTransfer(
             OutputValue::Coin(amount),
-            Destination::Address(pkh),
+            destination,
             OutputTimeLock::UntilHeight(current_block_height.checked_add(lock_for_blocks).unwrap()),
         ),
         2 => TxOutput::LockThenTransfer(
             OutputValue::Coin(amount),
-            Destination::Address(pkh),
+            destination,
             OutputTimeLock::ForSeconds(seconds_between_blocks * lock_for_blocks),
         ),
         _ => TxOutput::LockThenTransfer(
             OutputValue::Coin(amount),
-            Destination::Address(pkh),
+            destination,
             OutputTimeLock::UntilTime(
                 current_timestamp
                     .add_int_seconds(seconds_between_blocks * lock_for_blocks)
@@ -108,9 +108,9 @@ fn get_address(
     let address_priv_key = root_key
         .derive_absolute_path(&DerivationPath::try_from(address_path).unwrap())
         .unwrap();
-    Address::from_public_key(
+    Address::new_from_destination(
         chain_config,
-        &address_priv_key.to_public_key().into_public_key(),
+        &Destination::PublicKey(address_priv_key.to_public_key().into_public_key()),
     )
     .unwrap()
 }
@@ -229,7 +229,8 @@ fn wallet_balance_genesis() {
             );
 
             let genesis_amount = Amount::from_atoms(23456);
-            let genesis_output = make_address_output(address, genesis_amount).unwrap();
+            let genesis_output =
+                make_address_output(chain_config.as_ref(), address, genesis_amount).unwrap();
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
                 test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
@@ -327,7 +328,12 @@ fn wallet_balance_block_reward() {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
     let block1_id = block1.header().block_id();
@@ -354,7 +360,12 @@ fn wallet_balance_block_reward() {
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block2_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block2_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
     let block2_id = block2.header().block_id();
@@ -384,9 +395,12 @@ fn wallet_balance_block_reward() {
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address, block2_amount_new).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block2_amount_new,
+        )
+        .unwrap()]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
@@ -422,7 +436,7 @@ fn wallet_balance_block_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(address, tx_amount1).unwrap()],
+        vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
     )
     .unwrap();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -469,7 +483,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(address1, tx_amount1).unwrap()],
+        vec![make_address_output(chain_config.as_ref(), address1, tx_amount1).unwrap()],
     )
     .unwrap();
     let transaction_id1 = transaction1.get_id();
@@ -478,7 +492,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction2 = Transaction::new(
         0,
         vec![TxInput::from_utxo(OutPointSourceId::Transaction(transaction_id1), 0)],
-        vec![make_address_output(address2, tx_amount2).unwrap()],
+        vec![make_address_output(chain_config.as_ref(), address2, tx_amount2).unwrap()],
     )
     .unwrap();
     let signed_transaction2 =
@@ -550,7 +564,12 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -618,7 +637,12 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -736,7 +760,12 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -827,9 +856,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -851,7 +883,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pkh = PublicKeyHash::try_from(address2.data(&chain_config).unwrap()).unwrap();
+    let destination = address2.destination(chain_config.as_ref()).unwrap();
 
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
 
@@ -865,7 +897,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 metadata_uri: "http://uri".as_bytes().to_vec(),
             },
         )))),
-        Destination::Address(pkh),
+        destination,
     );
 
     let token_issuance_transaction = wallet
@@ -877,9 +909,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         block1_id.into(),
         block1_timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -928,7 +963,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
     wallet.scan_new_blocks(BlockHeight::new(2), vec![block3]).unwrap();
@@ -1026,9 +1066,12 @@ fn lock_then_transfer(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![
-            make_address_output(address.clone(), block1_amount).unwrap()
-        ]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -1053,8 +1096,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pkh = PublicKeyHash::try_from(address2.data(&chain_config).unwrap()).unwrap();
 
+    let destination = address2.destination(chain_config.as_ref()).unwrap();
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
 
     let block_count_lock = rng.gen_range(1..10);
@@ -1062,7 +1105,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let new_output = gen_random_lock_then_transfer(
         &mut rng,
         amount_to_lock_then_transfer,
-        pkh,
+        destination,
         block_count_lock,
         BlockHeight::new(2),
         seconds_between_blocks,
@@ -1078,7 +1121,12 @@ fn lock_then_transfer(#[case] seed: Seed) {
         block1_id.into(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -1176,7 +1224,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
             let transaction1 = Transaction::new(
                 0,
                 Vec::new(),
-                vec![make_address_output(address, tx_amount1).unwrap()],
+                vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
             )
             .unwrap();
             let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -1261,7 +1309,12 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
             chain_config.genesis_block_id(),
             chain_config.genesis_block().timestamp(),
             ConsensusData::None,
-            BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+            BlockReward::new(vec![make_address_output(
+                chain_config.as_ref(),
+                address,
+                block1_amount,
+            )
+            .unwrap()]),
         )
         .unwrap();
 
@@ -1389,7 +1442,12 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -1422,7 +1480,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             idx.try_into().unwrap(),
         );
-        let new_output = make_address_output(address, amount_to_transfer).unwrap();
+        let new_output =
+            make_address_output(chain_config.as_ref(), address, amount_to_transfer).unwrap();
 
         let transaction = wallet
             .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
@@ -1595,7 +1654,12 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
     )
     .unwrap();
 
@@ -1628,7 +1692,8 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             (idx + 1).try_into().unwrap(),
         );
-        let new_output = make_address_output(address, amount_to_transfer).unwrap();
+        let new_output =
+            make_address_output(chain_config.as_ref(), address, amount_to_transfer).unwrap();
 
         let transaction = wallet
             .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
