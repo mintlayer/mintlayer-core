@@ -140,8 +140,6 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             OutputTimeLock::ForBlockCount(50),
         ))
         .build();
-    let decommission_tx_id = decommission_tx.transaction().get_id();
-    let decommission_outpoint = UtxoOutPoint::new(decommission_tx_id.into(), 0);
 
     let result = tf
         .make_pos_block_builder(&mut rng)
@@ -154,12 +152,8 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::OutputTimelockError(
-                tx_verifier::timelock_check::OutputMaturityError::InvalidOutputMaturityDistance(
-                    decommission_outpoint,
-                    BlockDistance::new(50),
-                    BlockDistance::new(100)
-                )
+            ConnectTransactionError::IOPolicyError(
+                chainstate::IOPolicyError::TimelockRequirementNotSatisfied(BlockDistance::new(100))
             )
         ))
     );
@@ -302,8 +296,6 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             OutputTimeLock::ForBlockCount(50),
         ))
         .build();
-    let spend_share_tx_id = spend_share_tx.transaction().get_id();
-    let spend_share_tx_outpoint = UtxoOutPoint::new(spend_share_tx_id.into(), 0);
 
     let result = tf
         .make_pos_block_builder(&mut rng)
@@ -316,12 +308,8 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     assert_eq!(
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::OutputTimelockError(
-                tx_verifier::timelock_check::OutputMaturityError::InvalidOutputMaturityDistance(
-                    spend_share_tx_outpoint,
-                    BlockDistance::new(50),
-                    BlockDistance::new(100)
-                )
+            ConnectTransactionError::IOPolicyError(
+                chainstate::IOPolicyError::TimelockRequirementNotSatisfied(BlockDistance::new(100))
             )
         ))
     );

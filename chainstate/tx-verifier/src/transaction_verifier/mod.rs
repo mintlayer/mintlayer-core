@@ -40,6 +40,8 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
+pub use input_output_policy::IOPolicyError;
+
 use std::collections::BTreeMap;
 
 use self::{

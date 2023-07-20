@@ -43,6 +43,7 @@ pub use transaction_verifier::{
         ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError, TxIndexError,
     },
     storage::TransactionVerifierStorageError,
+    IOPolicyError,
 };
 use tx_verifier::transaction_verifier;
 

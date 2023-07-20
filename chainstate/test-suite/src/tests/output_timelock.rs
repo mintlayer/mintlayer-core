@@ -368,29 +368,29 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
         let block_count_that_unlocks = u64::MAX;
 
         // create the first block, with a locked output
-        let current_time = tf.current_time();
-        let (input_witness, input, _) = add_block_with_locked_output(
-            &mut tf,
-            OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(current_time),
-        );
 
-        // attempt to create the next block, and attempt to spend the locked output
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_anyone_can_spend_output(10000)
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100000)),
+                anyonecanspend_address(),
+                OutputTimeLock::ForBlockCount(block_count_that_unlocks),
+            ))
+            .build();
+
         assert_eq!(
-            tf.make_block_builder()
-                .add_transaction(
-                    TransactionBuilder::new()
-                        .add_input(input, input_witness)
-                        .add_anyone_can_spend_output(5000)
-                        .build()
-                )
-                .build_and_process()
-                .unwrap_err(),
+            tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::BlockHeightArithmeticError
             ))
         );
-        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
 }
 

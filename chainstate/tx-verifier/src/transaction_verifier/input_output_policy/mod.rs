@@ -15,7 +15,7 @@
 
 use common::{
     chain::{block::BlockRewardTransactable, ChainConfig, Transaction},
-    primitives::BlockHeight,
+    primitives::{BlockDistance, BlockHeight},
 };
 use pos_accounting::PoSAccountingView;
 
@@ -40,8 +40,8 @@ pub enum IOPolicyError {
     MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
-    #[error("Timelock requirement was not satisfied")]
-    TimelockRequirementNotSatisfied,
+    #[error("Timelock requirement was not satisfied for `{0}`")]
+    TimelockRequirementNotSatisfied(BlockDistance),
     #[error("Constraint amount overflow")]
     ConstrainedAmountOverflow,
 }

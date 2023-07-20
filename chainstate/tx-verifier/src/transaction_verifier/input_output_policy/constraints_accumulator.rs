@@ -62,7 +62,9 @@ impl ConstrainedValueAccumulator {
         }
 
         match self.timelock_requirement.iter().find(|(_, amount)| **amount > Amount::ZERO) {
-            Some(_) => Err(IOPolicyError::TimelockRequirementNotSatisfied.into()),
+            Some((block_distance, _)) => {
+                Err(IOPolicyError::TimelockRequirementNotSatisfied(*block_distance).into())
+            }
             None => Ok(()),
         }
     }
@@ -91,16 +93,17 @@ impl ConstrainedValueAccumulator {
                     | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                         let block_distance =
                             chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                        let pool_balance = pos_accounting_view
-                            .get_pool_balance(*pool_id)
+                        let pledged_amount = pos_accounting_view
+                            .get_pool_data(*pool_id)
                             .map_err(|_| pos_accounting::Error::ViewFail)?
-                            .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?;
+                            .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?
+                            .pledge_amount();
                         match self.timelock_requirement.entry(block_distance) {
                             Entry::Vacant(e) => {
-                                e.insert(pool_balance);
+                                e.insert(pledged_amount);
                             }
                             Entry::Occupied(mut e) => {
-                                let new_balance = (*e.get() + pool_balance)
+                                let new_balance = (*e.get() + pledged_amount)
                                     .ok_or(IOPolicyError::ConstrainedAmountOverflow)?;
                                 *e.get_mut() = new_balance;
                             }
@@ -158,15 +161,10 @@ impl ConstrainedValueAccumulator {
                             std::ops::Bound::Unbounded,
                             std::ops::Bound::Included(distance),
                         ));
-                        match range.max() {
-                            Some((_, amount)) => {
-                                let new_value = *amount - coins;
-                                *amount = new_value.unwrap_or(Amount::ZERO);
-                            }
-                            None => {
-                                self.timelock_requirement.insert(distance, coins);
-                            }
-                        };
+                        if let Some((_, amount)) = range.max() {
+                            let new_value = *amount - coins;
+                            *amount = new_value.unwrap_or(Amount::ZERO);
+                        }
                     }
                 }
             },

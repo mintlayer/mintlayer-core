@@ -15,7 +15,7 @@
 
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
@@ -265,7 +265,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InvalidOutputTypeInTx
+                ConnectTransactionError::IOPolicyError(IOPolicyError::MultipleDelegationCreated)
             ))
         );
     });
@@ -494,10 +494,15 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         assert_eq!(Some(amount_to_delegate), delegation_balance);
 
         // decommission the pool
+        let pledged_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap()
+                .pledge_amount();
         let tx = TransactionBuilder::new()
             .add_input(stake_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(1)),
+                OutputValue::Coin(pledged_balance),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(1),
             ))

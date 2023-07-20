@@ -28,8 +28,8 @@ pub use crate::{
     detail::{
         ban_score, calculate_median_time_past, check_nft_issuance_data, check_tokens_issuance_data,
         is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, InitializationError, Locator,
-        OrphanCheckError, SpendStakeError, TokenIssuanceError, TokensError,
+        CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
+        Locator, OrphanCheckError, SpendStakeError, TokenIssuanceError, TokensError,
         TransactionVerifierStorageError, TxIndexError,
     },
 };

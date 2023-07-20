@@ -16,7 +16,7 @@
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
 use chainstate::BlockSource;
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, get_output_value, TestFramework, TransactionBuilder,
@@ -297,7 +297,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InvalidOutputTypeInTx
+                ConnectTransactionError::IOPolicyError(IOPolicyError::MultiplePoolCreated)
             ))
         );
     });
