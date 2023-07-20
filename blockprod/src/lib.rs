@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod config;
 pub mod detail;
 pub mod interface;
 pub mod rpc;
@@ -25,6 +26,7 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
+use config::BlockProdConfig;
 use consensus::ConsensusCreationError;
 use detail::{
     job_manager::{JobKey, JobManagerError},
@@ -333,5 +335,11 @@ mod tests {
         });
 
         manager.main().await;
+    }
+}
+
+pub fn test_blockprod_config() -> BlockProdConfig {
+    BlockProdConfig {
+        min_peers_to_produce_blocks: 0,
     }
 }

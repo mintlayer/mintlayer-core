@@ -52,6 +52,10 @@ pub enum Command {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
+    /// Minimum number of connected peers to enable block production.
+    #[clap(long)]
+    pub blockprod_min_peers_to_produce_blocks: Option<usize>,
+
     /// Storage backend to use.
     #[clap(long)]
     pub storage_backend: Option<StorageBackendConfigFile>,

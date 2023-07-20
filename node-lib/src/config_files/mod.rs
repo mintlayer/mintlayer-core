@@ -17,6 +17,7 @@
 
 pub use self::{chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile};
 
+mod blockprod;
 mod chainstate;
 mod chainstate_launcher;
 mod p2p;
@@ -30,8 +31,8 @@ use serde::{Deserialize, Serialize};
 use crate::RunOptions;
 
 use self::{
-    chainstate::ChainstateConfigFile, chainstate_launcher::ChainstateLauncherConfigFile,
-    p2p::P2pConfigFile, rpc::RpcConfigFile,
+    blockprod::BlockProdConfigFile, chainstate::ChainstateConfigFile,
+    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile, rpc::RpcConfigFile,
 };
 
 /// The node configuration.
@@ -39,6 +40,7 @@ use self::{
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeConfigFile {
     // Subsystems configurations.
+    pub blockprod: Option<BlockProdConfigFile>,
     pub chainstate: Option<ChainstateLauncherConfigFile>,
     pub p2p: Option<P2pConfigFile>,
     pub rpc: Option<RpcConfigFile>,
@@ -47,6 +49,7 @@ pub struct NodeConfigFile {
 impl NodeConfigFile {
     pub fn new() -> Result<Self> {
         Ok(Self {
+            blockprod: None,
             chainstate: None,
             p2p: None,
             rpc: None,
@@ -70,20 +73,39 @@ impl NodeConfigFile {
         let config_as_str = Self::read_to_string_with_policy(config_path)?;
 
         let NodeConfigFile {
+            blockprod,
             chainstate,
             p2p,
             rpc,
         } = toml::from_str(&config_as_str).context("Failed to parse config")?;
 
+        let blockprod = blockprod_config(blockprod.unwrap_or_default(), options);
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
         let rpc = rpc_config(rpc.unwrap_or_default(), options);
 
         Ok(Self {
+            blockprod: Some(blockprod),
             chainstate: Some(chainstate),
             p2p: Some(p2p),
             rpc: Some(rpc),
         })
+    }
+}
+
+fn blockprod_config(config: BlockProdConfigFile, options: &RunOptions) -> BlockProdConfigFile {
+    const DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS: usize = 3;
+
+    let BlockProdConfigFile {
+        min_peers_to_produce_blocks,
+    } = config;
+
+    let min_peers_to_produce_blocks = options
+        .blockprod_min_peers_to_produce_blocks
+        .or(min_peers_to_produce_blocks.or(Some(DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS)));
+
+    BlockProdConfigFile {
+        min_peers_to_produce_blocks,
     }
 }
 
@@ -229,6 +251,7 @@ mod tests {
     #[test]
     fn no_values_required_in_toml_files() {
         let _config: NodeConfigFile = toml::from_str("").unwrap();
+        let _config: BlockProdConfigFile = toml::from_str("").unwrap();
         let _config: ChainstateLauncherConfigFile = toml::from_str("").unwrap();
         let _config: ChainstateConfigFile = toml::from_str("").unwrap();
         let _config: P2pConfigFile = toml::from_str("").unwrap();

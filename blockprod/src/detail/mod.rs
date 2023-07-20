@@ -41,11 +41,13 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
+use p2p::P2pHandle;
 use tokio::sync::oneshot;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
+    config::BlockProdConfig,
     detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
     BlockProductionError,
 };
@@ -258,6 +260,16 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        let current_peer_count = self
+            .p2p_handle
+            .call_async_mut(move |this| this.get_peer_count())
+            .await?
+            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+
+        if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
+            return Err(BlockProductionError::PeerCountBelowRequiredThreshold);
+        }
+
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 

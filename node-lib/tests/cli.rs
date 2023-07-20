@@ -81,6 +81,7 @@ fn read_config_override_values() {
     let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
+    let blockprod_min_peers_to_produce_blocks = 10;
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
@@ -105,6 +106,7 @@ fn read_config_override_values() {
     let rpc_cookie_file = "cookie_file";
 
     let options = RunOptions {
+        blockprod_min_peers_to_produce_blocks: Some(blockprod_min_peers_to_produce_blocks),
         storage_backend: Some(backend_type.clone()),
         node_type: Some(node_type),
         mock_time: None,
@@ -133,6 +135,11 @@ fn read_config_override_values() {
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
     };
     let config = NodeConfigFile::read(&config_path, &options).unwrap();
+
+    assert_eq!(
+        config.blockprod.clone().unwrap().min_peers_to_produce_blocks,
+        Some(blockprod_min_peers_to_produce_blocks),
+    );
 
     assert_eq!(
         config.chainstate.clone().unwrap().chainstate_config.max_db_commit_attempts,
