@@ -68,10 +68,6 @@ impl OrphanType {
             | CTE::PoSAccountingError(_)
             | CTE::MissingPoSAccountingUndo(_)
             | CTE::SpendStakeError(_)
-            | CTE::InvalidInputTypeInTx
-            | CTE::InvalidOutputTypeInTx
-            | CTE::InvalidInputTypeInReward
-            | CTE::InvalidOutputTypeInReward
             | CTE::PoolOwnerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)
             | CTE::PoolOwnerRewardCalculationFailed(_, _)

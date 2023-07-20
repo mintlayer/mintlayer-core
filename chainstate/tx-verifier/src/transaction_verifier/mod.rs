@@ -256,9 +256,9 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward)
-            }
+            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+                IOPolicyError::InvalidOutputTypeInReward,
+            )),
             TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id) => self
                 .accounting_delta_adapter
@@ -277,9 +277,9 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward)
-            }
+            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+                IOPolicyError::InvalidOutputTypeInReward,
+            )),
             TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
             TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
         }

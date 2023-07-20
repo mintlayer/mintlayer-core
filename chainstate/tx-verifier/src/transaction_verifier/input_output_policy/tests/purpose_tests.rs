@@ -17,26 +17,20 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        stakelock::StakePoolData,
-        timelock::OutputTimeLock,
-        tokens::OutputValue,
-        AccountNonce, AccountOutPoint, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        OutPointSourceId, PoolId, TxInput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, DelegationId, GenBlock, OutPointSourceId,
+        TxInput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
+    primitives::{Amount, Id, H256},
 };
-use crypto::{
-    random::{seq::IteratorRandom, Rng},
-    vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
-};
-use itertools::Itertools;
+use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::purposes_check::*;
 use super::*;
+
+use crate::error::SpendStakeError;
 
 #[rstest]
 #[rustfmt::skip]
@@ -630,7 +624,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
     assert_eq!(
         res,
         ConnectTransactionError::SpendStakeError(SpendStakeError::ConsensusPoSError(
-            ConsensusPoSError::MultipleKernels
+            consensus::ConsensusPoSError::MultipleKernels
         ))
     );
 }

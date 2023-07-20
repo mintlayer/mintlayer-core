@@ -153,7 +153,9 @@ where
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => {
-                    return Err(ConnectTransactionError::InvalidInputTypeInTx)
+                    return Err(ConnectTransactionError::IOPolicyError(
+                        super::IOPolicyError::InvalidInputTypeInTx,
+                    ))
                 }
             };
 

@@ -41,12 +41,6 @@ pub enum OutputMaturityError {
     InvalidOutputMaturityDistanceValue(UtxoOutPoint, u64),
 }
 
-#[derive(Debug, Clone, Copy)]
-enum OutputTimelockCheckRequired {
-    DelegationSpendMaturity,
-    DecommissioningMaturity,
-}
-
 pub fn check_timelock(
     source_block_height: &BlockHeight,
     source_block_time: &BlockTimestamp,
@@ -167,86 +161,7 @@ where
         Ok(())
     })?;
 
-    // check if output timelocks follow the rules
-    if let Some(outputs) = tx.outputs() {
-        // in case `CreateStakePool`, `ProduceBlockFromStake` utxos are spent or an input from account
-        // then produced outputs must be timelocked as per chain config
-        let output_check_required = inputs
-            .iter()
-            .zip(input_utxos.iter())
-            .filter_map(|(input, utxo_with_outpoint)| match input {
-                TxInput::Utxo(_) => {
-                    match utxo_with_outpoint.clone().expect("must be present").1.output() {
-                        TxOutput::Transfer(_, _)
-                        | TxOutput::LockThenTransfer(_, _, _)
-                        | TxOutput::Burn(_)
-                        | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::DelegateStaking(_, _) => None,
-                        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
-                            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
-                        }
-                    }
-                }
-                TxInput::Account(account_input) => match account_input.account() {
-                    AccountSpending::Delegation(_, _) => {
-                        Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
-                    }
-                },
-            })
-            // Note: theoretically there could be several inputs that impose timelock requirement
-            // but for now such transaction is considered invalid
-            .at_most_one()
-            .map_err(|_| ConnectTransactionError::InvalidInputTypeInTx)?;
-
-        if let Some(output_check_required) = output_check_required {
-            check_outputs_timelock(
-                chain_config.as_ref(),
-                outputs,
-                tx_source.expected_block_height(),
-                output_check_required,
-                outpoint_source_id,
-            )?;
-        }
-    }
-
     Ok(())
-}
-
-/// Outputs that decommission a stake pool or spend delegation share must be timelocked
-fn check_outputs_timelock(
-    chain_config: &ChainConfig,
-    outputs: &[TxOutput],
-    block_height: BlockHeight,
-    output_check_required: OutputTimelockCheckRequired,
-    outpoint_source_id: OutPointSourceId,
-) -> Result<(), ConnectTransactionError> {
-    outputs
-        .iter()
-        .enumerate()
-        .try_for_each(|(index, output)| {
-            let outpoint = UtxoOutPoint::new(outpoint_source_id.clone(), index as u32);
-            match output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::CreateStakePool(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => Ok(()),
-                TxOutput::LockThenTransfer(_, _, timelock) => match output_check_required {
-                    OutputTimelockCheckRequired::DelegationSpendMaturity => {
-                        let required =
-                            chain_config.as_ref().spend_share_maturity_distance(block_height);
-                        check_output_maturity_setting(timelock, required, outpoint)
-                    }
-                    OutputTimelockCheckRequired::DecommissioningMaturity => {
-                        let required =
-                            chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                        check_output_maturity_setting(timelock, required, outpoint)
-                    }
-                },
-            }
-        })
-        .map_err(ConnectTransactionError::OutputTimelockError)
 }
 
 pub fn check_output_maturity_setting(

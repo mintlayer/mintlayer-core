@@ -66,9 +66,9 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::LockThenTransfer(..)
                     | TxOutput::Burn(..)
                     | TxOutput::CreateDelegationId(..)
-                    | TxOutput::DelegateStaking(..) => {
-                        Err(ConnectTransactionError::InvalidInputTypeInReward)
-                    }
+                    | TxOutput::DelegateStaking(..) => Err(ConnectTransactionError::IOPolicyError(
+                        IOPolicyError::InvalidOutputTypeInReward,
+                    )),
                     TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
                         let outputs =
                             reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
@@ -85,7 +85,9 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::CreateStakePool(..)
                                 | TxOutput::CreateDelegationId(..)
                                 | TxOutput::DelegateStaking(..) => {
-                                    Err(ConnectTransactionError::InvalidOutputTypeInReward)
+                                    Err(ConnectTransactionError::IOPolicyError(
+                                        IOPolicyError::InvalidOutputTypeInReward,
+                                    ))
                                 }
                                 TxOutput::ProduceBlockFromStake(..) => Ok(()),
                             },
@@ -121,7 +123,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 });
             ensure!(
                 all_lock_then_transfer,
-                ConnectTransactionError::InvalidOutputTypeInReward
+                ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)
             );
             Ok(())
         }
