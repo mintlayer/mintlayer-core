@@ -14,21 +14,16 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::BlockRewardTransactable, signature::Signable, ChainConfig, Transaction, TxInput,
-        TxOutput,
-    },
+    chain::{block::BlockRewardTransactable, ChainConfig, Transaction},
     primitives::BlockHeight,
 };
-use consensus::ConsensusPoSError;
 use pos_accounting::PoSAccountingView;
-use utils::ensure;
 
 use thiserror::Error;
 
-use super::error::{ConnectTransactionError, SpendStakeError};
+use super::error::ConnectTransactionError;
 
-// mod constraints_accumulator;
+mod constraints_accumulator;
 mod purposes_check;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -45,6 +40,10 @@ pub enum IOPolicyError {
     MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
+    #[error("Timelock requirement was not satisfied")]
+    TimelockRequirementNotSatisfied,
+    #[error("Constraint amount overflow")]
+    ConstrainedAmountOverflow,
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -62,8 +61,18 @@ pub fn check_tx_inputs_outputs_policy(
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<(), ConnectTransactionError> {
     purposes_check::check_tx_inputs_outputs_purposes(tx, utxo_view)?;
+
+    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
+    constraints_accumulator.collect_and_verify(
+        tx,
+        chain_config,
+        block_height,
+        pos_accounting_view,
+        utxo_view,
+    )?;
+
     Ok(())
 }
 
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;

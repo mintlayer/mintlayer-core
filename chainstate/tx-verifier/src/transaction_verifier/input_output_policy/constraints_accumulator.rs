@@ -16,42 +16,39 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
-    amount_sum,
     chain::{
-        block::BlockRewardTransactable, signature::Signable, timelock::OutputTimeLock,
-        AccountSpending, ChainConfig, RequiredConsensus, Transaction, TxInput, TxOutput,
+        timelock::OutputTimeLock, AccountSpending, ChainConfig, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use pos_accounting::PoSAccountingView;
 
-use thiserror::Error;
+use crate::error::ConnectTransactionError;
 
-use crate::Fee;
+use super::IOPolicyError;
 
-use super::error::{ConnectTransactionError, SpendStakeError};
-
-struct ConstrainedValueAccumulator {
+pub struct ConstrainedValueAccumulator {
     //unconstrained_value: OutputValue,
     timelock_requirement: BTreeMap<BlockDistance, Amount>,
 }
 
 impl ConstrainedValueAccumulator {
-    pub fn new_for_transaction(
+    pub fn new() -> Self {
+        Self {
+            timelock_requirement: Default::default(),
+        }
+    }
+
+    pub fn collect_and_verify(
+        &mut self,
         tx: &Transaction,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         pos_accounting_view: &impl PoSAccountingView,
         utxo_view: &impl utxo::UtxosView,
-    ) -> Result<Self, ConnectTransactionError> {
-        let mut accumulator = Self {
-            timelock_requirement: Default::default(),
-            produce_block_requirement: 0,
-            pool_identity_constraint: MAX_POOLS_ALLOWED_TO_CREATE,
-            delegation_identity_constraint: MAX_DELEGATIONS_ALLOWED_TO_CREATE,
-        };
+    ) -> Result<(), ConnectTransactionError> {
         for input in tx.inputs() {
-            accumulator.process_tx_input(
+            self.process_input(
                 chain_config,
                 block_height,
                 pos_accounting_view,
@@ -59,46 +56,18 @@ impl ConstrainedValueAccumulator {
                 input,
             )?;
         }
-        Ok(accumulator)
-    }
 
-    pub fn verify_requirement(self) -> Result<(), IOPolicyError> {
+        for output in tx.outputs() {
+            self.process_output(output)?;
+        }
+
         match self.timelock_requirement.iter().find(|(_, amount)| **amount > Amount::ZERO) {
-            Some(_) => Err(IOPolicyError::TimelockRequirementNotSatisfied),
+            Some(_) => Err(IOPolicyError::TimelockRequirementNotSatisfied.into()),
             None => Ok(()),
         }
     }
 
-    fn process_block_reward_input(
-        &mut self,
-        utxo_view: &impl utxo::UtxosView,
-        input: &TxInput,
-    ) -> Result<(), ConnectTransactionError> {
-        match input {
-            TxInput::Utxo(outpoint) => {
-                let output = utxo_view
-                    .utxo(outpoint)
-                    .map_err(|_| utxo::Error::ViewRead)?
-                    .map(|u| u.output().clone())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                match output {
-                    TxOutput::Transfer(..)
-                    | TxOutput::LockThenTransfer(..)
-                    | TxOutput::CreateDelegationId(..)
-                    | TxOutput::DelegateStaking(..)
-                    | TxOutput::Burn(..) => Err(ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::InvalidInputTypeInReward,
-                    )),
-                    TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => Ok(()),
-                }
-            }
-            TxInput::Account(_) => Err(ConnectTransactionError::IOPolicyError(
-                IOPolicyError::InvalidInputTypeInReward,
-            )),
-        }
-    }
-
-    fn process_tx_input(
+    fn process_input(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
@@ -108,30 +77,24 @@ impl ConstrainedValueAccumulator {
     ) -> Result<(), ConnectTransactionError> {
         match input {
             TxInput::Utxo(outpoint) => {
-                let output = utxo_view
+                let utxo = utxo_view
                     .utxo(outpoint)
                     .map_err(|_| utxo::Error::ViewRead)?
-                    .map(|u| u.output().clone())
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                match output {
-                    TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) => {
-                        // TODO: this arm can be used to calculate transferred amounts
-                    }
-                    TxOutput::CreateDelegationId(..)
+                match utxo.output() {
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
-                    | TxOutput::Burn(..) => {
-                        return Err(ConnectTransactionError::IOPolicyError(
-                            IOPolicyError::InvalidInputTypeInTx,
-                        ))
-                    }
+                    | TxOutput::Burn(..) => { /* do nothing */ }
                     TxOutput::CreateStakePool(pool_id, _)
                     | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                         let block_distance =
                             chain_config.as_ref().decommission_pool_maturity_distance(block_height);
                         let pool_balance = pos_accounting_view
-                            .get_pool_balance(pool_id)
+                            .get_pool_balance(*pool_id)
                             .map_err(|_| pos_accounting::Error::ViewFail)?
-                            .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(pool_id))?;
+                            .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?;
                         match self.timelock_requirement.entry(block_distance) {
                             Entry::Vacant(e) => {
                                 e.insert(pool_balance);
@@ -167,9 +130,14 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    pub fn process_output(&mut self, output: &TxOutput) -> Result<(), ConnectTransactionError> {
+    fn process_output(&mut self, output: &TxOutput) -> Result<(), ConnectTransactionError> {
         match output {
-            TxOutput::Transfer(_, _) | TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => {
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::CreateDelegationId(_, _) => {
                 // TODO: this arm can be used to calculate transferred amounts
             }
             TxOutput::LockThenTransfer(value, _, timelock) => match timelock {
@@ -202,23 +170,6 @@ impl ConstrainedValueAccumulator {
                     }
                 }
             },
-            TxOutput::ProduceBlockFromStake(_, _) => {
-                self.produce_block_requirement
-                    .checked_sub(1)
-                    .ok_or(IOPolicyError::ProduceBlockConstrainedReached(0))?;
-            }
-            TxOutput::CreateStakePool(_, _) => {
-                self.pool_identity_constraint.checked_sub(1).ok_or(
-                    IOPolicyError::PoolIdentityConstrainedReached(MAX_POOLS_ALLOWED_TO_CREATE),
-                )?;
-            }
-            TxOutput::CreateDelegationId(_, _) => {
-                self.delegation_identity_constraint.checked_sub(1).ok_or(
-                    IOPolicyError::PoolIdentityConstrainedReached(
-                        MAX_DELEGATIONS_ALLOWED_TO_CREATE,
-                    ),
-                )?;
-            }
         };
         Ok(())
     }

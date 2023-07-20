@@ -156,7 +156,7 @@ pub fn check_tx_inputs_outputs_purposes(
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::Burn(..)
-        | TxOutput::DelegateStaking(..) => { /*do nothing*/ }
+        | TxOutput::DelegateStaking(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }
