@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use blockprod::rpc::BlockProductionRpcServer;
+use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
 use crypto::{key::PublicKey, random::Rng, vrf::VRFPublicKey};
 use hex::FromHex;
 
@@ -247,8 +247,10 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         "blockprod",
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
+            Arc::new(test_blockprod_config()),
             chainstate.clone(),
             mempool.clone(),
+            p2p.clone(),
             Default::default(),
         )
         .unwrap(),

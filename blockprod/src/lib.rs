@@ -32,6 +32,7 @@ use detail::{
 };
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
+use p2p::P2pHandle;
 use subsystem::subsystem::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -48,6 +49,10 @@ pub enum BlockProductionError {
     FailedConsensusInitialization(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
+    #[error("Failed to retieve peer count")]
+    PeerCountRetrievalError,
+    #[error("Connected peers is belowe the required peer threshold")]
+    PeerCountBelowRequiredThreshold,
     #[error("Block not found in this round")]
     TryAgainLater,
     #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
@@ -72,9 +77,10 @@ fn prepare_thread_pool(thread_count: u16) -> Arc<slave_pool::ThreadPool> {
 
 pub fn make_blockproduction(
     chain_config: Arc<ChainConfig>,
-    // blockprod_config: BlockProductionConfig,
+    blockprod_config: Arc<BlockProdConfig>,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
+    p2p_handle: P2pHandle,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn BlockProductionInterface>, BlockProductionError> {
     // TODO: make the number of threads configurable
@@ -83,8 +89,10 @@ pub fn make_blockproduction(
 
     let result = BlockProduction::new(
         chain_config,
+        blockprod_config,
         chainstate_handle,
         mempool_handle,
+        p2p_handle,
         time_getter,
         mining_thread_pool,
     )?;
@@ -118,6 +126,10 @@ mod tests {
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use mempool::{MempoolHandle, MempoolSubsystemInterface};
+    use p2p::{
+        peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
+    };
+    use storage_inmemory::InMemory;
     use subsystem::Manager;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -157,7 +169,13 @@ mod tests {
 
     pub fn setup_blockprod_test(
         chain_config: Option<ChainConfig>,
-    ) -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
+    ) -> (
+        Manager,
+        Arc<ChainConfig>,
+        ChainstateHandle,
+        MempoolHandle,
+        P2pHandle,
+    ) {
         let mut manager = Manager::new("blockprod-unit-test");
         manager.install_signal_handlers();
 
@@ -184,7 +202,24 @@ mod tests {
             move |call, shutdn| mempool.run(call, shutdn)
         });
 
-        (manager, chain_config, chainstate, mempool)
+        let mut p2p_config = test_p2p_config();
+        p2p_config.bind_addresses = vec!["127.0.0.1:0".to_owned()];
+
+        let p2p = p2p::make_p2p(
+            Arc::clone(&chain_config),
+            Arc::new(p2p_config),
+            chainstate.clone(),
+            mempool.clone(),
+            Default::default(),
+            PeerDbStorageImpl::new(InMemory::new()).unwrap(),
+        )
+        .expect("P2p initialisation was successful");
+
+        let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
+            move |call, shutdown| p2p.run(call, shutdown)
+        });
+
+        (manager, chain_config, chainstate, mempool, p2p)
     }
 
     pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
@@ -264,12 +299,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
-        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+        let (mut manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None);
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),
+            Arc::new(test_blockprod_config()),
             chainstate.clone(),
             mempool.clone(),
+            p2p.clone(),
             Default::default(),
         )
         .expect("Error initializing blockprod");
