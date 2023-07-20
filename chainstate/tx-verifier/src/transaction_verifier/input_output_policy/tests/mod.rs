@@ -39,6 +39,7 @@ use super::purposes_check::*;
 use super::*;
 
 //mod purpose_tests;
+mod constraints_tests;
 
 fn transfer() -> TxOutput {
     TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)

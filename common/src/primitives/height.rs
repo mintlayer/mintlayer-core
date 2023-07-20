@@ -173,6 +173,10 @@ impl BlockDistance {
     pub const fn new(distance: DistanceIntType) -> Self {
         Self(distance)
     }
+
+    pub fn into_int(self) -> DistanceIntType {
+        self.0
+    }
 }
 
 // Display should be defined for thiserror crate
