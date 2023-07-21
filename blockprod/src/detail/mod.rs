@@ -120,7 +120,7 @@ impl BlockProduction {
         &self,
         current_tip: Id<GenBlock>,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
-        let max_block_size = self.chain_config.max_block_size_from_txs();
+        let max_block_size = self.chain_config.max_block_size_from_std_scripts();
         let returned_accumulator = self
             .mempool_handle
             .call(move |mempool| {

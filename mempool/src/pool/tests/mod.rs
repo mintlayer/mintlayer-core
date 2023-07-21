@@ -380,7 +380,8 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
         Destination::AnyoneCanSpend,
     )
     .encoded_size();
-    let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
+    let too_many_outputs =
+        tf.chainstate.get_chain_config().max_tx_size_for_mempool() / single_output_size;
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),

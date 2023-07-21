@@ -414,10 +414,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             MempoolPolicyError::NoOutputs,
         );
 
-        // TODO: see this issue:
-        // https://github.com/mintlayer/mintlayer-core/issues/331
         ensure!(
-            entry.size() <= MAX_BLOCK_SIZE_BYTES,
+            entry.size() <= self.chain_config.max_tx_size_for_mempool(),
             MempoolPolicyError::ExceedsMaxBlockSize,
         );
 
