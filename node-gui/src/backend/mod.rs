@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod error;
 pub mod messages;
 pub mod wallet_events;
 
@@ -37,6 +38,7 @@ use wallet::account::Currency;
 use wallet::DefaultWallet;
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
 
+use self::error::BackendError;
 use self::messages::{
     AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, EncryptionAction,
     EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
@@ -79,7 +81,7 @@ struct AccountData {
     transaction_list_skip: usize,
 
     /// If set, pool balances should be updated in the UI.
-    /// This is necessary because the pool balances load requres RPC call and may fail.
+    /// The flag is necessary because the pool balances load requires RPC call and may fail.
     update_pool_balance: bool,
 }
 
@@ -90,22 +92,6 @@ struct Backend {
     manager_join_handle: JoinHandle<()>,
     wallets: BTreeMap<WalletId, WalletData>,
     wallet_notify: Arc<Notify>,
-}
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum BackendError {
-    #[error("Wallet error: {0}")]
-    WalletError(String),
-    #[error("RPC error: {0}")]
-    RpcError(String),
-    #[error("Unknown wallet index: {0:?}")]
-    UnknownWalletIndex(WalletId),
-    #[error("Unknown account index: {0:?}/{0:?}")]
-    UnknownAccountIndex(WalletId, AccountId),
-    #[error("Invalid address: {0}")]
-    AddressError(String),
-    #[error("Invalid amount: {0}")]
-    InvalidAmount(String),
 }
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Option<Amount> {

@@ -36,7 +36,7 @@ use node_comm::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
-use wallet::wallet_events::WalletEventsNop;
+use wallet::wallet_events::WalletEventsNoOp;
 
 use super::*;
 
@@ -233,7 +233,7 @@ async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<
 fn run_sync(chain_config: Arc<ChainConfig>, node: MockNode, mut wallet: MockWallet) {
     tokio::spawn(async move {
         loop {
-            let _ = sync_once(&chain_config, &node, &mut wallet, &mut WalletEventsNop).await;
+            let _ = sync_once(&chain_config, &node, &mut wallet, &mut WalletEventsNoOp).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     });

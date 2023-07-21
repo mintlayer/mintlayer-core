@@ -28,7 +28,7 @@ pub use utxo_selector::UtxoSelectorError;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{make_address_output, make_address_output_token, make_stake_output};
-use crate::wallet_events::{WalletEvents, WalletEventsNop};
+use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -121,7 +121,7 @@ impl Account {
             account_info,
         };
 
-        account.scan_genesis(db_tx, &mut WalletEventsNop)?;
+        account.scan_genesis(db_tx, &mut WalletEventsNoOp)?;
 
         Ok(account)
     }

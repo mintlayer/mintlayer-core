@@ -13,19 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use wallet_types::{AccountWalletTxId, WalletTx};
+use super::messages::{AccountId, WalletId};
 
-/// Callbacks that are invoked when the database is updated and the UI should be re-rendered
-pub trait WalletEvents {
-    fn new_block(&mut self);
-    fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx);
-    fn del_transaction(&mut self, id: &AccountWalletTxId);
-}
-
-pub struct WalletEventsNoOp;
-
-impl WalletEvents for WalletEventsNoOp {
-    fn new_block(&mut self) {}
-    fn set_transaction(&mut self, _id: &AccountWalletTxId, _tx: &WalletTx) {}
-    fn del_transaction(&mut self, _id: &AccountWalletTxId) {}
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum BackendError {
+    #[error("Wallet error: {0}")]
+    WalletError(String),
+    #[error("RPC error: {0}")]
+    RpcError(String),
+    #[error("Unknown wallet index: {0:?}")]
+    UnknownWalletIndex(WalletId),
+    #[error("Unknown account index: {0:?}/{0:?}")]
+    UnknownAccountIndex(WalletId, AccountId),
+    #[error("Invalid address: {0}")]
+    AddressError(String),
+    #[error("Invalid amount: {0}")]
+    InvalidAmount(String),
 }

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet::wallet_events::WalletEventsNop;
+use wallet::wallet_events::WalletEventsNoOp;
 use wallet_controller::{NodeRpcClient, RpcController};
 
 use crate::{
@@ -44,7 +44,7 @@ pub async fn run(
     loop {
         let background_task = async {
             match controller_opt.as_mut() {
-                Some(controller) => controller.run(&mut WalletEventsNop).await,
+                Some(controller) => controller.run(&mut WalletEventsNoOp).await,
                 None => std::future::pending().await,
             }
         };

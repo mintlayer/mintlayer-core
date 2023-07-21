@@ -25,7 +25,7 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::{account::Currency, wallet_events::WalletEventsNop};
+use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
 use wallet_controller::{
     NodeInterface, NodeRpcClient, PeerId, RpcController, DEFAULT_ACCOUNT_INDEX,
 };
@@ -548,7 +548,7 @@ impl CommandHandler {
                     .generate_blocks(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         count,
-                        &mut WalletEventsNop,
+                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -651,7 +651,7 @@ impl CommandHandler {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .sync_once(&mut WalletEventsNop)
+                    .sync_once(&mut WalletEventsNoOp)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
@@ -739,7 +739,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         address,
                         amount,
-                        &mut WalletEventsNop,
+                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -762,7 +762,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
                         decomission_key,
-                        &mut WalletEventsNop,
+                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
