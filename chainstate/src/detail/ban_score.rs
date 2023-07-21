@@ -19,7 +19,9 @@ use consensus::{
 };
 use tx_verifier::{
     timelock_check::OutputMaturityError,
-    transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
+    transaction_verifier::{
+        signature_destination_getter::SignatureDestinationGetterError, IOPolicyError,
+    },
 };
 
 use super::{
@@ -149,7 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::IOPolicyError(_) => todo!(),
+            ConnectTransactionError::IOPolicyError(err) => err.ban_score(),
         }
     }
 }
@@ -478,6 +480,21 @@ impl BanScore for EpochSealError {
             EpochSealError::SpendStakeError(_) => 100,
             EpochSealError::RandomnessError(err) => err.ban_score(),
             EpochSealError::PoolDataNotFound(_) => 0,
+        }
+    }
+}
+
+impl BanScore for IOPolicyError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            IOPolicyError::InvalidInputTypeInReward => 100,
+            IOPolicyError::InvalidOutputTypeInReward => 100,
+            IOPolicyError::InvalidInputTypeInTx => 100,
+            IOPolicyError::MultiplePoolCreated => 100,
+            IOPolicyError::MultipleDelegationCreated => 100,
+            IOPolicyError::ProduceBlockInTx => 100,
+            IOPolicyError::TimelockRequirementNotSatisfied(_) => 100,
+            IOPolicyError::ConstrainedAmountOverflow => 100,
         }
     }
 }

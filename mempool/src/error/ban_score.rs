@@ -16,8 +16,8 @@
 use chainstate::{
     ban_score::BanScore,
     tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
-    ChainstateError, ConnectTransactionError, TokensError, TransactionVerifierStorageError,
-    TxIndexError,
+    ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
+    TransactionVerifierStorageError, TxIndexError,
 };
 
 use crate::error::{Error, MempoolPolicyError, TxValidationError};
@@ -137,7 +137,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
-            ConnectTransactionError::IOPolicyError(_) => todo!(),
+            ConnectTransactionError::IOPolicyError(err) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -352,6 +352,21 @@ impl MempoolBanScore for accounting::Error {
             // Undo not performed in mempool
             accounting::Error::DeltaUndoNegationError => 0,
             accounting::Error::DeltaOverUndoApplied => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for IOPolicyError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            IOPolicyError::InvalidInputTypeInReward => 100,
+            IOPolicyError::InvalidOutputTypeInReward => 100,
+            IOPolicyError::InvalidInputTypeInTx => 100,
+            IOPolicyError::MultiplePoolCreated => 100,
+            IOPolicyError::MultipleDelegationCreated => 100,
+            IOPolicyError::ProduceBlockInTx => 100,
+            IOPolicyError::TimelockRequirementNotSatisfied(_) => 100,
+            IOPolicyError::ConstrainedAmountOverflow => 100,
         }
     }
 }

@@ -36,7 +36,7 @@ use utxo::{Utxo, UtxosDBInMemoryImpl};
 use super::*;
 
 mod constraints_tests;
-// mod purpose_tests;
+mod purpose_tests;
 
 fn transfer() -> TxOutput {
     TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)

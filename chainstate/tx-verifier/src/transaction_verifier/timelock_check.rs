@@ -17,11 +17,10 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        AccountSpending, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        ChainConfig, GenBlock, TxInput, UtxoOutPoint,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
-use itertools::Itertools;
 use thiserror::Error;
 use utils::ensure;
 use utxo::UtxosView;
@@ -83,7 +82,6 @@ pub fn check_timelocks<S, C, T, U>(
     utxos_view: &U,
     tx: &T,
     tx_source: &TransactionSourceForConnect,
-    outpoint_source_id: OutPointSourceId,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError>
 where

@@ -681,7 +681,6 @@ where
             &self.utxo_cache,
             tx,
             tx_source,
-            tx.transaction().get_id().into(),
             median_time_past,
         )?;
 

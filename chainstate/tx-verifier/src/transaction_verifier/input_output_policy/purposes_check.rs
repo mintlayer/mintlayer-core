@@ -67,7 +67,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::Burn(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..) => Err(ConnectTransactionError::IOPolicyError(
-                        IOPolicyError::InvalidOutputTypeInReward,
+                        IOPolicyError::InvalidInputTypeInReward,
                     )),
                     TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
                         let outputs =
