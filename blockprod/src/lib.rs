@@ -51,7 +51,7 @@ pub enum BlockProductionError {
     FailedConsensusInitialization(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
-    #[error("Failed to retieve peer count")]
+    #[error("Failed to retrieve peer count")]
     PeerCountRetrievalError,
     #[error("Connected peers is belowe the required peer threshold")]
     PeerCountBelowRequiredThreshold,
@@ -221,7 +221,7 @@ mod tests {
             Default::default(),
             PeerDbStorageImpl::new(InMemory::new()).unwrap(),
         )
-        .expect("P2p initialisation was successful");
+        .expect("P2p initialization was successful");
 
         let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
             move |call, shutdown| p2p.run(call, shutdown)
