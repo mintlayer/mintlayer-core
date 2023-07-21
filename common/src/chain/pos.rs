@@ -142,15 +142,14 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
 pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
     match chain_type {
         // TODO: Decide what to use on Mainnet.
-        // The initial_difficulty value from testnet is probably too high,
-        // because it takes a long time to converge on some stable level
-        // (about 200..300 blocks for testnet because of the 10% swing limit).
         ChainType::Mainnet => unimplemented!(),
+        // Note: Assuming that there is 1 initial staking pool in testnet the value for difficulty equals to
+        // U256::MAX / min_stake_pool_pledge / block_time, dropping the least significant bytes for simplicity
         ChainType::Testnet => Uint256([
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0x00000000FFFFFFFF,
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000026,
         ]),
         ChainType::Signet => Uint256([
             0xFFFFFFFFFFFFFFFF,
