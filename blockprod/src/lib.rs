@@ -53,8 +53,8 @@ pub enum BlockProductionError {
     Cancelled,
     #[error("Failed to retrieve peer count")]
     PeerCountRetrievalError,
-    #[error("Connected peers is belowe the required peer threshold")]
-    PeerCountBelowRequiredThreshold,
+    #[error("Connected peers {0} is below the required peer threshold {0}")]
+    PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
     TryAgainLater,
     #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]

@@ -250,7 +250,7 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::PeerCountBelowRequiredThreshold) => {}
+                    Err(BlockProductionError::PeerCountBelowRequiredThreshold(0, 100)) => {}
                     _ => panic!("Unexpected return value"),
                 }
             }

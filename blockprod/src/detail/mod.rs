@@ -267,7 +267,10 @@ impl BlockProduction {
             .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
 
         if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
-            return Err(BlockProductionError::PeerCountBelowRequiredThreshold);
+            return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
+                current_peer_count,
+                self.blockprod_config.min_peers_to_produce_blocks,
+            ));
         }
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
