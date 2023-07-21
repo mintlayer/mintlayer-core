@@ -15,6 +15,7 @@
 
 use common::address::Address;
 use common::chain::stakelock::StakePoolData;
+use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{
     Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer,
 };
@@ -22,7 +23,7 @@ use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
-use common::primitives::Amount;
+use common::primitives::{Amount, BlockHeight};
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 
@@ -115,6 +116,23 @@ pub fn make_issue_nft_outputs(
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
 
     Ok(vec![issuance_output, token_issuance_fee])
+}
+
+pub fn make_address_output_from_delegation(
+    chain_config: &ChainConfig,
+    address: Address,
+    amount: Amount,
+    current_block_height: BlockHeight,
+) -> WalletResult<TxOutput> {
+    let destination = address.destination(chain_config)?;
+    let num_blocks_to_lock: i64 =
+        chain_config.spend_share_maturity_distance(current_block_height).into();
+
+    Ok(TxOutput::LockThenTransfer(
+        OutputValue::Coin(amount),
+        destination,
+        ForBlockCount(num_blocks_to_lock as u64),
+    ))
 }
 
 pub fn make_stake_output(

@@ -39,8 +39,8 @@ use common::{
             RPCTokenInfo::{FungibleToken, NonFungibleToken},
             TokenId, TokenIssuance,
         },
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::get_time, Amount, BlockHeight, Id, Idable},
 };
@@ -63,7 +63,9 @@ pub use node_comm::{
 use wallet::{
     account::transaction_list::TransactionList,
     account::Currency,
-    send_request::{make_address_output, make_address_output_token},
+    send_request::{
+        make_address_output, make_address_output_from_delegation, make_address_output_token,
+    },
     wallet_events::WalletEvents,
     DefaultWallet, WalletError,
 };
@@ -370,6 +372,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         tasks.try_collect().await
     }
 
+    pub fn get_delegations(
+        &mut self,
+        account_index: U31,
+    ) -> Result<impl Iterator<Item = (&DelegationId, Amount)>, ControllerError<T>> {
+        self.wallet.get_delegations(account_index).map_err(ControllerError::WalletError)
+    }
+
     pub fn get_vrf_public_key(
         &mut self,
         account_index: U31,
@@ -435,6 +444,47 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)?;
 
         self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn send_to_address_from_delegation(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        amount: Amount,
+        delegation_id: DelegationId,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let (_, current_block_height) = self
+            .wallet
+            .get_best_block_for_account(account_index)
+            .map_err(ControllerError::WalletError)?;
+
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address,
+            amount,
+            current_block_height,
+        )
+        .map_err(ControllerError::WalletError)?;
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let tx = self
+            .wallet
+            .create_transaction_to_addresses_from_delegation(
+                &mut self.wallet_events,
+                account_index,
+                vec![output],
+                delegation_id,
+                current_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn send_tokens_to_address(

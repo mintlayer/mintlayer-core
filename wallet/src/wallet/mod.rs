@@ -30,8 +30,8 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuance};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-    TransactionCreationError, TxOutput, UtxoOutPoint,
+    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -91,6 +91,22 @@ pub enum WalletError {
     UnsupportedInputDestination(Destination),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
+    #[error("Negative delegation amount for id: {0}")]
+    NegativeDelegationAmount(DelegationId),
+    #[error(
+        "Inconsistent delegation state for id: {0}, missing Delegation creation before staking"
+    )]
+    InconsistentDelegationAddition(DelegationId),
+    #[error("Inconsistent delegation state for id: {0}, amount less than 0 while trying to remove transaction")]
+    InconsistentDelegationRemoval(DelegationId),
+    #[error("Inconsistent delegation state for id: {0}, nonce less than 0 while trying to remove transaction")]
+    InconsistentDelegationRemovalNegativeNonce(DelegationId),
+    #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
+    #[error("Delfation amount overflow for id: {0}")]
+    DelegationAmountOverflow(DelegationId),
+    #[error("Delfation nonce overflow for id: {0}")]
+    DelegationNonceOverflow(DelegationId),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
@@ -99,6 +115,8 @@ pub enum WalletError {
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] TransactionSigError),
+    #[error("Delegation not found with id {0}")]
+    DelegationNotFound(DelegationId),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
@@ -378,6 +396,14 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(pool_ids)
     }
 
+    pub fn get_delegations(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<impl Iterator<Item = (&DelegationId, Amount)>> {
+        let delegations = self.get_account(account_index)?.get_delegations();
+        Ok(delegations)
+    }
+
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<(ChildNumber, Address)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
@@ -453,6 +479,30 @@ impl<B: storage::Backend> Wallet<B> {
                 current_fee_rate,
                 consolidate_fee_rate,
             )
+        })
+    }
+
+    pub fn create_transaction_to_addresses_from_delegation(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        outputs: Vec<TxOutput>,
+        delegation_id: DelegationId,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let tx =
+                account.spend_from_delegation(db_tx, outputs, delegation_id, current_fee_rate)?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
+
+            let [tx] = txs;
+            Ok(tx)
         })
     }
 
@@ -534,6 +584,13 @@ impl<B: storage::Backend> Wallet<B> {
             .iter()
             .map(|(index, account)| (*index, account.best_block()))
             .collect()
+    }
+
+    pub fn get_best_block_for_account(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        Ok(self.get_account(account_index)?.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.

@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -34,7 +34,7 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 
 use crate::{errors::WalletCliError, CliController};
 
-use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
+use self::helper_types::{format_delegation_info, format_pool_info, CliUtxoState, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -197,6 +197,9 @@ pub enum WalletCommand {
     /// List available Pool Ids
     ListPoolIds,
 
+    /// List available Delegation Ids with their balances
+    ListDelegationIds,
+
     /// Generate a new unused address
     NewAddress,
 
@@ -214,6 +217,12 @@ pub enum WalletCommand {
         token_id: TokenId,
         address: String,
         amount: String,
+    },
+
+    SendFromDelegationToAddress {
+        address: String,
+        amount: String,
+        delegation_id: HexEncoded<DelegationId>,
     },
 
     CreateStakePool {
@@ -920,6 +929,28 @@ impl CommandHandler {
                 Self::broadcast_transaction(rpc_client, tx).await
             }
 
+            WalletCommand::SendFromDelegationToAddress {
+                address,
+                amount,
+                delegation_id,
+            } => {
+                let amount = parse_coin_amount(chain_config, &amount)?;
+                let address = parse_address(chain_config, &address)?;
+                // TODO: Take status into account
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .send_to_address_from_delegation(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        address,
+                        amount,
+                        delegation_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
             WalletCommand::CreateStakePool {
                 amount,
                 decomission_key,
@@ -954,7 +985,30 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?
                     .into_iter()
                     .map(|(pool_id, block_info, balance)| {
-                        format_pool_info(pool_id, balance, block_info.height, block_info.timestamp)
+                        format_pool_info(
+                            pool_id,
+                            balance,
+                            block_info.height,
+                            block_info.timestamp,
+                            chain_config.coin_decimals(),
+                        )
+                    })
+                    .collect();
+                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
+            }
+
+            WalletCommand::ListDelegationIds => {
+                let pool_ids: Vec<_> = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .get_delegations(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .map_err(WalletCliError::Controller)?
+                    .map(|(delegation_id, balance)| {
+                        format_delegation_info(
+                            *delegation_id,
+                            balance,
+                            chain_config.coin_decimals(),
+                        )
                     })
                     .collect();
                 Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))

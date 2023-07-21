@@ -19,6 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::AccountSpending::Delegation;
 use common::primitives::id::WithId;
 use common::primitives::Idable;
 use common::Uint256;
@@ -35,11 +36,10 @@ use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
-    TxOutput, UtxoOutPoint,
+    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -87,7 +87,7 @@ impl Account {
             AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let output_cache = OutputCache::new(txs);
+        let output_cache = OutputCache::new(txs)?;
 
         Ok(Account {
             chain_config,
@@ -329,7 +329,57 @@ impl Account {
         )?;
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(request, db_tx)?;
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
+        Ok(tx)
+    }
+
+    pub fn spend_from_delegation(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        outputs: Vec<TxOutput>,
+        delegation_id: DelegationId,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let delegation_data = self.output_cache.delegation_data(delegation_id)?;
+        let nonce = delegation_data
+            .latest_nonce
+            .increment()
+            .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
+
+        let network_fee: Amount = current_fee_rate
+            .compute_fee(
+                tx_size_with_outputs(outputs.as_slice())
+                    + input_signature_size(&delegation_data.destination)?,
+            )
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into();
+
+        let mut amount_with_fee = network_fee;
+        let mut tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            Delegation(delegation_id, amount_with_fee),
+        ));
+        let mut input_size = serialization::Encode::encoded_size(&tx_input);
+        loop {
+            amount_with_fee = (network_fee
+                + current_fee_rate
+                    .compute_fee(input_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                    .into())
+            .ok_or(WalletError::OutputAmountOverflow)?;
+            tx_input = TxInput::Account(AccountOutPoint::new(
+                nonce,
+                Delegation(delegation_id, amount_with_fee),
+            ));
+            let new_input_size = serialization::Encode::encoded_size(&tx_input);
+            if new_input_size == input_size {
+                break;
+            }
+            input_size = new_input_size;
+        }
+        let tx = Transaction::new(0, vec![tx_input], outputs)?;
+
+        let tx = self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?;
         Ok(tx)
     }
 
@@ -355,6 +405,12 @@ impl Account {
 
     pub fn get_pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
         self.output_cache.pool_ids()
+    }
+
+    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, Amount)> {
+        self.output_cache
+            .delegation_ids()
+            .map(|(delegation_id, data)| (delegation_id, data.balance))
     }
 
     pub fn create_stake_pool_tx(
@@ -422,7 +478,7 @@ impl Account {
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
 
-        let tx = self.sign_transaction(request, db_tx)?;
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
         Ok(tx)
     }
 
@@ -472,30 +528,45 @@ impl Account {
         Ok(data)
     }
 
+    fn sign_transaction_from_req(
+        &self,
+        request: SendRequest,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<SignedTransaction> {
+        let (tx, utxos) = request.into_transaction_and_utxos()?;
+        let destinations = utxos
+            .iter()
+            .map(|utxo| {
+                Self::get_tx_output_destination(utxo).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
+                })
+            })
+            .collect::<Result<Vec<_>, WalletError>>()?;
+        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
+
+        self.sign_transaction(tx, destinations.as_slice(), &input_utxos, db_tx)
+    }
+
     // TODO: Use a different type to support partially signed transactions
     fn sign_transaction(
         &self,
-        req: SendRequest,
+        tx: Transaction,
+        destinations: &[&Destination],
+        input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<SignedTransaction> {
-        let (tx, utxos) = req.into_transaction_and_utxos()?;
-        let inputs = tx.inputs();
-        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
-        if utxos.len() != inputs.len() {
-            return Err(
-                TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
-            );
-        }
+        // let inputs = tx.inputs();
+        // if utxos.len() != inputs.len() {
+        //     return Err(
+        //         TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
+        //     );
+        // }
 
-        let witnesses = utxos
+        let witnesses = destinations
             .iter()
+            .copied()
             .enumerate()
-            .map(|(i, utxo)| {
-                // Get the destination from this utxo
-                let destination = Self::get_tx_output_destination(utxo).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
-                })?;
-
+            .map(|(i, destination)| {
                 if *destination == Destination::AnyoneCanSpend {
                     Ok(InputWitness::NoSignature(None))
                 } else {
@@ -513,7 +584,7 @@ impl Account {
                         sighash_type,
                         destination.clone(),
                         &tx,
-                        &input_utxos,
+                        input_utxos,
                         i,
                     )
                     .map(InputWitness::Standard)
@@ -690,7 +761,7 @@ impl Account {
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             wallet_events.del_transaction(&tx_id);
-            self.output_cache.remove_tx(&tx_id.into_item_id());
+            self.output_cache.remove_tx(&tx_id.into_item_id())?;
         }
 
         Ok(())
@@ -716,7 +787,7 @@ impl Account {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
             wallet_events.set_transaction(&id, &tx);
-            self.output_cache.add_tx(id.into_item_id(), tx);
+            self.output_cache.add_tx(id.into_item_id(), tx)?;
             Ok(true)
         } else {
             Ok(false)
