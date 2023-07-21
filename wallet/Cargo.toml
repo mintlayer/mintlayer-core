@@ -14,6 +14,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 pos_accounting = { path = "../pos_accounting" }
 serialization = { path = "../serialization" }
+mempool = { path = "../mempool" }
 storage = { path = "../storage", features = ["inmemory"] }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 utils = { path = "../utils" }
@@ -22,6 +23,7 @@ wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
@@ -30,6 +32,5 @@ zeroize.workspace = true
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-hex.workspace = true
 rstest.workspace = true
 tempfile.workspace = true

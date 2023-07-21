@@ -16,7 +16,7 @@
 use common::{
     chain::{
         tokens::{OutputValue, TokenData},
-        TxOutput, UtxoOutPoint,
+        TxInput, TxOutput,
     },
     primitives::Amount,
 };
@@ -28,7 +28,7 @@ use super::UtxoSelectorError;
 #[derive(Clone)]
 pub struct OutputGroup {
     /// The list of UTXOs contained in this output group.
-    pub outputs: Vec<(UtxoOutPoint, TxOutput)>,
+    pub outputs: Vec<(TxInput, TxOutput)>,
     /// the total amount of the outputs in this group
     pub value: Amount,
     /// The fee cost of these UTXOs at the effective feerate.
@@ -52,7 +52,7 @@ pub enum PayFee {
 
 impl OutputGroup {
     pub fn new(
-        output: (UtxoOutPoint, TxOutput),
+        output: (TxInput, TxOutput),
         fee: Amount,
         long_term_fee: Amount,
         weight: u32,

@@ -279,9 +279,22 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+
         let tx = self
             .wallet
-            .create_transaction_to_addresses(account_index, [output])
+            .create_transaction_to_addresses(
+                account_index,
+                [output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.clone())
@@ -295,9 +308,22 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         amount: Amount,
         decomission_key: Option<PublicKey>,
     ) -> Result<TxStatus, ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
         let tx = self
             .wallet
-            .create_stake_pool_tx(account_index, amount, decomission_key)
+            .create_stake_pool_tx(
+                account_index,
+                amount,
+                decomission_key,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.clone())

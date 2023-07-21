@@ -19,7 +19,7 @@ pub mod output_group;
 pub use output_group::{OutputGroup, PayFee};
 
 use common::{
-    chain::{TxOutput, UtxoOutPoint},
+    chain::{TxInput, TxOutput},
     primitives::{signed_amount::SignedAmount, Amount},
 };
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -27,12 +27,13 @@ use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 const TOTAL_TRIES: u32 = 100_000;
 
 pub struct SelectionResult {
-    outputs: Vec<(UtxoOutPoint, TxOutput)>,
+    outputs: Vec<(TxInput, TxOutput)>,
     effective_value: Amount,
     target: Amount,
     waste: SignedAmount,
     weight: u32,
     fees: Amount,
+    change: Amount,
 }
 
 impl SelectionResult {
@@ -44,6 +45,7 @@ impl SelectionResult {
             waste: SignedAmount::ZERO,
             weight: 0,
             fees: Amount::ZERO,
+            change: Amount::ZERO,
         }
     }
 
@@ -51,11 +53,11 @@ impl SelectionResult {
         self.fees
     }
 
-    pub fn get_total_value(&self) -> Amount {
-        self.effective_value
+    pub fn get_change(&self) -> Amount {
+        self.change
     }
 
-    pub fn into_output_pairs(self) -> Vec<(UtxoOutPoint, TxOutput)> {
+    pub fn into_output_pairs(self) -> Vec<(TxInput, TxOutput)> {
         self.outputs
     }
 
@@ -88,9 +90,9 @@ impl SelectionResult {
         change_cost: Amount,
         change_fee: Amount,
     ) -> Result<(), UtxoSelectorError> {
-        let change = self.get_change(min_viable_change, change_fee);
+        self.change = self.calculate_change(min_viable_change, change_fee);
 
-        if change != Amount::ZERO {
+        if self.change != Amount::ZERO {
             // Consider the cost of making change and spending it in the future
             // If we aren't making change, the caller should've set change_cost to 0
             self.waste = change_cost
@@ -109,7 +111,7 @@ impl SelectionResult {
         Ok(())
     }
 
-    fn get_change(&self, min_viable_change: Amount, change_fee: Amount) -> Amount {
+    fn calculate_change(&self, min_viable_change: Amount, change_fee: Amount) -> Amount {
         // change = SUM(inputs) - SUM(outputs) - fees
         // 1) With SFFO we don't pay any fees
         // 2) Otherwise we pay all the fees:
@@ -618,7 +620,7 @@ fn select_coins_bnb(
         result.add_input(&utxo_pool[i], pay_fees)?;
     }
 
-    result.compute_and_set_waste(cost_of_change, cost_of_change, Amount::ZERO)?;
+    result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
     assert_eq!(best_waste, result.waste);
     Ok(result)
 }
@@ -627,9 +629,8 @@ pub fn select_coins(
     mut utxo_pool: Vec<OutputGroup>,
     selection_target: Amount,
     pay_fees: PayFee,
+    cost_of_change: Amount,
 ) -> Result<SelectionResult, UtxoSelectorError> {
-    // TODO: set some cost of change
-    let cost_of_change = Amount::ZERO;
     // TODO: set some max weight
     let max_weight = 999;
     let mut rng = make_pseudo_rng();
@@ -658,7 +659,10 @@ pub fn select_coins(
         max_weight,
         pay_fees,
     ) {
-        Ok(result) => results.push(result),
+        Ok(mut result) => {
+            result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
+            results.push(result)
+        }
         Err(error) => errors.push(error),
     };
 
@@ -670,7 +674,10 @@ pub fn select_coins(
         max_weight,
         pay_fees,
     ) {
-        Ok(result) => results.push(result),
+        Ok(mut result) => {
+            result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
+            results.push(result)
+        }
         Err(error) => errors.push(error),
     };
 

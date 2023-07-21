@@ -21,6 +21,7 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use mempool::TxStatus;
+use mempool::{rpc::MempoolRpcClient, FeeRate};
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex_encoded::HexEncoded;
 
@@ -148,6 +149,12 @@ impl NodeInterface for NodeRpcClient {
     }
     async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
         P2pRpcClient::remove_reserved_node(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        MempoolRpcClient::get_fee_rate(&self.http_client, in_top_x_mb)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
