@@ -29,7 +29,10 @@ use tokio::{
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
-    chain::{block::Block, config::ChainConfig},
+    chain::{
+        block::{signed_block_header::SignedBlockHeader, Block},
+        config::ChainConfig,
+    },
     primitives::Id,
     time_getter::TimeGetter,
 };
@@ -42,7 +45,7 @@ use utils::tap_error_log::LogError;
 use crate::{
     config::P2pConfig,
     error::P2pError,
-    message::{HeaderList, SyncMessage},
+    message::SyncMessage,
     net::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
@@ -51,6 +54,11 @@ use crate::{
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
+
+pub struct PeerContext {
+    task: JoinHandle<()>,
+    new_tip: UnboundedSender<SignedBlockHeader>,
+}
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
 /// and keeping up with updates to different branches of the blockchain.
@@ -74,7 +82,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AcqRelAtomicBool>,
 
     /// The list of connected peers
-    peers: HashMap<PeerId, JoinHandle<()>>,
+    peers: HashMap<PeerId, PeerContext>,
 
     time_getter: TimeGetter,
 }
@@ -157,6 +165,8 @@ where
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
+        let (new_tip_tx, new_tip_rx) = mpsc::unbounded_channel();
+
         let mut peer = Peer::<T>::new(
             peer_id,
             remote_services,
@@ -167,26 +177,33 @@ where
             self.peer_manager_sender.clone(),
             sync_rx,
             self.messaging_handle.clone(),
+            new_tip_rx,
             Arc::clone(&self.is_initial_block_download),
             self.time_getter.clone(),
         );
+
         let peer_task = tokio::spawn(async move {
             peer.run().await;
         });
 
-        let prev_task = self.peers.insert(peer_id, peer_task);
+        let peer_context = PeerContext {
+            task: peer_task,
+            new_tip: new_tip_tx,
+        };
+
+        let prev_task = self.peers.insert(peer_id, peer_context);
         assert!(prev_task.is_none(), "Registered duplicated peer: {peer_id}");
     }
 
     /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer_id: PeerId) {
         log::debug!("Unregister peer {peer_id} from sync manager");
-        let peer_task = self
+        let peer = self
             .peers
             .remove(&peer_id)
             .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer_id}"));
         // Call `abort` because the peer task may be sleeping for a long time in the `sync_clock` function
-        peer_task.abort();
+        peer.task.abort();
     }
 
     /// Announces the header of a new block to peers.
@@ -211,8 +228,10 @@ where
             .expect("A new tip block unavailable");
 
         log::debug!("Broadcasting a new tip header {}", header.block_id());
-        self.messaging_handle
-            .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![header])))
+        for peer in self.peers.values_mut() {
+            let _ = peer.new_tip.send(header.clone());
+        }
+        Ok(())
     }
 
     fn handle_transaction_processed(&mut self, tx_proc_event: &TransactionProcessed) -> Result<()> {

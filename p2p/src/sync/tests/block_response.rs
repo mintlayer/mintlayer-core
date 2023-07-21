@@ -25,7 +25,7 @@ use test_utils::random::Seed;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{BlockListRequest, BlockResponse, HeaderList, SyncMessage},
+    message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -104,34 +104,20 @@ async fn valid_response(#[case] seed: Seed) {
         SyncMessage::BlockListRequest(BlockListRequest::new(ids))
     );
 
-    for (i, block) in blocks.into_iter().enumerate() {
+    for block in blocks.into_iter() {
         handle
             .send_message(
                 peer,
                 SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
             )
             .await;
-
-        // A peer would request headers after the last block.
-        if i < num_blocks - 1 {
-            assert_eq!(
-                handle.message().await.1,
-                SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]))
-            );
-        } else {
-            // The order of receiving the block announcement and header list request is nondeterministic.
-            let header_list = match (handle.message().await, handle.message().await) {
-                ((_, SyncMessage::HeaderListRequest(_)), (_, SyncMessage::HeaderList(l))) => {
-                    l.into_headers()
-                }
-                ((_, SyncMessage::HeaderList(l)), (_, SyncMessage::HeaderListRequest(_))) => {
-                    l.into_headers()
-                }
-                (e1, e2) => panic!("Unexpected events: {e1:?} {e2:?}"),
-            };
-            assert_eq!(header_list, vec![block.header().clone()]);
-        }
     }
+
+    // A peer would request headers after the last block.
+    assert!(matches!(
+        handle.message().await.1,
+        SyncMessage::HeaderListRequest(HeaderListRequest { .. })
+    ));
 
     handle.assert_no_error().await;
 
