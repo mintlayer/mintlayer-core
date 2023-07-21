@@ -59,7 +59,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
 
     def assert_pos_consensus(self, block):
         if block["header"]["header"]["consensus_data"].get("PoS") is None:
-            raise AssertionError("Block {} was not PoS".format(block_hex))
+            raise AssertionError("Block {} was not PoS".format(block))
 
     def assert_tip(self, expected_block):
         tip = self.nodes[0].chainstate_best_block_id()

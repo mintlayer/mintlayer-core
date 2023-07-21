@@ -43,7 +43,7 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
 
     def assert_pow_consensus(self, block):
         if block["header"]["header"]["consensus_data"].get("PoW") is None:
-            raise AssertionError("Block {} was not PoS".format(block_hex))
+            raise AssertionError("Block {} was not PoS".format(block))
 
     def assert_tip(self, expected):
         tip = self.nodes[0].chainstate_best_block_id()
