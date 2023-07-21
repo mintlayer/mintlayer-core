@@ -20,7 +20,10 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, PoolId, SignedTransaction, Transaction},
+    chain::{
+        tokens::{Metadata, TokenCreator, TokenId},
+        Block, ChainConfig, PoolId, SignedTransaction, Transaction,
+    },
     primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
@@ -150,6 +153,28 @@ pub enum WalletCommand {
         transaction_id: HexEncoded<Id<Transaction>>,
     },
 
+    /// Issue a new token
+    IssueNewToken {
+        token_ticker: String,
+        amount_to_issue: String,
+        number_of_decimals: u8,
+        metadata_uri: String,
+        destination_address: String,
+    },
+
+    /// Issue a new token
+    IssueNewNft {
+        creator: Option<HexEncoded<PublicKey>>,
+        name: String,
+        description: String,
+        ticker: String,
+        icon_uri: Option<String>,
+        additional_metadata_uri: Option<String>,
+        media_uri: Option<String>,
+        media_hash: String,
+        destination_address: String,
+    },
+
     /// Rescan
     Rescan,
 
@@ -182,6 +207,12 @@ pub enum WalletCommand {
     GetVrfPublicKey,
 
     SendToAddress {
+        address: String,
+        amount: String,
+    },
+
+    SendTokensToAddress {
+        token_id: TokenId,
         address: String,
         amount: String,
     },
@@ -644,6 +675,77 @@ impl CommandHandler {
                 ))
             }
 
+            WalletCommand::IssueNewToken {
+                token_ticker,
+                amount_to_issue,
+                number_of_decimals,
+                metadata_uri,
+                destination_address,
+            } => {
+                let amount_to_issue = parse_coin_amount(chain_config, &amount_to_issue)?;
+                let destination_address = parse_address(chain_config, &destination_address)?;
+
+                let (token_id, _tx_status) = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .issue_new_token(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        destination_address,
+                        token_ticker.into_bytes(),
+                        amount_to_issue,
+                        number_of_decimals,
+                        metadata_uri.into_bytes(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(format!(
+                    "A new token has been issued with ID: {}",
+                    token_id
+                )))
+            }
+
+            WalletCommand::IssueNewNft {
+                creator,
+                name,
+                description,
+                ticker,
+                icon_uri,
+                additional_metadata_uri,
+                media_uri,
+                media_hash,
+                destination_address,
+            } => {
+                let destination_address = parse_address(chain_config, &destination_address)?;
+
+                let metadata = Metadata {
+                    creator: creator.map(|pk| TokenCreator {
+                        public_key: pk.take(),
+                    }),
+                    name: name.into_bytes(),
+                    description: description.into_bytes(),
+                    ticker: ticker.into_bytes(),
+                    icon_uri: icon_uri.map(|x| x.into_bytes()).into(),
+                    additional_metadata_uri: additional_metadata_uri.map(|x| x.into_bytes()).into(),
+                    media_uri: media_uri.map(|x| x.into_bytes()).into(),
+                    media_hash: media_hash.into_bytes(),
+                };
+
+                let (token_id, _tx_status) = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .issue_new_nft(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        destination_address,
+                        metadata,
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(format!(
+                    "A new NFT has been issued with ID: {}",
+                    token_id
+                )))
+            }
+
             WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
             WalletCommand::SyncWallet => {
@@ -737,6 +839,28 @@ impl CommandHandler {
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        address,
+                        amount,
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
+            WalletCommand::SendTokensToAddress {
+                token_id,
+                address,
+                amount,
+            } => {
+                let amount = parse_coin_amount(chain_config, &amount)?;
+                let address = parse_address(chain_config, &address)?;
+                // TODO: Take status into account
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .send_tokens_to_address(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        token_id,
                         address,
                         amount,
                     )

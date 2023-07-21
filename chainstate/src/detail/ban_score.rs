@@ -272,11 +272,7 @@ impl BanScore for TokensError {
     fn ban_score(&self) -> u32 {
         match self {
             TokensError::StorageError(_) => 0,
-            TokensError::IssueErrorInvalidTickerLength(_, _) => 100,
-            TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _) => 100,
-            TokensError::IssueAmountIsZero(_, _) => 100,
-            TokensError::IssueErrorTooManyDecimals(_, _) => 100,
-            TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
+            TokensError::IssueError(_, _, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             TokensError::CoinOrTokenOverflow => 100,
             TokensError::InsufficientTokenFees(_, _) => 100,
@@ -285,14 +281,6 @@ impl BanScore for TokensError {
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
-            TokensError::IssueErrorInvalidNameLength(_, _) => 100,
-            TokensError::IssueErrorInvalidDescriptionLength(_, _) => 100,
-            TokensError::IssueErrorNameHasNoneAlphaNumericChar(_, _) => 100,
-            TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(_, _) => 100,
-            TokensError::IssueErrorIncorrectIconURI(_, _) => 100,
-            TokensError::IssueErrorIncorrectMediaURI(_, _) => 100,
-            TokensError::MediaHashTooShort => 100,
-            TokensError::MediaHashTooLong => 100,
         }
     }
 }

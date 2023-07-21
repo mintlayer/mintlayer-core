@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TokensError;
-use common::{
-    chain::{Block, ChainConfig, Transaction},
-    primitives::Id,
-};
+use common::chain::ChainConfig;
+use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 
 fn check_is_text_alphanumeric(str: &[u8]) -> bool {
@@ -42,14 +39,14 @@ pub fn is_uri_valid(uri: &[u8]) -> bool {
     }
 }
 
-pub fn check_media_hash(chain_config: &ChainConfig, hash: &[u8]) -> Result<(), TokensError> {
+pub fn check_media_hash(chain_config: &ChainConfig, hash: &[u8]) -> Result<(), TokenIssuanceError> {
     ensure!(
         hash.len() >= chain_config.min_hash_len(),
-        TokensError::MediaHashTooShort
+        TokenIssuanceError::MediaHashTooShort
     );
     ensure!(
         hash.len() <= chain_config.max_hash_len(),
-        TokensError::MediaHashTooLong
+        TokenIssuanceError::MediaHashTooLong
     );
     Ok(())
 }
@@ -57,39 +54,32 @@ pub fn check_media_hash(chain_config: &ChainConfig, hash: &[u8]) -> Result<(), T
 pub fn check_token_ticker(
     chain_config: &ChainConfig,
     ticker: &[u8],
-    tx_id: Id<Transaction>,
-    source_block_id: Id<Block>,
-) -> Result<(), TokensError> {
+) -> Result<(), TokenIssuanceError> {
     // Check length
     ensure!(
         ticker.len() <= chain_config.token_max_ticker_len() && !ticker.is_empty(),
-        TokensError::IssueErrorInvalidTickerLength(tx_id, source_block_id,)
+        TokenIssuanceError::IssueErrorInvalidTickerLength
     );
 
     // Check is ticker has alphanumeric chars
     ensure!(
         check_is_text_alphanumeric(ticker),
-        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
+        TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar
     );
     Ok(())
 }
 
-pub fn check_nft_name(
-    chain_config: &ChainConfig,
-    name: &[u8],
-    tx_id: Id<Transaction>,
-    source_block_id: Id<Block>,
-) -> Result<(), TokensError> {
+pub fn check_nft_name(chain_config: &ChainConfig, name: &[u8]) -> Result<(), TokenIssuanceError> {
     // Check length
     ensure!(
         name.len() <= chain_config.token_max_name_len() && !name.is_empty(),
-        TokensError::IssueErrorInvalidNameLength(tx_id, source_block_id,)
+        TokenIssuanceError::IssueErrorInvalidNameLength
     );
 
     // Check is name has alphanumeric chars
     ensure!(
         check_is_text_alphanumeric(name),
-        TokensError::IssueErrorNameHasNoneAlphaNumericChar(tx_id, source_block_id)
+        TokenIssuanceError::IssueErrorNameHasNoneAlphaNumericChar
     );
     Ok(())
 }
@@ -97,19 +87,17 @@ pub fn check_nft_name(
 pub fn check_nft_description(
     chain_config: &ChainConfig,
     description: &[u8],
-    tx_id: Id<Transaction>,
-    source_block_id: Id<Block>,
-) -> Result<(), TokensError> {
+) -> Result<(), TokenIssuanceError> {
     // Check length
     ensure!(
         description.len() <= chain_config.token_max_description_len() && !description.is_empty(),
-        TokensError::IssueErrorInvalidDescriptionLength(tx_id, source_block_id,)
+        TokenIssuanceError::IssueErrorInvalidDescriptionLength
     );
 
     // Check is description has alphanumeric chars
     ensure!(
         check_is_text_alphanumeric(description),
-        TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(tx_id, source_block_id)
+        TokenIssuanceError::IssueErrorDescriptionHasNoneAlphaNumericChar
     );
     Ok(())
 }
