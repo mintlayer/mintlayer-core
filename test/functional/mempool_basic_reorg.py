@@ -14,7 +14,9 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.extra_args = [[]]
+        self.extra_args = [[
+            "--blockprod-min-peers-to-produce-blocks=0",
+        ]]
 
     def setup_network(self):
         self.setup_nodes()

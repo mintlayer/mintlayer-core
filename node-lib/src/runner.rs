@@ -127,8 +127,10 @@ async fn initialize(
         "blockprod",
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
+            Arc::new(node_config.blockprod.unwrap_or_default().into()),
             chainstate.clone(),
             mempool.clone(),
+            p2p.clone(),
             Default::default(),
         )?,
     );

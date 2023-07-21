@@ -15,7 +15,7 @@
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
-use blockprod::BlockProductionHandle;
+use blockprod::{test_blockprod_config, BlockProductionHandle};
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, rpc::ChainstateRpcServer,
     ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
@@ -95,17 +95,6 @@ pub async fn start_subsystems(
         move |call, shutdn| mempool.run(call, shutdn)
     });
 
-    let block_prod_handle = manager.add_subsystem(
-        "test-blockprod",
-        blockprod::make_blockproduction(
-            Arc::clone(&chain_config),
-            chainstate_handle.clone(),
-            mempool_handle.clone(),
-            Default::default(),
-        )
-        .unwrap(),
-    );
-
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
         Arc::clone(&chain_config),
@@ -119,6 +108,19 @@ pub async fn start_subsystems(
     let p2p_handle = manager.add_subsystem_with_custom_eventloop("test-p2p", {
         move |call, shutdown| p2p.run(call, shutdown)
     });
+
+    let block_prod_handle = manager.add_subsystem(
+        "test-blockprod",
+        blockprod::make_blockproduction(
+            Arc::clone(&chain_config),
+            Arc::new(test_blockprod_config()),
+            chainstate_handle.clone(),
+            mempool_handle.clone(),
+            p2p_handle.clone(),
+            Default::default(),
+        )
+        .unwrap(),
+    );
 
     let rpc_config = RpcConfig {
         http_bind_address: SocketAddr::from_str(&rpc_bind_address)
