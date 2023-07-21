@@ -63,13 +63,22 @@ pub fn check_tx_inputs_outputs_policy(
     purposes_check::check_tx_inputs_outputs_purposes(tx, utxo_view)?;
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
-    constraints_accumulator.collect_and_verify(
-        tx,
-        chain_config,
-        block_height,
-        pos_accounting_view,
-        utxo_view,
-    )?;
+
+    for input in tx.inputs() {
+        constraints_accumulator.process_input(
+            chain_config,
+            block_height,
+            pos_accounting_view,
+            utxo_view,
+            input,
+        )?;
+    }
+
+    for output in tx.outputs() {
+        constraints_accumulator.process_output(output)?;
+    }
+
+    constraints_accumulator.verify()?;
 
     Ok(())
 }

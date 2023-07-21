@@ -507,7 +507,7 @@ where
                             Some(res)
                         }
                         None => Some(Err(
-                            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
+                            ConnectTransactionError::AttemptToCreateDelegationFromAccounts,
                         )),
                     }
                 }

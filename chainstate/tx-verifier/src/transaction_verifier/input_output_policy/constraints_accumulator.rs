@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -16,9 +16,7 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
-    chain::{
-        timelock::OutputTimeLock, AccountSpending, ChainConfig, Transaction, TxInput, TxOutput,
-    },
+    chain::{timelock::OutputTimeLock, AccountSpending, ChainConfig, TxInput, TxOutput},
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use pos_accounting::PoSAccountingView;
@@ -27,8 +25,15 @@ use crate::error::ConnectTransactionError;
 
 use super::IOPolicyError;
 
+/// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
+/// providing a set of properties that should be satisfied. For example instead of checking that
+/// all outputs are timelocked when the pool is decommissioned `ConstrainedValueAccumulator` gives a way
+/// to check that an accumulated output value is locked for sufficient amount of time which allows
+/// using other valid inputs and outputs in the same tx.
+///
+/// TODO: potentially this struct can be extended to collect unconstrained values such as transferred amounts
+///       replacing `AmountsMap`
 pub struct ConstrainedValueAccumulator {
-    //unconstrained_value: OutputValue,
     timelock_requirement: BTreeMap<BlockDistance, Amount>,
 }
 
@@ -39,28 +44,7 @@ impl ConstrainedValueAccumulator {
         }
     }
 
-    pub fn collect_and_verify(
-        &mut self,
-        tx: &Transaction,
-        chain_config: &ChainConfig,
-        block_height: BlockHeight,
-        pos_accounting_view: &impl PoSAccountingView,
-        utxo_view: &impl utxo::UtxosView,
-    ) -> Result<(), ConnectTransactionError> {
-        for input in tx.inputs() {
-            self.process_input(
-                chain_config,
-                block_height,
-                pos_accounting_view,
-                utxo_view,
-                input,
-            )?;
-        }
-
-        for output in tx.outputs() {
-            self.process_output(output)?;
-        }
-
+    pub fn verify(self) -> Result<(), ConnectTransactionError> {
         match self.timelock_requirement.iter().find(|(_, amount)| **amount > Amount::ZERO) {
             Some((block_distance, _)) => {
                 Err(IOPolicyError::TimelockRequirementNotSatisfied(*block_distance).into())
@@ -69,7 +53,7 @@ impl ConstrainedValueAccumulator {
         }
     }
 
-    fn process_input(
+    pub fn process_input(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
@@ -113,7 +97,6 @@ impl ConstrainedValueAccumulator {
             }
             TxInput::Account(account) => match account.account() {
                 AccountSpending::Delegation(_, spend_amount) => {
-                    // FIXME: check balance?
                     let block_distance =
                         chain_config.as_ref().spend_share_maturity_distance(block_height);
                     match self.timelock_requirement.entry(block_distance) {
@@ -133,22 +116,18 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_output(&mut self, output: &TxOutput) -> Result<(), ConnectTransactionError> {
+    pub fn process_output(&mut self, output: &TxOutput) -> Result<(), ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateStakePool(_, _)
-            | TxOutput::CreateDelegationId(_, _) => {
-                // TODO: this arm can be used to calculate transferred amounts
-            }
+            | TxOutput::CreateDelegationId(_, _) => { /* do nothing */ }
             TxOutput::LockThenTransfer(value, _, timelock) => match timelock {
                 OutputTimeLock::UntilHeight(_)
                 | OutputTimeLock::UntilTime(_)
-                | OutputTimeLock::ForSeconds(_) => {
-                    // TODO: this arm can be used to calculate transferred amounts
-                }
+                | OutputTimeLock::ForSeconds(_) => { /* do nothing */ }
                 OutputTimeLock::ForBlockCount(block_count) => {
                     if let Some(coins) = value.coin_amount() {
                         let block_count: i64 = (*block_count)
