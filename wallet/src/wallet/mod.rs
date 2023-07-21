@@ -24,12 +24,12 @@ use crate::wallet_events::WalletEvents;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
-use common::address::Address;
+use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
-    Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TransactionCreationError,
-    TxOutput, UtxoOutPoint,
+    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
+    TransactionCreationError, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -39,6 +39,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
+use mempool::FeeRate;
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
@@ -88,6 +89,8 @@ pub enum WalletError {
     SendRequestComplete,
     #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
     UnsupportedTransactionOutput(Box<TxOutput>),
+    #[error("Unsupported input destination")] // TODO implement display for Destination
+    UnsupportedInputDestination(Destination),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
     #[error("Empty inputs in token issuance transaction")]
@@ -108,6 +111,8 @@ pub enum WalletError {
     CannotAbandonTransaction(TxState),
     #[error("Transaction with Id {0} not found")]
     CannotFindTransactionWithId(Id<Transaction>),
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
 }
 
 /// Result type used for the wallet
@@ -446,16 +451,40 @@ impl<B: storage::Backend> Wallet<B> {
         self.get_account(account_index)?.get_vrf_public_key(&db_tx)
     }
 
+    /// Creates a transaction to send funds to specified addresses.
+    ///
+    /// # Arguments
+    ///
+    /// * `&mut self` - A mutable reference to the wallet instance.
+    /// * `account_index: U31` - The index of the account from which funds will be sent.
+    /// * `outputs: impl IntoIterator<Item = TxOutput>` - An iterator over `TxOutput` items representing the addresses and amounts to which funds will be sent.
+    /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
+    /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
+    /// current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
+    /// use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
+    /// tend to use inputs with lowest fee.
+    ///
+    /// # Returns
+    ///
+    /// A `WalletResult` containing the signed transaction if successful, or an error indicating the reason for failure.
     pub fn create_transaction_to_addresses(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
-        wallet_events: &mut impl WalletEvents,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.process_send_request(db_tx, request, latest_median_time)?;
+            let tx = account.process_send_request(
+                db_tx,
+                request,
+                latest_median_time,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )?;
             let txs = [tx];
             account.scan_new_unconfirmed_transactions(
                 &txs,
@@ -471,15 +500,23 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_stake_pool_tx(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-        wallet_events: &mut impl WalletEvents,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx =
-                account.create_stake_pool_tx(db_tx, amount, decomission_key, latest_median_time)?;
+            let tx = account.create_stake_pool_tx(
+                db_tx,
+                amount,
+                decomission_key,
+                latest_median_time,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )?;
 
             let txs = [tx];
             account.scan_new_unconfirmed_transactions(

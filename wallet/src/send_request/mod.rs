@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::stakelock::StakePoolData;
 use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
 use common::chain::{
-    Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 
-use crate::{WalletError, WalletResult};
+use crate::WalletResult;
 
 /// The `SendRequest` struct provides the necessary information to the wallet
 /// on the precise method of sending funds to a designated destination.
@@ -41,24 +40,23 @@ pub struct SendRequest {
     outputs: Vec<TxOutput>,
 }
 
-pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxOutput> {
-    let pub_key_hash = PublicKeyHash::try_from(&address)
-        .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
-
-    let destination = Destination::Address(pub_key_hash);
+pub fn make_address_output(
+    chain_config: &ChainConfig,
+    address: Address,
+    amount: Amount,
+) -> WalletResult<TxOutput> {
+    let destination = address.destination(chain_config)?;
 
     Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
 }
 
 pub fn make_address_output_token(
+    chain_config: &ChainConfig,
     address: Address,
     amount: Amount,
     token_id: TokenId,
 ) -> WalletResult<TxOutput> {
-    let pub_key_hash = PublicKeyHash::try_from(&address)
-        .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
-
-    let destination = Destination::Address(pub_key_hash);
+    let destination = address.destination(chain_config)?;
 
     Ok(TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
@@ -123,12 +121,9 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(
-        mut self,
-        utxos: impl IntoIterator<Item = (UtxoOutPoint, TxOutput)>,
-    ) -> Self {
+    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (TxInput, TxOutput)>) -> Self {
         for (outpoint, txo) in utxos {
-            self.inputs.push(outpoint.into());
+            self.inputs.push(outpoint);
             self.utxos.push(txo);
         }
         self

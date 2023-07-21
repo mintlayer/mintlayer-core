@@ -29,6 +29,9 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+        self.extra_args = [[
+            "--blockprod-min-peers-to-produce-blocks=0",
+        ]]
 
     def assert_chain(self, block, previous_tip):
         assert_equal(block["header"]["header"]["prev_block_id"][2:], previous_tip)
@@ -40,7 +43,7 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
 
     def assert_pow_consensus(self, block):
         if block["header"]["header"]["consensus_data"].get("PoW") is None:
-            raise AssertionError("Block {} was not PoS".format(block_hex))
+            raise AssertionError("Block {} was not PoS".format(block))
 
     def assert_tip(self, expected):
         tip = self.nodes[0].chainstate_best_block_id()

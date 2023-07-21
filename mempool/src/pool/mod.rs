@@ -44,11 +44,12 @@ use utils::{
     ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
 };
 
+pub use self::feerate::FeeRate;
 pub use self::memory_usage_estimator::MemoryUsageEstimator;
 use self::{
     entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
-    feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
+    feerate::{INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
     orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
     spends_unconfirmed::SpendsUnconfirmed,
@@ -1029,6 +1030,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         reorg::handle_new_tip(self, block_id);
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());
+    }
+
+    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
+        let mut total_size = 0;
+        self.store
+            .txs_by_descendant_score
+            .iter()
+            .rev()
+            .find(|(_score, txs)| {
+                total_size += txs
+                    .iter()
+                    .map(|tx_id| self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size()))
+                    .sum::<usize>();
+                (total_size / 1_000_000) >= in_top_x_mb
+            })
+            .map_or_else(
+                || Ok(self.rolling_fee_rate.read().rolling_minimum_fee_rate()),
+                |(score, _txs)| {
+                    (Amount::from_atoms(score.into_atoms()) * 1000)
+                        .ok_or(MempoolPolicyError::FeeOverflow)
+                        .map(|amount| {
+                            let feerate = FeeRate::new(amount);
+                            std::cmp::max(
+                                feerate,
+                                self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+                            )
+                        })
+                },
+            )
     }
 }
 

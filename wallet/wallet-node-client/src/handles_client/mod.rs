@@ -20,7 +20,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::MempoolHandle;
+use mempool::{FeeRate, MempoolHandle};
 use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
 use serialization::hex::HexError;
 
@@ -29,7 +29,7 @@ use crate::node_traits::NodeInterface;
 #[derive(Clone)]
 pub struct WalletHandlesClient {
     chainstate: ChainstateHandle,
-    _mempool: MempoolHandle,
+    mempool: MempoolHandle,
     block_prod: BlockProductionHandle,
     p2p: P2pHandle,
 }
@@ -65,7 +65,7 @@ impl WalletHandlesClient {
     ) -> Result<Self, WalletHandlesClientError> {
         let result = Self {
             chainstate,
-            _mempool: mempool,
+            mempool,
             block_prod,
             p2p,
         };
@@ -193,5 +193,10 @@ impl NodeInterface for WalletHandlesClient {
             .call_async_mut(move |this| this.remove_reserved_node(address))
             .await??;
         Ok(())
+    }
+
+    async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        let res = self.mempool.call(move |this| this.get_fee_rate(in_top_x_mb)).await??;
+        Ok(res)
     }
 }

@@ -41,11 +41,13 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
+use p2p::P2pHandle;
 use tokio::sync::oneshot;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
+    config::BlockProdConfig,
     detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
     BlockProductionError,
 };
@@ -59,18 +61,22 @@ pub enum TransactionsSource {
 #[allow(dead_code)]
 pub struct BlockProduction {
     chain_config: Arc<ChainConfig>,
+    blockprod_config: Arc<BlockProdConfig>,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     job_manager_handle: JobManagerHandle,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
+    p2p_handle: P2pHandle,
 }
 
 impl BlockProduction {
     pub fn new(
         chain_config: Arc<ChainConfig>,
+        blockprod_config: Arc<BlockProdConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
+        p2p_handle: P2pHandle,
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
@@ -78,8 +84,10 @@ impl BlockProduction {
 
         let block_production = Self {
             chain_config,
+            blockprod_config,
             chainstate_handle,
             mempool_handle,
+            p2p_handle,
             time_getter,
             job_manager_handle,
             mining_thread_pool,
@@ -252,6 +260,19 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        let current_peer_count = self
+            .p2p_handle
+            .call_async_mut(move |this| this.get_peer_count())
+            .await?
+            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+
+        if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
+            return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
+                current_peer_count,
+                self.blockprod_config.min_peers_to_produce_blocks,
+            ));
+        }
+
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 

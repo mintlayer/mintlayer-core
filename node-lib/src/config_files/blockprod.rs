@@ -13,22 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(clippy::clone_on_ref_ptr)]
+use blockprod::config::BlockProdConfig;
+use serde::{Deserialize, Serialize};
 
-pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
-pub use mempool_types::{TxOrigin, TxStatus};
+/// The rpc subsystem configuration.
+#[must_use]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct BlockProdConfigFile {
+    /// Minimum number of connected peers to enable block production.
+    pub min_peers_to_produce_blocks: Option<usize>,
+}
 
-mod config;
-pub mod error;
-pub mod event;
-mod interface;
-mod pool;
-pub mod rpc;
-pub mod tx_accumulator;
-
-pub use pool::FeeRate;
-
-pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
-
-pub type Result<T> = core::result::Result<T, error::Error>;
+impl From<BlockProdConfigFile> for BlockProdConfig {
+    fn from(config: BlockProdConfigFile) -> Self {
+        Self {
+            min_peers_to_produce_blocks: config.min_peers_to_produce_blocks.unwrap_or_default(),
+        }
+    }
+}

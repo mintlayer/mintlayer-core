@@ -130,8 +130,10 @@ async fn initialize(
         "blockprod",
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
+            Arc::new(node_config.blockprod.unwrap_or_default().into()),
             chainstate.clone(),
             mempool.clone(),
+            p2p.clone(),
             Default::default(),
         )?,
     );
@@ -263,7 +265,6 @@ async fn start(
 
 fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     let ChainConfigOptions {
-        chain_address_prefix,
         chain_max_future_block_time_offset,
         chain_version,
         chain_target_block_spacing,
@@ -297,7 +298,6 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         };
     }
 
-    update_builder!(address_prefix);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);

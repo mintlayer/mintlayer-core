@@ -22,7 +22,7 @@ use common::{
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
-use crate::{MempoolMaxSize, TxOrigin, TxStatus};
+use crate::{FeeRate, MempoolMaxSize, TxOrigin, TxStatus};
 
 use rpc::Result as RpcResult;
 
@@ -64,6 +64,9 @@ trait MempoolRpc {
     // count, e.g. "200MB" instead of 200000000
     #[method(name = "set_max_size")]
     async fn set_max_size(&self, max_size: usize) -> RpcResult<()>;
+
+    #[method(name = "get_fee_rate")]
+    async fn get_fee_rate(&self, in_top_x_mb: usize) -> RpcResult<FeeRate>;
 }
 
 #[async_trait::async_trait]
@@ -125,5 +128,9 @@ impl MempoolRpcServer for super::MempoolHandle {
     async fn set_max_size(&self, max_size: usize) -> rpc::Result<()> {
         let max_size = MempoolMaxSize::from_bytes(max_size);
         rpc::handle_result(self.call_mut(move |this| this.set_max_size(max_size)).await)
+    }
+
+    async fn get_fee_rate(&self, in_top_x_mb: usize) -> rpc::Result<FeeRate> {
+        rpc::handle_result(self.call(move |this| this.get_fee_rate(in_top_x_mb)).await)
     }
 }

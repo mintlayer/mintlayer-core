@@ -358,7 +358,10 @@ impl Backend {
         Ok((wallet_id, account_id, enabled))
     }
 
-    fn send_amount(&mut self, send_request: SendRequest) -> Result<TransactionInfo, BackendError> {
+    async fn send_amount(
+        &mut self,
+        send_request: SendRequest,
+    ) -> Result<TransactionInfo, BackendError> {
         let SendRequest {
             wallet_id,
             account_id,
@@ -384,12 +387,13 @@ impl Backend {
                 amount,
                 &mut wallet.wallet_events,
             )
+            .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         Ok(TransactionInfo { transaction })
     }
 
-    fn stake_amount(
+    async fn stake_amount(
         &mut self,
         stake_request: StakeRequest,
     ) -> Result<TransactionInfo, BackendError> {
@@ -415,6 +419,7 @@ impl Backend {
                 None,
                 &mut wallet.wallet_events,
             )
+            .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         Ok(TransactionInfo { transaction })
@@ -495,11 +500,11 @@ impl Backend {
                 Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
             }
             BackendRequest::SendAmount(send_request) => {
-                let send_res = self.send_amount(send_request);
+                let send_res = self.send_amount(send_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
             }
             BackendRequest::StakeAmount(stake_request) => {
-                let stake_res = self.stake_amount(stake_request);
+                let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
             }
             BackendRequest::Broadcast(transaction) => {

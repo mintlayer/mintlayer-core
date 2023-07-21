@@ -741,6 +741,7 @@ impl CommandHandler {
                         amount,
                         &mut WalletEventsNop,
                     )
+                    .await
                     .map_err(WalletCliError::Controller)?;
                 // TODO: Take status into account
                 let _status =
@@ -763,6 +764,7 @@ impl CommandHandler {
                         decomission_key,
                         &mut WalletEventsNop,
                     )
+                    .await
                     .map_err(WalletCliError::Controller)?;
                 // TODO: Take status into account
                 let _status =

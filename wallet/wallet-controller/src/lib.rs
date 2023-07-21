@@ -294,28 +294,58 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn send_to_address(
+    pub async fn send_to_address(
         &mut self,
         account_index: U31,
         address: Address,
         amount: Amount,
         wallet_events: &mut impl WalletEvents,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
+        let output = make_address_output(self.chain_config.as_ref(), address, amount)
+            .map_err(ControllerError::WalletError)?;
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+
         self.wallet
-            .create_transaction_to_addresses(account_index, [output], wallet_events)
+            .create_transaction_to_addresses(
+                wallet_events,
+                account_index,
+                [output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn create_stake_pool_tx(
+    pub async fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
         wallet_events: &mut impl WalletEvents,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+
         self.wallet
-            .create_stake_pool_tx(account_index, amount, decomission_key, wallet_events)
+            .create_stake_pool_tx(
+                wallet_events,
+                account_index,
+                amount,
+                decomission_key,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
             .map_err(ControllerError::WalletError)
     }
 

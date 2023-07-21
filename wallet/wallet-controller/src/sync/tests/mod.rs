@@ -27,6 +27,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
+use mempool::FeeRate;
 use mempool_types::TxStatus;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
@@ -210,6 +211,10 @@ impl NodeInterface for MockNode {
     }
     async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
         unreachable!()
+    }
+
+    async fn mempool_get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Self::Error> {
+        Ok(FeeRate::new(Amount::ZERO))
     }
 }
 

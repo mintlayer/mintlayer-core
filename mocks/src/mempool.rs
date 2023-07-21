@@ -19,13 +19,13 @@ use std::sync::Arc;
 
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
-    primitives::Id,
+    primitives::{Amount, Id},
 };
 use mempool::{
     error::{Error, TxValidationError},
     event::MempoolEvent,
     tx_accumulator::TransactionAccumulator,
-    MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
+    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
 use utils::atomics::AcqRelAtomicBool;
@@ -137,6 +137,10 @@ impl MempoolInterface for MempoolInterfaceMock {
 
     fn set_max_size(&mut self, _max_size: MempoolMaxSize) -> Result<(), Error> {
         unimplemented!()
+    }
+
+    fn get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Error> {
+        Ok(FeeRate::new(Amount::ZERO))
     }
 }
 

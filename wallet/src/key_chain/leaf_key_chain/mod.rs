@@ -290,7 +290,10 @@ impl LeafKeySoftChain {
         // Calculate public key hash
         let public_key_hash = PublicKeyHash::from(&public_key);
         // Calculate the address
-        let address = Address::from_public_key_hash(&self.chain_config, &public_key_hash)?;
+        let address = Address::new_from_destination(
+            &self.chain_config,
+            &Destination::Address(public_key_hash),
+        )?;
         // Calculate account derivation path id
         let account_path_id = AccountDerivationPathId::new(
             self.account_id.clone(),
