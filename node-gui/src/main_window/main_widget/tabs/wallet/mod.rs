@@ -21,7 +21,10 @@ mod top_panel;
 mod transactions;
 
 use iced::{
-    widget::{column, container, horizontal_rule, row, vertical_rule, Scrollable, Text},
+    widget::{
+        column, container, horizontal_rule, pane_grid, row, vertical_rule, PaneGrid, Scrollable,
+        Text,
+    },
     Command, Element, Length,
 };
 use iced_aw::tab_bar::TabLabel;
@@ -50,6 +53,7 @@ pub enum WalletMessage {
     CopyToClipboard(String),
 
     SelectPanel(SelectedPanel),
+    Resized(pane_grid::ResizeEvent),
 
     SetPassword,
     RemovePassword,
@@ -87,15 +91,29 @@ pub struct WalletTab {
     selected_account: AccountId,
     selected_panel: SelectedPanel,
     account_state: AccountState,
+    panes: pane_grid::State<WalletPane>,
+}
+
+enum WalletPane {
+    Left,
+    Right,
 }
 
 impl WalletTab {
     pub fn new(wallet_id: WalletId) -> Self {
+        let (mut panes, pane) = pane_grid::State::new(WalletPane::Left);
+
+        let (_pane, split) = panes
+            .split(pane_grid::Axis::Vertical, &pane, WalletPane::Right)
+            .expect("split should not fail");
+        panes.resize(&split, 0.2);
+
         WalletTab {
             wallet_id,
             selected_account: AccountId::new(DEFAULT_ACCOUNT_INDEX),
             selected_panel: SelectedPanel::Transactions,
             account_state: AccountState::default(),
+            panes,
         }
     }
 
@@ -113,8 +131,14 @@ impl WalletTab {
                 // TODO: Show toast notification
                 iced::clipboard::write(text)
             }
+
             WalletMessage::SelectPanel(selected_panel) => {
                 self.selected_panel = selected_panel;
+                Command::none()
+            }
+
+            WalletMessage::Resized(pane_grid::ResizeEvent { split, ratio }) => {
+                self.panes.resize(&split, ratio);
                 Command::none()
             }
 
@@ -225,49 +249,56 @@ impl Tab for WalletTab {
             .get(&self.selected_account)
             .expect("selected account must be known");
 
-        let body = match self.selected_panel {
-            SelectedPanel::Transactions => {
-                transactions::view_transactions(&node_state.chain_config, account)
-            }
-            SelectedPanel::Addresses => addresses::view_addresses(account),
-            SelectedPanel::Send => send::view_send(
-                &self.account_state.send_address,
-                &self.account_state.send_amount,
-            ),
-            SelectedPanel::Stake => stake::view_stake(
-                &node_state.chain_config,
-                account,
-                &self.account_state.stake_amount,
-            ),
-        };
+        // PaneGrid is used to make the left panel resizable
+        let pane_grid: Element<WalletMessage> =
+            PaneGrid::new(&self.panes, move |_id, pane, _is_maximized| match pane {
+                WalletPane::Left => {
+                    let left_panel = left_panel::view_left_panel(
+                        node_state,
+                        wallet_info,
+                        self.selected_account,
+                        self.selected_panel,
+                    );
 
-        let body = Scrollable::new(container(body).padding(10))
+                    pane_grid::Content::new(row![left_panel, vertical_rule(1)])
+                }
+                WalletPane::Right => {
+                    let body = match self.selected_panel {
+                        SelectedPanel::Transactions => {
+                            transactions::view_transactions(&node_state.chain_config, account)
+                        }
+                        SelectedPanel::Addresses => addresses::view_addresses(account),
+                        SelectedPanel::Send => send::view_send(
+                            &self.account_state.send_address,
+                            &self.account_state.send_amount,
+                        ),
+                        SelectedPanel::Stake => stake::view_stake(
+                            &node_state.chain_config,
+                            account,
+                            &self.account_state.stake_amount,
+                        ),
+                    };
+
+                    let body = Scrollable::new(container(body).padding(10))
+                        .width(Length::Fill)
+                        .height(Length::Fill);
+
+                    let top_panel = container(top_panel::view_top_panel(
+                        &node_state.chain_config,
+                        wallet_info,
+                        account,
+                    ))
+                    .height(50)
+                    .width(Length::Fill);
+
+                    pane_grid::Content::new(column![top_panel, horizontal_rule(1.0), body])
+                }
+            })
             .width(Length::Fill)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .on_resize(10, WalletMessage::Resized)
+            .into();
 
-        let top_panel = container(top_panel::view_top_panel(
-            &node_state.chain_config,
-            wallet_info,
-            account,
-        ))
-        .height(50)
-        .width(Length::Fill);
-        let left_panel = container(left_panel::view_left_panel(
-            node_state,
-            wallet_info,
-            self.selected_account,
-            self.selected_panel,
-        ))
-        .width(150);
-
-        let page: Element<'static, WalletMessage> = row![
-            left_panel.width(Length::Fixed(150.0)),
-            vertical_rule(1),
-            column![top_panel, horizontal_rule(1.0), body]
-        ]
-        .width(Length::Fill)
-        .into();
-
-        page.map(|msg| TabsMessage::WalletMessage(self.wallet_id, msg))
+        pane_grid.map(|msg| TabsMessage::WalletMessage(self.wallet_id, msg))
     }
 }
