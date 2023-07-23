@@ -889,7 +889,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let tx_id = *tx.tx_id();
         let origin = tx.origin();
 
-        match self.validate_transaction(tx).log_err_pfx("Transaction rejected") {
+        match self.validate_transaction(tx).log_warn_pfx("Transaction rejected") {
             Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
