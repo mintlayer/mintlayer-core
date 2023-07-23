@@ -26,8 +26,10 @@ mod median_time;
 mod orphan_blocks;
 
 pub use self::{
-    error::*, info::ChainInfo, median_time::calculate_median_time_past,
-    tokens::is_rfc3986_valid_symbol,
+    error::*,
+    info::ChainInfo,
+    median_time::calculate_median_time_past,
+    tokens::{check_nft_issuance_data, check_tokens_issuance_data, is_rfc3986_valid_symbol},
 };
 pub use chainstate_types::Locator;
 pub use error::{
@@ -37,7 +39,9 @@ pub use error::{
 
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
 pub use transaction_verifier::{
-    error::{ConnectTransactionError, SpendStakeError, TokensError, TxIndexError},
+    error::{
+        ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError, TxIndexError,
+    },
     storage::TransactionVerifierStorageError,
 };
 use tx_verifier::transaction_verifier;

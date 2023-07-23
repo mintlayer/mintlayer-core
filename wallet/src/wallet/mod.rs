@@ -20,6 +20,7 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+use crate::send_request::{make_issue_nft_outputs, make_issue_token_outputs};
 use crate::wallet_events::WalletEvents;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -27,6 +28,7 @@ use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
+use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuance};
 use common::chain::{
     Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -40,6 +42,7 @@ use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
 use mempool::FeeRate;
+use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
@@ -103,6 +106,8 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
     InvalidAddress(String, PublicKeyHashError),
+    #[error("Token issuance error: {0}")]
+    TokenIssuance(#[from] TokenIssuanceError),
     #[error("No UTXOs")]
     NoUtxos,
     #[error("Coin selection error: {0}")]
@@ -496,6 +501,51 @@ impl<B: storage::Backend> Wallet<B> {
             let [tx] = txs;
             Ok(tx)
         })
+    }
+
+    pub fn issue_new_token(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        address: Address,
+        token_issuance: TokenIssuance,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(TokenId, SignedTransaction)> {
+        let outputs =
+            make_issue_token_outputs(address, token_issuance, self.chain_config.as_ref())?;
+
+        let tx = self.create_transaction_to_addresses(
+            wallet_events,
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
+        Ok((token_id, tx))
+    }
+
+    pub fn issue_new_nft(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        address: Address,
+        metadata: Metadata,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(TokenId, SignedTransaction)> {
+        let outputs = make_issue_nft_outputs(address, metadata, self.chain_config.as_ref())?;
+
+        let tx = self.create_transaction_to_addresses(
+            wallet_events,
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        let token_id = token_id(tx.transaction()).ok_or(WalletError::MissingTokenId)?;
+        Ok((token_id, tx))
     }
 
     pub fn create_stake_pool_tx(
