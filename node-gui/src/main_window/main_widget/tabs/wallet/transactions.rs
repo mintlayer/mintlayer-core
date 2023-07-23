@@ -1,0 +1,80 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use common::chain::ChainConfig;
+use iced::{
+    widget::{container, row, Column, Text},
+    Alignment, Element,
+};
+use iced_aw::Grid;
+
+use crate::{
+    backend::messages::AccountInfo,
+    main_window::{print_block_timestamp, print_coin_amount},
+};
+
+use super::WalletMessage;
+
+pub fn view_transactions(
+    chain_config: &ChainConfig,
+    account: &AccountInfo,
+) -> Element<'static, WalletMessage> {
+    let field = |text: String| container(Text::new(text)).padding(5);
+    let mut transactions = Column::new();
+
+    let current_transaction_list = &account.transaction_list;
+    let mut transaction_list = Grid::with_columns(5)
+        .push("Num")
+        .push("Txid")
+        .push("Timestamp")
+        .push("Type")
+        .push("Amount");
+    for (index, tx) in current_transaction_list.txs.iter().enumerate() {
+        let amount_str = tx
+            .tx_type
+            .amount()
+            .map(|amount| print_coin_amount(chain_config, amount))
+            .unwrap_or_default();
+        let timestamp = tx
+            .block
+            .as_ref()
+            .and_then(|block| print_block_timestamp(block.timestamp))
+            .unwrap_or_else(|| "-".to_owned());
+        transaction_list = transaction_list
+            .push(field(format!("{}", current_transaction_list.skip + index)))
+            .push(field(tx.txid.to_string()))
+            .push(field(timestamp))
+            .push(field(tx.tx_type.type_name().to_owned()))
+            .push(field(amount_str));
+    }
+    let transaction_list_controls = row![
+        iced::widget::button(Text::new("<<")).on_press(WalletMessage::TransactionList {
+            skip: current_transaction_list.skip.saturating_sub(current_transaction_list.count),
+        }),
+        Text::new(format!(
+            "{}/{}",
+            current_transaction_list.skip / current_transaction_list.count,
+            current_transaction_list.total / current_transaction_list.count,
+        )),
+        iced::widget::button(Text::new(">>")).on_press(WalletMessage::TransactionList {
+            skip: current_transaction_list.skip.saturating_add(current_transaction_list.count),
+        }),
+    ]
+    .spacing(10)
+    .align_items(Alignment::Center);
+    transactions = transactions.push(transaction_list).push(transaction_list_controls);
+
+    transactions.into()
+}
