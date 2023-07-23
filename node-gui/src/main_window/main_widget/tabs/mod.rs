@@ -22,13 +22,13 @@ use crate::{
 };
 
 use self::{
-    network::{NetworkMessage, NetworkTab},
+    networking::{NetworkingMessage, NetworkingTab},
     settings::{SettingsMessage, SettingsTab, TabBarPosition},
     summary::{SummaryMessage, SummaryTab},
     wallet::{WalletMessage, WalletTab},
 };
 
-pub mod network;
+pub mod networking;
 pub mod settings;
 pub mod summary;
 pub mod wallet;
@@ -39,7 +39,7 @@ pub enum TabsMessage {
     WalletAdded(WalletId),
     WalletRemoved(WalletId),
     Summary(SummaryMessage),
-    Network(NetworkMessage),
+    Networking(NetworkingMessage),
     Settings(SettingsMessage),
     WalletMessage(WalletId, WalletMessage),
 }
@@ -47,7 +47,7 @@ pub enum TabsMessage {
 pub struct TabsWidget {
     active_tab: usize,
     summary_tab: SummaryTab,
-    network_tab: NetworkTab,
+    networking_tab: NetworkingTab,
     settings_tab: SettingsTab,
     wallets: Vec<WalletTab>,
 }
@@ -57,7 +57,7 @@ impl TabsWidget {
         TabsWidget {
             active_tab: 0,
             summary_tab: SummaryTab::new(),
-            network_tab: NetworkTab::new(),
+            networking_tab: NetworkingTab::new(),
             settings_tab: SettingsTab::new(),
             wallets: Vec::new(),
         }
@@ -76,8 +76,8 @@ impl TabsWidget {
                 self.summary_tab.view(node_state),
             )
             .push(
-                self.network_tab.tab_label(),
-                self.network_tab.view(node_state),
+                self.networking_tab.tab_label(),
+                self.networking_tab.view(node_state),
             )
             .push(
                 self.settings_tab.tab_label(),
@@ -122,8 +122,8 @@ impl TabsWidget {
             TabsMessage::Summary(message) => {
                 self.summary_tab.update(message).map(TabsMessage::Summary)
             }
-            TabsMessage::Network(message) => {
-                self.network_tab.update(message).map(TabsMessage::Network)
+            TabsMessage::Networking(message) => {
+                self.networking_tab.update(message).map(TabsMessage::Networking)
             }
             TabsMessage::Settings(message) => {
                 self.settings_tab.update(message).map(TabsMessage::Settings)

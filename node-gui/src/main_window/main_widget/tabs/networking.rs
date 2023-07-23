@@ -26,25 +26,25 @@ use crate::main_window::NodeState;
 use super::{Tab, TabsMessage};
 
 #[derive(Debug, Clone)]
-pub enum NetworkMessage {}
+pub enum NetworkingMessage {}
 
-pub struct NetworkTab {}
+pub struct NetworkingTab {}
 
-impl NetworkTab {
+impl NetworkingTab {
     pub fn new() -> Self {
-        NetworkTab {}
+        NetworkingTab {}
     }
 
-    pub fn update(&mut self, message: NetworkMessage) -> Command<NetworkMessage> {
+    pub fn update(&mut self, message: NetworkingMessage) -> Command<NetworkingMessage> {
         match message {}
     }
 }
 
-impl Tab for NetworkTab {
+impl Tab for NetworkingTab {
     type Message = TabsMessage;
 
     fn title(&self) -> String {
-        String::from("Network")
+        String::from("Networking")
     }
 
     fn tab_label(&self) -> TabLabel {
