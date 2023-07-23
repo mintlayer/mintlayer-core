@@ -49,8 +49,6 @@ pub const ENABLE_RBF: bool = false;
 pub const MAX_TX_ADDITION_ATTEMPTS: usize = 3;
 
 pub const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
-// TODO this will be defined elsewhere (some of limits.rs file)
-pub const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 
 pub const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
 
