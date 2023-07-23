@@ -34,7 +34,9 @@ use crate::{
         },
         BackendSender,
     },
-    main_window::{print_block_timestamp, print_coin_amount, NodeState},
+    main_window::{
+        print_block_timestamp, print_coin_amount, print_coin_amount_with_name, NodeState,
+    },
 };
 
 use super::{Tab, TabsMessage};
@@ -283,8 +285,7 @@ fn view_top_panel(
     account: &AccountInfo,
 ) -> Element<'static, WalletMessage> {
     let balance = account.balance.get(&Currency::Coin).cloned().unwrap_or(Amount::ZERO);
-    let balance = print_coin_amount(chain_config, balance);
-    let balance = format!("{} Mlt", balance);
+    let balance = print_coin_amount_with_name(chain_config, balance);
     let balance = Text::new(balance).size(20);
 
     let password =
@@ -384,12 +385,20 @@ fn view_left_panel(
             node_state.best_block_height.into_int(),
             wallet_info.best_block.1.into_int(),
         );
-        let scan_progress_str = format!("{:.0}%", scan_progress);
-        column![text(scan_progress_str), progress_bar(0.0..=100.0, scan_progress)]
-            .padding(10)
-            .spacing(10)
-            .align_items(Alignment::Center)
-            .width(Length::Fill)
+        let scan_progress_str = format!(
+            "{:.0}%\n({}/{} blocks)",
+            scan_progress,
+            wallet_info.best_block.1.into_int(),
+            node_state.best_block_height.into_int()
+        );
+        column![
+            text(scan_progress_str).horizontal_alignment(iced::alignment::Horizontal::Center),
+            progress_bar(0.0..=100.0, scan_progress)
+        ]
+        .padding(10)
+        .spacing(10)
+        .align_items(Alignment::Center)
+        .width(Length::Fill)
     } else {
         Column::new()
     };

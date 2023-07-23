@@ -155,6 +155,7 @@ pub struct ChainConfig {
     version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
+    coin_name: &'static str,
     emission_schedule: EmissionSchedule,
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
@@ -254,6 +255,12 @@ impl ChainConfig {
     #[must_use]
     pub fn coin_decimals(&self) -> u8 {
         self.coin_decimals
+    }
+
+    /// The coin name
+    #[must_use]
+    pub fn coin_name(&self) -> &'static str {
+        self.coin_name
     }
 
     /// The maximum size of data attached to NoSignature witness

@@ -79,6 +79,14 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
+fn print_coin_amount_with_name(chain_config: &ChainConfig, value: Amount) -> String {
+    format!(
+        "{} {}",
+        print_coin_amount(chain_config, value),
+        chain_config.coin_name()
+    )
+}
+
 fn print_timestamp(timestamp: Duration) -> Option<String> {
     let timestamp: i64 = timestamp.as_secs().try_into().ok()?;
     let timestamp = chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)?;
