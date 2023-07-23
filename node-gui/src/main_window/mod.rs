@@ -15,10 +15,10 @@
 
 use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, time::Duration};
 
-use chainstate::ChainstateEvent;
+use chainstate::ChainInfo;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock},
-    primitives::{semver::SemVer, user_agent::UserAgent, Amount, BlockHeight, Id},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig},
+    primitives::{semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{widget::Text, Command, Element};
 use iced_aw::native::Modal;
@@ -63,8 +63,7 @@ enum ActiveDialog {
 #[derive(Debug)]
 pub struct NodeState {
     chain_config: Arc<ChainConfig>,
-    best_block_id: Id<GenBlock>,
-    best_block_height: BlockHeight,
+    chain_info: ChainInfo,
     connected_peers: BTreeMap<PeerId, Peer>,
     wallets: BTreeMap<WalletId, WalletInfo>,
 }
@@ -157,14 +156,12 @@ impl MainWindow {
     pub fn new(initialized_node: InitializedNode) -> Self {
         let InitializedNode {
             chain_config,
-            best_block_id,
-            best_block_height,
+            chain_info,
         } = initialized_node;
 
         let node_state = NodeState {
             chain_config,
-            best_block_id,
-            best_block_height,
+            chain_info,
             connected_peers: BTreeMap::new(),
             wallets: BTreeMap::new(),
         };
@@ -277,9 +274,8 @@ impl MainWindow {
                 .map(MainWindowMessage::MainWidgetMessage),
 
             MainWindowMessage::FromBackend(from_msg) => match from_msg {
-                BackendEvent::Chainstate(ChainstateEvent::NewTip(block_id, height)) => {
-                    self.node_state.best_block_id = block_id.into();
-                    self.node_state.best_block_height = height;
+                BackendEvent::ChainInfo(chain_info) => {
+                    self.node_state.chain_info = chain_info;
                     Command::none()
                 }
                 BackendEvent::P2p(P2pEvent::PeerConnected {

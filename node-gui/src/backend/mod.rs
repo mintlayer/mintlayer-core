@@ -20,6 +20,7 @@ pub mod p2p_event_handler;
 pub mod wallet_events;
 
 use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, GenBlock, SignedTransaction};
 use common::primitives::{Amount, BlockHeight, Id};
@@ -618,8 +619,7 @@ impl Backend {
 #[derive(Debug)]
 pub struct InitializedNode {
     pub chain_config: Arc<ChainConfig>,
-    pub best_block_id: Id<GenBlock>,
-    pub best_block_height: BlockHeight,
+    pub chain_info: ChainInfo,
 }
 
 pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<BackendControls> {
@@ -648,15 +648,11 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
     let chain_config =
         controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
-    let best_block = controller.chainstate.call(|this| this.get_best_block_index()).await??;
-
-    let (request_tx, mut request_rx) = unbounded_channel();
-    let (event_tx, event_rx) = unbounded_channel();
+    let chain_info = controller.chainstate.call(|this| this.info()).await??;
 
     let initialized_node = InitializedNode {
         chain_config: Arc::clone(&chain_config),
-        best_block_id: best_block.block_id(),
-        best_block_height: best_block.block_height(),
+        chain_info,
     };
 
     let backend_controls = BackendControls {

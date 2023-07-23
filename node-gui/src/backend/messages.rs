@@ -19,7 +19,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use chainstate::ChainstateEvent;
+use chainstate::ChainInfo;
 use common::{
     address::Address,
     chain::{GenBlock, PoolId, SignedTransaction},
@@ -157,7 +157,7 @@ pub enum BackendRequest {
 
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
-    Chainstate(ChainstateEvent),
+    ChainInfo(ChainInfo),
     P2p(P2pEvent),
 
     OpenWallet(Result<WalletInfo, BackendError>),

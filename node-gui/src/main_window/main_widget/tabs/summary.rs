@@ -21,7 +21,7 @@ use iced::{
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
 
-use crate::main_window::NodeState;
+use crate::main_window::{print_block_timestamp, NodeState};
 
 use super::{Tab, TabsMessage};
 
@@ -56,9 +56,16 @@ impl Tab for SummaryTab {
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
         let chainstate = Grid::with_columns(2)
             .push(Text::new("Best block id "))
-            .push(Text::new(node_state.best_block_id.hex_encode()))
+            .push(Text::new(node_state.chain_info.best_block_id.hex_encode()))
             .push(Text::new("Best block height "))
-            .push(Text::new(node_state.best_block_height.to_string()));
+            .push(Text::new(
+                node_state.chain_info.best_block_height.to_string(),
+            ))
+            .push(Text::new("Best block timestamp "))
+            .push(Text::new(
+                print_block_timestamp(node_state.chain_info.best_block_timestamp)
+                    .unwrap_or_else(|| "Invalid timestamp".to_owned()),
+            ));
 
         column![chainstate]
             .padding(10)

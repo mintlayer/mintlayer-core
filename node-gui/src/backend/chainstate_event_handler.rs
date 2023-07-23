@@ -23,8 +23,10 @@ use utils::tap_error_log::LogError;
 use super::{messages::BackendEvent, Backend};
 
 pub struct ChainstateEventHandler {
+    chainstate: Handle<Box<dyn ChainstateInterface>>,
     chainstate_event_rx: UnboundedReceiver<ChainstateEvent>,
     event_tx: UnboundedSender<BackendEvent>,
+    chain_info_updated: bool,
 }
 
 impl ChainstateEventHandler {
@@ -45,19 +47,35 @@ impl ChainstateEventHandler {
             .expect("Failed to subscribe to chainstate");
 
         Self {
+            chainstate: chainstate.clone(),
             chainstate_event_rx,
             event_tx,
+            chain_info_updated: false,
         }
     }
 
     pub async fn run(&mut self) {
         // Must be cancel-safe!
         loop {
+            // The `chain_info_updated` field is needed because `run` must be cancel-safe.
+            // The `run` call can be canceled between `await` points, but we need to update the UI after receiving `NewTip` event.
+            if self.chain_info_updated {
+                let chain_info = self
+                    .chainstate
+                    .call(|this| this.info().expect("Chainstate::info should not fail"))
+                    .await
+                    .expect("Chainstate::info should not fail");
+                Backend::send_event(&self.event_tx, BackendEvent::ChainInfo(chain_info));
+                self.chain_info_updated = false;
+            }
+
             let chainstate_event_opt = self.chainstate_event_rx.recv().await;
             match chainstate_event_opt {
-                Some(event) => {
-                    Backend::send_event(&self.event_tx, BackendEvent::Chainstate(event));
-                }
+                Some(event) => match event {
+                    ChainstateEvent::NewTip(_, _) => {
+                        self.chain_info_updated = true;
+                    }
+                },
                 None => {
                     // Node is stopped
                     return;

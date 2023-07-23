@@ -88,18 +88,19 @@ pub fn view_left_panel(
     };
 
     // `next_height` is used to prevent flickering when a new block is found
-    let show_scan_progress = wallet_info.best_block.1.next_height() < node_state.best_block_height;
+    let show_scan_progress =
+        wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height;
     let scan_progress_widget = if show_scan_progress {
         // TODO: Fix scan progress when the node is in the initial block download state
         let scan_progress = wallet_scan_progress(
-            node_state.best_block_height.into_int(),
+            node_state.chain_info.best_block_height.into_int(),
             wallet_info.best_block.1.into_int(),
         );
         let scan_progress_str = format!(
             "{:.0}%\n({}/{} blocks)",
             scan_progress,
             wallet_info.best_block.1.into_int(),
-            node_state.best_block_height.into_int()
+            node_state.chain_info.best_block_height.into_int()
         );
         column![
             text(scan_progress_str).horizontal_alignment(iced::alignment::Horizontal::Center),
