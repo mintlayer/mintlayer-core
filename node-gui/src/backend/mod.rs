@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2023 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod chainstate_event_handler;
 pub mod error;
 pub mod messages;
+pub mod p2p_event_handler;
 pub mod wallet_events;
 
-use chainstate::ChainstateEvent;
+use chainstate::chainstate_interface::ChainstateInterface;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, GenBlock, SignedTransaction};
 use common::primitives::{Amount, BlockHeight, Id};
@@ -25,18 +27,19 @@ use common::time_getter::TimeGetter;
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_lib::node_controller::NodeController;
-use p2p::P2pEvent;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::BTreeMap, fmt::Debug};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use utils::tap_error_log::LogError;
 use wallet::account::transaction_list::TransactionList;
 use wallet::account::Currency;
 use wallet::DefaultWallet;
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
+
+use crate::backend::chainstate_event_handler::ChainstateEventHandler;
+use crate::backend::p2p_event_handler::P2pEventHandler;
 
 use self::error::BackendError;
 use self::messages::{
@@ -634,34 +637,14 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
     let manager_join_handle = tokio::spawn(async move { node.main().await });
 
-    // Subscribe to chainstate before getting the current best_block!
-    let (chainstate_event_tx, mut chainstate_event_rx) = unbounded_channel();
-    controller
-        .chainstate
-        .call_mut(|this| {
-            this.subscribe_to_events(Arc::new(move |chainstate_event: ChainstateEvent| {
-                _ = chainstate_event_tx
-                    .send(chainstate_event)
-                    .log_err_pfx("Chainstate subscriber failed to send new tip");
-            }));
-        })
-        .await
-        .expect("Failed to subscribe to chainstate");
+    let (request_tx, mut request_rx) = unbounded_channel();
+    let (event_tx, event_rx) = unbounded_channel();
 
-    // TODO: Fix race in p2p events subscribe (if some peers are connected before the subscription is complete)
-    let (p2p_event_tx, mut p2p_event_rx) = unbounded_channel();
-    controller
-        .p2p
-        .call_mut(|this| {
-            this.subscribe_to_events(Arc::new(move |p2p_event: P2pEvent| {
-                _ = p2p_event_tx
-                    .send(p2p_event)
-                    .log_err_pfx("P2P subscriber failed to send new event");
-            }))
-        })
-        .await
-        .expect("Failed to subscribe to P2P event")
-        .expect("Failed to subscribe to P2P event");
+    // Subscribe to chainstate before getting the current best_block!
+    let mut chainstate_event_handler =
+        ChainstateEventHandler::new(&controller.chainstate, event_tx.clone()).await;
+
+    let mut p2p_event_handler = P2pEventHandler::new(&controller.p2p, event_tx.clone()).await;
 
     let chain_config =
         controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
@@ -696,30 +679,14 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
         loop {
             tokio::select! {
-                chainstate_event_opt = chainstate_event_rx.recv() => {
-                    match chainstate_event_opt {
-                        Some(event) => {
-                            Backend::send_event(&backend.event_tx, BackendEvent::Chainstate(event));
-                        },
-                        None => {
-                            // Node is stopped
-                            log::debug!("Chainstate channel closed");
-                            return
-                        },
-                    }
+                () = chainstate_event_handler.run() => {
+                    log::debug!("Chainstate channel closed, looks like the node has stopped");
+                    return
                 }
 
-                p2p_event_opt = p2p_event_rx.recv() => {
-                    match p2p_event_opt {
-                        Some(event) => {
-                            Backend::send_event(&backend.event_tx, BackendEvent::P2p(event));
-                        },
-                        None => {
-                            // Node is stopped
-                            log::debug!("P2P channel closed");
-                            return
-                        },
-                    }
+                () = p2p_event_handler.run() => {
+                    log::debug!("P2P channel closed, looks like the node has stopped");
+                    return
                 }
 
                 request_opt = request_rx.recv() => {
