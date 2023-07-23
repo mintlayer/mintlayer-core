@@ -62,10 +62,9 @@ impl Tab for SummaryTab {
                 node_state.chain_info.best_block_height.to_string(),
             ))
             .push(Text::new("Best block timestamp "))
-            .push(Text::new(
-                print_block_timestamp(node_state.chain_info.best_block_timestamp)
-                    .unwrap_or_else(|| "Invalid timestamp".to_owned()),
-            ));
+            .push(Text::new(print_block_timestamp(
+                node_state.chain_info.best_block_timestamp,
+            )));
 
         column![chainstate]
             .padding(10)

@@ -47,11 +47,10 @@ pub fn view_transactions(
             .amount()
             .map(|amount| print_coin_amount(chain_config, amount))
             .unwrap_or_default();
-        let timestamp = tx
-            .block
-            .as_ref()
-            .and_then(|block| print_block_timestamp(block.timestamp))
-            .unwrap_or_else(|| "-".to_owned());
+        let timestamp = tx.block.as_ref().map_or_else(
+            || "-".to_owned(),
+            |block| print_block_timestamp(block.timestamp),
+        );
         transaction_list = transaction_list
             .push(field(format!("{}", current_transaction_list.skip + index)))
             .push(field(tx.txid.to_string()))
