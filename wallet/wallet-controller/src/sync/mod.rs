@@ -22,14 +22,22 @@ use common::{
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_comm::node_traits::NodeInterface;
-use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
+use wallet::{
+    wallet::WalletSyncingState, wallet_events::WalletEvents, DefaultWallet, WalletResult,
+};
 
 use crate::ControllerError;
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
 pub trait SyncingWallet {
-    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)>;
+    fn syncing_state(&self) -> WalletSyncingState;
+
+    fn fast_forward_to_latest_block(
+        &mut self,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()>;
 
     fn scan_blocks(
         &mut self,
@@ -43,8 +51,16 @@ pub trait SyncingWallet {
 }
 
 impl SyncingWallet for DefaultWallet {
-    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
-        self.get_best_block()
+    fn syncing_state(&self) -> WalletSyncingState {
+        self.get_syncing_state()
+    }
+
+    fn fast_forward_to_latest_block(
+        &mut self,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        self.set_best_block(best_block_height, best_block_id)
     }
 
     fn scan_blocks(
@@ -92,30 +108,41 @@ pub async fn sync_once<T: NodeInterface>(
         let chain_info =
             rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
 
-        let best_blocks = wallet.best_block();
+        match wallet.syncing_state() {
+            WalletSyncingState::NewlyCreated => {
+                wallet
+                    .fast_forward_to_latest_block(
+                        chain_info.best_block_height,
+                        chain_info.best_block_id,
+                    )
+                    .map_err(ControllerError::WalletError)?;
+                wallet
+                    .update_median_time(chain_info.median_time)
+                    .map_err(ControllerError::WalletError)?;
+            }
+            WalletSyncingState::Syncing(best_blocks) => {
+                if best_blocks.iter().all(|(_account, wallet_best_block)| {
+                    chain_info.best_block_id == wallet_best_block.0
+                }) {
+                    return Ok(());
+                }
 
-        if best_blocks
-            .iter()
-            .all(|(_account, wallet_best_block)| chain_info.best_block_id == wallet_best_block.0)
-        {
-            return Ok(());
-        }
+                wallet
+                    .update_median_time(chain_info.median_time)
+                    .map_err(ControllerError::WalletError)?;
 
-        wallet
-            .update_median_time(chain_info.median_time)
-            .map_err(ControllerError::WalletError)?;
+                // Group accounts in the same state
+                let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<U31>> =
+                    BTreeMap::new();
+                for (account, best_block) in best_blocks.iter() {
+                    accounts_grouped.entry(*best_block).or_default().push(*account);
+                }
 
-        // Group accounts in the same state
-        let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<U31>> = BTreeMap::new();
-        for (account, best_block) in best_blocks.iter() {
-            accounts_grouped.entry(*best_block).or_default().push(*account);
-        }
-
-        for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
-            .iter()
-            .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
-        {
-            fetch_and_sync(
+                for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
+                    .iter()
+                    .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
+                {
+                    fetch_and_sync(
                 chain_info.clone(),
                 *wallet_block_id,
                 *wallet_block_height,
@@ -126,7 +153,7 @@ pub async fn sync_once<T: NodeInterface>(
                         blocks.last().expect("blocks must not be empty").header().block_id();
                     let new_height = common_block_height.into_int() + blocks.len() as u64;
 
-                    for account in accounts.iter() {
+                    for account in accounts {
                         log::debug!(
                             "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
                             account,
@@ -143,10 +170,12 @@ pub async fn sync_once<T: NodeInterface>(
                             .map_err(ControllerError::WalletError)?;
                     }
 
-                    Ok(())
-                },
-            )
-            .await?;
+                        Ok(())
+                    },
+                )
+                .await?;
+                }
+            }
         }
     }
 }

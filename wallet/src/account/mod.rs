@@ -939,6 +939,18 @@ impl Account {
             },
         )
     }
+
+    pub fn sync_best_block<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        self.account_info.update_best_block(best_block_height, best_block_id);
+        db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
+        Ok(())
+    }
+
     pub fn scan_new_inmempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
