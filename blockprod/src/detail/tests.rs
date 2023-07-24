@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroU64, sync::Arc, time::Duration};
 
-use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
+use chainstate::{ChainInfo, ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
@@ -225,6 +225,63 @@ mod collect_transactions {
 
 mod produce_block {
     use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_block_download() {
+        let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None);
+
+        let chainstate_subsystem: ChainstateHandle = {
+            let mut mock_chainstate = Box::new(MockChainstateInterfaceMock::new());
+            mock_chainstate.expect_info().times(..=1).returning(|| {
+                Ok(ChainInfo {
+                    best_block_height: BlockHeight::new(0),
+                    best_block_id: Id::new(H256::zero()),
+                    best_block_timestamp: BlockTimestamp::from_int_seconds(0),
+                    median_time: BlockTimestamp::from_int_seconds(0),
+                    is_initial_block_download: true,
+                })
+            });
+
+            mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            manager.add_subsystem("mock-chainstate", mock_chainstate)
+        };
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    Arc::new(test_blockprod_config()),
+                    chainstate_subsystem,
+                    mempool,
+                    p2p,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let result = block_production
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await;
+
+                match result {
+                    Err(BlockProductionError::ChainstateWaitForSync) => {}
+                    _ => panic!("Unexpected return value"),
+                }
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn below_peer_count() {
