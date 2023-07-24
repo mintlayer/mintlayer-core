@@ -43,6 +43,10 @@ pub enum BlockProductionError {
     MempoolChannelClosed,
     #[error("Chainstate channel closed")]
     ChainstateChannelClosed,
+    #[error("Failed to retrieve chainstate info")]
+    ChainstateInfoRetrievalError,
+    #[error("Wait for chainstate to sync before producing blocks")]
+    ChainstateWaitForSync,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
     #[error("Block creation error: {0}")]
