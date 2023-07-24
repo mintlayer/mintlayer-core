@@ -112,7 +112,7 @@ mod test {
 
             let blocks = chain_blocks(
                 block_count,
-                chainstate.chain_config.genesis_block_id(),
+                chainstate.chain_config().genesis_block_id(),
                 chain_config.genesis_block().timestamp().as_int_seconds(),
             );
 
@@ -136,9 +136,12 @@ mod test {
                 let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(
                     &chainstate_ref,
-                    &chainstate.chain_config.genesis_block_id(),
+                    &chainstate.chain_config().genesis_block_id(),
                 );
-                assert_eq!(median, chainstate.chain_config.genesis_block().timestamp());
+                assert_eq!(
+                    median,
+                    chainstate.chain_config().genesis_block().timestamp()
+                );
             }
 
             for n in 0..MEDIAN_TIME_SPAN {
@@ -191,7 +194,7 @@ mod test {
             let block4_time = current_time.load() + 18;
             let block5_time = current_time.load() + 17;
 
-            let block1 = make_block(chainstate.chain_config.genesis_block_id(), block1_time);
+            let block1 = make_block(chainstate.chain_config().genesis_block_id(), block1_time);
             let block2 = make_block(block1.get_id().into(), block2_time);
             let block3 = make_block(block2.get_id().into(), block3_time);
             let block4 = make_block(block3.get_id().into(), block4_time);
@@ -219,9 +222,12 @@ mod test {
                 let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(
                     &chainstate_ref,
-                    &chainstate.chain_config.genesis_block_id(),
+                    &chainstate.chain_config().genesis_block_id(),
                 );
-                assert_eq!(median, chainstate.chain_config.genesis_block().timestamp());
+                assert_eq!(
+                    median,
+                    chainstate.chain_config().genesis_block().timestamp()
+                );
             }
 
             {

@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::detail::query::locator_tip_distances;
 use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
+use crate::ChainstateConfig;
 use crate::DefaultTransactionVerificationStrategy;
 
 use super::*;
@@ -23,6 +26,8 @@ use common::chain::config::Builder as ChainConfigBuilder;
 use common::chain::config::ChainType;
 use common::chain::Destination;
 use common::chain::NetUpgrades;
+use common::primitives::BlockHeight;
+use common::time_getter::TimeGetter;
 use common::Uint256;
 use static_assertions::*;
 

@@ -17,8 +17,7 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use super::chainstateref::ChainstateRef;
-use crate::TransactionVerificationStrategy;
+use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{chain::Block, primitives::Id, Uint256};
