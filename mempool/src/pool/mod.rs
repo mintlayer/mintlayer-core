@@ -1057,6 +1057,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
+            .map(|feerate| std::cmp::max(feerate, INCREMENTAL_RELAY_FEE_RATE))
     }
 }
 
