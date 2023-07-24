@@ -675,15 +675,8 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
         loop {
             tokio::select! {
-                () = chainstate_event_handler.run() => {
-                    log::debug!("Chainstate channel closed, looks like the node has stopped");
-                    return
-                }
-
-                () = p2p_event_handler.run() => {
-                    log::debug!("P2P channel closed, looks like the node has stopped");
-                    return
-                }
+                // Make event loop more efficient
+                biased;
 
                 request_opt = request_rx.recv() => {
                     let request = request_opt.expect("UI channel closed unexpectedly");
@@ -695,9 +688,21 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
                     }
                 }
 
+                // Start this before starting the remaining background tasks
+                // to reduce the chance of tasks being canceled (for efficiency)
                 _ = wallet_notify.notified() => {}
 
-                // Wallet sync can be inefficient because it is interrupted as soon as another branch is ready
+                () = chainstate_event_handler.run() => {
+                    log::debug!("Chainstate channel closed, looks like the node has stopped");
+                    return
+                }
+
+                () = p2p_event_handler.run() => {
+                    log::debug!("P2P channel closed, looks like the node has stopped");
+                    return
+                }
+
+                // Start wallet sync as last
                 _ = backend.run() => {},
             }
 
