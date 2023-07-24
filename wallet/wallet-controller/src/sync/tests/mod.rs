@@ -71,6 +71,18 @@ impl SyncingWallet for MockWallet {
         (self.get_best_block_id(), self.get_block_height())
     }
 
+    fn syncing_state(&self) -> WalletSyncingState {
+        WalletSyncingState::SyncedAccount(self.get_block_height(), self.get_best_block_id())
+    }
+
+    fn fast_forward_to_latest_block(
+        &mut self,
+        _best_block_height: BlockHeight,
+        _best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        Ok(())
+    }
+
     fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
@@ -103,10 +115,6 @@ impl SyncingWallet for MockWallet {
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.latest_median_time = median_time;
         Ok(())
-    }
-
-    fn best_block_unsynced_acc(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
-        None
     }
 
     fn scan_blocks_unsynced_acc(

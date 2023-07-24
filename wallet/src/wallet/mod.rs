@@ -118,10 +118,18 @@ pub enum WalletError {
     CannotFindTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+    #[error("Wallet not in initial creation state")]
+    NotInInitialCreation,
 }
 
 /// Result type used for the wallet
 pub type WalletResult<T> = Result<T, WalletError>;
+
+enum WalletState {
+    InitialCreation,
+    Syncing,
+    // Recovering,
+}
 
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
@@ -130,6 +138,14 @@ pub struct Wallet<B: storage::Backend> {
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
     unsynced_accounts: BTreeMap<U31, Account>,
+    state: WalletState,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub enum WalletSyncingState {
+    NewlyCreated,
+    UnsyncedAccount(BlockHeight, Id<GenBlock>),
+    SyncedAccount(BlockHeight, Id<GenBlock>),
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -170,6 +186,7 @@ impl<B: storage::Backend> Wallet<B> {
             accounts: BTreeMap::new(),
             latest_median_time,
             unsynced_accounts: BTreeMap::new(),
+            state: WalletState::InitialCreation,
         };
 
         wallet.create_account(None)?;
@@ -222,6 +239,7 @@ impl<B: storage::Backend> Wallet<B> {
             accounts,
             latest_median_time,
             unsynced_accounts,
+            state: WalletState::Syncing,
         })
     }
 
@@ -603,6 +621,24 @@ impl<B: storage::Backend> Wallet<B> {
         self.unsynced_accounts.values().next().map(|acc| acc.best_block())
     }
 
+    /// Returns the syncing state of the wallet
+    /// includes the last scanned block hash and height for the unsynced or synced account if in
+    /// syncing state else NewlyCreated if this is the first sync after creating a new account
+    pub fn get_syncing_state(&self) -> WalletSyncingState {
+        match self.state {
+            WalletState::InitialCreation => WalletSyncingState::NewlyCreated,
+            WalletState::Syncing => self.get_best_block_for_unsynced_account().map_or_else(
+                || {
+                    let (best_block_id, best_block_height) = self.get_best_block();
+                    WalletSyncingState::SyncedAccount(best_block_height, best_block_id)
+                },
+                |(best_block_id, best_block_height)| {
+                    WalletSyncingState::UnsyncedAccount(best_block_height, best_block_id)
+                },
+            ),
+        }
+    }
+
     /// Scan new blocks and update best block hash/height.
     /// New block may reset the chain of previously scanned blocks.
     ///
@@ -624,6 +660,32 @@ impl<B: storage::Backend> Wallet<B> {
 
         wallet_events.new_block();
 
+        Ok(())
+    }
+
+    /// Sets the best block for all accounts
+    /// Should be called on the first sync for a newly created wallet
+    pub fn set_best_block(
+        &mut self,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        match self.state {
+            WalletState::InitialCreation => {
+                // all ok
+            }
+            WalletState::Syncing => return Err(WalletError::NotInInitialCreation),
+        }
+
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        for account in self.accounts.values_mut() {
+            account.sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
+        }
+
+        db_tx.commit()?;
+
+        self.state = WalletState::Syncing;
         Ok(())
     }
 

@@ -20,12 +20,22 @@ use common::{
 use logging::log;
 use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
-use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
+use wallet::{
+    wallet::WalletSyncingState, wallet_events::WalletEvents, DefaultWallet, WalletResult,
+};
 
 use crate::ControllerError;
 
 pub trait SyncingWallet {
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight);
+
+    fn syncing_state(&self) -> WalletSyncingState;
+
+    fn fast_forward_to_latest_block(
+        &mut self,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()>;
 
     fn scan_blocks(
         &mut self,
@@ -36,8 +46,6 @@ pub trait SyncingWallet {
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 
-    fn best_block_unsynced_acc(&self) -> Option<(Id<GenBlock>, BlockHeight)>;
-
     fn scan_blocks_unsynced_acc(
         &mut self,
         common_block_height: BlockHeight,
@@ -47,6 +55,18 @@ pub trait SyncingWallet {
 }
 
 impl SyncingWallet for DefaultWallet {
+    fn syncing_state(&self) -> WalletSyncingState {
+        self.get_syncing_state()
+    }
+
+    fn fast_forward_to_latest_block(
+        &mut self,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        self.set_best_block(best_block_height, best_block_id)
+    }
+
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         self.get_best_block()
     }
@@ -62,10 +82,6 @@ impl SyncingWallet for DefaultWallet {
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
         self.set_median_time(median_time)
-    }
-
-    fn best_block_unsynced_acc(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
-        self.get_best_block_for_unsynced_account()
     }
 
     fn scan_blocks_unsynced_acc(
@@ -113,9 +129,21 @@ pub async fn sync_once<T: NodeInterface>(
         let chain_info =
             rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
 
-        // first sync the unsynced account until it matches the other accounts
-        if let Some((wallet_block_id, wallet_block_height)) = wallet.best_block_unsynced_acc() {
-            fetch_and_sync(
+        match wallet.syncing_state() {
+            WalletSyncingState::NewlyCreated => {
+                wallet
+                    .fast_forward_to_latest_block(
+                        chain_info.best_block_height,
+                        chain_info.best_block_id,
+                    )
+                    .map_err(ControllerError::WalletError)?;
+                wallet
+                    .update_median_time(chain_info.median_time)
+                    .map_err(ControllerError::WalletError)?;
+            }
+
+            WalletSyncingState::UnsyncedAccount(wallet_block_height, wallet_block_id) => {
+                fetch_and_sync(
                 chain_info,
                 wallet_block_id,
                 wallet_block_height,
@@ -137,36 +165,36 @@ pub async fn sync_once<T: NodeInterface>(
                 },
             )
             .await?;
-        } else {
-            let (wallet_block_id, wallet_block_height) = wallet.best_block();
-
-            if chain_info.best_block_id == wallet_block_id {
-                return Ok(());
             }
-            wallet
-                .update_median_time(chain_info.median_time)
-                .map_err(ControllerError::WalletError)?;
-            fetch_and_sync(
-                chain_info,
-                wallet_block_id,
-                wallet_block_height,
-                chain_config,
-                rpc_client,
-                &mut |common_block_height: BlockHeight, block: Block| {
-                    let block_id = block.header().block_id();
-                    wallet
-                        .scan_blocks(common_block_height, vec![block], wallet_events)
-                        .map_err(ControllerError::WalletError)?;
-                    log::info!(
-                        "Node chainstate updated, block height: {}, tip block id: {}",
-                        common_block_height.next_height(),
-                        block_id.hex_encode()
-                    );
+            WalletSyncingState::SyncedAccount(wallet_block_height, wallet_block_id) => {
+                if chain_info.best_block_id == wallet_block_id {
+                    return Ok(());
+                }
+                wallet
+                    .update_median_time(chain_info.median_time)
+                    .map_err(ControllerError::WalletError)?;
+                fetch_and_sync(
+                    chain_info,
+                    wallet_block_id,
+                    wallet_block_height,
+                    chain_config,
+                    rpc_client,
+                    &mut |common_block_height: BlockHeight, block: Block| {
+                        let block_id = block.header().block_id();
+                        wallet
+                            .scan_blocks(common_block_height, vec![block], wallet_events)
+                            .map_err(ControllerError::WalletError)?;
+                        log::info!(
+                            "Node chainstate updated, block height: {}, tip block id: {}",
+                            common_block_height.next_height(),
+                            block_id.hex_encode()
+                        );
 
-                    Ok(())
-                },
-            )
-            .await?;
+                        Ok(())
+                    },
+                )
+                .await?;
+            }
         }
     }
 }
