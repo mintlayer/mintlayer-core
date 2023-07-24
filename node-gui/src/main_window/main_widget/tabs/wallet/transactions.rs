@@ -58,21 +58,35 @@ pub fn view_transactions(
             .push(field(tx.tx_type.type_name().to_owned()))
             .push(field(amount_str));
     }
-    let transaction_list_controls = row![
-        iced::widget::button(Text::new("<<")).on_press(WalletMessage::TransactionList {
+
+    let page_index = current_transaction_list.skip / current_transaction_list.count;
+    let page_count =
+        current_transaction_list.total.saturating_sub(1) / current_transaction_list.count;
+    let prev_enabled = page_index > 0;
+    let next_enabled = page_index < page_count;
+
+    let prev_button = iced::widget::button(Text::new("<<"));
+    let next_button = iced::widget::button(Text::new(">>"));
+
+    let prev_button = if prev_enabled {
+        prev_button.on_press(WalletMessage::TransactionList {
             skip: current_transaction_list.skip.saturating_sub(current_transaction_list.count),
-        }),
-        Text::new(format!(
-            "{}/{}",
-            current_transaction_list.skip / current_transaction_list.count,
-            current_transaction_list.total / current_transaction_list.count,
-        )),
-        iced::widget::button(Text::new(">>")).on_press(WalletMessage::TransactionList {
+        })
+    } else {
+        prev_button
+    };
+    let next_button = if next_enabled {
+        next_button.on_press(WalletMessage::TransactionList {
             skip: current_transaction_list.skip.saturating_add(current_transaction_list.count),
-        }),
-    ]
-    .spacing(10)
-    .align_items(Alignment::Center);
+        })
+    } else {
+        next_button
+    };
+
+    let transaction_list_controls =
+        row![prev_button, Text::new(format!("{}/{}", page_index, page_count)), next_button,]
+            .spacing(10)
+            .align_items(Alignment::Center);
     transactions = transactions.push(transaction_list).push(transaction_list_controls);
 
     transactions.into()

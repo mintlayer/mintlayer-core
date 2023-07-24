@@ -130,15 +130,6 @@ impl Backend {
         }
     }
 
-    fn get_account_balance(
-        controller: &HandlesController,
-        account_index: U31,
-    ) -> BTreeMap<Currency, Amount> {
-        controller
-            .get_balance(account_index, UtxoState::Confirmed.into())
-            .expect("get_balance should not fail normally")
-    }
-
     fn get_account_info(controller: &HandlesController, account_index: U31) -> AccountInfo {
         let name = controller
             .account_names()
@@ -406,6 +397,15 @@ impl Backend {
             .map_err(|e| BackendError::RpcError(e.to_string()))?
             .map_err(|e| BackendError::RpcError(e.to_string()));
         Ok(())
+    }
+
+    fn get_account_balance(
+        controller: &HandlesController,
+        account_index: U31,
+    ) -> BTreeMap<Currency, Amount> {
+        controller
+            .get_balance(account_index, UtxoState::Confirmed.into())
+            .expect("get_balance should not fail normally")
     }
 
     fn load_transaction_list(
