@@ -71,16 +71,11 @@ impl TxType {
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockInfo {
-    pub timestamp: BlockTimestamp,
-    pub block_height: BlockHeight,
-}
-
-#[derive(Debug, Clone)]
 pub struct TransactionInfo {
     pub txid: Id<Transaction>,
     pub tx_type: TxType,
-    pub block: Option<BlockInfo>,
+    pub timestamp: Option<BlockTimestamp>,
+    pub state: TxState,
 }
 
 #[derive(Debug, Clone)]
@@ -125,7 +120,7 @@ fn own_input<'a>(
     input: &TxInput,
 ) -> Option<&'a TxOutput> {
     match input {
-        TxInput::Utxo(utxo) => match output_cache.txs().get(&utxo.tx_id()) {
+        TxInput::Utxo(utxo) => match output_cache.txs_with_unconfirmed().get(&utxo.tx_id()) {
             Some(tx) => tx
                 .outputs()
                 .get(utxo.output_index() as usize)
@@ -141,15 +136,7 @@ fn get_transaction(
     output_cache: &OutputCache,
     tx_data: &TxData,
 ) -> WalletResult<TransactionInfo> {
-    let block = match tx_data.state() {
-        TxState::Confirmed(block_height, timestamp) => Some(BlockInfo {
-            timestamp: *timestamp,
-            block_height: *block_height,
-        }),
-        TxState::InMempool | TxState::Conflicted(_) | TxState::Inactive | TxState::Abandoned => {
-            None
-        }
-    };
+    let timestamp = tx_data.state().timestamp();
 
     let all_inputs = tx_data.get_transaction().inputs();
     let all_outputs = tx_data.get_transaction().outputs();
@@ -214,7 +201,8 @@ fn get_transaction(
     Ok(TransactionInfo {
         txid: tx_data.get_transaction().get_id(),
         tx_type,
-        block,
+        timestamp,
+        state: *tx_data.state(),
     })
 }
 
@@ -225,21 +213,14 @@ pub fn get_transaction_list(
     count: usize,
 ) -> WalletResult<TransactionList> {
     let mut tx_refs: Vec<TxRef> = output_cache
-        .txs()
+        .txs_with_unconfirmed()
         .values()
         .filter_map(|wallet_tx| match wallet_tx {
             WalletTx::Block(_) => None,
-            WalletTx::Tx(tx_data) => match tx_data.state() {
-                TxState::Confirmed(block_height, _) => Some(TxRef {
-                    tx_data,
-                    block_height: Some(*block_height),
-                }),
-                TxState::InMempool => Some(TxRef {
-                    tx_data,
-                    block_height: None,
-                }),
-                TxState::Conflicted(_) | TxState::Inactive | TxState::Abandoned => None,
-            },
+            WalletTx::Tx(tx_data) => Some(TxRef {
+                tx_data,
+                block_height: tx_data.state().block_height(),
+            }),
         })
         .collect();
 

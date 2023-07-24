@@ -43,6 +43,38 @@ pub enum TxState {
     Abandoned,
 }
 
+impl TxState {
+    pub fn block_height(&self) -> Option<BlockHeight> {
+        match self {
+            TxState::Confirmed(block_height, _timestamp) => Some(*block_height),
+            TxState::InMempool
+            | TxState::Conflicted(_)
+            | TxState::Inactive
+            | TxState::Abandoned => None,
+        }
+    }
+
+    pub fn timestamp(&self) -> Option<BlockTimestamp> {
+        match self {
+            TxState::Confirmed(_block_height, timestamp) => Some(*timestamp),
+            TxState::InMempool
+            | TxState::Conflicted(_)
+            | TxState::Inactive
+            | TxState::Abandoned => None,
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            TxState::Confirmed(_height, _timestamp) => "Confirmed",
+            TxState::Conflicted(_id) => "Conflicted",
+            TxState::InMempool => "InMempool",
+            TxState::Inactive => "Inactive",
+            TxState::Abandoned => "Abandoned",
+        }
+    }
+}
+
 impl Display for TxState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

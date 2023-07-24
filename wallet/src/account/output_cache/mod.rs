@@ -66,14 +66,8 @@ impl OutputCache {
         cache
     }
 
-    pub fn txs(&self) -> &BTreeMap<OutPointSourceId, WalletTx> {
+    pub fn txs_with_unconfirmed(&self) -> &BTreeMap<OutPointSourceId, WalletTx> {
         &self.txs
-    }
-
-    pub fn txs_with_unconfirmed(
-        &self,
-    ) -> impl Iterator<Item = (&OutPointSourceId, &WalletTx)> + '_ {
-        self.txs.iter()
     }
 
     pub fn get_txo(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {

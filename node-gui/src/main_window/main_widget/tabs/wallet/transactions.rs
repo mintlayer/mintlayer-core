@@ -35,28 +35,30 @@ pub fn view_transactions(
     let mut transactions = Column::new();
 
     let current_transaction_list = &account.transaction_list;
-    let mut transaction_list = Grid::with_columns(5)
+    let mut transaction_list = Grid::with_columns(6)
         .push("Num")
         .push("Txid")
         .push("Timestamp")
         .push("Type")
-        .push("Amount");
+        .push("Amount")
+        .push("State");
     for (index, tx) in current_transaction_list.txs.iter().enumerate() {
         let amount_str = tx
             .tx_type
             .amount()
             .map(|amount| print_coin_amount(chain_config, amount))
             .unwrap_or_default();
-        let timestamp = tx.block.as_ref().map_or_else(
+        let timestamp = tx.timestamp.as_ref().map_or_else(
             || "-".to_owned(),
-            |block| print_block_timestamp(block.timestamp),
+            |timestamp| print_block_timestamp(*timestamp),
         );
         transaction_list = transaction_list
             .push(field(format!("{}", current_transaction_list.skip + index)))
             .push(field(tx.txid.to_string()))
             .push(field(timestamp))
             .push(field(tx.tx_type.type_name().to_owned()))
-            .push(field(amount_str));
+            .push(field(amount_str))
+            .push(field(tx.state.short_name().to_owned()));
     }
 
     let page_index = current_transaction_list.skip / current_transaction_list.count;

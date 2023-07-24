@@ -667,6 +667,7 @@ impl Account {
         let revoked_txs = self
             .output_cache
             .txs_with_unconfirmed()
+            .iter()
             .filter_map(|(id, tx)| match tx.state() {
                 TxState::Confirmed(height, _) => {
                     if height > common_block_height {
@@ -830,7 +831,7 @@ impl Account {
     }
 
     pub fn has_transactions(&self) -> bool {
-        self.output_cache.txs_with_unconfirmed().next().is_some()
+        !self.output_cache.txs_with_unconfirmed().is_empty()
     }
 
     pub fn name(&self) -> &Option<String> {
