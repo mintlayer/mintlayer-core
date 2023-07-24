@@ -12,6 +12,7 @@ chainstate = { path = "../chainstate" }
 common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
+mempool = { path = "../mempool" }
 node-lib = { path = "../node-lib" }
 p2p = { path = "../p2p" }
 serialization = { path = "../serialization" }

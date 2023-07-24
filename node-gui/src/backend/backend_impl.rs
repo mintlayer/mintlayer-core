@@ -70,6 +70,8 @@ pub struct Backend {
     controller: NodeController,
     manager_join_handle: JoinHandle<()>,
     wallets: BTreeMap<WalletId, WalletData>,
+
+    // Waker that is triggered when the wallet DB is updated
     wallet_notify: Arc<Notify>,
 }
 
@@ -389,14 +391,21 @@ impl Backend {
     }
 
     async fn broadcast(&mut self, transaction: SignedTransaction) -> Result<(), BackendError> {
-        let _tx_status = self
+        let tx_status = self
             .controller
             .p2p
             .call_async_mut(|p2p| p2p.submit_transaction(transaction))
             .await
             .map_err(|e| BackendError::RpcError(e.to_string()))?
-            .map_err(|e| BackendError::RpcError(e.to_string()));
-        Ok(())
+            .map_err(|e| BackendError::RpcError(e.to_string()))?;
+        match tx_status {
+            mempool::TxStatus::InMempool => Ok(()),
+            mempool::TxStatus::InOrphanPool => {
+                // Mempool should reject the transaction and not return `InOrphanPool`
+                log::warn!("The transaction has been added to the orphan pool.");
+                Ok(())
+            }
+        }
     }
 
     fn get_account_balance(
@@ -585,7 +594,7 @@ impl Backend {
         }
     }
 
-    async fn run(&mut self) {
+    async fn wallet_sync(&mut self) {
         if self.wallets.is_empty() {
             std::future::pending::<()>().await;
         }
@@ -636,9 +645,10 @@ pub async fn run(
             }
 
             // Start wallet sync as last
-            _ = backend.run() => {},
+            _ = backend.wallet_sync() => {},
         }
 
+        // Update UI on every loop iteration (can be after a UI request or after `wallet_notify` is triggered
         backend.update_wallets().await;
     }
 }

@@ -3882,6 +3882,7 @@ dependencies = [
  "iced_aw",
  "iced_lazy",
  "logging",
+ "mempool",
  "node-lib",
  "p2p",
  "rfd",

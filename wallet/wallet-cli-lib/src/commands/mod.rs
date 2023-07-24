@@ -371,6 +371,21 @@ impl CommandHandler {
         }
     }
 
+    pub async fn broadcast_transaction(
+        rpc_client: &NodeRpcClient,
+        tx: SignedTransaction,
+    ) -> Result<ConsoleCommand, WalletCliError> {
+        let status = rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+        let status_text = match status {
+            mempool::TxStatus::InMempool => "The transaction was submitted successfully",
+            mempool::TxStatus::InOrphanPool => {
+                // Mempool should reject the transaction and not return `InOrphanPool`
+                "The transaction has been added to the orphan pool"
+            }
+        };
+        Ok(ConsoleCommand::Print(status_text.to_owned()))
+    }
+
     pub async fn handle_wallet_command(
         &mut self,
         chain_config: &Arc<ChainConfig>,
@@ -652,14 +667,7 @@ impl CommandHandler {
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                // TODO: Take status into account
-                let _status = rpc_client
-                    .submit_transaction(transaction.take())
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print(
-                    "The transaction was submitted successfully".to_owned(),
-                ))
+                Self::broadcast_transaction(rpc_client, transaction.take()).await
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
@@ -847,10 +855,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                // TODO: Take status into account
-                let _status =
-                    rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::SendTokensToAddress {
@@ -860,8 +865,7 @@ impl CommandHandler {
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                // TODO: Take status into account
-                let _status = controller_opt
+                let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_tokens_to_address(
@@ -873,7 +877,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::CreateStakePool {
@@ -893,10 +897,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                // TODO: Take status into account
-                let _status =
-                    rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::NodeVersion => {

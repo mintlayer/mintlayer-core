@@ -405,7 +405,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         token_id: TokenId,
         address: Address,
         amount: Amount,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<SignedTransaction, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(5)
@@ -416,8 +416,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let output =
             make_address_output_token(self.chain_config.as_ref(), address, amount, token_id)
                 .map_err(ControllerError::WalletError)?;
-        let tx = self
-            .wallet
+        self.wallet
             .create_transaction_to_addresses(
                 wallet_events,
                 account_index,
@@ -425,11 +424,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn create_stake_pool_tx(
