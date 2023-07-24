@@ -219,6 +219,11 @@ pub enum WalletCommand {
         amount: String,
     },
 
+    CreateDelegation {
+        address: String,
+        pool_id: HexEncoded<PoolId>,
+    },
+
     SendFromDelegationToAddress {
         address: String,
         amount: String,
@@ -927,6 +932,22 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Self::broadcast_transaction(rpc_client, tx).await
+            }
+
+            WalletCommand::CreateDelegation { address, pool_id } => {
+                let address = parse_address(chain_config, &address)?;
+
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .create_delegation(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        address,
+                        pool_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::SendFromDelegationToAddress {

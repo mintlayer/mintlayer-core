@@ -65,6 +65,7 @@ use wallet::{
     account::Currency,
     send_request::{
         make_address_output, make_address_output_from_delegation, make_address_output_token,
+        make_create_delegation_output,
     },
     wallet_events::WalletEvents,
     DefaultWallet, WalletError,
@@ -444,6 +445,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)?;
 
         self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn create_delegation(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        pool_id: PoolId,
+    ) -> Result<(DelegationId, TxStatus), ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+        let output = make_create_delegation_output(self.chain_config.as_ref(), address, pool_id)
+            .map_err(ControllerError::WalletError)?;
+        let (delegation_id, tx) = self
+            .wallet
+            .create_delegation(
+                account_index,
+                vec![output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .map(|status| (delegation_id, status))
     }
 
     pub async fn send_to_address_from_delegation(

@@ -118,6 +118,16 @@ pub fn make_issue_nft_outputs(
     Ok(vec![issuance_output, token_issuance_fee])
 }
 
+pub fn make_create_delegation_output(
+    chain_config: &ChainConfig,
+    address: Address,
+    pool_id: PoolId,
+) -> WalletResult<TxOutput> {
+    let destination = address.destination(chain_config)?;
+
+    Ok(TxOutput::CreateDelegationId(destination, pool_id))
+}
+
 pub fn make_address_output_from_delegation(
     chain_config: &ChainConfig,
     address: Address,

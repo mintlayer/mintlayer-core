@@ -41,6 +41,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
+use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
@@ -504,6 +505,30 @@ impl<B: storage::Backend> Wallet<B> {
             let [tx] = txs;
             Ok(tx)
         })
+    }
+
+    pub fn create_delegation(
+        &mut self,
+        account_index: U31,
+        outputs: Vec<TxOutput>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(DelegationId, SignedTransaction)> {
+        let tx = self.create_transaction_to_addresses(
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        let input0_outpoint = tx
+            .transaction()
+            .inputs()
+            .get(0)
+            .ok_or(WalletError::NoUtxos)?
+            .utxo_outpoint()
+            .ok_or(WalletError::NoUtxos)?;
+        let delegation_id = make_delegation_id(input0_outpoint);
+        Ok((delegation_id, tx))
     }
 
     pub fn issue_new_token(
