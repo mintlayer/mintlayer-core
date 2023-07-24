@@ -75,8 +75,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
     fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
         let button_enabled = !state.password1.is_empty();
         let button =
-            Button::new(Text::new("Set password").horizontal_alignment(Horizontal::Center))
-                .width(100.0);
+            Button::new(Text::new("Encrypt wallet").horizontal_alignment(Horizontal::Center));
         let button = if button_enabled {
             button.on_press(SetPasswordEvent::Ok)
         } else {
@@ -84,7 +83,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
         };
 
         Card::new(
-            Text::new("Unlock"),
+            Text::new("Encrypt wallet"),
             iced::widget::column![
                 text_input("Password", &state.password1)
                     .password()
@@ -94,7 +93,8 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
                     .password()
                     .on_input(SetPasswordEvent::EditPassword2)
                     .padding(15)
-            ],
+            ]
+            .spacing(10),
         )
         .foot(container(button).width(Length::Fill).center_x())
         .max_width(600.0)
