@@ -465,6 +465,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (delegation_id, tx) = self
             .wallet
             .create_delegation(
+                &mut self.wallet_events,
                 account_index,
                 vec![output],
                 current_fee_rate,
@@ -476,6 +477,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .await
             .map_err(ControllerError::NodeCallError)
             .map(|status| (delegation_id, status))
+    }
+
+    pub async fn delegate_staking(
+        &mut self,
+        account_index: U31,
+        amount: Amount,
+        delegation_id: DelegationId,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let output = TxOutput::DelegateStaking(amount, delegation_id);
+
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(5)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        let consolidate_fee_rate = current_fee_rate;
+
+        let tx = self
+            .wallet
+            .create_transaction_to_addresses(
+                &mut self.wallet_events,
+                account_index,
+                vec![output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn send_to_address_from_delegation(

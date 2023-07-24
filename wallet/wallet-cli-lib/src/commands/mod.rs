@@ -224,6 +224,11 @@ pub enum WalletCommand {
         pool_id: HexEncoded<PoolId>,
     },
 
+    DelegateStaking {
+        amount: String,
+        delegation_id: HexEncoded<DelegationId>,
+    },
+
     SendFromDelegationToAddress {
         address: String,
         amount: String,
@@ -944,6 +949,26 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         address,
                         pool_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
+            WalletCommand::DelegateStaking {
+                amount,
+                delegation_id,
+            } => {
+                let amount = parse_coin_amount(chain_config, &amount)?;
+
+                // TODO: Take status into account
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .delegate_staking(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        amount,
+                        delegation_id.take(),
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

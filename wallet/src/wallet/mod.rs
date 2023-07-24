@@ -509,12 +509,14 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_delegation(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         outputs: Vec<TxOutput>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(DelegationId, SignedTransaction)> {
         let tx = self.create_transaction_to_addresses(
+            wallet_events,
             account_index,
             outputs,
             current_fee_rate,

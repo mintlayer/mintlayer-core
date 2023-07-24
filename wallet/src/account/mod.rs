@@ -632,12 +632,12 @@ impl Account {
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         // TODO: Reuse code from TxVerifier
         match txo {
-            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::CreateDelegationId(d, _)
+            | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-            TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
     }
 
@@ -995,9 +995,8 @@ fn group_outputs<T, Grouped: Clone>(
                 v.clone()
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
-            TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
+            TxOutput::CreateDelegationId(_, _) => continue,
+            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::DelegateStaking(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
