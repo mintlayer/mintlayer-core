@@ -329,7 +329,7 @@ impl BlockProduction {
             .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
 
         if is_initial_block_download {
-          return Err(BlockProductionError::ChainstateWaitForSync);
+            return Err(BlockProductionError::ChainstateWaitForSync);
         }
 
         let current_peer_count = self
