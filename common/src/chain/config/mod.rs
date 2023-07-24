@@ -123,21 +123,21 @@ fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static 
             Destination::Address(_) => "tmt",
             Destination::PublicKey(_) => "tpmt",
             Destination::ScriptHash(_) => "tstc",
-            Destination::ClassicMultisig(_) => "mmtc",
+            Destination::ClassicMultisig(_) => "tmtc",
         },
         ChainType::Regtest => match destination {
             Destination::AnyoneCanSpend => "",
             Destination::Address(_) => "rmt",
             Destination::PublicKey(_) => "rpmt",
-            Destination::ScriptHash(_) => "tstc",
-            Destination::ClassicMultisig(_) => "mmtc",
+            Destination::ScriptHash(_) => "rstc",
+            Destination::ClassicMultisig(_) => "rmtc",
         },
         ChainType::Signet => match destination {
             Destination::AnyoneCanSpend => "",
             Destination::Address(_) => "smt",
             Destination::PublicKey(_) => "spmt",
-            Destination::ScriptHash(_) => "tstc",
-            Destination::ClassicMultisig(_) => "mmtc",
+            Destination::ScriptHash(_) => "sstc",
+            Destination::ClassicMultisig(_) => "smtc",
         },
     }
 }
