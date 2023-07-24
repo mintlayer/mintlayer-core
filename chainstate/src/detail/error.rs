@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{
-    best_chain_candidates::BestChainCandidatesError,
+    block_invalidation::best_chain_candidates::BestChainCandidatesError,
     chainstateref::EpochSealError,
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
@@ -68,24 +68,20 @@ pub enum BlockError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
-    #[error("The block {0} is too deep to invalidate")]
-    BlockTooDeepToInvalidate(Id<Block>),
-    #[error("Error manipulating best chain candidates: {0}")]
-    BestChainCandidatesError(#[from] BestChainCandidatesError),
-    #[error("Block not found : {0}")]
-    BlockNotFound(Id<Block>),
+    #[error("Block data missing for a block with a valid index: {0}")]
+    BlockDataMissingForValidBlockIndex(Id<Block>),
+    #[error("Error accessing best chain candidates: {0}")]
+    BestChainCandidatesAccessorError(BestChainCandidatesError),
 
-    #[error("Failed to obtain best block id")]
+    #[error("Failed to obtain best block id: {0}")]
     BestBlockIdQueryError(PropertyQueryError),
-    #[error("Failed to obtain best block index")]
+    #[error("Failed to obtain best block index: {0}")]
     BestBlockIndexQueryError(PropertyQueryError),
-    #[error("Failed to determine if the block {0} is in mainchain")]
-    IsBlockInMainChainQueryError(PropertyQueryError, Id<GenBlock>),
-    #[error("Failed to obtain block index for block {0}")]
-    BlockIndexQueryError(PropertyQueryError, Id<GenBlock>),
-    #[error("Failed to obtain best block index")]
-    BlockIndicesForBranchQueryError(PropertyQueryError),
-    #[error("Failed to obtain the minimum height with allowed reorgs")]
+    #[error("Failed to obtain block index for block {0}: {1}")]
+    BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
+    #[error("Failed to determine if the block {0} is in mainchain: {1}")]
+    IsBlockInMainChainQueryError(Id<GenBlock>, PropertyQueryError),
+    #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]
     MinHeightForReorgQueryError(PropertyQueryError),
 
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
@@ -105,12 +101,6 @@ pub enum DbCommittingContext {
     Block(Id<Block>),
     #[display(fmt = "committing block status for block {}", _0)]
     BlockStatus(Id<Block>),
-    #[display(fmt = "committing invalidated blocks statuses (root block: {})", _0)]
-    InvalidatedBlockTreeStatuses(Id<Block>),
-    #[display(fmt = "committing cleared blocks statuses (root block: {})", _0)]
-    ClearedBlockTreeStatuses(Id<Block>),
-    #[display(fmt = "committing block tree disconnection (root block: {})", _0)]
-    BlockTreeDisconnection(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

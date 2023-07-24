@@ -16,6 +16,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::chainstate_interface::integration_tests_support;
+use crate::detail::block_checking::BlockChecker;
+use crate::detail::block_invalidation::BlockInvalidator;
 use crate::{
     detail::{
         self,
@@ -71,26 +73,25 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
-        self.chainstate
-            .invalidate_block(block_id)
-            .map_err(ChainstateError::ProcessBlockError)
+        BlockInvalidator::new(&mut self.chainstate)
+            .invalidate_block(block_id, detail::block_invalidation::IsExplicit::Yes)
+            .map_err(ChainstateError::BlockInvalidatorError)
     }
 
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
-        self.chainstate
+        BlockInvalidator::new(&mut self.chainstate)
             .reset_block_failure_flags(block_id)
-            .map_err(ChainstateError::ProcessBlockError)
+            .map_err(ChainstateError::BlockInvalidatorError)
     }
 
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
-        self.chainstate
+        BlockChecker::new(&self.chainstate)
             .preliminary_header_check(header)
             .map_err(ChainstateError::ProcessBlockError)
     }
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
-        let block = self
-            .chainstate
+        let block = BlockChecker::new(&self.chainstate)
             .preliminary_block_check(block.into())
             .map_err(ChainstateError::ProcessBlockError)?;
         Ok(WithId::take(block))

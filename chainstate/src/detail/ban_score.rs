@@ -60,15 +60,13 @@ impl BanScore for BlockError {
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::EpochSealError(err) => err.ban_score(),
-            BlockError::BlockTooDeepToInvalidate(_) => 0,
-            BlockError::BestChainCandidatesError(_) => 0,
-            BlockError::BlockNotFound(_) => 0,
+            BlockError::BlockDataMissingForValidBlockIndex(_) => 0,
+            BlockError::BestChainCandidatesAccessorError(_) => 0,
 
             BlockError::BestBlockIdQueryError(_) => 0,
             BlockError::BestBlockIndexQueryError(_) => 0,
-            BlockError::IsBlockInMainChainQueryError(_, _) => 0,
             BlockError::BlockIndexQueryError(_, _) => 0,
-            BlockError::BlockIndicesForBranchQueryError(_) => 0,
+            BlockError::IsBlockInMainChainQueryError(_, _) => 0,
             BlockError::MinHeightForReorgQueryError(_) => 0,
 
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
@@ -478,6 +476,7 @@ impl BanScore for ChainstateError {
             ChainstateError::ProcessBlockError(e) => e.ban_score(),
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
+            ChainstateError::BlockInvalidatorError(_) => 0,
         }
     }
 }

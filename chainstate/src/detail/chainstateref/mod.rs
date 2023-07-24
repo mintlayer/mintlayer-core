@@ -193,21 +193,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .map_err(PropertyQueryError::from)
     }
 
-    pub fn get_existing_gen_block_index(
-        &self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<GenBlockIndex, PropertyQueryError> {
-        self.get_gen_block_index(block_id)?
-            .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))
-    }
-
     pub fn get_best_block_index(&self) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id().log_err()?)
             .log_err()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)
     }
 
-    /// Read previous block from storage and return its BlockIndex.
+    /// Return BlockIndex of the previous block.
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
@@ -281,6 +273,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         )
     }
 
+    /// Obtain the last common ancestor between the specified blocks.
     pub fn last_common_ancestor(
         &self,
         first_block_index: &GenBlockIndex,
@@ -316,7 +309,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    fn last_common_ancestor_in_main_chain(
+    /// Obtain the last common ancestor between the specified block and the tip of the main chain.
+    // TODO: unlike its generic counterpart above, this function may be optimized by taking jumps
+    // via get_ancestor instead of the block-by-block iteration (because here the other chain is
+    // the main chain and we can always check whether we've reached it).
+    pub fn last_common_ancestor_in_main_chain(
         &self,
         block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
@@ -477,7 +474,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    /// Read previous block from storage and return its BlockIndex.
+    /// Return BlockIndex of the previous block.
     fn get_previous_block_index_for_check_block(
         &self,
         block_header: &SignedBlockHeader,
@@ -857,7 +854,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        self.get_block_ids_by_height(0.into())
+        self.get_higher_block_ids_sorted_by_height(0.into())
     }
 
     /// Return ids of all blocks with height bigger than the specified one,
@@ -866,7 +863,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     // for places where it's currently used (such as block invalidation or best chain selection).
     // We need either to optimize it or replace it with some other solution.
     // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
-    pub fn get_block_ids_by_height(
+    pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
     ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
@@ -887,7 +884,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let root_block_index = self.get_existing_block_index(root_block_id).log_err()?;
 
         let next_block_height = root_block_index.block_height().next_height();
-        let maybe_descendant_block_ids = self.get_block_ids_by_height(next_block_height)?;
+        let maybe_descendant_block_ids =
+            self.get_higher_block_ids_sorted_by_height(next_block_height)?;
 
         let mut result = Vec::new();
         let mut seen_block_ids = BTreeSet::new();
@@ -920,7 +918,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let prev_block_id = block.header().prev_block_id();
         let prev_block_index = self
             .get_gen_block_index(prev_block_id)
-            .map_err(|err| BlockError::BlockIndexQueryError(err, *prev_block_id))?
+            .map_err(|err| BlockError::BlockIndexQueryError(*prev_block_id, err))?
             .ok_or(BlockError::PrevBlockNotFoundForNewBlock(block.get_id()))?;
 
         // Set the block height
@@ -1024,6 +1022,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                     // block re-downloading, this behavior must be changed: instead, we should
                     // trigger the re-downloading and completely ignore the subtree during
                     // the current operation.
+                    // Alternatively, we can just remove the previously invalid block indices
+                    // instead of resetting their statuses.
                     // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #4.
                     ReorgError::BlockDataMissing(*block_index.block_id())
                 })

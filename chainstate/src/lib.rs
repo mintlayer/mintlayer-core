@@ -26,10 +26,11 @@ pub mod rpc;
 pub use crate::{
     config::ChainstateConfig,
     detail::{
-        ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
-        ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-        InitializationError, Locator, OrphanCheckError, SpendStakeError, TokensError,
-        TransactionVerifierStorageError, TxIndexError,
+        ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
+        is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
+        CheckBlockTransactionsError, ConnectTransactionError, InitializationError, Locator,
+        OrphanCheckError, SpendStakeError, TokensError, TransactionVerifierStorageError,
+        TxIndexError,
     },
 };
 
@@ -65,6 +66,8 @@ pub enum ChainstateError {
     FailedToReadProperty(#[from] PropertyQueryError),
     #[error("Block import error {0}")]
     BootstrapError(#[from] BootstrapError),
+    #[error("Error invoking block invalidator: {0}")]
+    BlockInvalidatorError(#[from] BlockInvalidatorError),
 }
 
 impl HasTxIndexDisabledError for ChainstateError {

@@ -173,7 +173,7 @@ pub fn assert_invalidated_blocks_with_bad_parent_at_stage(
 
 pub fn assert_best_chain_candidates(tf: &TestFramework, candidates: &[Id<Block>]) {
     let best_chain_candidates = tf.get_best_chain_candidates();
-    let actual_set = BTreeSet::from_iter(best_chain_candidates.elements().map(|e| &e.block_id));
+    let actual_set = BTreeSet::from_iter(best_chain_candidates.elements().map(|e| e.block_id()));
     let expected_set = BTreeSet::from_iter(candidates);
     assert_eq!(actual_set, expected_set);
 }

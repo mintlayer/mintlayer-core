@@ -17,8 +17,7 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use super::chainstateref::ChainstateRef;
-use crate::TransactionVerificationStrategy;
+use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{chain::Block, primitives::Id, Uint256};
@@ -26,11 +25,19 @@ use utils::tap_error_log::LogError;
 
 #[derive(Eq, Copy, Clone, Debug)]
 pub struct BestChainCandidatesItem {
-    pub chain_trust: Uint256,
-    pub block_id: Id<Block>,
+    chain_trust: Uint256,
+    block_id: Id<Block>,
 }
 
 impl BestChainCandidatesItem {
+    pub fn chain_trust(&self) -> &Uint256 {
+        &self.chain_trust
+    }
+
+    pub fn block_id(&self) -> &Id<Block> {
+        &self.block_id
+    }
+
     fn from_block_index(block_index: &BlockIndex) -> Self {
         BestChainCandidatesItem {
             block_id: *block_index.block_id(),
@@ -73,11 +80,12 @@ impl BestChainCandidates {
         S: BlockchainStorageRead,
         V: TransactionVerificationStrategy,
     {
-        let best_block_index = chainstate_ref.get_best_block_index().log_err()?;
         let min_height_with_allowed_reorg = chainstate_ref.get_min_height_with_allowed_reorg()?;
 
+        // Note: currently, this call has linear complexity with respect to the total number of
+        // blocks, see the TODO near the function itself.
         let block_ids_by_height = chainstate_ref
-            .get_block_ids_by_height(min_height_with_allowed_reorg)
+            .get_higher_block_ids_sorted_by_height(min_height_with_allowed_reorg)
             .log_err()?;
 
         let mut candidates = BTreeSet::new();
@@ -85,6 +93,11 @@ impl BestChainCandidates {
 
         // Iterate over the block ids from bigger block height to lower, so that we see children
         // before parents.
+        // Note: currently, this loop has the complexity of (the number of tips higher than
+        // min_height_with_allowed_reorg) x (the average height of the common ancestor of each
+        // tip and the current best block). The latter part can be improved a little by
+        // optimizing last_common_ancestor_in_main_chain, see the comment below.
+        // TODO: is there a way to make the complexity "more linear" in general?
         for block_id in block_ids_by_height.iter().rev() {
             let block_index = chainstate_ref.get_existing_block_index(block_id).log_err()?;
 
@@ -93,8 +106,9 @@ impl BestChainCandidates {
                 // Only add the tips of branches to the list of candidates.
                 if !seen_parents.contains(block_id.into()) {
                     let gen_block_index: GenBlockIndex = block_index.clone().into();
+                    // Note: this function can be optimized, see the TODO near it.
                     let last_common_ancestor = chainstate_ref
-                        .last_common_ancestor(&gen_block_index, &best_block_index)
+                        .last_common_ancestor_in_main_chain(&gen_block_index)
                         .log_err()?;
 
                     // Only consider chains that start above the minimum height that allows reorgs.
@@ -131,10 +145,10 @@ impl BestChainCandidates {
         // Add the parent to the list
         if let Some(prev_block_id) = invalidated_block_index
             .prev_block_id()
-            .classify_ref(chainstate_ref.chain_config())
+            .classify(chainstate_ref.chain_config())
             .chain_block_id()
         {
-            let prev_block_index = chainstate_ref.get_existing_block_index(prev_block_id)?;
+            let prev_block_index = chainstate_ref.get_existing_block_index(&prev_block_id)?;
             self.add(chainstate_ref, &prev_block_index);
         }
 

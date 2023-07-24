@@ -275,11 +275,8 @@ impl TestFramework {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
     }
 
-    pub fn to_chain_block_id<'a>(&self, block_id: &'a Id<GenBlock>) -> &'a Id<Block> {
-        block_id
-            .classify_ref(self.chainstate.get_chain_config())
-            .chain_block_id()
-            .unwrap()
+    pub fn to_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
+        block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
     }
 
     pub fn get_best_chain_candidates(&self) -> BestChainCandidates {

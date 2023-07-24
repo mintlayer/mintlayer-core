@@ -243,7 +243,7 @@ pub mod integration_tests_support {
     use common::Uint256;
 
     use super::*;
-    pub use crate::detail::best_chain_candidates::{
+    pub use crate::detail::block_invalidation::best_chain_candidates::{
         BestChainCandidates, BestChainCandidatesError, BestChainCandidatesItem,
     };
 

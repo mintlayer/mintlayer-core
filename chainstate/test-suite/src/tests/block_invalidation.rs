@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
-use chainstate::{BlockError, ChainstateError};
+use chainstate::{BlockInvalidatorError, ChainstateError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
 use common::{
@@ -433,7 +433,9 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         let err = tf.chainstate.invalidate_block(&m[1]).unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(BlockError::BlockTooDeepToInvalidate(m[1]))
+            ChainstateError::BlockInvalidatorError(
+                BlockInvalidatorError::BlockTooDeepToInvalidate(m[1])
+            )
         );
 
         // Nothing has changed.
