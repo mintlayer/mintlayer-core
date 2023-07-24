@@ -15,7 +15,9 @@
 
 use wallet_types::{AccountWalletTxId, WalletTx};
 
-/// Callbacks that are invoked when the database is updated and the UI should be re-rendered
+/// Callbacks that are called when the database is updated and the UI should be re-rendered.
+/// For example, when a new wallet is imported and the wallet scan is in progress,
+/// the wallet balance and address/transaction lists should be updated after this callbacks.
 pub trait WalletEvents {
     fn new_block(&mut self);
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx);
