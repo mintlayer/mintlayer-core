@@ -20,7 +20,7 @@ use subsystem::Handle;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_error_log::LogError;
 
-use super::{messages::BackendEvent, Backend};
+use super::{backend_impl::Backend, messages::BackendEvent};
 
 pub struct P2pEventHandler {
     p2p_event_rx: UnboundedReceiver<P2pEvent>,
