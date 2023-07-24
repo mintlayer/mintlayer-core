@@ -92,7 +92,7 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     let (request_tx, request_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
 
-    // Subscribe to chainstate before getting the current best_block!
+    // Subscribe to chainstate before getting the current chain_info!
     let chainstate_event_handler =
         ChainstateEventHandler::new(&controller.chainstate, event_tx.clone()).await;
 

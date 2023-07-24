@@ -16,7 +16,6 @@
 use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, time::Duration};
 
 use chainstate::ChainInfo;
-use chrono::TimeZone;
 use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig},
     primitives::{semver::SemVer, user_agent::UserAgent, Amount},
@@ -90,7 +89,11 @@ fn print_coin_amount_with_name(chain_config: &ChainConfig, value: Amount) -> Str
 fn print_timestamp(timestamp: Duration) -> Option<String> {
     let timestamp: i64 = timestamp.as_secs().try_into().ok()?;
     let timestamp = chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)?;
-    let timestamp = chrono::Local.from_utc_datetime(&timestamp);
+
+    // To print in local timezone
+    // use chrono::TimeZone;
+    // let timestamp = chrono::Local.from_utc_datetime(&timestamp);
+
     Some(timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
