@@ -19,8 +19,13 @@ use wallet_types::{AccountWalletTxId, WalletTx};
 /// For example, when a new wallet is imported and the wallet scan is in progress,
 /// the wallet balance and address/transaction lists should be updated after this callbacks.
 pub trait WalletEvents {
+    /// New block is scanned
     fn new_block(&mut self);
+
+    /// The transaction is updated in the DB
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx);
+
+    /// The transaction is removed from the DB
     fn del_transaction(&mut self, id: &AccountWalletTxId);
 }
 

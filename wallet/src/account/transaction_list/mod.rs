@@ -80,9 +80,16 @@ pub struct TransactionInfo {
 
 #[derive(Debug, Clone)]
 pub struct TransactionList {
+    /// How many transactions are in the single page (currently it's always 10)
     pub count: usize,
+
+    /// How many transactions the user has seen and scrolled through (normally it can be 0, 10, 20, etc.)
     pub skip: usize,
+
+    /// Total number of transactions
     pub total: usize,
+
+    /// Transaction list from the selected page
     pub txs: Vec<TransactionInfo>,
 }
 

@@ -37,10 +37,12 @@ impl GuiWalletEvents {
         self.wallet_notify.notify_one();
     }
 
+    /// Returns `true` if the wallet DB has been updated
     pub fn is_set(&self) -> bool {
         self.updated
     }
 
+    /// Marks wallet as clean
     pub fn reset(&mut self) {
         self.updated = false;
     }

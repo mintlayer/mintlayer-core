@@ -57,6 +57,8 @@ struct WalletData {
 }
 
 struct AccountData {
+    /// How many transactions the user has seen and scrolled (can be 0, 10, 20, etc).
+    /// The variable is stored here so that the backend can send transaction list updates automatically.
     transaction_list_skip: usize,
 
     /// If set, pool balances should be updated in the UI.
@@ -566,28 +568,31 @@ impl Backend {
             }
         }
 
+        // `get_stake_pool_balances` may fail if we ever start using remote RPC
         for (wallet_id, wallet_data) in self.wallets.iter_mut() {
-            for (account_id, account_data) in wallet_data.accounts.iter_mut() {
-                if account_data.update_pool_balance {
-                    let staking_balance_res = wallet_data
-                        .controller
-                        .get_stake_pool_balances(account_id.account_index())
-                        .await;
-                    match staking_balance_res {
-                        Ok(staking_balance) => {
-                            Self::send_event(
-                                &self.event_tx,
-                                BackendEvent::StakingBalance(
-                                    *wallet_id,
-                                    *account_id,
-                                    staking_balance.clone(),
-                                ),
-                            );
-                            account_data.update_pool_balance = false;
-                        }
-                        Err(err) => {
-                            log::error!("Staking balance loading failed: {err}");
-                        }
+            for (account_id, account_data) in wallet_data
+                .accounts
+                .iter_mut()
+                .filter(|(_account_id, account_data)| account_data.update_pool_balance)
+            {
+                let staking_balance_res = wallet_data
+                    .controller
+                    .get_stake_pool_balances(account_id.account_index())
+                    .await;
+                match staking_balance_res {
+                    Ok(staking_balance) => {
+                        Self::send_event(
+                            &self.event_tx,
+                            BackendEvent::StakingBalance(
+                                *wallet_id,
+                                *account_id,
+                                staking_balance.clone(),
+                            ),
+                        );
+                        account_data.update_pool_balance = false;
+                    }
+                    Err(err) => {
+                        log::error!("Staking balance loading failed: {err}");
                     }
                 }
             }

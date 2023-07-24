@@ -44,7 +44,7 @@ pub struct BackendControls {
     pub backend_receiver: UnboundedReceiver<BackendEvent>,
 }
 
-// Wrap `UnboundedSender` without Clone
+/// `UnboundedSender` wrapper, used to make sure there is only one instance and it doesn't get cloned
 #[derive(Debug)]
 pub struct BackendSender {
     request_tx: UnboundedSender<BackendRequest>,
