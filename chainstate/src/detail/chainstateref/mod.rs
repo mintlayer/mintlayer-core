@@ -619,10 +619,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         );
 
         ensure!(
-            block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
+            block_size.size_from_txs() <= self.chain_config.max_block_size_from_std_scripts(),
             BlockSizeError::SizeOfTxs(
                 block_size.size_from_txs(),
-                self.chain_config.max_block_size_from_txs()
+                self.chain_config.max_block_size_from_std_scripts()
             )
         );
 

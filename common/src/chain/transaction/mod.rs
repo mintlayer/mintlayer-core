@@ -48,6 +48,7 @@ use self::signed_transaction::SignedTransaction;
 mod transaction_v1;
 use transaction_v1::TransactionV1;
 
+/// In case multiple types of transactions are developed, the size of that transaction can be described here along with its type
 pub enum TransactionSize {
     ScriptedTransaction(usize),
     SmartContractTransaction(usize),

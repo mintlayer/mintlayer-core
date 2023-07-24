@@ -414,10 +414,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             MempoolPolicyError::NoOutputs,
         );
 
-        // TODO: see this issue:
-        // https://github.com/mintlayer/mintlayer-core/issues/331
         ensure!(
-            entry.size() <= MAX_BLOCK_SIZE_BYTES,
+            entry.size() <= self.chain_config.max_tx_size_for_mempool(),
             MempoolPolicyError::ExceedsMaxBlockSize,
         );
 
@@ -889,7 +887,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let tx_id = *tx.tx_id();
         let origin = tx.origin();
 
-        match self.validate_transaction(tx).log_err_pfx("Transaction rejected") {
+        match self.validate_transaction(tx).log_warn_pfx("Transaction rejected") {
             Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
@@ -1059,6 +1057,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                         })
                 },
             )
+            .map(|feerate| std::cmp::max(feerate, INCREMENTAL_RELAY_FEE_RATE))
     }
 }
 

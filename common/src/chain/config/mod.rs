@@ -300,7 +300,7 @@ impl ChainConfig {
 
     /// The maximum size of a block that uses standard transactions
     #[must_use]
-    pub fn max_block_size_from_txs(&self) -> usize {
+    pub fn max_block_size_from_std_scripts(&self) -> usize {
         self.max_block_size_with_standard_txs
     }
 
@@ -308,6 +308,14 @@ impl ChainConfig {
     #[must_use]
     pub fn max_block_size_from_smart_contracts(&self) -> usize {
         self.max_block_size_with_smart_contracts
+    }
+
+    /// The maximum size of any transaction submitted to the node for the mempool
+    pub fn max_tx_size_for_mempool(&self) -> usize {
+        std::cmp::min(
+            self.max_block_size_from_std_scripts(),
+            self.max_block_size_from_smart_contracts(),
+        )
     }
 
     /// The initial randomness used for the first few epochs until sealed blocks kick in
@@ -467,8 +475,8 @@ impl AsRef<ChainConfig> for ChainConfig {
 }
 
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
-const MAX_BLOCK_TXS_SIZE: usize = 524_288;
-const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
+const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
+const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
