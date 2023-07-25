@@ -24,7 +24,7 @@ use logging::log;
 use node_lib::node_controller::NodeController;
 use tokio::{
     sync::{
-        mpsc::{UnboundedReceiver, UnboundedSender},
+        mpsc::{Sender, UnboundedReceiver},
         Notify,
     },
     task::JoinHandle,
@@ -68,19 +68,25 @@ struct AccountData {
 
 pub struct Backend {
     chain_config: Arc<ChainConfig>,
-    event_tx: UnboundedSender<BackendEvent>,
+
+    /// The bounded sender is used so that the UI is not overloaded with messages.
+    /// With an unbounded sender, high latency was experienced when wallet scan was enabled.
+    event_tx: Sender<BackendEvent>,
+
     controller: NodeController,
+
     manager_join_handle: JoinHandle<()>,
+
     wallets: BTreeMap<WalletId, WalletData>,
 
-    // Waker that is triggered when the wallet DB is updated
+    /// Waker that is triggered when the wallet DB is updated
     wallet_notify: Arc<Notify>,
 }
 
 impl Backend {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        event_tx: UnboundedSender<BackendEvent>,
+        event_tx: Sender<BackendEvent>,
         controller: NodeController,
         manager_join_handle: JoinHandle<()>,
     ) -> Self {
@@ -451,51 +457,51 @@ impl Backend {
         match request {
             BackendRequest::OpenWallet { file_path } => {
                 let open_res = self.open_wallet(file_path).await;
-                Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res))
+                Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res)).await;
             }
             BackendRequest::CreateWallet {
                 mnemonic,
                 file_path,
             } => {
                 let import_res = self.create_wallet(mnemonic, file_path).await;
-                Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res))
+                Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res)).await;
             }
             BackendRequest::CloseWallet(wallet_id) => {
                 if let Some(wallet) = self.wallets.remove(&wallet_id) {
                     drop(wallet);
-                    Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
+                    Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id)).await;
                 }
             }
 
             BackendRequest::UpdateEncryption { wallet_id, action } => {
                 let res = self.update_encryption(wallet_id, action);
-                Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res));
+                Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res)).await;
             }
 
             BackendRequest::NewAccount { wallet_id, name } => {
                 let res = self.new_account(wallet_id, name);
-                Self::send_event(&self.event_tx, BackendEvent::NewAccount(res));
+                Self::send_event(&self.event_tx, BackendEvent::NewAccount(res)).await;
             }
 
             BackendRequest::NewAddress(wallet_id, account_id) => {
                 let address_res = self.new_address(wallet_id, account_id);
-                Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
+                Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res)).await;
             }
             BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
                 let toggle_res = self.toggle_staking(wallet_id, account_id, enabled);
-                Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
+                Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res)).await;
             }
             BackendRequest::SendAmount(send_request) => {
                 let send_res = self.send_amount(send_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
+                Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res)).await;
             }
             BackendRequest::StakeAmount(stake_request) => {
                 let stake_res = self.stake_amount(stake_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
+                Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res)).await;
             }
             BackendRequest::Broadcast(transaction) => {
                 let broadcast_res = self.broadcast(transaction).await;
-                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res));
+                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res)).await;
             }
             BackendRequest::TransactionList {
                 wallet_id,
@@ -508,14 +514,15 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::TransactionList(wallet_id, account_id, transaction_list),
-                );
+                )
+                .await;
             }
             BackendRequest::Shutdown => unreachable!(),
         }
     }
 
-    pub fn send_event(event_tx: &UnboundedSender<BackendEvent>, event: BackendEvent) {
-        _ = event_tx.send(event);
+    pub async fn send_event(event_tx: &Sender<BackendEvent>, event: BackendEvent) {
+        _ = event_tx.send(event).await;
     }
 
     async fn shutdown(self) {
@@ -536,7 +543,8 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::WalletBestBlock(*wallet_id, best_block),
-                );
+                )
+                .await;
                 wallet_data.best_block = best_block;
             }
 
@@ -548,7 +556,8 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
-                );
+                )
+                .await;
 
                 // GuiWalletEvents will notify about stake pool balance update
                 // (when a new wallet block is added/removed from the DB)
@@ -567,7 +576,8 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::TransactionList(*wallet_id, *account_id, transaction_list),
-                );
+                )
+                .await;
             }
         }
 
@@ -591,7 +601,8 @@ impl Backend {
                                 *account_id,
                                 staking_balance.clone(),
                             ),
-                        );
+                        )
+                        .await;
                         account_data.update_pool_balance = false;
                     }
                     Err(err) => {

@@ -17,21 +17,18 @@ use std::sync::Arc;
 
 use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
 use subsystem::Handle;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, Sender, UnboundedReceiver};
 use utils::tap_error_log::LogError;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
 
 pub struct P2pEventHandler {
     p2p_event_rx: UnboundedReceiver<P2pEvent>,
-    event_tx: UnboundedSender<BackendEvent>,
+    event_tx: Sender<BackendEvent>,
 }
 
 impl P2pEventHandler {
-    pub async fn new(
-        p2p: &Handle<dyn P2pInterface>,
-        event_tx: UnboundedSender<BackendEvent>,
-    ) -> Self {
+    pub async fn new(p2p: &Handle<dyn P2pInterface>, event_tx: Sender<BackendEvent>) -> Self {
         // TODO: Fix race in p2p events subscribe (if some peers are connected before the subscription is complete)
 
         let (p2p_event_tx, p2p_event_rx) = unbounded_channel();
@@ -58,7 +55,7 @@ impl P2pEventHandler {
             let p2p_event_opt = self.p2p_event_rx.recv().await;
             match p2p_event_opt {
                 Some(event) => {
-                    Backend::send_event(&self.event_tx, BackendEvent::P2p(event));
+                    Backend::send_event(&self.event_tx, BackendEvent::P2p(event)).await;
                 }
                 None => {
                     // Node is stopped
