@@ -508,12 +508,10 @@ impl Backend {
                 account_id,
                 skip,
             } => {
-                let transaction_list = self
-                    .load_transaction_list(wallet_id, account_id, skip)
-                    .expect("load_transaction_list failed");
+                let transaction_list_res = self.load_transaction_list(wallet_id, account_id, skip);
                 Self::send_event(
                     &self.event_tx,
-                    BackendEvent::TransactionList(wallet_id, account_id, transaction_list),
+                    BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
                 )
                 .await;
             }
@@ -565,19 +563,27 @@ impl Backend {
 
                 // GuiWalletEvents will notify about transaction list
                 // (when a wallet transaction is added/updated/removed)
-                let transaction_list = wallet_data
-                    .controller
-                    .get_transaction_list(
-                        account_id.account_index(),
-                        account_data.transaction_list_skip,
-                        TRANSACTION_LIST_PAGE_COUNT,
-                    )
-                    .expect("load_transaction_list failed");
-                Self::send_event(
-                    &self.event_tx,
-                    BackendEvent::TransactionList(*wallet_id, *account_id, transaction_list),
-                )
-                .await;
+                let transaction_list_res = wallet_data.controller.get_transaction_list(
+                    account_id.account_index(),
+                    account_data.transaction_list_skip,
+                    TRANSACTION_LIST_PAGE_COUNT,
+                );
+                match transaction_list_res {
+                    Ok(transaction_list) => {
+                        Self::send_event(
+                            &self.event_tx,
+                            BackendEvent::TransactionList(
+                                *wallet_id,
+                                *account_id,
+                                Ok(transaction_list),
+                            ),
+                        )
+                        .await;
+                    }
+                    Err(err) => {
+                        log::error!("Transaction list loading failed: {err}");
+                    }
+                }
             }
         }
 

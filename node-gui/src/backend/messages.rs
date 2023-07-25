@@ -180,5 +180,5 @@ pub enum BackendEvent {
     StakeAmount(Result<TransactionInfo, BackendError>),
     Broadcast(Result<(), BackendError>),
 
-    TransactionList(WalletId, AccountId, TransactionList),
+    TransactionList(WalletId, AccountId, Result<TransactionList, BackendError>),
 }

@@ -462,7 +462,7 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
-                BackendEvent::TransactionList(wallet_id, account_id, transaction_list) => {
+                BackendEvent::TransactionList(wallet_id, account_id, Ok(transaction_list)) => {
                     self.node_state
                         .wallets
                         .get_mut(&wallet_id)
@@ -471,6 +471,10 @@ impl MainWindow {
                         .get_mut(&account_id)
                         .expect("account must be known (TransactionList)")
                         .transaction_list = transaction_list;
+                    Command::none()
+                }
+                BackendEvent::TransactionList(_wallet_id, _account_id, Err(error)) => {
+                    self.show_error(error.to_string());
                     Command::none()
                 }
             },
