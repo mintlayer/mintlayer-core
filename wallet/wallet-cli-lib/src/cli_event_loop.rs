@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet::wallet_events::WalletEventsNoOp;
-use wallet_controller::{NodeRpcClient, RpcController};
+use wallet_controller::NodeRpcClient;
 
 use crate::{
     commands::{CommandHandler, ConsoleCommand, WalletCommand},
     errors::WalletCliError,
+    CliController,
 };
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub enum Event {
 pub async fn run(
     chain_config: &Arc<ChainConfig>,
     rpc_client: &NodeRpcClient,
-    mut controller_opt: Option<RpcController>,
+    mut controller_opt: Option<CliController>,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
 ) {
     let mut command_handler = CommandHandler::new();
@@ -44,7 +44,7 @@ pub async fn run(
     loop {
         let background_task = async {
             match controller_opt.as_mut() {
-                Some(controller) => controller.run(&mut WalletEventsNoOp).await,
+                Some(controller) => controller.run().await,
                 None => std::future::pending().await,
             }
         };

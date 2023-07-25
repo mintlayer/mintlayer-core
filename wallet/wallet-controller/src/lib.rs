@@ -82,7 +82,7 @@ pub enum ControllerError<T: NodeInterface> {
     WalletError(wallet::wallet::WalletError),
 }
 
-pub struct Controller<T> {
+pub struct Controller<T, W> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
@@ -90,24 +90,32 @@ pub struct Controller<T> {
     wallet: DefaultWallet,
 
     staking_started: BTreeSet<U31>,
+
+    wallet_events: W,
 }
 
-impl<T> std::fmt::Debug for Controller<T> {
+impl<T, WalletEvents> std::fmt::Debug for Controller<T, WalletEvents> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Controller").finish()
     }
 }
 
-pub type RpcController = Controller<NodeRpcClient>;
-pub type HandlesController = Controller<WalletHandlesClient>;
+pub type RpcController<WalletEvents> = Controller<NodeRpcClient, WalletEvents>;
+pub type HandlesController<WalletEvents> = Controller<WalletHandlesClient, WalletEvents>;
 
-impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
-    pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
+impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controller<T, W> {
+    pub fn new(
+        chain_config: Arc<ChainConfig>,
+        rpc_client: T,
+        wallet: DefaultWallet,
+        wallet_events: W,
+    ) -> Self {
         Self {
             chain_config,
             rpc_client,
             wallet,
             staking_started: BTreeSet::new(),
+            wallet_events,
         }
     }
 
@@ -244,7 +252,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     #[allow(clippy::too_many_arguments)]
     pub async fn issue_new_token(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         token_ticker: Vec<u8>,
@@ -262,7 +269,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let (token_id, tx) = self
             .wallet
             .issue_new_token(
-                wallet_events,
+                &mut self.wallet_events,
                 account_index,
                 address,
                 TokenIssuance {
@@ -284,7 +291,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub async fn issue_new_nft(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         metadata: Metadata,
@@ -299,7 +305,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let (token_id, tx) = self
             .wallet
             .issue_new_nft(
-                wallet_events,
+                &mut self.wallet_events,
                 account_index,
                 address,
                 metadata,
@@ -375,7 +381,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         account_index: U31,
         address: Address,
         amount: Amount,
-        wallet_events: &mut impl WalletEvents,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
@@ -389,7 +394,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
         self.wallet
             .create_transaction_to_addresses(
-                wallet_events,
+                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
@@ -400,7 +405,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub async fn send_tokens_to_address(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         token_id: TokenId,
         address: Address,
@@ -418,7 +422,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 .map_err(ControllerError::WalletError)?;
         self.wallet
             .create_transaction_to_addresses(
-                wallet_events,
+                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
@@ -432,7 +436,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-        wallet_events: &mut impl WalletEvents,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
@@ -444,7 +447,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
         self.wallet
             .create_stake_pool_tx(
-                wallet_events,
+                &mut self.wallet_events,
                 account_index,
                 amount,
                 decomission_key,
@@ -478,17 +481,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         &mut self,
         account_index: U31,
         count: u32,
-        wallet_events: &mut impl WalletEvents,
     ) -> Result<(), ControllerError<T>> {
         for _ in 0..count {
-            self.sync_once(wallet_events).await?;
+            self.sync_once().await?;
             let block = self.generate_block(account_index, None).await?;
             self.rpc_client
                 .submit_block(block)
                 .await
                 .map_err(ControllerError::NodeCallError)?;
         }
-        self.sync_once(wallet_events).await
+        self.sync_once().await
     }
 
     pub fn create_account(
@@ -572,25 +574,30 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     }
 
     /// Synchronize the wallet to the current node tip height and return
-    pub async fn sync_once(
-        &mut self,
-        wallet_events: &mut impl WalletEvents,
-    ) -> Result<(), ControllerError<T>> {
+    pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
         sync::sync_once(
             &self.chain_config,
             &self.rpc_client,
             &mut self.wallet,
-            wallet_events,
+            &mut self.wallet_events,
         )
         .await?;
         Ok(())
     }
 
+    pub fn wallet_events(&self) -> &W {
+        &self.wallet_events
+    }
+
+    pub fn wallet_events_mut(&mut self) -> &mut W {
+        &mut self.wallet_events
+    }
+
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self, wallet_events: &mut impl WalletEvents) {
+    pub async fn run(&mut self) {
         loop {
-            let sync_res = self.sync_once(wallet_events).await;
+            let sync_res = self.sync_once().await;
 
             if let Err(e) = sync_res {
                 log::error!("Wallet sync error: {e}");

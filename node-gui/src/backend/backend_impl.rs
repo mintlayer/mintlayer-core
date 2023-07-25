@@ -49,9 +49,10 @@ use super::{
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
 
+pub type GuiController = HandlesController<GuiWalletEvents>;
+
 struct WalletData {
-    controller: HandlesController,
-    wallet_events: GuiWalletEvents,
+    controller: GuiController,
     best_block: (Id<GenBlock>, BlockHeight),
     accounts: BTreeMap<AccountId, AccountData>,
 }
@@ -102,9 +103,8 @@ impl Backend {
     async fn open_wallet(&mut self, file_path: PathBuf) -> Result<WalletInfo, BackendError> {
         log::debug!("Try to open wallet file {file_path:?}...");
 
-        let wallet =
-            HandlesController::open_wallet(Arc::clone(&self.chain_config), file_path.clone())
-                .map_err(|e| BackendError::WalletError(e.to_string()))?;
+        let wallet = GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone())
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         self.add_wallet(file_path, wallet).await
     }
@@ -122,7 +122,7 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
-        let wallet = HandlesController::create_wallet(
+        let wallet = GuiController::create_wallet(
             Arc::clone(&self.chain_config),
             file_path.clone(),
             mnemonic,
@@ -133,14 +133,14 @@ impl Backend {
         self.add_wallet(file_path, wallet).await
     }
 
-    fn get_account_data(_controller: &HandlesController, _account_index: U31) -> AccountData {
+    fn get_account_data(_controller: &GuiController, _account_index: U31) -> AccountData {
         AccountData {
             transaction_list_skip: 0,
             update_pool_balance: true,
         }
     }
 
-    fn get_account_info(controller: &HandlesController, account_index: U31) -> AccountInfo {
+    fn get_account_info(controller: &GuiController, account_index: U31) -> AccountInfo {
         let name = controller
             .account_names()
             .nth(account_index.into_u32() as usize)
@@ -184,8 +184,14 @@ impl Backend {
 
         let account_indexes = wallet.account_indexes().cloned().collect::<Vec<_>>();
 
-        let controller =
-            HandlesController::new(Arc::clone(&self.chain_config), handles_client, wallet);
+        let wallet_events = GuiWalletEvents::new(Arc::clone(&self.wallet_notify));
+
+        let controller = HandlesController::new(
+            Arc::clone(&self.chain_config),
+            handles_client,
+            wallet,
+            wallet_events,
+        );
         let best_block = controller.best_block();
 
         let accounts_info = account_indexes
@@ -208,11 +214,8 @@ impl Backend {
             })
             .collect();
 
-        let wallet_events = GuiWalletEvents::new(Arc::clone(&self.wallet_notify));
-
         let wallet_data = WalletData {
             controller,
-            wallet_events,
             accounts: accounts_data,
             best_block,
         };
@@ -357,12 +360,7 @@ impl Backend {
 
         let transaction = wallet
             .controller
-            .send_to_address(
-                account_id.account_index(),
-                address,
-                amount,
-                &mut wallet.wallet_events,
-            )
+            .send_to_address(account_id.account_index(), address, amount)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
@@ -389,12 +387,7 @@ impl Backend {
 
         let transaction = wallet
             .controller
-            .create_stake_pool_tx(
-                account_id.account_index(),
-                amount,
-                None,
-                &mut wallet.wallet_events,
-            )
+            .create_stake_pool_tx(account_id.account_index(), amount, None)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
@@ -420,7 +413,7 @@ impl Backend {
     }
 
     fn get_account_balance(
-        controller: &HandlesController,
+        controller: &GuiController,
         account_index: U31,
     ) -> BTreeMap<Currency, Amount> {
         controller
@@ -532,9 +525,9 @@ impl Backend {
         for (wallet_id, wallet_data) in self
             .wallets
             .iter_mut()
-            .filter(|(_, wallet_data)| wallet_data.wallet_events.is_set())
+            .filter(|(_, wallet_data)| wallet_data.controller.wallet_events().is_set())
         {
-            wallet_data.wallet_events.reset();
+            wallet_data.controller.wallet_events_mut().reset();
 
             let best_block = wallet_data.controller.best_block();
             if wallet_data.best_block != best_block {
@@ -624,10 +617,7 @@ impl Backend {
             std::future::pending::<()>().await;
         }
 
-        let wallet_tasks = self
-            .wallets
-            .values_mut()
-            .map(|wallet| wallet.controller.run(&mut wallet.wallet_events));
+        let wallet_tasks = self.wallets.values_mut().map(|wallet| wallet.controller.run());
         futures::future::join_all(wallet_tasks).await;
     }
 }

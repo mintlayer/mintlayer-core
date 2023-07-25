@@ -29,11 +29,9 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
-use wallet_controller::{
-    NodeInterface, NodeRpcClient, PeerId, RpcController, DEFAULT_ACCOUNT_INDEX,
-};
+use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
 
-use crate::errors::WalletCliError;
+use crate::{errors::WalletCliError, CliController};
 
 use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
 
@@ -390,7 +388,7 @@ impl CommandHandler {
         &mut self,
         chain_config: &Arc<ChainConfig>,
         rpc_client: &NodeRpcClient,
-        controller_opt: &mut Option<RpcController>,
+        controller_opt: &mut Option<CliController>,
         command: WalletCommand,
     ) -> Result<ConsoleCommand, WalletCliError> {
         let selected_account = self.selected_account();
@@ -415,7 +413,7 @@ impl CommandHandler {
                     None => wallet_controller::mnemonic::generate_new_mnemonic(language),
                 };
 
-                let wallet = RpcController::create_wallet(
+                let wallet = CliController::create_wallet(
                     Arc::clone(chain_config),
                     wallet_path,
                     mnemonic.clone(),
@@ -424,10 +422,11 @@ impl CommandHandler {
                 .map_err(WalletCliError::Controller)?;
 
                 let account_names = wallet.account_names().cloned().collect();
-                *controller_opt = Some(RpcController::new(
+                *controller_opt = Some(CliController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
                     wallet,
+                    WalletEventsNoOp,
                 ));
 
                 let msg = if need_mnemonic_backup {
@@ -450,14 +449,15 @@ impl CommandHandler {
                     WalletCliError::WalletFileAlreadyOpen
                 );
 
-                let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
+                let wallet = CliController::open_wallet(Arc::clone(chain_config), wallet_path)
                     .map_err(WalletCliError::Controller)?;
 
                 let account_names = wallet.account_names().cloned().collect();
-                *controller_opt = Some(RpcController::new(
+                *controller_opt = Some(CliController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
                     wallet,
+                    WalletEventsNoOp,
                 ));
 
                 self.set_accounts(account_names);
@@ -594,7 +594,6 @@ impl CommandHandler {
                     .generate_blocks(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         count,
-                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -698,7 +697,6 @@ impl CommandHandler {
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .issue_new_token(
-                        &mut WalletEventsNoOp,
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         destination_address,
                         token_ticker.into_bytes(),
@@ -744,7 +742,6 @@ impl CommandHandler {
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .issue_new_nft(
-                        &mut WalletEventsNoOp,
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         destination_address,
                         metadata,
@@ -763,7 +760,7 @@ impl CommandHandler {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .sync_once(&mut WalletEventsNoOp)
+                    .sync_once()
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
@@ -851,7 +848,6 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         address,
                         amount,
-                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -869,7 +865,6 @@ impl CommandHandler {
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_tokens_to_address(
-                        &mut WalletEventsNoOp,
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         token_id,
                         address,
@@ -893,7 +888,6 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
                         decomission_key,
-                        &mut WalletEventsNoOp,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
