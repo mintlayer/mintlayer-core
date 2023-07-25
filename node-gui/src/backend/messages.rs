@@ -137,7 +137,10 @@ pub enum BackendRequest {
 
     NewAccount {
         wallet_id: WalletId,
-        name: Option<String>,
+
+        /// New account name (will be trimmed first and if empty, no name will be used
+        /// because the wallet controller does not allow empty names)
+        name: String,
     },
 
     NewAddress(WalletId, AccountId),

@@ -145,18 +145,12 @@ impl WalletTab {
             WalletMessage::SetPassword
             | WalletMessage::RemovePassword
             | WalletMessage::Lock
-            | WalletMessage::Unlock => {
+            | WalletMessage::Unlock
+            | WalletMessage::NewAccount => {
                 // Processed by the main_window
                 Command::none()
             }
 
-            WalletMessage::NewAccount => {
-                backend_sender.send(crate::backend::messages::BackendRequest::NewAccount {
-                    wallet_id: self.wallet_id,
-                    name: None,
-                });
-                Command::none()
-            }
             WalletMessage::SelectAccount(account_id) => {
                 if account_id != self.selected_account {
                     self.selected_account = account_id;

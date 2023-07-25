@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2023 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod new_wallet_account;
 pub mod popup_dialog;
 pub mod wallet_mnemonic;
 pub mod wallet_set_password;

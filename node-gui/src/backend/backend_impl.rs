@@ -259,12 +259,15 @@ impl Backend {
     fn new_account(
         &mut self,
         wallet_id: WalletId,
-        name: Option<String>,
+        name: String,
     ) -> Result<(WalletId, AccountId, AccountInfo), BackendError> {
         let wallet = self
             .wallets
             .get_mut(&wallet_id)
             .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
+
+        let name = name.trim().to_owned();
+        let name = (!name.is_empty()).then_some(name);
 
         let (account_index, _name) = wallet
             .controller
@@ -653,7 +656,7 @@ pub async fn run(
             _ = backend.wallet_sync() => {},
         }
 
-        // Update UI on every loop iteration (can be after a UI request or after `wallet_notify` is triggered
+        // Update UI on every loop iteration (can be after a UI request or after `wallet_notify` is triggered)
         backend.update_wallets().await;
     }
 }

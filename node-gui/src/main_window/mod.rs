@@ -33,6 +33,7 @@ use crate::{
     },
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
+        new_wallet_account::new_wallet_account,
         popup_dialog::{popup_dialog, Popup},
         wallet_mnemonic::wallet_mnemonic_dialog,
         wallet_set_password::wallet_set_password_dialog,
@@ -56,6 +57,9 @@ enum ActiveDialog {
         wallet_id: WalletId,
     },
     WalletUnlock {
+        wallet_id: WalletId,
+    },
+    NewAccount {
         wallet_id: WalletId,
     },
 }
@@ -152,6 +156,11 @@ pub enum MainWindowMessage {
     WalletUnlock {
         wallet_id: WalletId,
         password: String,
+    },
+
+    NewWalletAccount {
+        wallet_id: WalletId,
+        name: String,
     },
 
     ClosePopup,
@@ -274,6 +283,13 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
+                TabsMessage::WalletMessage(wallet_id, WalletMessage::NewAccount),
+            )) => {
+                self.active_dialog = ActiveDialog::NewAccount { wallet_id };
+                Command::none()
+            }
+
             MainWindowMessage::MainWidgetMessage(main_widget_message) => self
                 .main_widget
                 .update(main_widget_message, backend_sender)
@@ -346,6 +362,7 @@ impl MainWindow {
                 }
 
                 BackendEvent::NewAccount(Ok((wallet_id, account_id, account_info))) => {
+                    self.active_dialog = ActiveDialog::None;
                     self.node_state
                         .wallets
                         .get_mut(&wallet_id)
@@ -538,6 +555,11 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::NewWalletAccount { wallet_id, name } => {
+                backend_sender.send(BackendRequest::NewAccount { wallet_id, name });
+                Command::none()
+            }
+
             MainWindowMessage::ClosePopup => {
                 self.popups.pop();
                 Command::none()
@@ -598,6 +620,15 @@ impl MainWindow {
                         wallet_id,
                         password,
                     }),
+                    Box::new(|| MainWindowMessage::CloseDialog),
+                )
+                .into()
+            }
+
+            ActiveDialog::NewAccount { wallet_id } => {
+                let wallet_id = *wallet_id;
+                new_wallet_account(
+                    Box::new(move |name| MainWindowMessage::NewWalletAccount { wallet_id, name }),
                     Box::new(|| MainWindowMessage::CloseDialog),
                 )
                 .into()

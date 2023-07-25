@@ -598,6 +598,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 continue;
             }
 
+            // TODO: Try to remove the `clone` call
             for account_index in self.staking_started.clone().iter() {
                 let generate_res = self.generate_block(*account_index, None).await;
 
