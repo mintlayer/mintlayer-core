@@ -22,7 +22,7 @@ use wallet::account::Currency;
 
 use crate::{
     backend::messages::{AccountInfo, EncryptionState, WalletInfo},
-    main_window::print_coin_amount_with_name,
+    main_window::print_coin_amount_with_ticker,
 };
 
 use super::WalletMessage;
@@ -33,7 +33,7 @@ pub fn view_top_panel(
     account: &AccountInfo,
 ) -> Element<'static, WalletMessage> {
     let balance = account.balance.get(&Currency::Coin).cloned().unwrap_or(Amount::ZERO);
-    let balance = print_coin_amount_with_name(chain_config, balance);
+    let balance = print_coin_amount_with_ticker(chain_config, balance);
     let balance = Text::new(balance).size(20);
 
     let password =

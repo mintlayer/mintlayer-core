@@ -37,6 +37,8 @@ use crate::backend::p2p_event_handler::P2pEventHandler;
 use self::error::BackendError;
 use self::messages::{BackendEvent, BackendRequest};
 
+const UI_CHANNEL_BUF: usize = 10;
+
 #[derive(Debug)]
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
@@ -90,7 +92,8 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     let manager_join_handle = tokio::spawn(async move { node.main().await });
 
     let (request_tx, request_rx) = unbounded_channel();
-    let (event_tx, event_rx) = channel(10);
+    let (event_tx, event_rx) = channel(UI_CHANNEL_BUF);
+    let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
     // Subscribe to chainstate before getting the current chain_info!
     let chainstate_event_handler =
@@ -113,13 +116,19 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
         backend_receiver: event_rx,
     };
 
-    let backend =
-        backend_impl::Backend::new(chain_config, event_tx, controller, manager_join_handle);
+    let backend = backend_impl::Backend::new(
+        chain_config,
+        event_tx,
+        wallet_updated_tx,
+        controller,
+        manager_join_handle,
+    );
 
     tokio::spawn(async move {
         backend_impl::run(
             backend,
             request_rx,
+            wallet_updated_rx,
             chainstate_event_handler,
             p2p_event_handler,
         )

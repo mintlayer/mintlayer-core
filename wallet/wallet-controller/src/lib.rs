@@ -585,14 +585,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(())
     }
 
-    pub fn wallet_events(&self) -> &W {
-        &self.wallet_events
-    }
-
-    pub fn wallet_events_mut(&mut self) -> &mut W {
-        &mut self.wallet_events
-    }
-
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) {

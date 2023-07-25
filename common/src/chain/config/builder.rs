@@ -151,7 +151,7 @@ impl Builder {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
             coin_decimals: Mlt::DECIMALS,
-            coin_ticker: Mlt::NAME,
+            coin_ticker: Mlt::TICKER,
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
             version: SemVer::try_from(env!("CARGO_PKG_VERSION"))

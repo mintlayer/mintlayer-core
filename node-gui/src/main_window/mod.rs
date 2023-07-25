@@ -82,7 +82,7 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
-fn print_coin_amount_with_name(chain_config: &ChainConfig, value: Amount) -> String {
+fn print_coin_amount_with_ticker(chain_config: &ChainConfig, value: Amount) -> String {
     format!(
         "{} {}",
         print_coin_amount(chain_config, value),

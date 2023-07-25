@@ -23,10 +23,7 @@ use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_lib::node_controller::NodeController;
 use tokio::{
-    sync::{
-        mpsc::{Sender, UnboundedReceiver},
-        Notify,
-    },
+    sync::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
 use wallet::{
@@ -55,6 +52,7 @@ struct WalletData {
     controller: GuiController,
     best_block: (Id<GenBlock>, BlockHeight),
     accounts: BTreeMap<AccountId, AccountData>,
+    updated: bool,
 }
 
 struct AccountData {
@@ -74,30 +72,30 @@ pub struct Backend {
     /// With an unbounded sender, high latency was experienced when wallet scan was enabled.
     event_tx: Sender<BackendEvent>,
 
+    wallet_updated_tx: UnboundedSender<WalletId>,
+
     controller: NodeController,
 
     manager_join_handle: JoinHandle<()>,
 
     wallets: BTreeMap<WalletId, WalletData>,
-
-    /// Waker that is triggered when the wallet DB is updated
-    wallet_notify: Arc<Notify>,
 }
 
 impl Backend {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         event_tx: Sender<BackendEvent>,
+        wallet_updated_tx: UnboundedSender<WalletId>,
         controller: NodeController,
         manager_join_handle: JoinHandle<()>,
     ) -> Self {
         Self {
             chain_config,
             event_tx,
+            wallet_updated_tx,
             controller,
             manager_join_handle,
             wallets: BTreeMap::new(),
-            wallet_notify: Arc::new(Notify::new()),
         }
     }
     async fn open_wallet(&mut self, file_path: PathBuf) -> Result<WalletInfo, BackendError> {
@@ -184,7 +182,7 @@ impl Backend {
 
         let account_indexes = wallet.account_indexes().cloned().collect::<Vec<_>>();
 
-        let wallet_events = GuiWalletEvents::new(Arc::clone(&self.wallet_notify));
+        let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
         let controller = HandlesController::new(
             Arc::clone(&self.chain_config),
@@ -218,6 +216,7 @@ impl Backend {
             controller,
             accounts: accounts_data,
             best_block,
+            updated: false,
         };
 
         let wallet_info = WalletInfo {
@@ -522,12 +521,10 @@ impl Backend {
     }
 
     async fn update_wallets(&mut self) {
-        for (wallet_id, wallet_data) in self
-            .wallets
-            .iter_mut()
-            .filter(|(_, wallet_data)| wallet_data.controller.wallet_events().is_set())
+        for (wallet_id, wallet_data) in
+            self.wallets.iter_mut().filter(|(_, wallet_data)| wallet_data.updated)
         {
-            wallet_data.controller.wallet_events_mut().reset();
+            wallet_data.updated = false;
 
             let best_block = wallet_data.controller.best_block();
             if wallet_data.best_block != best_block {
@@ -620,16 +617,21 @@ impl Backend {
         let wallet_tasks = self.wallets.values_mut().map(|wallet| wallet.controller.run());
         futures::future::join_all(wallet_tasks).await;
     }
+
+    fn wallet_updated(&mut self, wallet_id: WalletId) {
+        if let Some(wallet) = self.wallets.get_mut(&wallet_id) {
+            wallet.updated = true;
+        }
+    }
 }
 
 pub async fn run(
     mut backend: Backend,
     mut request_rx: UnboundedReceiver<BackendRequest>,
+    mut wallet_updated_rx: UnboundedReceiver<WalletId>,
     mut chainstate_event_handler: ChainstateEventHandler,
     mut p2p_event_handler: P2pEventHandler,
 ) {
-    let wallet_notify = Arc::clone(&backend.wallet_notify);
-
     loop {
         tokio::select! {
             // Make event loop more efficient
@@ -647,7 +649,10 @@ pub async fn run(
 
             // Start this before starting the remaining background tasks
             // to reduce the chance of tasks being canceled (for efficiency)
-            _ = wallet_notify.notified() => {}
+            wallet_id = wallet_updated_rx.recv() => {
+                let wallet_id = wallet_id.expect("wallet_updated_rx must be always open");
+                backend.wallet_updated(wallet_id);
+            }
 
             () = chainstate_event_handler.run() => {
                 log::debug!("Chainstate channel closed, looks like the node has stopped");
@@ -661,6 +666,11 @@ pub async fn run(
 
             // Start wallet sync as last
             _ = backend.wallet_sync() => {},
+        }
+
+        // Process all pending messages so that `update_wallets` is not needlessly called multiple times
+        while let Ok(wallet_id) = wallet_updated_rx.try_recv() {
+            backend.wallet_updated(wallet_id);
         }
 
         // Update UI on every loop iteration (can be after a UI request or after `wallet_notify` is triggered)

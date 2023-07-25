@@ -20,19 +20,19 @@ use wallet_types::{AccountWalletTxId, WalletTx};
 /// the wallet balance and address/transaction lists should be updated after this callbacks.
 pub trait WalletEvents {
     /// New block is scanned
-    fn new_block(&mut self);
+    fn new_block(&self);
 
     /// The transaction is updated in the DB
-    fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx);
+    fn set_transaction(&self, id: &AccountWalletTxId, tx: &WalletTx);
 
     /// The transaction is removed from the DB
-    fn del_transaction(&mut self, id: &AccountWalletTxId);
+    fn del_transaction(&self, id: &AccountWalletTxId);
 }
 
 pub struct WalletEventsNoOp;
 
 impl WalletEvents for WalletEventsNoOp {
-    fn new_block(&mut self) {}
-    fn set_transaction(&mut self, _id: &AccountWalletTxId, _tx: &WalletTx) {}
-    fn del_transaction(&mut self, _id: &AccountWalletTxId) {}
+    fn new_block(&self) {}
+    fn set_transaction(&self, _id: &AccountWalletTxId, _tx: &WalletTx) {}
+    fn del_transaction(&self, _id: &AccountWalletTxId) {}
 }

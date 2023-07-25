@@ -13,51 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use tokio::sync::Notify;
+use tokio::sync::mpsc::UnboundedSender;
 use wallet::wallet_events::WalletEvents;
 use wallet_types::{AccountWalletTxId, WalletTx};
 
+use super::messages::WalletId;
+
 pub struct GuiWalletEvents {
-    wallet_notify: Arc<Notify>,
-    updated: bool,
+    wallet_id: WalletId,
+    wallet_updated_tx: UnboundedSender<WalletId>,
 }
 
 impl GuiWalletEvents {
-    pub fn new(wallet_notify: Arc<Notify>) -> Self {
+    pub fn new(wallet_id: WalletId, wallet_updated_tx: UnboundedSender<WalletId>) -> Self {
         GuiWalletEvents {
-            wallet_notify,
-            updated: false,
+            wallet_id,
+            wallet_updated_tx,
         }
     }
 
-    fn notify(&mut self) {
-        self.updated = true;
-        self.wallet_notify.notify_one();
-    }
-
-    /// Returns `true` if the wallet DB has been updated
-    pub fn is_set(&self) -> bool {
-        self.updated
-    }
-
-    /// Marks wallet as clean
-    pub fn reset(&mut self) {
-        self.updated = false;
+    fn notify(&self) {
+        let _ = self.wallet_updated_tx.send(self.wallet_id);
     }
 }
 
 impl WalletEvents for GuiWalletEvents {
-    fn new_block(&mut self) {
+    fn new_block(&self) {
         self.notify();
     }
 
-    fn set_transaction(&mut self, _id: &AccountWalletTxId, _tx: &WalletTx) {
+    fn set_transaction(&self, _id: &AccountWalletTxId, _tx: &WalletTx) {
         self.notify();
     }
 
-    fn del_transaction(&mut self, _id: &AccountWalletTxId) {
+    fn del_transaction(&self, _id: &AccountWalletTxId) {
         self.notify();
     }
 }
