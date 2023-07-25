@@ -82,7 +82,7 @@ fn print_coin_amount_with_name(chain_config: &ChainConfig, value: Amount) -> Str
     format!(
         "{} {}",
         print_coin_amount(chain_config, value),
-        chain_config.coin_name()
+        chain_config.coin_ticker()
     )
 }
 

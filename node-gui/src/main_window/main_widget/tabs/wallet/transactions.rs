@@ -38,7 +38,7 @@ pub fn view_transactions(
     let mut transaction_list = Grid::with_columns(6)
         .push("Num")
         .push("Txid")
-        .push("Timestamp")
+        .push("Timestamp (UTC)")
         .push("Type")
         .push("Amount")
         .push("State");

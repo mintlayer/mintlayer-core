@@ -61,7 +61,7 @@ impl Tab for SummaryTab {
             .push(Text::new(
                 node_state.chain_info.best_block_height.to_string(),
             ))
-            .push(Text::new("Best block timestamp "))
+            .push(Text::new("Best block timestamp (UTC) "))
             .push(Text::new(print_block_timestamp(
                 node_state.chain_info.best_block_timestamp,
             )));
