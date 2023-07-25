@@ -31,7 +31,7 @@ impl Mlt {
     /// Maximum representable amount of MLTs
     pub const MAX: Self = Self(Amount::MAX);
     /// The coin name
-    pub const NAME: &'static str = "Mlt";
+    pub const NAME: &'static str = "ML";
 
     /// Construct from the number atomic units
     pub const fn from_atoms(n: u128) -> Self {
