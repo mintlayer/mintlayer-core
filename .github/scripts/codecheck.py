@@ -27,6 +27,7 @@ LICENSE_TEMPLATE = [
     r'|//'
 ]
 
+
 # List Rust source files
 def rs_sources(exclude = []):
     exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
@@ -38,6 +39,7 @@ def rs_sources(exclude = []):
             if os.path.splitext(file)[1].lower() == '.rs':
                 yield os.path.join(top, file)
 
+
 # Cargo.toml files
 def cargo_toml_files(exclude = []):
     exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
@@ -48,6 +50,7 @@ def cargo_toml_files(exclude = []):
         for file in files:
             if file == 'Cargo.toml':
                 yield os.path.join(top, file)
+
 
 # Disallow certain pattern in source files, with exceptions
 def disallow(pat, exclude = []):
@@ -66,6 +69,7 @@ def disallow(pat, exclude = []):
     print()
     return not found_re
 
+
 # Check we depend on only one version of given crate
 def check_crate_version_unique(crate_name):
     packages = toml.load('Cargo.lock')['package']
@@ -77,6 +81,7 @@ def check_crate_version_unique(crate_name):
         print("Multiple versions of '{}': {}".format(crate_name, ', '.join(versions)))
 
     return len(versions) == 1
+
 
 # Ensure that the versions in the workspace's Cargo.toml are consistent
 def check_workspace_and_package_versions_equal():
@@ -94,22 +99,42 @@ def check_workspace_and_package_versions_equal():
 
     return result
 
-def internal_check_dependency_versions(root_node, dependencies_name: str, file_path) -> bool:
-    '''
-    Both dependencies and dev-dependencies have the same structure, so we check the versions the same way for both
-    root_node is the root node of the Cargo.toml file
-    file_path is the path of the Cargo.toml file, for logging
-    '''
 
+# Retrieve an item from arbitrarily nested dicts given a list of keys.
+# E.g. get_from_nested_dicts({'a': {'b': 1, 'c': 2}}, ['a', 'b']) will
+# return 1.
+def get_from_nested_dicts(nested_dicts, keys_list) -> bool:
+    cur_dict = nested_dicts
+    while keys_list:
+        key = keys_list.pop(0)
+        if key in cur_dict:
+            cur_dict = cur_dict[key]
+        else:
+            return None
+
+    return cur_dict
+
+
+# Since 'dependencies', 'dev-dependencies' and 'workspace.dependencies'
+# have the same structure, we check the versions the same way for all
+# of them.
+# Here 'root_node' is the root node of the Cargo.toml file,
+# 'dependencies_name' is the name of the 'dependencies' node (may contain
+# dots) and 'file_path' is the path of the Cargo.toml file, for logging.
+def internal_check_dependency_versions(root_node, dependencies_name: str, file_path) -> bool:
     res = True
 
     # list of crates, whose version can have patch version
     exempted_crates = [
-       # 'ctor'    # left here as an example, remove if you ever add one crated that is exempt
+        # left here as an example, remove if you ever add one crate that is exempt
+        # 'ctor'
     ]
 
-    if dependencies_name in root_node:
-        deps = root_node[dependencies_name]
+    # Names with dots actually represent paths inside the tree of nodes.
+    dependencies_path = dependencies_name.split('.')
+
+    deps = get_from_nested_dicts(root_node, dependencies_path)
+    if deps is not None:
         for dep in deps:
             # skip exempted crates
             if dep in exempted_crates:
@@ -118,16 +143,16 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
             # versions that looks like `tokio = { version = "1.2.3" }`
             if 'version' in deps[dep]:
                 version = deps[dep]['version']
-                if len(version.split('.')) > 2:
-                    print("In {}, {} Version '{}' in '{}' has patch version".format(dependencies_name, dep, version, file_path))
-                    res = False
-
             # versions that looks like late `tokio = "1.2.3"`
             elif type(deps[dep]) == str:
                 version = deps[dep]
-                if len(version.split('.')) > 2:
-                    print("In {}, {} Version '{}' in '{}' has patch version".format(dependencies_name, dep, version, file_path))
-                    res = False
+            else:
+                version = None
+
+            if version is not None and len(version.split('.')) > 2:
+                print((f"In {dependencies_name} of '{file_path}' "
+                       f"{dep} has patch version: {version}"))
+                res = False
 
     return res
 
@@ -136,9 +161,8 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
 def check_dependency_versions_patch_version():
     print("==== Ensuring that all versions in Cargo.toml don't have patch version")
 
-    # list of files exempt from license check
+    # list of files exempt from patch version check
     exempted_files = [
-        "./Cargo.toml"
     ]
 
     result = True
@@ -158,6 +182,10 @@ def check_dependency_versions_patch_version():
         intermediary_result = internal_check_dependency_versions(root, 'dev-dependencies', path)
         result = result and intermediary_result
 
+        # check workspace.dependencies
+        intermediary_result = internal_check_dependency_versions(root, 'workspace.dependencies', path)
+        result = result and intermediary_result
+
     print()
 
     return result
@@ -168,12 +196,13 @@ def check_crate_versions():
     print("==== Checking crate versions:")
 
     ok = all([
-            check_crate_version_unique('parity-scale-codec'),
-            check_crate_version_unique('parity-scale-codec-derive'),
-        ])
+        check_crate_version_unique('parity-scale-codec'),
+        check_crate_version_unique('parity-scale-codec-derive'),
+    ])
 
     print()
     return ok
+
 
 # Check license header in current project crates
 def check_local_licenses():
@@ -186,7 +215,7 @@ def check_local_licenses():
         "./common/src/uint/endian.rs",
         "./common/src/uint/impls.rs",
         "./common/src/uint/mod.rs"
-        ]
+    ]
 
     template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
@@ -203,13 +232,14 @@ def check_local_licenses():
     print()
     return ok
 
+
 # check TODO(PR) and FIXME instances
 def check_todos():
     print("==== Checking TODO(PR) and FIXME instances:")
 
     # list of files exempted from checks
     exempted_files = [
-        ]
+    ]
 
     ok = True
     for path in rs_sources():
@@ -225,16 +255,18 @@ def check_todos():
     print()
     return ok
 
+
 def run_checks():
     return all([
-            disallow(SCALECODEC_RE, exclude = ['serialization/core', 'merkletree']),
-            disallow(JSONRPSEE_RE, exclude = ['rpc', 'wallet/wallet-node-client']),
-            check_local_licenses(),
-            check_crate_versions(),
-            check_workspace_and_package_versions_equal(),
-            check_dependency_versions_patch_version(),
-            check_todos()
-        ])
+        disallow(SCALECODEC_RE, exclude = ['serialization/core', 'merkletree']),
+        disallow(JSONRPSEE_RE, exclude = ['rpc', 'wallet/wallet-node-client']),
+        check_local_licenses(),
+        check_crate_versions(),
+        check_workspace_and_package_versions_equal(),
+        check_dependency_versions_patch_version(),
+        check_todos()
+    ])
+
 
 if __name__ == '__main__':
     if not run_checks():
