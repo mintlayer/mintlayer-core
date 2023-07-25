@@ -135,7 +135,34 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::new_wallet(
+        let wallet = wallet::Wallet::create_new_wallet(
+            Arc::clone(&chain_config),
+            db,
+            &mnemonic.to_string(),
+            passphrase,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        Ok(wallet)
+    }
+
+    pub fn recover_wallet(
+        chain_config: Arc<ChainConfig>,
+        file_path: impl AsRef<Path>,
+        mnemonic: mnemonic::Mnemonic,
+        passphrase: Option<&str>,
+    ) -> Result<DefaultWallet, ControllerError<T>> {
+        utils::ensure!(
+            !file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File already exists".to_owned()
+            )
+        );
+
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::recover_wallet(
             Arc::clone(&chain_config),
             db,
             &mnemonic.to_string(),

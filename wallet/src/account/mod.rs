@@ -738,7 +738,7 @@ impl Account {
         wallet_events: &mut impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
-    ) -> WalletResult<()> {
+    ) -> WalletResult<bool> {
         assert!(!blocks.is_empty());
         assert!(
             common_block_height <= self.account_info.best_block_height(),
@@ -751,19 +751,23 @@ impl Account {
             self.reset_to_height(db_tx, wallet_events, common_block_height)?;
         }
 
+        let mut new_tx_was_added = false;
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let tx_state = TxState::Confirmed(block_height, block.timestamp());
 
             let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
-            self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+            new_tx_was_added = self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?
+                || new_tx_was_added;
 
             for signed_tx in block.transactions() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
                     tx_state,
                 ));
-                self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+                new_tx_was_added =
+                    self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?
+                        || new_tx_was_added;
             }
         }
 
@@ -774,12 +778,12 @@ impl Account {
         self.account_info.update_best_block(best_block_height, best_block_id);
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
-        Ok(())
+        Ok(new_tx_was_added)
     }
 
-    pub fn sync_best_block<B: storage::Backend>(
+    pub fn sync_best_block(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         best_block_height: BlockHeight,
         best_block_id: Id<GenBlock>,
     ) -> WalletResult<()> {
