@@ -24,7 +24,7 @@ use common::{
         Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, TxInput, TxOutput,
         UpgradeVersion, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable},
     Uint256,
 };
 use crypto::{
@@ -153,7 +153,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
             ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::TimelockRequirementNotSatisfied(BlockDistance::new(100))
+                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
             )
         ))
     );
@@ -309,7 +309,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
             ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::TimelockRequirementNotSatisfied(BlockDistance::new(100))
+                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
             )
         ))
     );

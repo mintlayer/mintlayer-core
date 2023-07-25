@@ -23,7 +23,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
 use crypto::{
-    random::{Rng, SliceRandom},
+    random::{CryptoRng, Rng, SliceRandom},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
@@ -71,8 +71,8 @@ fn random_input_utxos(
         .collect()
 }
 
-fn create_stake_pool_data(atoms_to_stake: u128) -> StakePoolData {
-    let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128) -> StakePoolData {
+    let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     StakePoolData::new(
         Amount::from_atoms(atoms_to_stake),
         Destination::AnyoneCanSpend,
@@ -102,7 +102,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
     let pool_id = PoolId::new(H256::zero());
     let staked_atoms = rng.gen_range(0..1000);
-    let stake_pool_data = create_stake_pool_data(staked_atoms);
+    let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
@@ -164,7 +164,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             outputs
         };
 
-        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos.clone(), outputs);
+        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
         let err = check_tx_inputs_outputs_policy(
             &tx,
@@ -176,7 +176,9 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             err,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::MoneyPrinting)
+            ConnectTransactionError::IOPolicyError(
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+            )
         );
     }
 
@@ -296,7 +298,9 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             res,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::MoneyPrinting)
+            ConnectTransactionError::IOPolicyError(
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+            )
         )
     }
 

@@ -31,7 +31,7 @@ use super::IOPolicyError;
 /// to check that an accumulated output value is locked for sufficient amount of time which allows
 /// using other valid inputs and outputs in the same tx.
 ///
-/// TODO: potentially this struct can be extended to collect tokens replacing `AmountsMap`
+/// TODO: this struct can be extended to collect tokens replacing `AmountsMap`
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: Amount,
     timelock_constrained: BTreeMap<BlockDistance, Amount>,
@@ -46,13 +46,12 @@ impl ConstrainedValueAccumulator {
     }
 
     /// Return accumulated amounts that are left
-    // TODO: for now only used in tests, but should be used to calculate fees
+    // TODO: for now only used in tests but can be used to calculate fees
     #[allow(dead_code)]
     pub fn consume(self) -> Result<Amount, IOPolicyError> {
         self.timelock_constrained
             .values()
             .copied()
-            .into_iter()
             .sum::<Option<Amount>>()
             .and_then(|v| v + self.unconstrained_value)
             .ok_or(IOPolicyError::AmountOverflow)
@@ -132,20 +131,20 @@ impl ConstrainedValueAccumulator {
         match output {
             TxOutput::Transfer(value, _) | TxOutput::Burn(value) => {
                 if let Some(coins) = value.coin_amount() {
-                    self.unconstrained_value =
-                        (self.unconstrained_value - coins).ok_or(IOPolicyError::MoneyPrinting)?;
+                    self.unconstrained_value = (self.unconstrained_value - coins)
+                        .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
                 }
             }
             TxOutput::DelegateStaking(coins, _) => {
-                self.unconstrained_value =
-                    (self.unconstrained_value - *coins).ok_or(IOPolicyError::MoneyPrinting)?;
+                self.unconstrained_value = (self.unconstrained_value - *coins)
+                    .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
             }
             TxOutput::CreateStakePool(_, data) => {
                 self.unconstrained_value = (self.unconstrained_value - data.value())
-                    .ok_or(IOPolicyError::MoneyPrinting)?;
+                    .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
             }
             TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => {
-                /* do nothing */
+                /* do nothing as these outputs cannot produce values */
             }
             TxOutput::LockThenTransfer(value, _, timelock) => match timelock {
                 OutputTimeLock::UntilHeight(_)
@@ -158,7 +157,7 @@ impl ConstrainedValueAccumulator {
                             .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
                         let distance = BlockDistance::from(block_count);
 
-                        // find max value that can be saturated with the current timelock
+                        // find the range that can be saturated with the current timelock
                         let range = self.timelock_constrained.range_mut((
                             std::ops::Bound::Unbounded,
                             std::ops::Bound::Included(distance),
@@ -166,12 +165,12 @@ impl ConstrainedValueAccumulator {
 
                         let mut range_iter = range.rev().peekable();
 
-                        // subtract output coins from constrained values, starting from max until
-                        // all coins are used
+                        // subtract output coins from constrained values starting from max until all coins are used
                         while coins > Amount::ZERO {
                             match range_iter.peek_mut() {
                                 Some((_, locked_coins)) => {
                                     if coins > **locked_coins {
+                                        // use up current constraint and move on to the next one
                                         coins = (coins - **locked_coins).expect("cannot fail");
                                         **locked_coins = Amount::ZERO;
                                         range_iter.next();
@@ -182,9 +181,10 @@ impl ConstrainedValueAccumulator {
                                     }
                                 }
                                 None => {
+                                    // if lock cannot satisfy any constraints then use it as unconstrained
                                     self.unconstrained_value =
                                         (self.unconstrained_value - coins)
-                                            .ok_or(IOPolicyError::MoneyPrinting)?;
+                                            .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
                                     coins = Amount::ZERO;
                                 }
                             };
@@ -200,9 +200,6 @@ impl ConstrainedValueAccumulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use std::collections::BTreeMap;
-
     use common::{
         chain::{
             config::ChainType, stakelock::StakePoolData, timelock::OutputTimeLock,
@@ -214,14 +211,18 @@ mod tests {
         Uint256,
     };
     use crypto::{
-        random::Rng,
+        random::{CryptoRng, Rng},
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use rstest::rstest;
+    use std::collections::BTreeMap;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    fn create_stake_pool_data(atoms_to_stake: u128) -> StakePoolData {
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+    fn create_stake_pool_data(
+        rng: &mut (impl Rng + CryptoRng),
+        atoms_to_stake: u128,
+    ) -> StakePoolData {
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         StakePoolData::new(
             Amount::from_atoms(atoms_to_stake),
             Destination::AnyoneCanSpend,
@@ -247,7 +248,7 @@ mod tests {
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
         let fee_atoms = rng.gen_range(1..100);
-        let stake_pool_data = create_stake_pool_data(staked_atoms);
+        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
         let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
@@ -297,7 +298,7 @@ mod tests {
             chain_config.spend_share_maturity_distance(BlockHeight::new(1));
 
         let delegation_id = DelegationId::new(H256::zero());
-        let delegated_atoms = rng.gen_range(1..1000);
+        let delegated_atoms = rng.gen_range(100..1000);
         let fee_atoms = rng.gen_range(1..100);
 
         let input_account = AccountOutPoint::new(
@@ -341,7 +342,7 @@ mod tests {
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
-        let stake_pool_data = create_stake_pool_data(staked_atoms);
+        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
         let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
@@ -390,7 +391,9 @@ mod tests {
         let result = constraints_accumulator.process_output(&outputs[2]).unwrap_err();
         assert_eq!(
             result,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::MoneyPrinting)
+            ConnectTransactionError::IOPolicyError(
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+            )
         );
     }
 
@@ -424,7 +427,7 @@ mod tests {
 
         let pool_id = PoolId::new(H256::zero());
         let staked_atoms = rng.gen_range(100..1000);
-        let stake_pool_data = create_stake_pool_data(staked_atoms);
+        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
         let delegation_id = DelegationId::new(H256::zero());
         let delegated_atoms = rng.gen_range(1..1000);

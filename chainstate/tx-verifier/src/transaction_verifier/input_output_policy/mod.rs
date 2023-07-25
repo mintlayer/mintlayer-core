@@ -15,7 +15,7 @@
 
 use common::{
     chain::{block::BlockRewardTransactable, ChainConfig, Transaction, TxInput},
-    primitives::{BlockDistance, BlockHeight},
+    primitives::BlockHeight,
 };
 use pos_accounting::PoSAccountingView;
 
@@ -40,12 +40,10 @@ pub enum IOPolicyError {
     MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
-    #[error("Timelock requirement was not satisfied for `{0}`")]
-    TimelockRequirementNotSatisfied(BlockDistance),
     #[error("Amount overflow")]
     AmountOverflow,
-    #[error("Money printing")]
-    MoneyPrinting, // FIXME: better name
+    #[error("Attempt to print money or violate timelock constraints")]
+    AttemptToPrintMoneyOrViolateTimelockConstraints,
 }
 
 pub fn check_reward_inputs_outputs_policy(

@@ -493,9 +493,8 @@ impl BanScore for IOPolicyError {
             IOPolicyError::MultiplePoolCreated => 100,
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::ProduceBlockInTx => 100,
-            IOPolicyError::TimelockRequirementNotSatisfied(_) => 100,
             IOPolicyError::AmountOverflow => 100,
-            IOPolicyError::MoneyPrinting => todo!(),
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
         }
     }
 }

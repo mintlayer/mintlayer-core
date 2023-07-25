@@ -377,12 +377,14 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                ))
             ))
-        ));
+        );
     })
 }
 
