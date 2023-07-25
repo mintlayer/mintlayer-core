@@ -366,7 +366,8 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::TimelockRequirementNotSatisfied(_) => 100,
-            IOPolicyError::ConstrainedAmountOverflow => 100,
+            IOPolicyError::AmountOverflow => 100,
+            IOPolicyError::MoneyPrinting => todo!(),
         }
     }
 }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use common::{
     chain::{
@@ -46,6 +46,31 @@ fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     result
 }
 
+fn random_input_utxos(
+    rng: &mut impl Rng,
+    total_input_atoms: u128,
+    timelock_range: Range<u64>,
+) -> Vec<TxOutput> {
+    decompose_value(rng, total_input_atoms)
+        .into_iter()
+        .map(|v| {
+            if rng.gen::<bool>() {
+                TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(v)),
+                    Destination::AnyoneCanSpend,
+                )
+            } else {
+                let lock = rng.gen_range(timelock_range.clone());
+                TxOutput::LockThenTransfer(
+                    OutputValue::Coin(Amount::from_atoms(v)),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(lock),
+                )
+            }
+        })
+        .collect()
+}
+
 fn create_stake_pool_data(atoms_to_stake: u128) -> StakePoolData {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
     StakePoolData::new(
@@ -69,7 +94,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         .net_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
-        chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
+        chain_config.decommission_pool_maturity_distance(BlockHeight::new(1)).into_int() as u64;
 
     let mut rng = make_seedable_rng(seed);
     let number_of_inputs = rng.gen_range(0..10);
@@ -94,12 +119,22 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         produce_block()
     };
 
-    let input_utxos = get_random_outputs_combination(&mut rng, &source_inputs, number_of_inputs)
+    let transferred_atoms = rng.gen_range(0..1000);
+
+    let input_utxos = {
+        let mut outputs = random_input_utxos(
+            &mut rng,
+            transferred_atoms,
+            0..(required_maturity_distance + 100),
+        )
         .into_iter()
         .chain(std::iter::once(decommission_pool_utxo.clone()))
         .collect::<Vec<_>>();
+        outputs.shuffle(&mut rng);
+        outputs
+    };
 
-    // make timelock outputs but total atoms that locked is less then required
+    // try to unlock random value
     {
         let random_additional_value = rng.gen_range(1..10u128);
         let timelocked_outputs = decompose_value(&mut rng, staked_atoms - random_additional_value)
@@ -110,18 +145,21 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance.into_int() as u64 + random_additional_value,
+                        required_maturity_distance + random_additional_value,
                     ),
                 )
             })
             .collect::<Vec<_>>();
 
         let outputs = {
-            let mut outputs =
-                get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs)
-                    .into_iter()
-                    .chain(timelocked_outputs.into_iter())
-                    .collect::<Vec<_>>();
+            let mut outputs = random_input_utxos(
+                &mut rng,
+                transferred_atoms + random_additional_value,
+                0..required_maturity_distance,
+            )
+            .into_iter()
+            .chain(timelocked_outputs.into_iter())
+            .collect::<Vec<_>>();
             outputs.shuffle(&mut rng);
             outputs
         };
@@ -138,53 +176,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             err,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::TimelockRequirementNotSatisfied(
-                required_maturity_distance
-            ))
-        );
-    }
-
-    // make timelock outputs but distance is less then required
-    {
-        let timelocked_outputs = decompose_value(&mut rng, staked_atoms)
-            .iter()
-            .map(|atoms| {
-                let random_additional_value = rng.gen_range(1..10u64);
-                TxOutput::LockThenTransfer(
-                    OutputValue::Coin(Amount::from_atoms(*atoms)),
-                    Destination::AnyoneCanSpend,
-                    OutputTimeLock::ForBlockCount(
-                        required_maturity_distance.into_int() as u64 - random_additional_value,
-                    ),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let outputs = {
-            let mut outputs =
-                get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs)
-                    .into_iter()
-                    .chain(timelocked_outputs.into_iter())
-                    .collect::<Vec<_>>();
-            outputs.shuffle(&mut rng);
-            outputs
-        };
-
-        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
-
-        let err = check_tx_inputs_outputs_policy(
-            &tx,
-            &chain_config,
-            BlockHeight::new(1),
-            &pos_db,
-            &utxo_db,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::TimelockRequirementNotSatisfied(
-                required_maturity_distance
-            ))
+            ConnectTransactionError::IOPolicyError(IOPolicyError::MoneyPrinting)
         );
     }
 
@@ -204,7 +196,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance.into_int() as u64 + random_additional_distance,
+                        required_maturity_distance + random_additional_distance,
                     ),
                 )
             })
@@ -237,7 +229,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .net_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
-        chain_config.spend_share_maturity_distance(BlockHeight::new(1));
+        chain_config.spend_share_maturity_distance(BlockHeight::new(1)).into_int() as u64;
 
     let mut rng = make_seedable_rng(seed);
     let number_of_outputs = rng.gen_range(0..10);
@@ -268,8 +260,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
                         OutputValue::Coin(Amount::from_atoms(*atoms)),
                         Destination::AnyoneCanSpend,
                         OutputTimeLock::ForBlockCount(
-                            required_maturity_distance.into_int() as u64
-                                + random_additional_distance,
+                            required_maturity_distance + random_additional_distance,
                         ),
                     )
                 })
@@ -277,7 +268,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
         let outputs = {
             let mut outputs =
-                get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs)
+                random_input_utxos(&mut rng, delegated_atoms, 0..required_maturity_distance)
                     .into_iter()
                     .chain(timelocked_outputs.into_iter())
                     .collect::<Vec<_>>();
@@ -305,61 +296,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         .unwrap_err();
         assert_eq!(
             res,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::TimelockRequirementNotSatisfied(
-                required_maturity_distance
-            ))
-        )
-    }
-
-    // make timelock outputs but total atoms that locked is less then required
-    {
-        let timelocked_outputs = decompose_value(&mut rng, atoms_to_spend)
-            .iter()
-            .map(|atoms| {
-                let random_additional_distance = rng.gen_range(0..10);
-                TxOutput::LockThenTransfer(
-                    OutputValue::Coin(Amount::from_atoms(*atoms)),
-                    Destination::AnyoneCanSpend,
-                    OutputTimeLock::ForBlockCount(
-                        required_maturity_distance.into_int() as u64 - random_additional_distance,
-                    ),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let outputs = {
-            let mut outputs =
-                get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs)
-                    .into_iter()
-                    .chain(timelocked_outputs.into_iter())
-                    .collect::<Vec<_>>();
-            outputs.shuffle(&mut rng);
-            outputs
-        };
-
-        let tx = Transaction::new(
-            0,
-            vec![TxInput::from_account(
-                AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, Amount::from_atoms(atoms_to_spend)),
-            )],
-            outputs,
-        )
-        .unwrap();
-
-        let res = check_tx_inputs_outputs_policy(
-            &tx,
-            &chain_config,
-            BlockHeight::new(1),
-            &pos_db,
-            &utxo_db,
-        )
-        .unwrap_err();
-        assert_eq!(
-            res,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::TimelockRequirementNotSatisfied(
-                required_maturity_distance
-            ))
+            ConnectTransactionError::IOPolicyError(IOPolicyError::MoneyPrinting)
         )
     }
 
@@ -373,7 +310,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(*atoms)),
                     Destination::AnyoneCanSpend,
                     OutputTimeLock::ForBlockCount(
-                        required_maturity_distance.into_int() as u64 + random_additional_distance,
+                        required_maturity_distance + random_additional_distance,
                     ),
                 )
             })

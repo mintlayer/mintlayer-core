@@ -126,7 +126,7 @@ fn make_block_no_kernel(reward_outputs: Vec<TxOutput>) -> Block {
     .unwrap()
 }
 
-fn prepare_utxos_and_tx(
+pub fn prepare_utxos_and_tx(
     rng: &mut impl Rng,
     input_utxos: Vec<TxOutput>,
     outputs: Vec<TxOutput>,

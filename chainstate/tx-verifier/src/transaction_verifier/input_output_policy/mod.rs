@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::BlockRewardTransactable, ChainConfig, Transaction},
+    chain::{block::BlockRewardTransactable, ChainConfig, Transaction, TxInput},
     primitives::{BlockDistance, BlockHeight},
 };
 use pos_accounting::PoSAccountingView;
@@ -42,8 +42,10 @@ pub enum IOPolicyError {
     ProduceBlockInTx,
     #[error("Timelock requirement was not satisfied for `{0}`")]
     TimelockRequirementNotSatisfied(BlockDistance),
-    #[error("Constraint amount overflow")]
-    ConstrainedAmountOverflow,
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Money printing")]
+    MoneyPrinting, // FIXME: better name
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -65,20 +67,32 @@ pub fn check_tx_inputs_outputs_policy(
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
 
     for input in tx.inputs() {
-        constraints_accumulator.process_input(
-            chain_config,
-            block_height,
-            pos_accounting_view,
-            utxo_view,
-            input,
-        )?;
+        match input {
+            TxInput::Utxo(outpoint) => {
+                let utxo = utxo_view
+                    .utxo(outpoint)
+                    .map_err(|_| utxo::Error::ViewRead)?
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                constraints_accumulator.process_input_utxo(
+                    chain_config,
+                    block_height,
+                    pos_accounting_view,
+                    utxo.output(),
+                )?;
+            }
+            TxInput::Account(account) => {
+                constraints_accumulator.process_input_from_account(
+                    chain_config,
+                    block_height,
+                    account,
+                )?;
+            }
+        };
     }
 
     for output in tx.outputs() {
         constraints_accumulator.process_output(output)?;
     }
-
-    constraints_accumulator.verify()?;
 
     Ok(())
 }

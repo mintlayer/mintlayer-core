@@ -171,10 +171,10 @@ impl Account {
             vec![],
         )?;
 
-        let amount_to_be_paied_in_currency_with_fees =
+        let amount_to_be_paid_in_currency_with_fees =
             output_currency_amounts.remove(&pay_fee_with_currency).unwrap_or(Amount::ZERO);
 
-        let mut total_fees_not_paied = network_fee;
+        let mut total_fees_not_paid = network_fee;
 
         let utxo_to_output_group =
             |(outpoint, txo): &(UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -229,12 +229,12 @@ impl Account {
                     cost_of_change,
                 )?;
 
-                total_fees_not_paied = (total_fees_not_paied + selection_result.get_total_fees())
+                total_fees_not_paid = (total_fees_not_paid + selection_result.get_total_fees())
                     .ok_or(WalletError::OutputAmountOverflow)?;
 
                 let change_amount = selection_result.get_change();
                 if change_amount > Amount::ZERO {
-                    total_fees_not_paied = (total_fees_not_paied + cost_of_change)
+                    total_fees_not_paid = (total_fees_not_paid + cost_of_change)
                         .ok_or(WalletError::OutputAmountOverflow)?;
                 }
 
@@ -250,9 +250,9 @@ impl Account {
             .map(utxo_to_output_group)
             .try_collect()?;
 
-        let mut amount_to_be_paied_in_currency_with_fees =
-            (amount_to_be_paied_in_currency_with_fees + total_fees_not_paied)
-                .ok_or(WalletError::OutputAmountOverflow)?;
+        let mut amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
+            + total_fees_not_paid)
+            .ok_or(WalletError::OutputAmountOverflow)?;
 
         let cost_of_change = match pay_fee_with_currency {
             Currency::Coin => coin_change_fee,
@@ -261,21 +261,21 @@ impl Account {
 
         let selection_result = select_coins(
             utxos,
-            amount_to_be_paied_in_currency_with_fees,
+            amount_to_be_paid_in_currency_with_fees,
             PayFee::PayFeeWithThisCurrency,
             cost_of_change,
         )?;
 
         let change_amount = selection_result.get_change();
         if change_amount > Amount::ZERO {
-            amount_to_be_paied_in_currency_with_fees = (amount_to_be_paied_in_currency_with_fees
+            amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
                 + cost_of_change)
                 .ok_or(WalletError::OutputAmountOverflow)?;
         }
 
         output_currency_amounts.insert(
             pay_fee_with_currency.clone(),
-            (amount_to_be_paied_in_currency_with_fees + selection_result.get_total_fees())
+            (amount_to_be_paid_in_currency_with_fees + selection_result.get_total_fees())
                 .ok_or(WalletError::OutputAmountOverflow)?,
         );
         selected_inputs.insert(pay_fee_with_currency, selection_result);
