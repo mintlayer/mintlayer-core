@@ -490,7 +490,7 @@ impl CommandHandler {
 
                 // TODO: Support other languages
                 let language = wallet::wallet::Language::English;
-                let need_mnemonic_backup = mnemonic.is_none();
+                let newly_generated_mnemonic = mnemonic.is_none();
                 let mnemonic = match &mnemonic {
                     Some(mnemonic) => {
                         wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
@@ -499,13 +499,23 @@ impl CommandHandler {
                     None => wallet_controller::mnemonic::generate_new_mnemonic(language),
                 };
 
-                let wallet = CliController::create_wallet(
-                    Arc::clone(chain_config),
-                    wallet_path,
-                    mnemonic.clone(),
-                    None,
-                    save_seed_phrase.to_walet_type(),
-                )
+                let wallet = if newly_generated_mnemonic {
+                    CliController::create_wallet(
+                        Arc::clone(chain_config),
+                        wallet_path,
+                        mnemonic.clone(),
+                        None,
+                        save_seed_phrase.to_walet_type(),
+                    )
+                } else {
+                    CliController::recover_wallet(
+                        Arc::clone(chain_config),
+                        wallet_path,
+                        mnemonic.clone(),
+                        None,
+                        save_seed_phrase.to_walet_type(),
+                    )
+                }
                 .map_err(WalletCliError::Controller)?;
 
                 let account_names = wallet.account_names().cloned().collect();
@@ -516,7 +526,7 @@ impl CommandHandler {
                     WalletEventsNoOp,
                 ));
 
-                let msg = if need_mnemonic_backup {
+                let msg = if newly_generated_mnemonic {
                     format!(
                     "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
                 , mnemonic)

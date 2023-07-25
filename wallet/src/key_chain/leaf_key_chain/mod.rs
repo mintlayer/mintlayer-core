@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
 use utils::ensure;
-use wallet_storage::{StoreTxRo, WalletStorageReadLocked, WalletStorageWriteLocked};
+use wallet_storage::{WalletStorageReadLocked, WalletStorageWriteLocked};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
 use wallet_types::{AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId};
 
@@ -121,10 +121,10 @@ impl LeafKeySoftChain {
         })
     }
 
-    pub fn load_leaf_keys<B: storage::Backend>(
+    pub fn load_leaf_keys(
         chain_config: Arc<ChainConfig>,
         account_info: &AccountInfo,
-        db_tx: &StoreTxRo<B>,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> KeyChainResult<WithPurpose<LeafKeySoftChain>> {
         let mut addresses = WithPurpose::new(BTreeMap::new(), BTreeMap::new());

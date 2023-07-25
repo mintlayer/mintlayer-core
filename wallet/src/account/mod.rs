@@ -56,8 +56,8 @@ use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
-    StoreTxRo, StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
@@ -78,9 +78,9 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn load_from_database<B: storage::Backend>(
+    pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &StoreTxRo<B>,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;
@@ -874,7 +874,7 @@ impl Account {
         wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
-    ) -> WalletResult<()> {
+    ) -> WalletResult<bool> {
         assert!(!blocks.is_empty());
         assert!(
             common_block_height <= self.account_info.best_block_height(),
@@ -887,23 +887,25 @@ impl Account {
             self.reset_to_height(db_tx, wallet_events, common_block_height)?;
         }
 
+        let mut new_tx_was_added = false;
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
             let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
-            self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+            new_tx_was_added = self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?
+                || new_tx_was_added;
 
             for (index, signed_tx) in block.transactions().iter().enumerate() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
                     TxState::Confirmed(block_height, block.timestamp(), index as u64),
                 ));
-                self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                new_tx_was_added = self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
                     db_tx,
                     wallet_events,
                     wallet_tx,
                     signed_tx,
-                )?;
+                )? || new_tx_was_added;
             }
         }
 
@@ -914,7 +916,7 @@ impl Account {
         self.account_info.update_best_block(best_block_height, best_block_id);
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
-        Ok(())
+        Ok(new_tx_was_added)
     }
 
     /// Add a new wallet tx if relevant for this account and remove it from the user transactions
@@ -940,9 +942,9 @@ impl Account {
         )
     }
 
-    pub fn sync_best_block<B: storage::Backend>(
+    pub fn sync_best_block(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         best_block_height: BlockHeight,
         best_block_id: Id<GenBlock>,
     ) -> WalletResult<()> {
@@ -999,12 +1001,7 @@ impl Account {
                 tx_state,
             ));
 
-            if !self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                db_tx,
-                wallet_events,
-                wallet_tx,
-                signed_tx,
-            )? {
+            if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                 not_added.push((signed_tx, tx_state));
             }
         }
@@ -1019,12 +1016,7 @@ impl Account {
                     *tx_state,
                 ));
 
-                if self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                    db_tx,
-                    wallet_events,
-                    wallet_tx,
-                    signed_tx,
-                )? {
+                if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
                     not_added_next.push((*signed_tx, *tx_state));
                 }
             }
@@ -1075,6 +1067,16 @@ impl Account {
             db_tx.del_user_transaction(&id)?;
         }
 
+        Ok(())
+    }
+
+    pub fn set_name(
+        &mut self,
+        name: Option<String>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        self.account_info.set_name(name);
+        db_tx.set_account(&self.get_account_id(), &self.account_info)?;
         Ok(())
     }
 }

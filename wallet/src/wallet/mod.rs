@@ -158,7 +158,6 @@ pub type WalletResult<T> = Result<T, WalletError>;
 enum WalletState {
     InitialCreation,
     Syncing,
-    // Recovering,
 }
 
 pub struct Wallet<B: storage::Backend> {
@@ -168,6 +167,7 @@ pub struct Wallet<B: storage::Backend> {
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
     state: WalletState,
+    next_unused_account: (U31, Account),
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -185,12 +185,47 @@ pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
 }
 
 impl<B: storage::Backend> Wallet<B> {
-    pub fn new_wallet(
+    pub fn create_new_wallet(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+    ) -> WalletResult<Self> {
+        Self::new_wallet(
+            chain_config,
+            db,
+            mnemonic,
+            passphrase,
+            save_seed_phrase,
+            WalletState::InitialCreation,
+        )
+    }
+
+    pub fn recover_wallet(
+        chain_config: Arc<ChainConfig>,
+        db: Store<B>,
+        mnemonic: &str,
+        passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
+    ) -> WalletResult<Self> {
+        Self::new_wallet(
+            chain_config,
+            db,
+            mnemonic,
+            passphrase,
+            save_seed_phrase,
+            WalletState::Syncing,
+        )
+    }
+
+    fn new_wallet(
+        chain_config: Arc<ChainConfig>,
+        db: Store<B>,
+        mnemonic: &str,
+        passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
+        state: WalletState,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
@@ -205,19 +240,34 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
+        let default_account = Wallet::<B>::create_next_unused_account(
+            U31::ZERO,
+            chain_config.clone(),
+            &key_chain,
+            &mut db_tx,
+            None,
+        )?;
+
+        let next_unused_account = Wallet::<B>::create_next_unused_account(
+            U31::ONE,
+            chain_config.clone(),
+            &key_chain,
+            &mut db_tx,
+            None,
+        )?;
+
         db_tx.commit()?;
 
         let latest_median_time = chain_config.genesis_block().timestamp();
-        let mut wallet = Wallet {
+        let wallet = Wallet {
             chain_config,
             db,
             key_chain,
-            accounts: BTreeMap::new(),
+            accounts: [default_account].into(),
             latest_median_time,
-            state: WalletState::InitialCreation,
+            state,
+            next_unused_account,
         };
-
-        wallet.create_account(None)?;
 
         Ok(wallet)
     }
@@ -226,15 +276,18 @@ impl<B: storage::Backend> Wallet<B> {
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
     fn migration_v2(
-        db_tx: &mut impl WalletStorageWriteLocked,
-        chain_config: &ChainConfig,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        chain_config: Arc<ChainConfig>,
     ) -> WalletResult<()> {
         // set new chain info to the one provided by the user assuming it is the correct one
-        db_tx.set_chain_info(&ChainInfo::new(chain_config))?;
+        db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
         // reset wallet transaction as now we will need to rescan the blockchain to store the
         // correct order of the transactions to avoid bugs in loading them in the wrong order
-        Self::reset_wallet_transactions(chain_config, db_tx)?;
+        Self::reset_wallet_transactions(chain_config.as_ref(), db_tx)?;
+
+        // Create the next unused account
+        Self::migrate_next_unused_account(chain_config, db_tx)?;
 
         Ok(())
     }
@@ -252,8 +305,8 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db(db: &Store<B>, chain_config: &ChainConfig) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw(None)?;
+    fn check_and_migrate_db(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         match db_tx.get_storage_version()? {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
@@ -304,6 +357,34 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    fn migrate_next_unused_account(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> Result<(), WalletError> {
+        let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), db_tx)?;
+        let accounts_info = db_tx.get_accounts_info()?;
+        let mut accounts: BTreeMap<U31, Account> = accounts_info
+            .keys()
+            .map(|account_id| Account::load_from_database(chain_config.clone(), db_tx, account_id))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|account| (account.account_index(), account))
+            .collect();
+        let last_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
+        let next_account_index = last_account
+            .0
+            .plus_one()
+            .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded(last_account.0))?;
+        Wallet::<B>::create_next_unused_account(
+            next_account_index,
+            chain_config.clone(),
+            &key_chain,
+            db_tx,
+            None,
+        )?;
+        Ok(())
+    }
+
     /// Resets the wallet's accounts to the genesis block so it can start to do a rescan of the
     /// blockchain
     pub fn reset_wallet(&mut self, wallet_events: &impl WalletEvents) -> WalletResult<()> {
@@ -317,7 +398,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
-        Self::check_and_migrate_db(&db, chain_config.as_ref())?;
+        Self::check_and_migrate_db(&db, chain_config.clone())?;
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
@@ -329,7 +410,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         let accounts_info = db_tx.get_accounts_info()?;
 
-        let accounts: BTreeMap<U31, Account> = accounts_info
+        let mut accounts: BTreeMap<U31, Account> = accounts_info
             .keys()
             .map(|account_id| {
                 Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
@@ -344,6 +425,8 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
+        let next_unused_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
+
         Ok(Wallet {
             chain_config,
             db,
@@ -351,6 +434,7 @@ impl<B: storage::Backend> Wallet<B> {
             accounts,
             latest_median_time,
             state: WalletState::Syncing,
+            next_unused_account,
         })
     }
 
@@ -398,42 +482,71 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.values().map(|acc| acc.name())
     }
 
-    pub fn create_account(&mut self, name: Option<String>) -> WalletResult<(U31, Option<String>)> {
-        let next_account_index = self.accounts.last_key_value().map_or(
-            Ok(U31::ZERO),
-            |(last_account_index, last_account)| {
-                if last_account.has_transactions() {
-                    last_account_index.plus_one().map_err(|_| {
-                        WalletError::AbsoluteMaxNumAccountsExceeded(*last_account_index)
-                    })
-                } else {
-                    // Cannot create a new account if the latest created one has no transactions
-                    // associated with it
-                    Err(WalletError::EmptyLastAccount)
-                }
-            },
-        )?;
-
+    fn create_next_unused_account(
+        next_account_index: U31,
+        chain_config: Arc<ChainConfig>,
+        master_key_chain: &MasterKeyChain,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        name: Option<String>,
+    ) -> WalletResult<(U31, Account)> {
         ensure!(
             name.as_ref().map_or(true, |name| !name.is_empty()),
             WalletError::EmptyAccountName
         );
 
+        let account_key_chain =
+            master_key_chain.create_account_key_chain(db_tx, next_account_index)?;
+
+        let account = Account::new(chain_config, db_tx, account_key_chain, name)?;
+
+        Ok((next_account_index, account))
+    }
+
+    /// Promotes the unused account into the used accounts and creates a new unused account
+    /// Returns the new index and optional name if provided
+    pub fn create_next_account(
+        &mut self,
+        name: Option<String>,
+    ) -> WalletResult<(U31, Option<String>)> {
+        ensure!(
+            self.accounts
+                .values()
+                .last()
+                .expect("must have a default account")
+                .has_transactions(),
+            WalletError::EmptyLastAccount
+        );
+
+        let next_account_index =
+            self.next_unused_account.0.plus_one().map_err(|_| {
+                WalletError::AbsoluteMaxNumAccountsExceeded(self.next_unused_account.0)
+            })?;
+
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 
-        let account_key_chain =
-            self.key_chain.create_account_key_chain(&mut db_tx, next_account_index)?;
-
-        let account = Account::new(
-            Arc::clone(&self.chain_config),
+        let mut next_unused_account = Self::create_next_unused_account(
+            next_account_index,
+            self.chain_config.clone(),
+            &self.key_chain,
             &mut db_tx,
-            account_key_chain,
-            name.clone(),
+            None,
         )?;
+
+        self.next_unused_account.1.set_name(name.clone(), &mut db_tx)?;
+        std::mem::swap(&mut self.next_unused_account, &mut next_unused_account);
+        let (next_account_index, next_account) = next_unused_account;
+
+        // no need to rescan the blockchain from the start for the next unused account as we have been
+        // scaning for addresses of the previous next unused account and it is not alowed to create a gap in
+        // the account indexes
+        let (best_block_id, best_block_height) = next_account.best_block();
+        self.next_unused_account
+            .1
+            .sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
 
         db_tx.commit()?;
 
-        self.accounts.insert(account.account_index(), account);
+        self.accounts.insert(next_account_index, next_account);
 
         Ok((next_account_index, name))
     }
@@ -759,7 +872,7 @@ impl<B: storage::Backend> Wallet<B> {
         )
     }
 
-    /// Returns the last scanned block hash and height.
+    /// Returns the last scanned block hash and height for all accounts.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
         self.accounts
@@ -768,6 +881,8 @@ impl<B: storage::Backend> Wallet<B> {
             .collect()
     }
 
+    /// Returns the last scanned block hash and height for the account.
+    /// Returns genesis block when the account is just created.
     pub fn get_best_block_for_account(
         &self,
         account_index: U31,
@@ -797,11 +912,43 @@ impl<B: storage::Backend> Wallet<B> {
         blocks: Vec<Block>,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
-        self.for_account_rw(account_index, |account, db_tx| {
-            account.scan_new_blocks(db_tx, wallet_events, common_block_height, &blocks)
+        self.for_account_rw(account_index, |acc, db_tx| {
+            acc.scan_new_blocks(db_tx, wallet_events, common_block_height, &blocks)
         })?;
-        wallet_events.new_block();
 
+        wallet_events.new_block();
+        Ok(())
+    }
+
+    /// Scan new blocks and update best block hash/height.
+    /// New block may reset the chain of previously scanned blocks.
+    ///
+    /// `common_block_height` is the height of the shared blocks that are still in sync after reorgs.
+    /// If `common_block_height` is zero, only the genesis block is considered common.
+    /// If a new transaction is recognized for the unused account, it is transferd to the used
+    /// accounts and a new unused account is created.
+    pub fn scan_new_blocks_unused_account(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
+    ) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
+            &mut db_tx,
+            wallet_events,
+            common_block_height,
+            &blocks,
+        )?;
+
+        db_tx.commit()?;
+
+        if added_new_tx_in_unused_acc {
+            self.create_next_account(None)?;
+        }
+
+        wallet_events.new_block();
         Ok(())
     }
 
@@ -824,6 +971,10 @@ impl<B: storage::Backend> Wallet<B> {
         for account in self.accounts.values_mut() {
             account.sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
         }
+
+        self.next_unused_account
+            .1
+            .sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
 
         db_tx.commit()?;
 
