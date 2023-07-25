@@ -153,18 +153,11 @@ fn get_transaction(
         .filter_map(|input| own_input(key_chain, output_cache, input))
         .collect::<Vec<_>>();
 
-    let own_outputs = tx_data
+    let (own_outputs, non_own_outputs): (Vec<_>, Vec<_>) = tx_data
         .get_transaction()
         .outputs()
         .iter()
-        .filter(|output| own_output(key_chain, output))
-        .collect::<Vec<_>>();
-
-    let non_own_outputs = tx_data
-        .get_transaction()
-        .outputs()
-        .iter()
-        .filter(|output| !own_output(key_chain, output));
+        .partition(|output| own_output(key_chain, output));
 
     let own_output_amounts = group_outputs(
         own_outputs.iter(),
@@ -177,7 +170,7 @@ fn get_transaction(
     )?;
 
     let non_own_output_amounts = group_outputs(
-        non_own_outputs,
+        non_own_outputs.iter(),
         |&output| output,
         |grouped: &mut Amount, _, new_amount| -> WalletResult<()> {
             *grouped = grouped.add(new_amount).ok_or(WalletError::OutputAmountOverflow)?;
