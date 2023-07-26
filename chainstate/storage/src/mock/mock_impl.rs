@@ -18,12 +18,11 @@
 use std::collections::BTreeMap;
 
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
-use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
     chain::{
-        block::BlockReward,
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::EpochIndex,
+        tokens::{TokenAuxiliaryData, TokenId},
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
     },

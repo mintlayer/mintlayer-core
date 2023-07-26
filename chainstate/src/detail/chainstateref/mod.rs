@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod epoch_seal;
+mod in_memory_reorg;
+mod tx_verifier_storage;
+
 use std::{cmp::max, collections::BTreeSet};
 use thiserror::Error;
 
@@ -58,10 +62,7 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
 };
 
-mod epoch_seal;
 pub use epoch_seal::EpochSealError;
-mod in_memory_reorg;
-mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,

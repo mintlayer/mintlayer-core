@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
 use chainstate::{BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
 use common::primitives::Idable;
-use rstest::rstest;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
+use test_utils::random::{make_seedable_rng, Seed};
 
 // Check processing of a good block.
 #[rstest]

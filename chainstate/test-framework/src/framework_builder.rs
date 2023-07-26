@@ -15,6 +15,12 @@
 
 use std::sync::Arc;
 
+use crate::{
+    tx_verification_strategy::{
+        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
+    },
+    TestFramework, TestStore,
+};
 use chainstate::{
     integration_tests_support::make_chainstate, BlockError, ChainstateConfig,
     DefaultTransactionVerificationStrategy,
@@ -28,13 +34,6 @@ use common::{
 };
 use crypto::random::{CryptoRng, Rng};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
-
-use crate::{
-    tx_verification_strategy::{
-        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
-    },
-    TestFramework, TestStore,
-};
 use utils::atomics::SeqCstAtomicU64;
 
 pub enum TxVerificationStrategy {

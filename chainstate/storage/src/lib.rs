@@ -23,21 +23,24 @@ pub mod schema;
 
 use std::collections::BTreeMap;
 
-use common::chain::block::signed_block_header::SignedBlockHeader;
-pub use internal::Store;
-
 use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
-use common::chain::block::BlockReward;
-use common::chain::config::EpochIndex;
-use common::chain::tokens::{TokenAuxiliaryData, TokenId};
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{AccountNonce, AccountType, Block, GenBlock, OutPointSourceId};
-use common::primitives::{BlockHeight, Id};
+use common::{
+    chain::{
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        config::EpochIndex,
+        tokens::{TokenAuxiliaryData, TokenId},
+        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
+        AccountNonce, AccountType, Block, GenBlock, OutPointSourceId,
+    },
+    primitives::{BlockHeight, Id},
+};
 use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingStorageWrite,
 };
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
+
+pub use internal::Store;
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;

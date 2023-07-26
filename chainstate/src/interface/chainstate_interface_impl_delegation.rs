@@ -19,25 +19,16 @@ use std::{
     sync::Arc,
 };
 
-use chainstate_types::Locator;
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
-use common::chain::{
-    block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
-    config::ChainConfig,
-    tokens::TokenAuxiliaryData,
-    AccountNonce, AccountType, OutPointSourceId, TxMainChainIndex,
-};
-use common::chain::{Transaction, UtxoOutPoint};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
+        config::ChainConfig,
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id},
-};
-use common::{
-    chain::{DelegationId, PoolId, TxInput},
-    primitives::Amount,
+    primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;

@@ -15,16 +15,17 @@
 
 mod with_id;
 
-use crypto::hash::StreamHasher;
-pub use with_id::WithId;
-
 use std::fmt::{Debug, Display};
 
-use crate::Uint256;
 use generic_array::{typenum, GenericArray};
 use ref_cast::RefCast;
+
+use crate::Uint256;
+use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode};
 use typename::TypeName;
+
+pub use with_id::WithId;
 
 fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]

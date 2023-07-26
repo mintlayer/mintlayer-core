@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use derive_more::Display;
+use thiserror::Error;
+
 use super::{
     block_invalidation::best_chain_candidates::BestChainCandidatesError,
     chainstateref::EpochSealError,
@@ -31,9 +34,6 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
-
-use derive_more::Display;
-use thiserror::Error;
 use tx_verifier::transaction_verifier::{error::TxIndexError, storage::HasTxIndexDisabledError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -16,25 +16,22 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::detail::BlockSource;
-use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
-
+use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
-
-use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::{AccountNonce, AccountType};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
-
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {

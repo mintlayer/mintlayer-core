@@ -13,16 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::Chainstate;
+use crate::{BlockError, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorage;
 use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block},
     primitives::id::WithId,
 };
 use utils::tap_error_log::LogError;
-
-use crate::{BlockError, TransactionVerificationStrategy};
-
-use super::Chainstate;
 
 pub struct BlockChecker<'a, S, V> {
     chainstate: &'a Chainstate<S, V>,

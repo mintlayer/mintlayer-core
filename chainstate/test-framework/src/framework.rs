@@ -15,6 +15,13 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use rstest::rstest;
+
+use crate::{
+    pos_block_builder::PoSBlockBuilder,
+    utils::{outputs_from_block, outputs_from_genesis},
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
+};
 use chainstate::{
     chainstate_interface::ChainstateInterface, integration_tests_support::BestChainCandidates,
     BlockSource, ChainstateError,
@@ -30,14 +37,6 @@ use crypto::{
     key::PrivateKey,
     random::{CryptoRng, Rng},
     vrf::VRFPrivateKey,
-};
-
-use rstest::rstest;
-
-use crate::{
-    pos_block_builder::PoSBlockBuilder,
-    utils::{outputs_from_block, outputs_from_genesis},
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use utils::atomics::SeqCstAtomicU64;
 

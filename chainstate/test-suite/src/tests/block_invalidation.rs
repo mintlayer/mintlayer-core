@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+
 use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
 use chainstate::{BlockInvalidatorError, ChainstateError};
 use chainstate_test_framework::TestFramework;
@@ -25,9 +27,7 @@ use common::{
     primitives::{BlockDistance, Id, Idable},
 };
 use crypto::random::{CryptoRng, Rng};
-use rstest::rstest;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
+use test_utils::random::{make_seedable_rng, Seed};
 
 // Invalidate a0 in:
 // /----a0----a1----a2

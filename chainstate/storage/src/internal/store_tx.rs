@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
-use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
-        block::BlockReward,
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
@@ -31,7 +32,6 @@ use pos_accounting::{
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
-use std::collections::BTreeMap;
 use storage::schema;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 

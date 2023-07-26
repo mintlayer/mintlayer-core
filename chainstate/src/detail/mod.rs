@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod chainstateref;
+mod error;
+mod info;
+mod median_time;
+mod orphan_blocks;
+
 pub mod ban_score;
 pub mod block_checking;
 pub mod block_invalidation;
@@ -21,34 +27,18 @@ pub mod query;
 pub mod tokens;
 pub mod tx_verification_strategy;
 
-mod chainstateref;
-mod error;
-mod info;
-mod median_time;
-mod orphan_blocks;
-
-pub use self::{
-    error::*, info::ChainInfo, median_time::calculate_median_time_past,
-    tokens::is_rfc3986_valid_symbol,
-};
-pub use chainstate_types::Locator;
-pub use error::{
-    BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
-    InitializationError, OrphanCheckError,
-};
-
-use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
-pub use transaction_verifier::{
-    error::{ConnectTransactionError, SpendStakeError, TokensError, TxIndexError},
-    storage::TransactionVerifierStorageError,
-};
-use tx_verifier::transaction_verifier;
-
 use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 use thiserror::Error;
 
+use self::{
+    block_invalidation::{best_chain_candidates::BestChainCandidates, BlockInvalidator},
+    orphan_blocks::{OrphanBlocksMut, OrphansProxy},
+    query::ChainstateQuery,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
+use crate::{ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
     TipStorageTag, TransactionRw, Transactional,
@@ -65,6 +55,8 @@ use common::{
     Uint256,
 };
 use logging::log;
+use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
+use tx_verifier::transaction_verifier;
 use utils::{
     ensure,
     eventhandler::{EventHandler, EventsController},
@@ -72,15 +64,20 @@ use utils::{
 };
 use utxo::UtxosDB;
 
-use self::{
-    block_invalidation::{best_chain_candidates::BestChainCandidates, BlockInvalidator},
-    orphan_blocks::OrphanBlocksMut,
-    orphan_blocks::OrphansProxy,
-    query::ChainstateQuery,
-    tx_verification_strategy::TransactionVerificationStrategy,
+pub use self::{
+    error::*, info::ChainInfo, median_time::calculate_median_time_past,
+    tokens::is_rfc3986_valid_symbol,
 };
-use crate::{ChainstateConfig, ChainstateEvent};
+pub use chainstate_types::Locator;
+pub use error::{
+    BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
+    InitializationError, OrphanCheckError,
+};
 pub use orphan_blocks::OrphanBlocksRef;
+pub use transaction_verifier::{
+    error::{ConnectTransactionError, SpendStakeError, TokensError, TxIndexError},
+    storage::TransactionVerifierStorageError,
+};
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;

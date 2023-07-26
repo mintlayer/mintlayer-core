@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod store_tx;
+
 use std::collections::BTreeMap;
 
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
@@ -39,7 +41,6 @@ use crate::{
     TipStorageTag, TransactionRw, Transactional,
 };
 
-mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 
 /// Store for blockchain data, parametrized over the backend B

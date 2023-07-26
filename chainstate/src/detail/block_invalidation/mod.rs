@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod best_chain_candidates;
+
 use derive_more::Display;
-use logging::log;
 use thiserror::Error;
 
 use self::best_chain_candidates::{BestChainCandidates, BestChainCandidatesError};
@@ -27,9 +28,8 @@ use common::{
     primitives::{BlockHeight, Id},
     Uint256,
 };
+use logging::log;
 use utils::{ensure, tap_error_log::LogError};
-
-pub mod best_chain_candidates;
 
 pub struct BlockInvalidator<'a, S, V> {
     chainstate: &'a mut Chainstate<S, V>,

@@ -15,12 +15,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::chainstate_interface::integration_tests_support;
-use crate::detail::block_checking::BlockChecker;
-use crate::detail::block_invalidation::BlockInvalidator;
 use crate::{
+    chainstate_interface::integration_tests_support,
     detail::{
         self,
+        block_checking::BlockChecker,
+        block_invalidation::BlockInvalidator,
         bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
         calculate_median_time_past,
         tx_verification_strategy::TransactionVerificationStrategy,
@@ -30,7 +30,6 @@ use crate::{
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
-use common::Uint256;
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
@@ -40,6 +39,7 @@ use common::{
         TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
+    Uint256,
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
