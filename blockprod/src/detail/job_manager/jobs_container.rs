@@ -15,11 +15,11 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
+use crate::detail::CustomId;
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::Id,
 };
-use crate::detail::CustomId;
 use logging::log;
 use tokio::sync::oneshot;
 
@@ -137,11 +137,10 @@ impl JobsContainer {
 
     pub fn handle_update_last_used_block_timestamp(
         &mut self,
-        event: (JobKey, BlockTimestamp, oneshot::Sender<()>),
+        event: (CustomId, BlockTimestamp, oneshot::Sender<()>),
     ) {
-        let (job_key, last_used_block_timestamp, result_sender) = event;
-        self.last_used_block_timestamps
-            .insert(job_key.custom_id, last_used_block_timestamp);
+        let (custom_id, last_used_block_timestamp, result_sender) = event;
+        self.last_used_block_timestamps.insert(custom_id, last_used_block_timestamp);
 
         _ = result_sender.send(());
     }

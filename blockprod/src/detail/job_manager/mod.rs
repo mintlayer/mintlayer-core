@@ -107,7 +107,7 @@ pub struct JobManager {
     chainstate_handle: Option<ChainstateHandle>,
     get_job_count_sender: UnboundedSender<oneshot::Sender<usize>>,
     last_used_block_timestamp_sender:
-        UnboundedSender<(JobKey, BlockTimestamp, oneshot::Sender<()>)>,
+        UnboundedSender<(CustomId, BlockTimestamp, oneshot::Sender<()>)>,
     new_job_sender: UnboundedSender<NewJobEvent>,
     stop_job_sender: UnboundedSender<(Option<JobKey>, oneshot::Sender<usize>)>,
     shutdown_sender: UnboundedSender<oneshot::Sender<usize>>,
@@ -138,7 +138,7 @@ pub trait JobManagerInterface: Send + Sync {
 
     async fn update_last_used_block_timestamp(
         &self,
-        job_key: JobKey,
+        custom_id: CustomId,
         last_used_block_timestamp: BlockTimestamp,
     ) -> Result<(), JobManagerError>;
 }
@@ -187,11 +187,11 @@ impl JobManagerInterface for JobManagerImpl {
 
     async fn update_last_used_block_timestamp(
         &self,
-        job_key: JobKey,
+        custom_id: CustomId,
         last_used_block_timestamp: BlockTimestamp,
     ) -> Result<(), JobManagerError> {
         self.job_manager
-            .update_last_used_block_timestamp(job_key, last_used_block_timestamp)
+            .update_last_used_block_timestamp(custom_id, last_used_block_timestamp)
             .await
     }
 }
@@ -244,7 +244,7 @@ impl JobManager {
         mut chainstate_receiver: UnboundedReceiver<Id<GenBlock>>,
         mut get_job_count_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
         mut last_used_block_timestamp_receiver: UnboundedReceiver<(
-            JobKey,
+            CustomId,
             BlockTimestamp,
             oneshot::Sender<()>,
         )>,
@@ -383,14 +383,14 @@ impl JobManager {
 
     pub async fn update_last_used_block_timestamp(
         &self,
-        job_key: JobKey,
+        custom_id: CustomId,
         last_used_block_timestamp: BlockTimestamp,
     ) -> Result<(), JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
 
         ensure!(
             self.last_used_block_timestamp_sender
-                .send((job_key, last_used_block_timestamp, result_sender))
+                .send((custom_id, last_used_block_timestamp, result_sender))
                 .is_ok(),
             JobManagerError::FailedToSendUpdateLastTimestampSecondsUsed
         );
@@ -447,7 +447,7 @@ pub mod tests {
 
             async fn update_last_used_block_timestamp(
                 &self,
-                job_key: JobKey,
+                custom_id: CustomId,
                 last_used_block_timestamp: BlockTimestamp,
             ) -> Result<(), JobManagerError>;
         }

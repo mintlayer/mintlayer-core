@@ -126,11 +126,11 @@ impl BlockProduction {
 
     pub async fn update_last_used_block_timestamp(
         &self,
-        job_key: JobKey,
+        custom_id: CustomId,
         last_used_block_timestamp: BlockTimestamp,
     ) -> Result<(), BlockProductionError> {
         self.job_manager_handle
-            .update_last_used_block_timestamp(job_key, last_used_block_timestamp)
+            .update_last_used_block_timestamp(custom_id, last_used_block_timestamp)
             .await?;
 
         Ok(())
@@ -311,8 +311,10 @@ impl BlockProduction {
         let tip_at_start = self.pull_best_block_index().await?;
         let custom_id = custom_id.unwrap_or_else(|| self.generate_custom_id(&input_data));
 
-        let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) =
-            self.job_manager_handle.add_job(custom_id, tip_at_start.block_id()).await?;
+        let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) = self
+            .job_manager_handle
+            .add_job(custom_id.clone(), tip_at_start.block_id())
+            .await?;
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
@@ -368,7 +370,7 @@ impl BlockProduction {
                     return Err(BlockProductionError::TryAgainLater);
                 }
 
-                self.update_last_used_block_timestamp(job_key.clone(), last_used_block_timestamp)
+                self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
                     .await?;
             }
 

@@ -480,6 +480,79 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn update_last_used_block_timestamp(#[case] seed: Seed) {
+        let (
+            pos_chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(seed);
+
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(Some(pos_chain_config));
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config.clone(),
+                    Arc::new(test_blockprod_config()),
+                    chainstate.clone(),
+                    mempool,
+                    p2p,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let input_data =
+                    GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                        genesis_stake_private_key,
+                        genesis_vrf_private_key,
+                        PoolId::new(H256::zero()),
+                        vec![TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        )],
+                        vec![create_genesis_pool_txoutput],
+                    )));
+
+                _ = block_production
+                    .job_manager_handle
+                    .update_last_used_block_timestamp(
+                        block_production.generate_custom_id(&input_data),
+                        BlockTimestamp::from_int_seconds(u64::MAX),
+                    )
+                    .await;
+
+                let result = block_production
+                    .produce_block(input_data, TransactionsSource::Provided(vec![]))
+                    .await;
+
+                match result {
+                    Err(BlockProductionError::FailedConsensusInitialization(
+                        ConsensusCreationError::TimestampOverflow(_, _),
+                    )) => {}
+                    _ => panic!("Expected timestamp overflow"),
+                };
+
+                assert_job_count(&block_production, 0).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn try_again_later() {
         // Ensure we reset the global mock time on exit
