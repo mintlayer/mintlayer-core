@@ -869,6 +869,11 @@ mod produce_block {
                     (Box::new(|_| {}), result_receiver)
                 });
 
+                mock_job_manager
+                    .expect_update_last_used_block_timestamp()
+                    .times(..=1)
+                    .returning(|_, _| Ok(()));
+
                 block_production.set_job_manager(mock_job_manager);
 
                 let result = block_production
@@ -1560,23 +1565,25 @@ mod stop_all_jobs {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(
-                vec![],
-                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-            )
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
+                .await
+                .unwrap();
 
-        let (_stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(
-                vec![],
-                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-            )
-            .await
-            .unwrap();
+        let (_stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
+                .await
+                .unwrap();
 
         let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
         assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
@@ -1684,23 +1691,25 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(
-                vec![],
-                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-            )
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
+                .await
+                .unwrap();
 
-        let (stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(
-                vec![],
-                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-            )
-            .await
-            .unwrap();
+        let (stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
+                .await
+                .unwrap();
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(job_stopped, "Failed to stop job");
@@ -1733,14 +1742,15 @@ mod stop_job {
         let jobs_to_create = rng.gen::<usize>() % 20 + 1;
 
         for _ in 1..=jobs_to_create {
-            let (job_key, _stop_job_cancel_receiver) = block_production
-                .job_manager_handle
-                .add_job(
-                    vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-                )
-                .await
-                .unwrap();
+            let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+                block_production
+                    .job_manager_handle
+                    .add_job(
+                        vec![],
+                        Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    )
+                    .await
+                    .unwrap();
 
             job_keys.push(job_key)
         }
@@ -1787,14 +1797,15 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(
-                vec![],
-                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
-            )
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
+                .await
+                .unwrap();
 
         let stop_job_key = JobKey::new(
             vec![],
