@@ -857,9 +857,11 @@ mod produce_block {
                 mock_job_manager.expect_add_job().times(1).returning(move |_, _| {
                     let (_, cancel_receiver) = unbounded_channel::<()>();
                     let mut rng = make_seedable_rng(seed);
-                    let job_key =
-                        JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
-                    Ok((job_key, cancel_receiver))
+                    let job_key = JobKey::new(
+                        vec![],
+                        Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    );
+                    Ok((job_key, None, cancel_receiver))
                 });
 
                 mock_job_manager.expect_make_job_stopper_function().times(1).returning(|| {
@@ -1560,13 +1562,19 @@ mod stop_all_jobs {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(
+                vec![],
+                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            )
             .await
             .unwrap();
 
         let (_stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(
+                vec![],
+                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            )
             .await
             .unwrap();
 
@@ -1643,7 +1651,10 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let job_key = JobKey::new(
+            vec![],
+            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+        );
 
         let result = block_production.stop_job(job_key).await;
 
@@ -1675,13 +1686,19 @@ mod stop_job {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(
+                vec![],
+                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            )
             .await
             .unwrap();
 
         let (stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(
+                vec![],
+                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            )
             .await
             .unwrap();
 
@@ -1718,7 +1735,10 @@ mod stop_job {
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_job_cancel_receiver) = block_production
                 .job_manager_handle
-                .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+                .add_job(
+                    vec![],
+                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                )
                 .await
                 .unwrap();
 
@@ -1769,11 +1789,17 @@ mod stop_job {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(
+                vec![],
+                Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            )
             .await
             .unwrap();
 
-        let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let stop_job_key = JobKey::new(
+            vec![],
+            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+        );
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -1807,7 +1833,10 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let job_key = JobKey::new(
+            vec![],
+            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+        );
 
         let result = block_production.stop_job(job_key).await;
 

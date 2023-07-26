@@ -17,6 +17,7 @@ mod jobs_container;
 
 use std::sync::Arc;
 
+use crate::detail::CustomId;
 use async_trait::async_trait;
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{chain::GenBlock, primitives::Id};
@@ -65,7 +66,7 @@ pub struct JobHandle {
 pub struct JobKey {
     /// The job key is provided in tests to make it possible to run
     /// multiple block productions in parallel
-    custom_id: Option<Vec<u8>>,
+    custom_id: CustomId,
     /// The current tip, which will be the "previous block" for the
     /// block that will be produced
     current_tip_id: Id<GenBlock>,
@@ -76,7 +77,7 @@ pub struct JobKey {
 }
 
 impl JobKey {
-    pub fn new(custom_id: Option<Vec<u8>>, current_tip_id: Id<GenBlock>) -> Self {
+    pub fn new(custom_id: CustomId, current_tip_id: Id<GenBlock>) -> Self {
         JobKey {
             custom_id,
             current_tip_id,
@@ -89,7 +90,7 @@ impl JobKey {
 }
 
 pub struct NewJobEvent {
-    custom_id: Option<Vec<u8>>,
+    custom_id: CustomId,
     current_tip_id: Id<GenBlock>,
     cancel_sender: UnboundedSender<()>,
     result_sender: oneshot::Sender<Result<JobKey, JobManagerError>>,
@@ -109,7 +110,7 @@ pub trait JobManagerInterface: Send + Sync {
 
     async fn add_job(
         &self,
-        custom_id: Option<Vec<u8>>,
+        custom_id: CustomId,
         block_id: Id<GenBlock>,
     ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
 
@@ -149,7 +150,7 @@ impl JobManagerInterface for JobManagerImpl {
 
     async fn add_job(
         &self,
-        custom_id: Option<Vec<u8>>,
+        custom_id: CustomId,
         block_id: Id<GenBlock>,
     ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
         self.job_manager.add_job(custom_id, block_id).await
@@ -280,7 +281,7 @@ impl JobManager {
 
     pub async fn add_job(
         &self,
-        custom_id: Option<Vec<u8>>,
+        custom_id: CustomId,
         block_id: Id<GenBlock>,
     ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
@@ -374,7 +375,7 @@ pub mod tests {
 
             async fn add_job(
                 &self,
-                custom_id: Option<Vec<u8>>,
+                custom_id: CustomId,
                 block_id: Id<GenBlock>,
             ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
 
