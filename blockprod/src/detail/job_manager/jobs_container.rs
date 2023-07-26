@@ -71,9 +71,7 @@ impl JobsContainer {
             .collect();
 
         for job_key in jobs_to_stop {
-            if let Some(handle) = self.jobs.remove(&job_key) {
-                _ = handle.cancel_sender.send(())
-            }
+            self.remove_job(job_key, true);
         }
     }
 
@@ -101,13 +99,16 @@ impl JobsContainer {
         let taken_jobs = std::mem::take(&mut self.jobs);
         let count = taken_jobs.len();
         let stop_results = taken_jobs
-            .into_values()
-            .map(|job_handle| job_handle.cancel_sender.send(()))
+            .into_keys()
+            .map(|job_key| self.remove_job(job_key, true))
+            .filter(|stopped| *stopped)
             .collect::<Vec<_>>();
 
-        let send_fail_count = stop_results.into_iter().filter_map(|r| r.ok()).count();
-        if send_fail_count > 0 {
-            log::info!("Sending stop jobs for block production failed for {send_fail_count}");
+        if !stop_results.is_empty() {
+            log::info!(
+                "Sending stop jobs for block production failed for {}",
+                stop_results.len()
+            );
         }
 
         // We don't do `count - send_fail_count` because the failures
