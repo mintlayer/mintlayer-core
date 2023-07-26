@@ -16,10 +16,11 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
-    chain::{timelock::OutputTimeLock, AccountOutPoint, AccountSpending, ChainConfig, TxOutput},
+    chain::{
+        timelock::OutputTimeLock, AccountOutPoint, AccountSpending, ChainConfig, PoolId, TxOutput,
+    },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
-use pos_accounting::PoSAccountingView;
 
 use crate::error::ConnectTransactionError;
 
@@ -57,13 +58,16 @@ impl ConstrainedValueAccumulator {
             .ok_or(IOPolicyError::AmountOverflow)
     }
 
-    pub fn process_input_utxo(
+    pub fn process_input_utxo<PledgeAmountGetterFn>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        pos_accounting_view: &impl PoSAccountingView,
+        pledge_amount_getter: PledgeAmountGetterFn,
         output: &TxOutput,
-    ) -> Result<(), ConnectTransactionError> {
+    ) -> Result<(), ConnectTransactionError>
+    where
+        PledgeAmountGetterFn: Fn(PoolId) -> Result<Amount, ConnectTransactionError>,
+    {
         match output {
             TxOutput::Transfer(value, _)
             | TxOutput::LockThenTransfer(value, _, _)
@@ -81,11 +85,7 @@ impl ConstrainedValueAccumulator {
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                 let block_distance =
                     chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                let pledged_amount = pos_accounting_view
-                    .get_pool_data(*pool_id)
-                    .map_err(|_| pos_accounting::Error::ViewFail)?
-                    .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?
-                    .pledge_amount();
+                let pledged_amount = pledge_amount_getter(*pool_id)?;
                 match self.timelock_constrained.entry(block_distance) {
                     Entry::Vacant(e) => {
                         e.insert(pledged_amount);
@@ -215,7 +215,6 @@ mod tests {
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use rstest::rstest;
-    use std::collections::BTreeMap;
     use test_utils::random::{make_seedable_rng, Seed};
 
     fn create_stake_pool_data(
@@ -250,14 +249,7 @@ mod tests {
         let fee_atoms = rng.gen_range(1..100);
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-        let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-        );
-        let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
+        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
 
         let input_utxos = vec![TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))];
 
@@ -271,7 +263,7 @@ mod tests {
 
         for input in input_utxos {
             constraints_accumulator
-                .process_input_utxo(&chain_config, BlockHeight::new(1), &pos_db, &input)
+                .process_input_utxo(&chain_config, BlockHeight::new(1), pledge_getter, &input)
                 .unwrap();
         }
 
@@ -344,14 +336,7 @@ mod tests {
         let staked_atoms = rng.gen_range(100..1000);
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-        let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-        );
-        let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
+        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
 
         let input_utxos = vec![
             TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)),
@@ -382,7 +367,7 @@ mod tests {
 
         for input in input_utxos {
             constraints_accumulator
-                .process_input_utxo(&chain_config, BlockHeight::new(1), &pos_db, &input)
+                .process_input_utxo(&chain_config, BlockHeight::new(1), pledge_getter, &input)
                 .unwrap();
         }
 
@@ -434,14 +419,7 @@ mod tests {
 
         let transferred_atoms = rng.gen_range(100..1000);
 
-        let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, stake_pool_data.clone().into())]),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::from([(delegation_id, Amount::from_atoms(delegated_atoms))]),
-            BTreeMap::new(),
-        );
-        let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
+        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
 
         let input_utxos = vec![
             TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data)),
@@ -474,7 +452,7 @@ mod tests {
 
         for input in input_utxos {
             constraints_accumulator
-                .process_input_utxo(&chain_config, BlockHeight::new(1), &pos_db, &input)
+                .process_input_utxo(&chain_config, BlockHeight::new(1), pledge_getter, &input)
                 .unwrap();
         }
 

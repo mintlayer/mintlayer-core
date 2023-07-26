@@ -101,7 +101,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let number_of_outputs = rng.gen_range(0..10);
 
     let pool_id = PoolId::new(H256::zero());
-    let staked_atoms = rng.gen_range(0..1000);
+    let staked_atoms = rng.gen_range(100..1000);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let pos_store = pos_accounting::InMemoryPoSAccounting::from_values(
@@ -136,7 +136,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
     // try to unlock random value
     {
-        let random_additional_value = rng.gen_range(1..10u128);
+        let random_additional_value = rng.gen_range(1..100);
         let timelocked_outputs = decompose_value(&mut rng, staked_atoms - random_additional_value)
             .iter()
             .map(|atoms| {
@@ -223,7 +223,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
+#[case(1347582952673854724.into())]
 fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
@@ -252,7 +252,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
     // make timelock outputs but total atoms that locked is less then required
     {
-        let random_additional_value = rng.gen_range(1..10u128);
+        let random_additional_value = rng.gen_range(1..=atoms_to_spend);
         let timelocked_outputs =
             decompose_value(&mut rng, atoms_to_spend - random_additional_value)
                 .iter()

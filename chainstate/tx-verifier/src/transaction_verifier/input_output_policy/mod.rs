@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::BlockRewardTransactable, ChainConfig, Transaction, TxInput},
+    chain::{block::BlockRewardTransactable, ChainConfig, PoolId, Transaction, TxInput},
     primitives::BlockHeight,
 };
 use pos_accounting::PoSAccountingView;
@@ -71,10 +71,18 @@ pub fn check_tx_inputs_outputs_policy(
                     .utxo(outpoint)
                     .map_err(|_| utxo::Error::ViewRead)?
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+
+                let pledge_getter = |pool_id: PoolId| {
+                    Ok(pos_accounting_view
+                        .get_pool_data(pool_id)
+                        .map_err(|_| pos_accounting::Error::ViewFail)?
+                        .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?
+                        .pledge_amount())
+                };
                 constraints_accumulator.process_input_utxo(
                     chain_config,
                     block_height,
-                    pos_accounting_view,
+                    pledge_getter,
                     utxo.output(),
                 )?;
             }

@@ -1653,14 +1653,12 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert_eq!(
+        assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
-                ))
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
             ))
-        );
+        ));
     })
 }
 

@@ -224,8 +224,9 @@ fn overspend_single_output(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                ConnectTransactionError::AttemptToPrintMoney(
+                    Amount::from_atoms(tx1_output_value),
+                    Amount::from_atoms(tx2_output_value)
                 )
             ))
         );
@@ -265,8 +266,9 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                ConnectTransactionError::AttemptToPrintMoney(
+                    Amount::from_atoms(tx1_output_value),
+                    Amount::from_atoms(tx2_output_value * 2)
                 )
             ))
         );

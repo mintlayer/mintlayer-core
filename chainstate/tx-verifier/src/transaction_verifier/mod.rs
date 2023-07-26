@@ -635,14 +635,6 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        input_output_policy::check_tx_inputs_outputs_policy(
-            tx.transaction(),
-            self.chain_config.as_ref(),
-            tx_source.expected_block_height(),
-            &self.accounting_delta_adapter.accounting_delta(),
-            &self.utxo_cache,
-        )?;
-
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache.precache_token_issuance(
             |id| {
@@ -666,6 +658,14 @@ where
             &self.accounting_delta_adapter.accounting_delta(),
             tx.transaction(),
             issuance_token_id_getter,
+        )?;
+
+        input_output_policy::check_tx_inputs_outputs_policy(
+            tx.transaction(),
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            &self.accounting_delta_adapter.accounting_delta(),
+            &self.utxo_cache,
         )?;
 
         // check token issuance fee
