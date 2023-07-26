@@ -234,22 +234,3 @@ pub trait ChainstateInterface: Send {
         account: AccountType,
     ) -> Result<Option<AccountNonce>, ChainstateError>;
 }
-
-#[doc(hidden)]
-pub mod integration_tests_support {
-    use common::Uint256;
-
-    use super::*;
-    pub use crate::detail::block_invalidation::best_chain_candidates::{
-        BestChainCandidates, BestChainCandidatesError, BestChainCandidatesItem,
-    };
-
-    pub trait ChainstateTestInterface: super::ChainstateInterface {
-        fn get_best_chain_candidates(
-            &self,
-            min_chain_trust: Uint256,
-        ) -> Result<BestChainCandidates, ChainstateError>;
-
-        fn cast_boxed_self(self: Box<Self>) -> Box<dyn super::ChainstateInterface>;
-    }
-}

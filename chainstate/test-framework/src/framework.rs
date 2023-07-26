@@ -22,16 +22,12 @@ use crate::{
     utils::{outputs_from_block, outputs_from_genesis},
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
-use chainstate::{
-    chainstate_interface::ChainstateInterface, integration_tests_support::BestChainCandidates,
-    BlockSource, ChainstateError,
-};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{Block, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
-    Uint256,
 };
 use crypto::{
     key::PrivateKey,
@@ -64,8 +60,8 @@ impl TestFramework {
     }
 
     // TODO: remove this, because there is the 'into_chainstate' function below, which does the same.
-    pub fn chainstate(self) -> Box<dyn chainstate::chainstate_interface::ChainstateInterface> {
-        self.chainstate.cast_boxed_self()
+    pub fn chainstate(self) -> TestChainstate {
+        self.chainstate
     }
 
     /// Returns a block builder instance that can be used for block construction and processing.
@@ -266,8 +262,8 @@ impl TestFramework {
     }
 
     /// Consumes a test framework and returns chainstate.
-    pub fn into_chainstate(self) -> Box<dyn chainstate::chainstate_interface::ChainstateInterface> {
-        self.chainstate.cast_boxed_self()
+    pub fn into_chainstate(self) -> TestChainstate {
+        self.chainstate
     }
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
@@ -276,10 +272,6 @@ impl TestFramework {
 
     pub fn to_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
         block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
-    }
-
-    pub fn get_best_chain_candidates(&self) -> BestChainCandidates {
-        self.chainstate.get_best_chain_candidates(Uint256::ZERO).unwrap()
     }
 
     pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {

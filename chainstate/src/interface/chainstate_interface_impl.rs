@@ -16,7 +16,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    chainstate_interface::integration_tests_support,
     detail::{
         self,
         block_checking::BlockChecker,
@@ -39,7 +38,6 @@ use common::{
         TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
-    Uint256,
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
@@ -586,21 +584,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_account_nonce_count(account)
             .map_err(ChainstateError::FailedToReadProperty)
-    }
-}
-
-impl<S: BlockchainStorage + 'static, V: TransactionVerificationStrategy + 'static>
-    integration_tests_support::ChainstateTestInterface for ChainstateInterfaceImpl<S, V>
-{
-    fn get_best_chain_candidates(
-        &self,
-        min_chain_trust: Uint256,
-    ) -> Result<integration_tests_support::BestChainCandidates, ChainstateError> {
-        Ok(self.chainstate.get_best_chain_candidates(min_chain_trust)?)
-    }
-
-    fn cast_boxed_self(self: Box<Self>) -> Box<dyn ChainstateInterface> {
-        self
     }
 }
 

@@ -27,7 +27,7 @@ mod utils;
 pub type TestStore = chainstate_storage::inmemory::Store;
 
 /// Chainstate instantiation for testing, using the in-memory storage backend
-pub type TestChainstate = Box<dyn chainstate::integration_tests_support::ChainstateTestInterface>;
+pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
 pub use {
     crate::utils::{

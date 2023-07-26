@@ -262,8 +262,6 @@ fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestC
     assert_in_stale_chain(&tf, &e);
     assert_ok_blocks_at_stage(&tf, &e, BlockValidationStage::CheckBlockOk);
 
-    assert_best_chain_candidates(&tf, &[b[0], c[1], d[2], e[2], m[6]]);
-
     (tf, TestChainBlockIds { m, a, b, c, d, e })
 }
 
@@ -309,7 +307,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0], c[1], d[2], m[2]]);
     }
 
     {
@@ -346,7 +343,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0], c[1], d[2]]);
     }
 
     {
@@ -384,7 +380,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0], c[1]]);
     }
 
     {
@@ -423,7 +418,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0]]);
     }
 
     {
@@ -468,7 +462,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0]]);
     }
 
     {
@@ -510,7 +503,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
 
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
-        assert_best_chain_candidates(&tf, &[b[0]]);
     }
 
     {
@@ -555,7 +547,6 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         // Check the min height for reorg and the best chain candidates.
         assert_eq!(tf.get_min_height_with_allowed_reorg(), 2.into());
         // Note that now b2 and c2 are among the candidates instead of b0 and c1.
-        assert_best_chain_candidates(&tf, &[b[2], c[2], d[2], e[2], m[6]]);
     }
 }
 

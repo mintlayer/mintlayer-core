@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod best_chain_candidates;
+mod best_chain_candidates;
 
 use derive_more::Display;
 use thiserror::Error;
 
-use self::best_chain_candidates::{BestChainCandidates, BestChainCandidatesError};
+use self::best_chain_candidates::BestChainCandidates;
 use super::{chainstateref::ChainstateRef, Chainstate};
 use crate::{detail::chainstateref::ReorgError, BlockError, TransactionVerificationStrategy};
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
@@ -30,6 +30,8 @@ use common::{
 };
 use logging::log;
 use utils::{ensure, tap_error_log::LogError};
+
+pub use best_chain_candidates::BestChainCandidatesError;
 
 pub struct BlockInvalidator<'a, S, V> {
     chainstate: &'a mut Chainstate<S, V>,

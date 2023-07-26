@@ -74,6 +74,8 @@ impl BestChainCandidates {
     /// Collect candidates for the best chain that have chain trust bigger than or equal to
     /// the specified one.
     /// Only consider branches that start above the minimum height where reorgs are allowed.
+    // FIXME: abstract ChainstateRef away here (e.g. hide it behind a trait) so that
+    // BestChainCandidates can be unit-tested more easily. Then write the tests.
     pub fn new<S, V>(
         chainstate_ref: &ChainstateRef<S, V>,
         min_chain_trust: Uint256,
@@ -163,10 +165,6 @@ impl BestChainCandidates {
 
     pub fn best_item(&self) -> Option<&BestChainCandidatesItem> {
         self.0.last()
-    }
-
-    pub fn elements(&self) -> impl Iterator<Item = &BestChainCandidatesItem> {
-        self.0.iter()
     }
 
     fn add<S, V>(&mut self, _chainstate_ref: &ChainstateRef<S, V>, block_index: &BlockIndex)

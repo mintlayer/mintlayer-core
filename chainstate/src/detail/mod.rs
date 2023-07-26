@@ -33,7 +33,7 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use self::{
-    block_invalidation::{best_chain_candidates::BestChainCandidates, BlockInvalidator},
+    block_invalidation::BlockInvalidator,
     orphan_blocks::{OrphanBlocksMut, OrphansProxy},
     query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
@@ -52,7 +52,6 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, config::ChainConfig, Block, GenBlock, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
-    Uint256,
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
@@ -664,16 +663,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     pub fn events_controller(&self) -> &EventsController<ChainstateEvent> {
         &self.events_controller
-    }
-
-    // Note: this is exposed for testing only.
-    pub fn get_best_chain_candidates(
-        &self,
-        min_chain_trust: Uint256,
-    ) -> Result<BestChainCandidates, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from).log_err()?;
-        BestChainCandidates::new(&chainstate_ref, min_chain_trust)
-            .map_err(BlockError::BestChainCandidatesAccessorError)
     }
 
     pub fn is_initial_block_download(&self) -> Result<bool, PropertyQueryError> {

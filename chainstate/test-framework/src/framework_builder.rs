@@ -21,10 +21,7 @@ use crate::{
     },
     TestFramework, TestStore,
 };
-use chainstate::{
-    integration_tests_support::make_chainstate, BlockError, ChainstateConfig,
-    DefaultTransactionVerificationStrategy,
-};
+use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
@@ -170,7 +167,7 @@ impl TestFrameworkBuilder {
         let (time_getter, time_value) = self.create_time_getter_and_value();
 
         let chainstate = match self.tx_verification_strategy {
-            TxVerificationStrategy::Default => make_chainstate(
+            TxVerificationStrategy::Default => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),
@@ -178,7 +175,7 @@ impl TestFrameworkBuilder {
                 self.custom_orphan_error_hook,
                 time_getter.clone(),
             ),
-            TxVerificationStrategy::Disposable => make_chainstate(
+            TxVerificationStrategy::Disposable => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),
@@ -186,7 +183,7 @@ impl TestFrameworkBuilder {
                 self.custom_orphan_error_hook,
                 time_getter.clone(),
             ),
-            TxVerificationStrategy::Randomized(seed) => make_chainstate(
+            TxVerificationStrategy::Randomized(seed) => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),

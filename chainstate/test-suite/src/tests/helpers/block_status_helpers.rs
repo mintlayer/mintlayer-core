@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use chainstate_test_framework::TestFramework;
 use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{chain::Block, primitives::Id};
@@ -169,11 +167,4 @@ pub fn assert_invalidated_blocks_with_bad_parent_at_stage(
         let block_status = get_block_status(tf, block_id);
         assert_invalidated_block_with_bad_parent_at_stage(block_status, expected_last_valid_stage);
     }
-}
-
-pub fn assert_best_chain_candidates(tf: &TestFramework, candidates: &[Id<Block>]) {
-    let best_chain_candidates = tf.get_best_chain_candidates();
-    let actual_set = BTreeSet::from_iter(best_chain_candidates.elements().map(|e| e.block_id()));
-    let expected_set = BTreeSet::from_iter(candidates);
-    assert_eq!(actual_set, expected_set);
 }

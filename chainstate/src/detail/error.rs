@@ -17,7 +17,7 @@ use derive_more::Display;
 use thiserror::Error;
 
 use super::{
-    block_invalidation::best_chain_candidates::BestChainCandidatesError,
+    block_invalidation::BestChainCandidatesError,
     chainstateref::EpochSealError,
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
