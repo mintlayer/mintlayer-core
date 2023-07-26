@@ -48,6 +48,8 @@ impl BestChainCandidatesItem {
 
 impl Ord for BestChainCandidatesItem {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Note: the order of fields is important - we first compare items by chain_trust
+        // and use block_id only as a tiebreaker.
         (&self.chain_trust, &self.block_id).cmp(&(&other.chain_trust, &other.block_id))
     }
 }
