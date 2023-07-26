@@ -15,7 +15,10 @@
 
 pub mod job_manager;
 
-use std::sync::{mpsc, Arc};
+use std::{
+    cmp,
+    sync::{mpsc, Arc},
+};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
 use chainstate_types::{
@@ -119,6 +122,18 @@ impl BlockProduction {
 
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {
         Ok(self.job_manager_handle.stop_job(job_key).await? == 1)
+    }
+
+    pub async fn update_last_used_block_timestamp(
+        &self,
+        job_key: JobKey,
+        last_used_block_timestamp: BlockTimestamp,
+    ) -> Result<(), BlockProductionError> {
+        self.job_manager_handle
+            .update_last_used_block_timestamp(job_key, last_used_block_timestamp)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn collect_transactions(
@@ -296,14 +311,17 @@ impl BlockProduction {
         let tip_at_start = self.pull_best_block_index().await?;
         let custom_id = custom_id.unwrap_or_else(|| self.generate_custom_id(&input_data));
 
-        let (job_key, mut cancel_receiver) =
+        let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) =
             self.job_manager_handle.add_job(custom_id, tip_at_start.block_id()).await?;
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
         let (job_stopper_function, job_finished_receiver) =
             self.job_manager_handle.make_job_stopper_function();
-        let _job_stopper_destructor = OnceDestructor::new(move || job_stopper_function(job_key));
+        let _job_stopper_destructor = {
+            let job_key = job_key.clone();
+            OnceDestructor::new(move || job_stopper_function(job_key))
+        };
 
         // Unlike Proof of Work, which can vary any header field when
         // searching for a valid block, Proof of Stake can only vary
@@ -314,9 +332,13 @@ impl BlockProduction {
         //
         // This variable keeps track of the last timestamp that was
         // attempted, and during Proof of Stake, will prevent
-        // searching over the same search space.
+        // searching over the same search space, across multiple
+        // calls, given the same tip
         let last_timestamp_seconds_used = {
-            let tip_timestamp = tip_at_start.block_timestamp();
+            let tip_timestamp = cmp::max(
+                previous_last_used_block_timestamp.unwrap_or(BlockTimestamp::from_int_seconds(0)),
+                tip_at_start.block_timestamp(),
+            );
 
             let tip_plus_one = tip_timestamp
                 .add_int_seconds(1)
@@ -345,6 +367,9 @@ impl BlockProduction {
                     stop_flag.store(true);
                     return Err(BlockProductionError::TryAgainLater);
                 }
+
+                self.update_last_used_block_timestamp(job_key.clone(), last_used_block_timestamp)
+                    .await?;
             }
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
