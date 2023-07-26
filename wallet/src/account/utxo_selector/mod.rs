@@ -89,8 +89,9 @@ impl SelectionResult {
         min_viable_change: Amount,
         change_cost: Amount,
         change_fee: Amount,
+        pay_fees: PayFee,
     ) -> Result<(), UtxoSelectorError> {
-        self.change = self.calculate_change(min_viable_change, change_fee);
+        self.change = self.calculate_change(min_viable_change, change_fee, pay_fees);
 
         if self.change != Amount::ZERO {
             // Consider the cost of making change and spending it in the future
@@ -111,17 +112,25 @@ impl SelectionResult {
         Ok(())
     }
 
-    fn calculate_change(&self, min_viable_change: Amount, change_fee: Amount) -> Amount {
+    fn calculate_change(
+        &self,
+        min_viable_change: Amount,
+        change_fee: Amount,
+        pay_fees: PayFee,
+    ) -> Amount {
         // change = SUM(inputs) - SUM(outputs) - fees
         // 1) With SFFO we don't pay any fees
         // 2) Otherwise we pay all the fees:
         //  - input fees are covered by effective_value
         //  - non_input_fee is included in target
         //  - change_fee
-        let change = ((self.effective_value - self.target)
-            .expect("effective value is larger than target")
-            - change_fee)
-            .unwrap_or(Amount::ZERO);
+        let change =
+            (self.effective_value - self.target).expect("effective value is larger than target");
+
+        let change = match pay_fees {
+            PayFee::PayFeeWithThisCurrency => (change - change_fee).unwrap_or(Amount::ZERO),
+            PayFee::DoNotPayFeeWithThisCurrency => change,
+        };
 
         if change < min_viable_change {
             Amount::ZERO
@@ -620,7 +629,7 @@ fn select_coins_bnb(
         result.add_input(&utxo_pool[i], pay_fees)?;
     }
 
-    result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
+    result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change, pay_fees)?;
     assert_eq!(best_waste, result.waste);
     Ok(result)
 }
@@ -660,7 +669,12 @@ pub fn select_coins(
         pay_fees,
     ) {
         Ok(mut result) => {
-            result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
+            result.compute_and_set_waste(
+                cost_of_change,
+                cost_of_change,
+                cost_of_change,
+                pay_fees,
+            )?;
             results.push(result)
         }
         Err(error) => errors.push(error),
@@ -675,7 +689,12 @@ pub fn select_coins(
         pay_fees,
     ) {
         Ok(mut result) => {
-            result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change)?;
+            result.compute_and_set_waste(
+                cost_of_change,
+                cost_of_change,
+                cost_of_change,
+                pay_fees,
+            )?;
             results.push(result)
         }
         Err(error) => errors.push(error),
