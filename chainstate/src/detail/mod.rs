@@ -218,7 +218,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .get_block_id_by_height(&BlockHeight::new(1))?
             .ok_or(InitializationError::Block1Missing)?;
         let block1 = dbtx
-            .get_block(Id::new(block1_id.get()))?
+            .get_block(Id::new(block1_id.to_hash()))?
             .ok_or(InitializationError::Block1Missing)?;
         let stored_genesis_id = block1.prev_block_id();
 

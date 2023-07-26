@@ -108,7 +108,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
             let len_to_cut_from_branch = 5;
             let new_branch_len = 35;
             tf1.create_chain(
-                &chain2[chain2.len() - 1 - len_to_cut_from_branch].get().into(),
+                &chain2[chain2.len() - 1 - len_to_cut_from_branch].to_hash().into(),
                 new_branch_len,
                 &mut rng,
             )

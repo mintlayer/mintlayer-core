@@ -181,7 +181,7 @@ mod tests {
 
         let transaction_ids = transactions
             .iter()
-            .map(|tx| tx.transaction().get_id().get())
+            .map(|tx| tx.transaction().get_id().to_hash())
             .collect::<Vec<_>>();
 
         let expected_merkle_leaves = std::iter::once(block_reward_witness_hash)
@@ -254,7 +254,7 @@ mod tests {
                 witness_merkle_tree.transaction_witness_inclusion_proof(i as u32).unwrap();
 
             assert!(inclusion_proof
-                .verify(tx.transaction().get_id().get(), merkle_tree.root())
+                .verify(tx.transaction().get_id().to_hash(), merkle_tree.root())
                 .passed_decisively());
             assert!(witness_inclusion_proof
                 .verify(tx.serialized_hash(), witness_merkle_tree.root())

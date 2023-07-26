@@ -30,59 +30,59 @@ pub enum GenBlock {}
 
 impl From<Id<Block>> for Id<GenBlock> {
     fn from(id: Id<Block>) -> Id<GenBlock> {
-        Id::new(id.get())
+        Id::new(id.to_hash())
     }
 }
 
 impl<'a> From<&'a Id<Block>> for &'a Id<GenBlock> {
     fn from(id: &Id<Block>) -> &Id<GenBlock> {
-        Id::<GenBlock>::ref_cast(id.get_ref())
+        Id::<GenBlock>::ref_cast(id.as_hash())
     }
 }
 
 impl From<Id<Genesis>> for Id<GenBlock> {
     fn from(id: Id<Genesis>) -> Id<GenBlock> {
-        Id::new(id.get())
+        Id::new(id.to_hash())
     }
 }
 
 impl<'a> From<&'a Id<Genesis>> for &'a Id<GenBlock> {
     fn from(id: &Id<Genesis>) -> &Id<GenBlock> {
-        Id::<GenBlock>::ref_cast(id.get_ref())
+        Id::<GenBlock>::ref_cast(id.as_hash())
     }
 }
 
 impl PartialEq<Id<Block>> for Id<GenBlock> {
     fn eq(&self, other: &Id<Block>) -> bool {
-        self.get() == other.get()
+        self.to_hash() == other.to_hash()
     }
 }
 
 impl PartialEq<Id<GenBlock>> for Id<Block> {
     fn eq(&self, other: &Id<GenBlock>) -> bool {
-        self.get() == other.get()
+        self.to_hash() == other.to_hash()
     }
 }
 
 impl PartialEq<Id<Genesis>> for Id<GenBlock> {
     fn eq(&self, other: &Id<Genesis>) -> bool {
-        self.get() == other.get()
+        self.to_hash() == other.to_hash()
     }
 }
 
 impl PartialEq<Id<GenBlock>> for Id<Genesis> {
     fn eq(&self, other: &Id<GenBlock>) -> bool {
-        self.get() == other.get()
+        self.to_hash() == other.to_hash()
     }
 }
 
 impl Id<GenBlock> {
     /// Figure out if this [Id] refers to a [Genesis] or a proper [Block].
     pub fn classify(&self, c: &crate::chain::config::ChainConfig) -> GenBlockId {
-        if self.get() == c.genesis_block_id().get() {
-            GenBlockId::Genesis(Id::new(self.get()))
+        if self.to_hash() == c.genesis_block_id().to_hash() {
+            GenBlockId::Genesis(Id::new(self.to_hash()))
         } else {
-            GenBlockId::Block(Id::new(self.get()))
+            GenBlockId::Block(Id::new(self.to_hash()))
         }
     }
 }

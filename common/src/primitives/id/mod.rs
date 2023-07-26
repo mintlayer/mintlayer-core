@@ -95,21 +95,21 @@ impl<'de> serde::Deserialize<'de> for H256 {
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct Id<T> {
-    id: H256,
+    hash: H256,
     #[serde(skip)]
     _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: TypeName> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.id)
+        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.hash)
     }
 }
 
 // Implementing Clone manually to avoid the Clone constraint on T
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
-        Self::new(self.id)
+        Self::new(self.hash)
     }
 }
 
@@ -117,21 +117,21 @@ impl<T> Copy for Id<T> {}
 
 impl<T> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.id, f)
+        std::fmt::Display::fmt(&self.hash, f)
     }
 }
 
 // We implement Ord manually to avoid it getting inherited to T through PhantomData, because Id having Ord doesn't mean T requiring Ord
 impl<T: Eq> Ord for Id<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(&other.id)
+        self.hash.cmp(&other.hash)
     }
 }
 
 // We implement PartialOrd manually to avoid it getting inherited to T through PhantomData, because Id having PartialOrd doesn't mean T requiring Ord
 impl<T: Eq> PartialOrd for Id<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.id.partial_cmp(&other.id)
+        self.hash.partial_cmp(&other.hash)
     }
 }
 
@@ -142,17 +142,17 @@ impl<T: Eq> From<H256> for Id<T> {
 }
 
 impl<T> Id<T> {
-    pub const fn get(&self) -> H256 {
-        self.id
+    pub const fn to_hash(&self) -> H256 {
+        self.hash
     }
 
-    pub const fn get_ref(&self) -> &H256 {
-        &self.id
+    pub const fn as_hash(&self) -> &H256 {
+        &self.hash
     }
 
     pub const fn new(h: H256) -> Self {
         Self {
-            id: h,
+            hash: h,
             _shadow: std::marker::PhantomData,
         }
     }
@@ -160,7 +160,7 @@ impl<T> Id<T> {
 
 impl<T> AsRef<[u8]> for Id<T> {
     fn as_ref(&self) -> &[u8] {
-        &self.id[..]
+        &self.hash[..]
     }
 }
 
@@ -317,7 +317,7 @@ mod tests {
             serde_test::assert_tokens(&id, &[serde_test::Token::Str(hex)]);
             assert_eq!(
                 serde_json::to_value(id).ok(),
-                Some(Value::String(format!("{:x}", id.id)))
+                Some(Value::String(format!("{:x}", id.hash)))
             );
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)

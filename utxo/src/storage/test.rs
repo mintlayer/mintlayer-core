@@ -238,7 +238,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
         // get the block_undo.
         let block_undo = db
-            .get_undo_data(Id::new(current_best_block_id.get()))
+            .get_undo_data(Id::new(current_best_block_id.to_hash()))
             .expect("query should not fail")
             .expect("should return the undo file");
 

@@ -422,7 +422,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         if let Some(e) =
             self.chain_config.height_checkpoints().checkpoint_at_height(&current_height)
         {
-            let expected_id = Id::<Block>::new(e.get());
+            let expected_id = Id::<Block>::new(e.to_hash());
             if expected_id != header.get_id() {
                 return Err(CheckBlockError::CheckpointMismatch(
                     expected_id,

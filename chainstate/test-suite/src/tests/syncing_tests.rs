@@ -447,7 +447,7 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         assert_eq!(
             filtered_headers,
             Err(ChainstateError::FailedToReadProperty(
-                PropertyQueryError::BlockNotFound(Id::new(headers[1].prev_block_id().get()))
+                PropertyQueryError::BlockNotFound(Id::new(headers[1].prev_block_id().to_hash()))
             ))
         );
     });
