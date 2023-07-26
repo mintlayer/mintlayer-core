@@ -36,12 +36,14 @@ use consensus::{
     generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
     FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
 };
+use crypto::random::{make_true_rng, Rng};
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
 use p2p::P2pHandle;
+use serialization::Encode;
 use tokio::sync::oneshot;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
@@ -57,6 +59,9 @@ pub enum TransactionsSource {
     Mempool,
     Provided(Vec<SignedTransaction>),
 }
+
+pub type CustomId = Vec<u8>;
+pub const JOBKEY_DEFAULT_LEN: usize = 32;
 
 #[allow(dead_code)]
 pub struct BlockProduction {
@@ -242,6 +247,18 @@ impl BlockProduction {
         Ok(best_block_index)
     }
 
+    pub fn generate_custom_id(&self, input_data: &GenerateBlockInputData) -> CustomId {
+        match input_data {
+            GenerateBlockInputData::PoS(pos_input_data) => {
+                pos_input_data.stake_public_key().encode()
+            }
+            GenerateBlockInputData::None | GenerateBlockInputData::PoW(_) => {
+                let mut rng = make_true_rng();
+                rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into()
+            }
+        }
+    }
+
     /// The function the creates a new block.
     ///
     /// Returns the block and a oneshot receiver that will be notified when
@@ -277,6 +294,7 @@ impl BlockProduction {
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
+        let custom_id = custom_id.unwrap_or_else(|| self.generate_custom_id(&input_data));
 
         let (job_key, mut cancel_receiver) =
             self.job_manager_handle.add_job(custom_id, tip_at_start.block_id()).await?;
