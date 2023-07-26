@@ -17,9 +17,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::account::transaction_list::TransactionList;
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{make_issue_nft_outputs, make_issue_token_outputs};
+use crate::wallet_events::WalletEvents;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -34,6 +36,7 @@ use common::chain::{
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
+use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
@@ -71,8 +74,6 @@ pub enum WalletError {
     NoAccountFound(AccountId),
     #[error("No account found with index {0}")]
     NoAccountFoundWithIndex(U31),
-    #[error("Account with index {0} is not synced yet")]
-    AccountNotSyncedWithIndex(U31),
     #[error("Account with index {0} already exists")]
     AccountAlreadyExists(U31),
     #[error("Cannot create a new account when last account is still empty")]
@@ -224,6 +225,10 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn is_encrypted(&self) -> bool {
+        self.db.is_encrypted()
+    }
+
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
         self.db.encrypt_private_keys(password).map_err(WalletError::from)
     }
@@ -237,19 +242,18 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn account_indexes(&self) -> impl Iterator<Item = &U31> {
-        self.accounts.keys()
+        self.accounts.keys().chain(self.unsynced_accounts.keys())
     }
 
     pub fn number_of_accounts(&self) -> usize {
         self.accounts.len() + self.unsynced_accounts.len()
     }
 
-    pub fn account_names(&self) -> Vec<&Option<String>> {
+    pub fn account_names(&self) -> impl Iterator<Item = &Option<String>> {
         self.accounts
             .values()
             .chain(self.unsynced_accounts.values())
             .map(|acc| acc.name())
-            .collect_vec()
     }
 
     pub fn create_account(&mut self, name: Option<String>) -> WalletResult<(U31, Option<String>)> {
@@ -313,8 +317,11 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw(None)?;
-        let account =
-            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
+        let account = Self::get_account_mut(
+            &mut self.accounts,
+            &mut self.unsynced_accounts,
+            account_index,
+        )?;
         let value = f(account, &mut db_tx)?;
         // The in-memory wallet state has already changed, so rolling back
         // the DB transaction will make the wallet state inconsistent.
@@ -330,8 +337,11 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
-        let account =
-            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
+        let account = Self::get_account_mut(
+            &mut self.accounts,
+            &mut self.unsynced_accounts,
+            account_index,
+        )?;
         let value = f(account, &mut db_tx)?;
         // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
         db_tx.commit().expect("RW transaction commit failed unexpectedly");
@@ -341,25 +351,19 @@ impl<B: storage::Backend> Wallet<B> {
     fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
         self.accounts
             .get(&account_index)
+            .or_else(|| self.unsynced_accounts.get(&account_index))
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
-            .map_err(|err| match self.unsynced_accounts.get(&account_index) {
-                Some(_) => WalletError::AccountNotSyncedWithIndex(account_index),
-                _ => err,
-            })
     }
 
     fn get_account_mut<'a>(
         accounts: &'a mut BTreeMap<U31, Account>,
-        unsynced_accounts: &BTreeMap<U31, Account>,
+        unsynced_accounts: &'a mut BTreeMap<U31, Account>,
         account_index: U31,
     ) -> WalletResult<&'a mut Account> {
         accounts
             .get_mut(&account_index)
+            .or_else(|| unsynced_accounts.get_mut(&account_index))
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
-            .map_err(|err| match unsynced_accounts.get(&account_index) {
-                Some(_) => WalletError::AccountNotSyncedWithIndex(account_index),
-                _ => err,
-            })
     }
 
     pub fn get_balance(
@@ -404,8 +408,11 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         tx_id: Id<Transaction>,
     ) -> WalletResult<()> {
-        let account =
-            Self::get_account_mut(&mut self.accounts, &self.unsynced_accounts, account_index)?;
+        let account = Self::get_account_mut(
+            &mut self.accounts,
+            &mut self.unsynced_accounts,
+            account_index,
+        )?;
         account.abandon_transaction(tx_id)
     }
 
@@ -414,7 +421,7 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(pool_ids)
     }
 
-    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
+    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<(ChildNumber, Address)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
@@ -424,6 +431,24 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
         })
+    }
+
+    pub fn get_transaction_list(
+        &self,
+        account_index: U31,
+        skip: usize,
+        count: usize,
+    ) -> WalletResult<TransactionList> {
+        let account = self.get_account(account_index)?;
+        account.get_transaction_list(skip, count)
+    }
+
+    pub fn get_all_issued_addresses(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<BTreeMap<ChildNumber, Address>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_issued_addresses())
     }
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
@@ -449,6 +474,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// A `WalletResult` containing the signed transaction if successful, or an error indicating the reason for failure.
     pub fn create_transaction_to_addresses(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
         current_fee_rate: FeeRate,
@@ -465,7 +491,12 @@ impl<B: storage::Backend> Wallet<B> {
                 consolidate_fee_rate,
             )?;
             let txs = [tx];
-            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
 
             let [tx] = txs;
             Ok(tx)
@@ -474,6 +505,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn issue_new_token(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         token_issuance: TokenIssuance,
@@ -484,6 +516,7 @@ impl<B: storage::Backend> Wallet<B> {
             make_issue_token_outputs(address, token_issuance, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
+            wallet_events,
             account_index,
             outputs,
             current_fee_rate,
@@ -495,6 +528,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn issue_new_nft(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         metadata: Metadata,
@@ -504,6 +538,7 @@ impl<B: storage::Backend> Wallet<B> {
         let outputs = make_issue_nft_outputs(address, metadata, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
+            wallet_events,
             account_index,
             outputs,
             current_fee_rate,
@@ -515,6 +550,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_stake_pool_tx(
         &mut self,
+        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
@@ -533,7 +569,12 @@ impl<B: storage::Backend> Wallet<B> {
             )?;
 
             let txs = [tx];
-            account.scan_new_unconfirmed_transactions(&txs, TxState::Inactive, db_tx)?;
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
 
             let [tx] = txs;
             Ok(tx)
@@ -551,10 +592,9 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
-    pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+    pub fn get_best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         // all synced accounts should have the same best block
-        let account = self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
-        Ok(account.best_block())
+        self.accounts.values().next().expect("accounts can't be empty").best_block()
     }
 
     /// Returns the last scanned block hash and height for the unsynced_account.
@@ -572,14 +612,17 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
+            account.scan_new_blocks(&mut db_tx, wallet_events, common_block_height, &blocks)?;
         }
 
         db_tx.commit()?;
+
+        wallet_events.new_block();
 
         Ok(())
     }
@@ -593,6 +636,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
@@ -602,9 +646,11 @@ impl<B: storage::Backend> Wallet<B> {
             .next()
             .ok_or(WalletError::NoUnsyncedAccount)?;
 
-        account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
+        account.scan_new_blocks(&mut db_tx, wallet_events, common_block_height, &blocks)?;
 
         db_tx.commit()?;
+
+        wallet_events.new_block();
 
         let synced_best_block_height = self
             .accounts
@@ -624,7 +670,11 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
-    pub fn scan_mempool(&mut self, transactions: &[SignedTransaction]) -> WalletResult<()> {
+    pub fn scan_mempool(
+        &mut self,
+        transactions: &[SignedTransaction],
+        wallet_events: &mut impl WalletEvents,
+    ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
@@ -632,6 +682,7 @@ impl<B: storage::Backend> Wallet<B> {
                 transactions,
                 TxState::InMempool,
                 &mut db_tx,
+                wallet_events,
             )?;
         }
 

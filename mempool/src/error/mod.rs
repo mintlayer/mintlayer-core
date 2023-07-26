@@ -61,7 +61,7 @@ pub enum MempoolPolicyError {
     TransactionFeeLowerThanConflictsWithDescendants,
     #[error("Underflow in computing transaction's additional fees.")]
     AdditionalFeesUnderflow,
-    #[error("Transaction does not pay sufficient fees to be relayed.")]
+    #[error("Transaction does not pay sufficient fees to be relayed (tx_fee: {tx_fee:?}, relay_fee: {relay_fee:?}).")]
     InsufficientFeesToRelay { tx_fee: Fee, relay_fee: Fee },
     #[error("Replacement transaction does not pay enough for its bandwidth.")]
     InsufficientFeesToRelayRBF,

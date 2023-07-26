@@ -66,10 +66,8 @@ impl OutputCache {
         cache
     }
 
-    pub fn txs_with_unconfirmed(
-        &self,
-    ) -> impl Iterator<Item = (&OutPointSourceId, &WalletTx)> + '_ {
-        self.txs.iter()
+    pub fn txs_with_unconfirmed(&self) -> &BTreeMap<OutPointSourceId, WalletTx> {
+        &self.txs
     }
 
     pub fn get_txo(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {
@@ -111,7 +109,7 @@ impl OutputCache {
                     }
                 }
                 TxInput::Account(_) => {
-                    unimplemented!()
+                    // TODO: Add accounts support
                 }
             }
         }
@@ -156,7 +154,7 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(_) => {
-                        unimplemented!()
+                        // TODO: Add accounts support
                     }
                 }
             }
@@ -262,7 +260,7 @@ impl OutputCache {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
                                     TxInput::Account(_) => {
-                                        unimplemented!()
+                                        // TODO: Add accounts support
                                     }
                                 }
                             }

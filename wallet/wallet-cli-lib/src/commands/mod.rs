@@ -28,12 +28,10 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::account::Currency;
-use wallet_controller::{
-    NodeInterface, NodeRpcClient, PeerId, RpcController, DEFAULT_ACCOUNT_INDEX,
-};
+use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
+use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
 
-use crate::errors::WalletCliError;
+use crate::{errors::WalletCliError, CliController};
 
 use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
 
@@ -371,11 +369,26 @@ impl CommandHandler {
         }
     }
 
+    pub async fn broadcast_transaction(
+        rpc_client: &NodeRpcClient,
+        tx: SignedTransaction,
+    ) -> Result<ConsoleCommand, WalletCliError> {
+        let status = rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+        let status_text = match status {
+            mempool::TxStatus::InMempool => "The transaction was submitted successfully",
+            mempool::TxStatus::InOrphanPool => {
+                // Mempool should reject the transaction and not return `InOrphanPool`
+                "The transaction has been added to the orphan pool"
+            }
+        };
+        Ok(ConsoleCommand::Print(status_text.to_owned()))
+    }
+
     pub async fn handle_wallet_command(
         &mut self,
         chain_config: &Arc<ChainConfig>,
         rpc_client: &NodeRpcClient,
-        controller_opt: &mut Option<RpcController>,
+        controller_opt: &mut Option<CliController>,
         command: WalletCommand,
     ) -> Result<ConsoleCommand, WalletCliError> {
         let selected_account = self.selected_account();
@@ -400,7 +413,7 @@ impl CommandHandler {
                     None => wallet_controller::mnemonic::generate_new_mnemonic(language),
                 };
 
-                let wallet = RpcController::create_wallet(
+                let wallet = CliController::create_wallet(
                     Arc::clone(chain_config),
                     wallet_path,
                     mnemonic.clone(),
@@ -408,11 +421,12 @@ impl CommandHandler {
                 )
                 .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names().into_iter().cloned().collect();
-                *controller_opt = Some(RpcController::new(
+                let account_names = wallet.account_names().cloned().collect();
+                *controller_opt = Some(CliController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
                     wallet,
+                    WalletEventsNoOp,
                 ));
 
                 let msg = if need_mnemonic_backup {
@@ -435,14 +449,15 @@ impl CommandHandler {
                     WalletCliError::WalletFileAlreadyOpen
                 );
 
-                let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
+                let wallet = CliController::open_wallet(Arc::clone(chain_config), wallet_path)
                     .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names().into_iter().cloned().collect();
-                *controller_opt = Some(RpcController::new(
+                let account_names = wallet.account_names().cloned().collect();
+                *controller_opt = Some(CliController::new(
                     Arc::clone(chain_config),
                     rpc_client.clone(),
                     wallet,
+                    WalletEventsNoOp,
                 ));
 
                 self.set_accounts(account_names);
@@ -624,7 +639,7 @@ impl CommandHandler {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .stop_staking()
+                    .stop_staking(self.selected_account().ok_or(WalletCliError::NoSelectedAccount)?)
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
@@ -651,14 +666,7 @@ impl CommandHandler {
             }
 
             WalletCommand::SubmitTransaction { transaction } => {
-                // TODO: Take status into account
-                let _status = rpc_client
-                    .submit_transaction(transaction.take())
-                    .await
-                    .map_err(WalletCliError::RpcError)?;
-                Ok(ConsoleCommand::Print(
-                    "The transaction was submitted successfully".to_owned(),
-                ))
+                Self::broadcast_transaction(rpc_client, transaction.take()).await
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
@@ -809,7 +817,7 @@ impl CommandHandler {
                     .ok_or(WalletCliError::NoWallet)?
                     .new_address(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print(address.get().to_owned()))
+                Ok(ConsoleCommand::Print(address.1.get().to_owned()))
             }
 
             WalletCommand::NewPublicKey => {
@@ -833,8 +841,7 @@ impl CommandHandler {
             WalletCommand::SendToAddress { address, amount } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                // TODO: Take status into account
-                let _status = controller_opt
+                let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address(
@@ -844,7 +851,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::SendTokensToAddress {
@@ -854,8 +861,7 @@ impl CommandHandler {
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                // TODO: Take status into account
-                let _status = controller_opt
+                let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_tokens_to_address(
@@ -866,7 +872,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::CreateStakePool {
@@ -875,8 +881,7 @@ impl CommandHandler {
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
-                // TODO: Take status into account
-                let _status = controller_opt
+                let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_stake_pool_tx(
@@ -886,7 +891,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::NodeVersion => {

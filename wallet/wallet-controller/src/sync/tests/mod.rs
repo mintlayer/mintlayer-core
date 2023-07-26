@@ -36,6 +36,7 @@ use node_comm::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
+use wallet::wallet_events::WalletEventsNoOp;
 
 use super::*;
 
@@ -66,14 +67,15 @@ impl MockWallet {
 }
 
 impl SyncingWallet for MockWallet {
-    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        Ok((self.get_best_block_id(), self.get_block_height()))
+    fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
+        (self.get_best_block_id(), self.get_block_height())
     }
 
     fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        _wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(
@@ -111,6 +113,7 @@ impl SyncingWallet for MockWallet {
         &mut self,
         _common_block_height: BlockHeight,
         _blocks: Vec<Block>,
+        _wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
         Err(wallet::WalletError::NoUnsyncedAccount)
     }
@@ -230,7 +233,7 @@ async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<
 fn run_sync(chain_config: Arc<ChainConfig>, node: MockNode, mut wallet: MockWallet) {
     tokio::spawn(async move {
         loop {
-            let _ = sync_once(&chain_config, &node, &mut wallet).await;
+            let _ = sync_once(&chain_config, &node, &mut wallet, &mut WalletEventsNoOp).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     });

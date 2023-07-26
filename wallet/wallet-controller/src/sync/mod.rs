@@ -20,17 +20,18 @@ use common::{
 use logging::log;
 use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
-use wallet::{DefaultWallet, WalletResult};
+use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
 
 use crate::ControllerError;
 
 pub trait SyncingWallet {
-    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)>;
+    fn best_block(&self) -> (Id<GenBlock>, BlockHeight);
 
     fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()>;
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
@@ -41,11 +42,12 @@ pub trait SyncingWallet {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
-    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+    fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         self.get_best_block()
     }
 
@@ -53,8 +55,9 @@ impl SyncingWallet for DefaultWallet {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
-        self.scan_new_blocks(common_block_height, blocks)
+        self.scan_new_blocks(common_block_height, blocks, wallet_events)
     }
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
@@ -69,8 +72,9 @@ impl SyncingWallet for DefaultWallet {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
+        wallet_events: &mut impl WalletEvents,
     ) -> WalletResult<()> {
-        self.scan_new_blocks_for_unsynced_account(common_block_height, blocks)
+        self.scan_new_blocks_for_unsynced_account(common_block_height, blocks, wallet_events)
     }
 }
 
@@ -103,6 +107,7 @@ pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
+    wallet_events: &mut impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
     loop {
         let chain_info =
@@ -119,7 +124,7 @@ pub async fn sync_once<T: NodeInterface>(
                 &mut |common_block_height: BlockHeight, block: Block| {
                     let block_id = block.header().block_id();
                     wallet
-                        .scan_blocks_unsynced_acc(common_block_height, vec![block])
+                        .scan_blocks_unsynced_acc(common_block_height, vec![block], wallet_events)
                         .map_err(ControllerError::<T>::WalletError)?;
 
                     log::info!(
@@ -133,8 +138,7 @@ pub async fn sync_once<T: NodeInterface>(
             )
             .await?;
         } else {
-            let (wallet_block_id, wallet_block_height) =
-                wallet.best_block().map_err(ControllerError::WalletError)?;
+            let (wallet_block_id, wallet_block_height) = wallet.best_block();
 
             if chain_info.best_block_id == wallet_block_id {
                 return Ok(());
@@ -151,7 +155,7 @@ pub async fn sync_once<T: NodeInterface>(
                 &mut |common_block_height: BlockHeight, block: Block| {
                     let block_id = block.header().block_id();
                     wallet
-                        .scan_blocks(common_block_height, vec![block])
+                        .scan_blocks(common_block_height, vec![block], wallet_events)
                         .map_err(ControllerError::WalletError)?;
                     log::info!(
                         "Node chainstate updated, block height: {}, tip block id: {}",

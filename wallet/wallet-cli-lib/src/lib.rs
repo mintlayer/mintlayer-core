@@ -20,6 +20,8 @@ pub mod console;
 pub mod errors;
 mod repl;
 
+type CliController = wallet_controller::RpcController<wallet::wallet_events::WalletEventsNoOp>;
+
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use cli_event_loop::Event;

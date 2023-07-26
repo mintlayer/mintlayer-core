@@ -330,26 +330,6 @@ macro_rules! impl_write_ops {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
             }
 
-            // fn set_block(
-            //     &mut self,
-            //     block_height: &AccountBlockHeight,
-            //     block: &WalletBlock,
-            // ) -> crate::Result<()> {
-            //     self.write::<db::DBBlocks, _, _, _>(block_height, block)
-            // }
-
-            // fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()> {
-            //     self.storage.get_mut::<db::DBBlocks, _>().del(block_height).map_err(Into::into)
-            // }
-
-            // fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {
-            //     self.write::<db::DBTxs, _, _, _>(id, tx)
-            // }
-
-            // fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()> {
-            //     self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
-            // }
-
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
                 self.write::<db::DBAccounts, _, _, _>(id, tx)
             }

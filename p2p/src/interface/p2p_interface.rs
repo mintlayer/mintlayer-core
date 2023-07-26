@@ -16,8 +16,9 @@
 use std::sync::Arc;
 
 use common::chain::SignedTransaction;
+use p2p_types::p2p_event::P2pEvent;
 
-use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, P2pEvent};
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {

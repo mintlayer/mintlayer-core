@@ -140,9 +140,9 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
 
     // Issue new addresses until the lookahead size is reached
-    let mut last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
+    let mut last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap().1;
     for _ in 1..key_chain.lookahead_size() {
-        last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
+        last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap().1;
     }
     assert_eq!(
         key_chain.issue_address(&mut db_tx, purpose),

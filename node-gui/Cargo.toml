@@ -9,13 +9,25 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate = { path = "../chainstate" }
-common = { path = '../common' }
+common = { path = "../common" }
+crypto = { path = "../crypto" }
 logging = { path = "../logging" }
+mempool = { path = "../mempool" }
 node-lib = { path = "../node-lib" }
+p2p = { path = "../p2p" }
+serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils" }
+wallet = { path = "../wallet" }
+wallet-controller = { path = "../wallet/wallet-controller" }
+wallet-types = { path = "../wallet/types" }
 
 anyhow.workspace = true
+chrono.workspace = true
+futures.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio"] }
-iced_aw = { workspace = true, features = ["cupertino"] }
+iced_aw = { workspace = true, features = ["cupertino", "icons"] }
+iced_lazy = { workspace = true }
+rfd = { workspace = true, features = ["xdg-portal"] }
+thiserror.workspace = true
 tokio.workspace = true

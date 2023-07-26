@@ -16,34 +16,27 @@
 use iced::{
     alignment,
     widget::{button, container, text},
-    Color, Command, Element, Length,
+    Color, Element, Length,
 };
 use iced_aw::menu::{CloseCondition, ItemHeight, ItemWidth, MenuBar, MenuTree, PathHighlight};
 
-use crate::backend_controller::NodeBackendController;
-
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
-    Start,
     NoOp,
+    CreateNewWallet,
+    ImportWallet,
+    OpenWallet,
     Exit,
 }
 
-pub struct MainMenu {
-    _backend_controller: NodeBackendController,
-}
+pub struct MainMenu {}
 
 impl MainMenu {
-    pub fn new(backend_controller: NodeBackendController) -> Self {
-        Self {
-            _backend_controller: backend_controller,
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 
-    pub fn view(
-        &self,
-        _backend_controller: &NodeBackendController,
-    ) -> Element<'_, MenuMessage, iced::Renderer> {
+    pub fn view(&self) -> Element<MenuMessage> {
         let file_menu = make_menu_file();
         let help_menu = make_menu_help();
 
@@ -54,26 +47,14 @@ impl MainMenu {
             .bounds_expand(30)
             .path_highlight(Some(PathHighlight::MenuActive))
             .close_condition(CloseCondition {
-                leave: true,
-                click_outside: false,
-                click_inside: false,
+                leave: false,
+                click_outside: true,
+                click_inside: true,
             });
 
         let c = iced::widget::column![container(menu_bar)];
 
         c.into()
-    }
-
-    pub fn start() -> impl IntoIterator<Item = Command<MenuMessage>> {
-        []
-    }
-
-    pub fn update(&self, msg: MenuMessage) -> Command<MenuMessage> {
-        match msg {
-            MenuMessage::Start => iced::Command::batch(Self::start()),
-            MenuMessage::NoOp => Command::none(),
-            MenuMessage::Exit => iced::window::close(),
-        }
     }
 }
 
@@ -102,7 +83,7 @@ impl button::StyleSheet for ButtonStyle {
 }
 
 fn base_button<'a>(
-    content: impl Into<Element<'a, MenuMessage, iced::Renderer>>,
+    content: impl Into<Element<'a, MenuMessage>>,
     msg: MenuMessage,
 ) -> button::Button<'a, MenuMessage, iced::Renderer> {
     button(content)
@@ -111,10 +92,7 @@ fn base_button<'a>(
         .on_press(msg)
 }
 
-fn labeled_button<'a>(
-    label: &str,
-    msg: MenuMessage,
-) -> button::Button<'a, MenuMessage, iced::Renderer> {
+fn labeled_button<'a>(label: &str, msg: MenuMessage) -> button::Button<'a, MenuMessage> {
     base_button(
         text(label)
             .width(Length::Fill)
@@ -131,7 +109,13 @@ fn menu_item<'a>(label: &str, msg: MenuMessage) -> MenuTree<'a, MenuMessage, ice
 fn make_menu_file<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
     let root = MenuTree::with_children(
         labeled_button("File", MenuMessage::NoOp),
-        vec![menu_item("Settings", MenuMessage::NoOp), menu_item("Exit", MenuMessage::Exit)],
+        vec![
+            menu_item("Create new wallet", MenuMessage::CreateNewWallet),
+            menu_item("Import wallet", MenuMessage::ImportWallet),
+            menu_item("Open wallet", MenuMessage::OpenWallet),
+            menu_item("Settings", MenuMessage::NoOp),
+            menu_item("Exit", MenuMessage::Exit),
+        ],
     )
     .width(110);
 

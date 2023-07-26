@@ -88,15 +88,23 @@ where
     assert_eq!(events_receiver.try_recv(), Err(TryRecvError::Empty));
     let (_, _, info) = connect_and_accept_services::<N>(&mut service1, &mut service2).await;
 
-    assert_eq!(
-        timeout(Duration::from_secs(5), events_receiver.recv()).await.unwrap(),
+    match timeout(Duration::from_secs(5), events_receiver.recv()).await.unwrap() {
         Some(P2pEvent::PeerConnected {
-            id: info.peer_id,
-            services: [Service::Transactions, Service::Blocks, Service::PeerAddresses]
-                .as_ref()
-                .into()
-        })
-    );
+            id,
+            services,
+            address: _,
+            inbound: _,
+            user_agent: _,
+            version: _,
+        }) => {
+            assert_eq!(id, info.peer_id);
+            assert_eq!(
+                services,
+                [Service::Transactions, Service::Blocks, Service::PeerAddresses].as_ref().into()
+            );
+        }
+        res => panic!("unexpected result: {res:?}"),
+    }
 
     service1.disconnect(info.peer_id).unwrap();
     assert_eq!(

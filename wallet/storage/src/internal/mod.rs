@@ -61,6 +61,13 @@ impl<B: storage::Backend> Store<B> {
         Ok(storage)
     }
 
+    pub fn is_encrypted(&self) -> bool {
+        match self.encryption_state {
+            EncryptionState::Locked | EncryptionState::Unlocked(Some(_)) => true,
+            EncryptionState::Unlocked(None) => false,
+        }
+    }
+
     /// Encrypts the root keys in the DB with the provided new_password
     /// expects that the wallet is already unlocked
     pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {

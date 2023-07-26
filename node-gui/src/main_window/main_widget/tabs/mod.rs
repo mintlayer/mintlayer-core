@@ -13,77 +13,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{
-    alignment,
-    widget::{Column, Container},
-    Command, Element, Font, Length,
-};
+use iced::{Command, Element};
 use iced_aw::{TabLabel, Tabs};
 
-use crate::backend_controller::NodeBackendController;
+use crate::{
+    backend::{messages::WalletId, BackendSender},
+    main_window::NodeState,
+};
 
 use self::{
+    networking::{NetworkingMessage, NetworkingTab},
     settings::{SettingsMessage, SettingsTab, TabBarPosition},
     summary::{SummaryMessage, SummaryTab},
+    wallet::{WalletMessage, WalletTab},
 };
 
+pub mod networking;
 pub mod settings;
 pub mod summary;
-
-const TAB_PADDING: u16 = 16;
-
-const ICON_FONT: Font = iced::Font::External {
-    name: "Icons",
-    bytes: include_bytes!("../../../../fonts/icons.ttf"),
-};
-
-enum Icon {
-    User,
-    CogAlt,
-}
-
-impl From<Icon> for char {
-    fn from(icon: Icon) -> Self {
-        match icon {
-            Icon::User => '\u{E800}',
-            Icon::CogAlt => '\u{E802}',
-        }
-    }
-}
+pub mod wallet;
 
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
-    Start,
     TabSelected(usize),
+    WalletAdded(WalletId),
+    WalletRemoved(WalletId),
     Summary(SummaryMessage),
+    Networking(NetworkingMessage),
     Settings(SettingsMessage),
+    WalletMessage(WalletId, WalletMessage),
 }
 
 pub struct TabsWidget {
     active_tab: usize,
     summary_tab: SummaryTab,
+    networking_tab: NetworkingTab,
     settings_tab: SettingsTab,
+    wallets: Vec<WalletTab>,
 }
 
 impl TabsWidget {
-    pub fn new(backend_controller: NodeBackendController) -> Self {
+    pub fn new() -> Self {
         TabsWidget {
             active_tab: 0,
-            summary_tab: SummaryTab::new(backend_controller),
+            summary_tab: SummaryTab::new(),
+            networking_tab: NetworkingTab::new(),
             settings_tab: SettingsTab::new(),
+            wallets: Vec::new(),
         }
     }
 
-    pub fn view(
-        &self,
-        _backend_controller: &NodeBackendController,
-    ) -> Element<'_, TabsMessage, iced::Renderer> {
+    pub fn last_wallet_tab_index(&self) -> usize {
+        2 + self.wallets.len()
+    }
+
+    pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
-        Tabs::new(self.active_tab, TabsMessage::TabSelected)
-            .push(self.summary_tab.tab_label(), self.summary_tab.view())
-            .push(self.settings_tab.tab_label(), self.settings_tab.view())
-            .icon_font(ICON_FONT)
+        let mut tabs = Tabs::new(self.active_tab, TabsMessage::TabSelected)
+            .push(
+                self.summary_tab.tab_label(),
+                self.summary_tab.view(node_state),
+            )
+            .push(
+                self.networking_tab.tab_label(),
+                self.networking_tab.view(node_state),
+            )
+            .push(
+                self.settings_tab.tab_label(),
+                self.settings_tab.view(node_state),
+            );
+
+        for wallet in self.wallets.iter() {
+            tabs = tabs.push(wallet.tab_label(), wallet.view(node_state))
+        }
+
+        tabs.icon_font(iced_aw::ICON_FONT)
             .tab_bar_position(match position {
                 TabBarPosition::Top => iced_aw::TabBarPosition::Top,
                 TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
@@ -91,25 +96,48 @@ impl TabsWidget {
             .into()
     }
 
-    pub fn start() -> impl IntoIterator<Item = Command<TabsMessage>> {
-        [
-            iced::Command::perform(async {}, |_| TabsMessage::Summary(SummaryMessage::Start)),
-            iced::Command::perform(async {}, |_| TabsMessage::Settings(SettingsMessage::Start)),
-        ]
-    }
-
-    pub fn update(&mut self, msg: TabsMessage) -> iced::Command<TabsMessage> {
+    pub fn update(
+        &mut self,
+        msg: TabsMessage,
+        backend_sender: &BackendSender,
+    ) -> Command<TabsMessage> {
         match msg {
-            TabsMessage::Start => iced::Command::batch(Self::start()),
             TabsMessage::TabSelected(n) => {
                 self.active_tab = n;
+                Command::none()
+            }
+            TabsMessage::WalletAdded(waller_id) => {
+                let wallet_tab = WalletTab::new(waller_id);
+                self.wallets.push(wallet_tab);
+                self.active_tab = self.last_wallet_tab_index();
+                Command::none()
+            }
+            TabsMessage::WalletRemoved(wallet_id) => {
+                self.wallets.retain(|wallet_tab| wallet_tab.wallet_id() != wallet_id);
+                if self.active_tab > self.last_wallet_tab_index() {
+                    self.active_tab = self.last_wallet_tab_index();
+                }
                 Command::none()
             }
             TabsMessage::Summary(message) => {
                 self.summary_tab.update(message).map(TabsMessage::Summary)
             }
+            TabsMessage::Networking(message) => {
+                self.networking_tab.update(message).map(TabsMessage::Networking)
+            }
             TabsMessage::Settings(message) => {
                 self.settings_tab.update(message).map(TabsMessage::Settings)
+            }
+            TabsMessage::WalletMessage(wallet_id, message) => {
+                if let Some(wallet_tab) =
+                    self.wallets.iter_mut().find(|wallet_tab| wallet_tab.wallet_id() == wallet_id)
+                {
+                    wallet_tab
+                        .update(message, backend_sender)
+                        .map(move |msg| TabsMessage::WalletMessage(wallet_id, msg))
+                } else {
+                    Command::none()
+                }
             }
         }
     }
@@ -122,17 +150,9 @@ trait Tab {
 
     fn tab_label(&self) -> TabLabel;
 
-    fn view(&self) -> Element<'_, Self::Message> {
-        let column = Column::new().spacing(20).push(self.content());
-
-        Container::new(column)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(alignment::Horizontal::Left)
-            .align_y(alignment::Vertical::Top)
-            .padding(TAB_PADDING)
-            .into()
+    fn view(&self, node_state: &NodeState) -> Element<Self::Message> {
+        self.content(node_state)
     }
 
-    fn content(&self) -> Element<'_, Self::Message>;
+    fn content(&self, node_state: &NodeState) -> Element<Self::Message>;
 }

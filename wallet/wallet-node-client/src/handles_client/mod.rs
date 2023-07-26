@@ -34,6 +34,12 @@ pub struct WalletHandlesClient {
     p2p: P2pHandle,
 }
 
+impl std::fmt::Debug for WalletHandlesClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WalletHandlesClient").finish()
+    }
+}
+
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum WalletHandlesClientError {
     #[error("Call error: {0}")]

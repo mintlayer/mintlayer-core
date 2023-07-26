@@ -189,16 +189,14 @@ impl LeafKeySoftChain {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         lookahead_size: u32,
-    ) -> KeyChainResult<(ExtendedPublicKey, Address)> {
+    ) -> KeyChainResult<(ChildNumber, ExtendedPublicKey, Address)> {
         let new_issued_index = self.get_new_issued_index(lookahead_size)?;
 
         let key = self.derive_and_add_key(db_tx, new_issued_index)?;
 
-        let address = self
-            .addresses
-            .get(&ChildNumber::from_normal(new_issued_index))
-            .expect("The address should be derived")
-            .clone();
+        let index = ChildNumber::from_normal(new_issued_index);
+
+        let address = self.addresses.get(&index).expect("The address should be derived").clone();
 
         logging::log::debug!(
             "new address: {}, index: {}, purpose {:?}",
@@ -210,7 +208,7 @@ impl LeafKeySoftChain {
         self.usage_state.increment_up_to_last_issued(new_issued_index);
         self.save_usage_state(db_tx)?;
 
-        Ok((key, address))
+        Ok((index, key, address))
     }
 
     /// Persist the usage state to the database
@@ -442,6 +440,21 @@ impl LeafKeySoftChain {
     /// Get the index of the last issued key or None if no key is issued
     pub fn last_issued(&self) -> Option<U31> {
         self.usage_state.last_issued()
+    }
+
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+        let last_issued = match self.usage_state.last_issued() {
+            Some(index) => index,
+            None => return BTreeMap::new(),
+        };
+
+        let last_issued = ChildNumber::from_normal(last_issued);
+
+        self.addresses
+            .clone()
+            .into_iter()
+            .filter(|(index, _address)| *index <= last_issued)
+            .collect()
     }
 
     pub fn usage_state(&self) -> &KeychainUsageState {

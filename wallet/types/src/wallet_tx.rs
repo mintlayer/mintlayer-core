@@ -43,6 +43,38 @@ pub enum TxState {
     Abandoned,
 }
 
+impl TxState {
+    pub fn block_height(&self) -> Option<BlockHeight> {
+        match self {
+            TxState::Confirmed(block_height, _timestamp) => Some(*block_height),
+            TxState::InMempool
+            | TxState::Conflicted(_)
+            | TxState::Inactive
+            | TxState::Abandoned => None,
+        }
+    }
+
+    pub fn timestamp(&self) -> Option<BlockTimestamp> {
+        match self {
+            TxState::Confirmed(_block_height, timestamp) => Some(*timestamp),
+            TxState::InMempool
+            | TxState::Conflicted(_)
+            | TxState::Inactive
+            | TxState::Abandoned => None,
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            TxState::Confirmed(_height, _timestamp) => "Confirmed",
+            TxState::Conflicted(_id) => "Conflicted",
+            TxState::InMempool => "InMempool",
+            TxState::Inactive => "Inactive",
+            TxState::Abandoned => "Abandoned",
+        }
+    }
+}
+
 impl Display for TxState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -83,7 +115,7 @@ pub struct TxData {
 /// Spent outputs are found by looking at all locally stored transactions
 /// and blocks. In case of reorg, top blocks are simply removed from the DB.
 /// We use the same approach as the Bitcoin Core wallet, but unlike Bitcoin
-/// we don't have coinbase transactions, so the additional `OwnedBlockRewardData`
+/// we don't have coinbase transactions, so the additional `BlockData`
 /// struct is invented here.
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct BlockData {

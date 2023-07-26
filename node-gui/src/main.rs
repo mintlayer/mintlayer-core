@@ -13,21 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod backend_controller;
+mod backend;
 mod main_window;
+mod widgets;
 
-use std::ops::DerefMut;
+use std::convert::identity;
 
-use backend_controller::NodeBackendController;
-use iced::futures::TryFutureExt;
+use backend::messages::{BackendEvent, BackendRequest};
+use backend::{node_initialize, BackendControls, BackendSender};
+use common::time_getter::TimeGetter;
 use iced::widget::{column, container, text};
 use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
+use tokio::sync::mpsc::Receiver;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
+        id: Some("mintlayer-gui".to_owned()),
         antialiasing: true,
         exit_on_close_request: false,
         try_opengles_first: true,
@@ -37,31 +41,17 @@ pub fn main() -> iced::Result {
 
 enum MintlayerNodeGUI {
     Loading,
-    Loaded(NodeBackendController, MainWindow),
+    Loaded(BackendSender, MainWindow),
     IntializationError(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Message {
-    Loaded(Result<NodeBackendController, String>),
+    FromBackend(Receiver<BackendEvent>, BackendEvent),
+    Loaded(anyhow::Result<BackendControls>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
     MainWindowMessage(MainWindowMessage),
-}
-
-fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
-    let manager_join_handle = match controller.trigger_shutdown() {
-        Some(h) => h,
-        None => return Command::none(),
-    };
-
-    Command::perform(
-        async move {
-            let mut handle = manager_join_handle.lock().await;
-            handle.deref_mut().await.expect("Manager thread failed");
-        },
-        |_| Message::ShuttingDownFinished,
-    )
 }
 
 impl Application for MintlayerNodeGUI {
@@ -73,18 +63,18 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Loading,
-            Command::perform(
-                NodeBackendController::initialize().map_err(|e| e.to_string()),
-                Message::Loaded,
-            ),
+            Command::perform(node_initialize(TimeGetter::default()), Message::Loaded),
         )
     }
 
     fn title(&self) -> String {
         match self {
-            MintlayerNodeGUI::Loading => ("Mintlayer Node - Loading...").to_string(),
-            MintlayerNodeGUI::Loaded(d, _w) => {
-                format!("Mintlayer Node - {}", d.chain_config().chain_type().name())
+            MintlayerNodeGUI::Loading => "Mintlayer Node - Loading...".to_string(),
+            MintlayerNodeGUI::Loaded(_backend_sender, w) => {
+                format!(
+                    "Mintlayer Node - {}",
+                    w.node_state().chain_config().chain_type().name()
+                )
             }
             MintlayerNodeGUI::IntializationError(_) => "Mintlayer initialization error".to_string(),
         }
@@ -93,15 +83,19 @@ impl Application for MintlayerNodeGUI {
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
             MintlayerNodeGUI::Loading => match message {
-                Message::Loaded(Ok(controller)) => {
+                Message::FromBackend(_, _) => unreachable!(),
+                Message::Loaded(Ok(backend_controls)) => {
+                    let BackendControls {
+                        initialized_node,
+                        backend_sender,
+                        backend_receiver,
+                    } = backend_controls;
                     *self =
-                        MintlayerNodeGUI::Loaded(controller.clone(), MainWindow::new(controller));
-                    iced::Command::perform(async {}, |_| {
-                        Message::MainWindowMessage(MainWindowMessage::Start)
-                    })
+                        MintlayerNodeGUI::Loaded(backend_sender, MainWindow::new(initialized_node));
+                    recv_backend_command(backend_receiver)
                 }
                 Message::Loaded(Err(e)) => {
-                    *self = MintlayerNodeGUI::IntializationError(e);
+                    *self = MintlayerNodeGUI::IntializationError(e.to_string());
                     Command::none()
                 }
                 Message::EventOccurred(event) => {
@@ -115,20 +109,32 @@ impl Application for MintlayerNodeGUI {
                 Message::ShuttingDownFinished => Command::none(),
                 Message::MainWindowMessage(_) => Command::none(),
             },
-            MintlayerNodeGUI::Loaded(ref mut controller, ref mut w) => match message {
+            MintlayerNodeGUI::Loaded(backend_sender, w) => match message {
+                Message::FromBackend(backend_receiver, backend_event) => Command::batch([
+                    w.update(
+                        MainWindowMessage::FromBackend(backend_event),
+                        backend_sender,
+                    )
+                    .map(Message::MainWindowMessage),
+                    recv_backend_command(backend_receiver),
+                ]),
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         // TODO: this event doesn't cover the case of closing the Window through Cmd+Q in MacOS
-                        gui_shutdown(controller)
+                        backend_sender.send(BackendRequest::Shutdown);
+                        Command::none()
                     } else {
                         Command::none()
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
-                Message::MainWindowMessage(msg) => w.update(msg).map(Message::MainWindowMessage),
+                Message::MainWindowMessage(msg) => {
+                    w.update(msg, backend_sender).map(Message::MainWindowMessage)
+                }
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
+                Message::FromBackend(_, _) => unreachable!(),
                 Message::Loaded(_) => Command::none(),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
@@ -149,24 +155,28 @@ impl Application for MintlayerNodeGUI {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerNodeGUI::Loaded(state, w) => w.view(state).map(Message::MainWindowMessage),
+            MintlayerNodeGUI::Loaded(_backend_sender, w) => {
+                w.view().map(Message::MainWindowMessage)
+            }
 
             MintlayerNodeGUI::IntializationError(e) => {
                 let error_box = column![
                     iced::widget::text("Mintlayer-core node initialization failed".to_string())
                         .size(32),
                     iced::widget::text(e.to_string()).size(20),
-                    iced::widget::button(text("Close")).on_press(Message::ShuttingDownFinished)
+                    iced::widget::button(text("Close")).on_press(())
                 ]
                 .align_items(iced::Alignment::Center)
                 .spacing(5);
 
-                container(error_box)
+                let res: Element<()> = container(error_box)
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .center_x()
                     .center_y()
-                    .into()
+                    .into();
+
+                res.map(|_| Message::ShuttingDownFinished)
             }
         }
     }
@@ -178,4 +188,16 @@ impl Application for MintlayerNodeGUI {
     fn subscription(&self) -> Subscription<Message> {
         iced::subscription::events().map(Message::EventOccurred)
     }
+}
+
+fn recv_backend_command(mut backend_receiver: Receiver<BackendEvent>) -> Command<Message> {
+    Command::perform(
+        async move {
+            match backend_receiver.recv().await {
+                Some(msg) => Message::FromBackend(backend_receiver, msg),
+                None => Message::ShuttingDownFinished,
+            }
+        },
+        identity,
+    )
 }

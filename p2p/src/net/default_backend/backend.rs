@@ -25,7 +25,11 @@ use tokio::{
     time::timeout,
 };
 
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{
+    chain::ChainConfig,
+    primitives::{semver::SemVer, user_agent::UserAgent},
+    time_getter::TimeGetter,
+};
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
@@ -61,16 +65,24 @@ use super::{
 const SYNC_CHAN_BUF_SIZE: usize = 20;
 
 /// Active peer data
-struct PeerContext {
+struct PeerContext<A> {
     handle: tokio::task::JoinHandle<()>,
-
-    services: Services,
 
     /// Channel used to send messages to the peer's event loop.
     tx: mpsc::UnboundedSender<Event>,
 
     /// True if the peer was accepted by PeerManager and SyncManager was notified
     was_accepted: SetFlag,
+
+    address: A,
+
+    inbound: bool,
+
+    user_agent: UserAgent,
+
+    version: SemVer,
+
+    services: Services,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -103,7 +115,7 @@ pub struct Backend<T: TransportSocket> {
     cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
 
     /// Active peers
-    peers: HashMap<PeerId, PeerContext>,
+    peers: HashMap<PeerId, PeerContext<T::Address>>,
 
     /// Pending connections
     pending: HashMap<PeerId, PendingPeerContext<T::Address>>,
@@ -224,6 +236,10 @@ where
         self.events_controller.broadcast(P2pEvent::PeerConnected {
             id: peer_id,
             services: peer.services,
+            address: peer.address.to_string(),
+            inbound: peer.inbound,
+            user_agent: peer.user_agent.clone(),
+            version: peer.version,
         });
 
         Ok(())
@@ -397,18 +413,21 @@ where
         }
 
         let services = peer_info.services;
+        let inbound = peer_role == PeerRole::Inbound;
+        let user_agent = peer_info.user_agent.clone();
+        let version = peer_info.version;
 
         match peer_role {
             PeerRole::Outbound { handshake_nonce: _ } => {
                 self.conn_tx.send(ConnectivityEvent::OutboundAccepted {
-                    address,
+                    address: address.clone(),
                     peer_info,
                     receiver_address,
                 })?;
             }
             PeerRole::Inbound => {
                 self.conn_tx.send(ConnectivityEvent::InboundAccepted {
-                    address,
+                    address: address.clone(),
                     peer_info,
                     receiver_address,
                 })?;
@@ -419,6 +438,10 @@ where
             peer_id,
             PeerContext {
                 handle,
+                address,
+                inbound,
+                user_agent,
+                version,
                 services,
                 tx,
                 was_accepted: SetFlag::new(),

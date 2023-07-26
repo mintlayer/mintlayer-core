@@ -16,6 +16,7 @@
 use crate::{
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::make_address_output,
+    wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
 use std::collections::BTreeSet;
@@ -335,7 +336,7 @@ fn wallet_balance_block_reward() {
         .unwrap_or(Amount::ZERO);
 
     assert_eq!(coin_balance, Amount::ZERO);
-    let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
+    let (best_block_id, best_block_height) = wallet.get_best_block();
     assert_eq!(best_block_id, chain_config.genesis_block_id());
     assert_eq!(best_block_height, BlockHeight::new(0));
 
@@ -363,10 +364,12 @@ fn wallet_balance_block_reward() {
     .unwrap();
     let block1_id = block1.header().block_id();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     // Verify that the first block reward has been received
-    let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
+    let (best_block_id, best_block_height) = wallet.get_best_block();
     assert_eq!(best_block_id, block1_id);
     assert_eq!(best_block_height, BlockHeight::new(1));
     verify_wallet_balance(&chain_config, &wallet, block1_amount);
@@ -394,10 +397,12 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_id = block2.header().block_id();
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(1), vec![block2], &mut WalletEventsNoOp)
+        .unwrap();
 
     // Verify that the second block reward is also received
-    let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
+    let (best_block_id, best_block_height) = wallet.get_best_block();
     assert_eq!(best_block_id, block2_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
     verify_wallet_balance(
@@ -429,10 +434,12 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2_new]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(1), vec![block2_new], &mut WalletEventsNoOp)
+        .unwrap();
 
     // Verify that the balance includes outputs from block1 and block2_new, but not block2
-    let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
+    let (best_block_id, best_block_height) = wallet.get_best_block();
     assert_eq!(best_block_id, block2_new_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
     verify_wallet_balance(
@@ -474,7 +481,9 @@ fn wallet_balance_block_transactions() {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     verify_wallet_balance(&chain_config, &wallet, tx_amount1);
 }
@@ -532,7 +541,9 @@ fn wallet_balance_parent_child_transactions() {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     verify_wallet_balance(&chain_config, &wallet, tx_amount2);
 }
@@ -598,7 +609,9 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
     let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
     wallet.lock_wallet().unwrap();
@@ -671,7 +684,9 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
@@ -698,6 +713,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     assert_eq!(
         wallet.create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output.clone()],
             FeeRate::new(Amount::ZERO),
@@ -713,6 +729,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     if rng.gen::<bool>() {
         wallet
             .create_transaction_to_addresses(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
@@ -740,6 +757,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
         wallet
             .create_transaction_to_addresses(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
@@ -794,7 +812,9 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -819,7 +839,13 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
 
     let feerate = FeeRate::new(Amount::from_atoms(1000));
     let transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, feerate, feerate)
+        .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
+            DEFAULT_ACCOUNT_INDEX,
+            outputs,
+            feerate,
+            feerate,
+        )
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
@@ -901,7 +927,9 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let block1_id = block1.get_id();
     let block1_timestamp = block1.timestamp();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
     assert!(pool_ids.is_empty());
@@ -922,6 +950,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             pool_amount,
             None,
@@ -938,7 +967,9 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(1), vec![block2], &mut WalletEventsNoOp)
+        .unwrap();
 
     let currency_balances = wallet
         .get_balance(
@@ -1006,7 +1037,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let block1_id = block1.get_id();
     let block1_timestamp = block1.timestamp();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1020,7 +1053,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
-    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
@@ -1028,6 +1061,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let (issued_token_id, token_issuance_transaction) = if rng.gen::<bool>() {
         wallet
             .issue_new_token(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
                 TokenIssuance {
@@ -1044,6 +1078,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         token_amount_to_issue = Amount::from_atoms(1);
         wallet
             .issue_new_nft(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
                 Metadata {
@@ -1076,7 +1111,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(1), vec![block2], &mut WalletEventsNoOp)
+        .unwrap();
 
     let currency_balances = wallet
         .get_balance(
@@ -1115,6 +1152,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1135,7 +1173,9 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         .unwrap()]),
     )
     .unwrap();
-    wallet.scan_new_blocks(BlockHeight::new(2), vec![block3]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(2), vec![block3], &mut WalletEventsNoOp)
+        .unwrap();
 
     let currency_balances = wallet
         .get_balance(
@@ -1180,6 +1220,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let transfer_tokens_error = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1249,7 +1290,9 @@ fn lock_then_transfer(#[case] seed: Seed) {
     // not important that it is not the actual median
     wallet.set_median_time(timestamp).unwrap();
     let timestamp = block1.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     // check balance
     let coin_balance = wallet
@@ -1264,7 +1307,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
-    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let destination = address2.destination(chain_config.as_ref()).unwrap();
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
@@ -1283,6 +1326,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
 
     let lock_then_transfer_transaction = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1307,7 +1351,9 @@ fn lock_then_transfer(#[case] seed: Seed) {
     // not important that it is not the actual median
     wallet.set_median_time(timestamp).unwrap();
     let mut timestamp = block2.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(1), vec![block2], &mut WalletEventsNoOp)
+        .unwrap();
 
     // check balance
     let balance_without_locked_transer =
@@ -1350,7 +1396,13 @@ fn lock_then_transfer(#[case] seed: Seed) {
         // not important that it is not the actual median
         wallet.set_median_time(timestamp).unwrap();
         timestamp = new_block.timestamp().add_int_seconds(seconds_between_blocks).unwrap();
-        wallet.scan_new_blocks(BlockHeight::new(2 + idx), vec![new_block]).unwrap();
+        wallet
+            .scan_new_blocks(
+                BlockHeight::new(2 + idx),
+                vec![new_block],
+                &mut WalletEventsNoOp,
+            )
+            .unwrap();
     }
 
     // check that after block_count_lock, the amount is included
@@ -1412,7 +1464,9 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
         .collect_vec();
 
     // move old account 1..10 block further then genesis
-    wallet.scan_new_blocks(BlockHeight::new(0), blocks.clone()).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), blocks.clone(), &mut WalletEventsNoOp)
+        .unwrap();
     verify_wallet_balance(&chain_config, &wallet, total_amount);
 
     // create new account which is back on genesis
@@ -1423,21 +1477,18 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     // sync new account with the new block
     for block in blocks {
         // not yet synced
-        let err = wallet
+        let _balance = wallet
             .get_balance(
                 new_account_index,
                 UtxoType::Transfer.into(),
                 UtxoState::Confirmed.into(),
             )
-            .err()
             .unwrap();
-        assert_eq!(
-            err,
-            WalletError::AccountNotSyncedWithIndex(new_account_index)
-        );
 
         let (_, block_height) = wallet.get_best_block_for_unsynced_account().unwrap();
-        wallet.scan_new_blocks_for_unsynced_account(block_height, vec![block]).unwrap();
+        wallet
+            .scan_new_blocks_for_unsynced_account(block_height, vec![block], &mut WalletEventsNoOp)
+            .unwrap();
     }
     // now both account are in sync and can be used
     let coin_balance = wallet
@@ -1490,7 +1541,13 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         )
         .unwrap();
 
-        wallet.scan_new_blocks(BlockHeight::new(i as u64), vec![block1]).unwrap();
+        wallet
+            .scan_new_blocks(
+                BlockHeight::new(i as u64),
+                vec![block1],
+                &mut WalletEventsNoOp,
+            )
+            .unwrap();
         amounts.push(block1_amount);
     }
 
@@ -1531,6 +1588,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
@@ -1544,7 +1602,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         }
 
         transactions.push(transaction);
-        wallet.scan_mempool(transactions.as_slice()).unwrap();
+        wallet.scan_mempool(transactions.as_slice(), &mut WalletEventsNoOp).unwrap();
     }
 
     let block = Block::new(
@@ -1557,7 +1615,11 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     .unwrap();
 
     wallet
-        .scan_new_blocks(BlockHeight::new(blocks_to_add as u64), vec![block])
+        .scan_new_blocks(
+            BlockHeight::new(blocks_to_add as u64),
+            vec![block],
+            &mut WalletEventsNoOp,
+        )
         .unwrap();
 
     let coin_balance = wallet
@@ -1626,7 +1688,13 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1.clone()]).unwrap();
+    wallet
+        .scan_new_blocks(
+            BlockHeight::new(0),
+            vec![block1.clone()],
+            &mut WalletEventsNoOp,
+        )
+        .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1673,6 +1741,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
                 FeeRate::new(Amount::ZERO),
@@ -1704,6 +1773,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     );
     let transaction = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1717,18 +1787,20 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     }
 
     transactions.push(transaction);
-    wallet.scan_mempool(transactions.as_slice()).unwrap();
+    wallet.scan_mempool(transactions.as_slice(), &mut WalletEventsNoOp).unwrap();
 
     // create new wallet
     let db = create_wallet_in_memory().unwrap();
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
 
     // scan the first block
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     // scan mempool transaction in random order
     transactions.shuffle(&mut rng);
-    wallet.scan_mempool(transactions.as_slice()).unwrap();
+    wallet.scan_mempool(transactions.as_slice(), &mut WalletEventsNoOp).unwrap();
 
     // Should fail to spend more than we have
     let should_fail_to_send = (amount_to_keep + Amount::from_atoms(1)).unwrap();
@@ -1741,6 +1813,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     );
     let err = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1765,6 +1838,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 
     let transaction = wallet
         .create_transaction_to_addresses(
+            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1801,7 +1875,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     assert_eq!(coin_balance, amount_to_keep);
 
     // if we add it back from the mempool it should return even if abandoned
-    wallet.scan_mempool(&[transaction]).unwrap();
+    wallet.scan_mempool(&[transaction], &mut WalletEventsNoOp).unwrap();
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
@@ -1866,7 +1940,9 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+    wallet
+        .scan_new_blocks(BlockHeight::new(0), vec![block1], &mut WalletEventsNoOp)
+        .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1913,6 +1989,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
+                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
                 FeeRate::new(Amount::ZERO),
@@ -1968,7 +2045,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     assert_eq!(coin_balance, coins_after_abandon);
 
     let txs_to_keep: Vec<_> = txs_to_keep.iter().map(|(tx, _)| tx.clone()).collect();
-    wallet.scan_mempool(txs_to_keep.as_slice()).unwrap();
+    wallet.scan_mempool(txs_to_keep.as_slice(), &mut WalletEventsNoOp).unwrap();
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,

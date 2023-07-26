@@ -20,11 +20,13 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
+use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::ExtendedVRFPrivateKey;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
 use wallet_storage::{StoreTxRo, WalletStorageReadUnlocked, WalletStorageWriteLocked};
@@ -159,11 +161,11 @@ impl AccountKeyChain {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
-    ) -> KeyChainResult<Address> {
+    ) -> KeyChainResult<(ChildNumber, Address)> {
         let lookahead_size = self.lookahead_size();
-        let (_key, address) =
+        let (index, _key, address) =
             self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
-        Ok(address)
+        Ok((index, address))
     }
 
     /// Issue a new derived key that hasn't been used before
@@ -173,7 +175,7 @@ impl AccountKeyChain {
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
         let lookahead_size = self.lookahead_size();
-        let (key, _address) =
+        let (_index, key, _address) =
             self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
         Ok(key)
     }
@@ -310,6 +312,10 @@ impl AccountKeyChain {
             }
         }
         Ok(false)
+    }
+
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+        self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
 }
 

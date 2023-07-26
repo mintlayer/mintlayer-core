@@ -30,6 +30,8 @@ impl Mlt {
     pub const ZERO: Self = Self(Amount::from_atoms(0));
     /// Maximum representable amount of MLTs
     pub const MAX: Self = Self(Amount::MAX);
+    /// The coin ticker
+    pub const TICKER: &'static str = "ML";
 
     /// Construct from the number atomic units
     pub const fn from_atoms(n: u128) -> Self {
