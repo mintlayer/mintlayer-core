@@ -17,7 +17,7 @@ use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 
@@ -84,7 +84,7 @@ pub struct SyncManagerHandle {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
-    connected_peers: Arc<Mutex<BTreeMap<PeerId, Sender<SyncMessage>>>>,
+    connected_peers: BTreeMap<PeerId, Sender<SyncMessage>>,
 }
 
 impl SyncManagerHandle {
@@ -114,7 +114,6 @@ impl SyncManagerHandle {
         let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
-            connected_peers: Arc::clone(&connected_peers),
         };
         let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
@@ -173,7 +172,7 @@ impl SyncManagerHandle {
                 sync_rx,
             })
             .unwrap();
-        self.connected_peers.lock().unwrap().insert(peer, sync_tx);
+        self.connected_peers.insert(peer, sync_tx);
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -190,12 +189,12 @@ impl SyncManagerHandle {
         self.sync_event_sender
             .send(SyncingEvent::Disconnected { peer_id: peer })
             .unwrap();
-        self.connected_peers.lock().unwrap().remove(&peer);
+        self.connected_peers.remove(&peer);
     }
 
     /// Sends an announcement to the sync manager.
     pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
-        let sync_tx = self.connected_peers.lock().unwrap().get(&peer).unwrap().clone();
+        let sync_tx = self.connected_peers.get(&peer).unwrap().clone();
         sync_tx.send(message).await.unwrap();
     }
 
@@ -339,13 +338,8 @@ pub async fn try_sync_managers_once(
                 },
                 message => {
                     let other_manager = managers.iter_mut().find(|m| m.peer_id == peer).unwrap();
-                    let sync_tx = other_manager
-                        .connected_peers
-                        .lock()
-                        .unwrap()
-                        .get(&sender_peer_id)
-                        .unwrap()
-                        .clone();
+                    let sync_tx =
+                        other_manager.connected_peers.get(&sender_peer_id).unwrap().clone();
                     sync_tx.send(message.clone()).await.unwrap();
                     return true;
                 }
@@ -502,7 +496,6 @@ impl NetworkingService for NetworkingServiceStub {
 #[derive(Clone)]
 struct MessagingHandleMock {
     events_sender: UnboundedSender<(PeerId, SyncMessage)>,
-    connected_peers: Arc<Mutex<BTreeMap<PeerId, Sender<SyncMessage>>>>,
 }
 struct SyncingEventReceiverMock {
     events_receiver: UnboundedReceiver<SyncingEvent>,
@@ -511,13 +504,6 @@ struct SyncingEventReceiverMock {
 impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send((peer, message)).unwrap();
-        Ok(())
-    }
-
-    fn broadcast_message(&mut self, message: SyncMessage) -> Result<()> {
-        for peer_id in self.connected_peers.lock().unwrap().keys() {
-            self.events_sender.send((*peer_id, message.clone())).unwrap();
-        }
         Ok(())
     }
 }

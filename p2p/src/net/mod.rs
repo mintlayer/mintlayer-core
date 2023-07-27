@@ -144,9 +144,6 @@ where
 pub trait MessagingService: Clone {
     /// Sends a message to the peer.
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
-
-    /// Broadcasts a message to all peers.
-    fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()>;
 }
 
 #[async_trait]

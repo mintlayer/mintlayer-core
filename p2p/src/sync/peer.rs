@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 
+use crypto::random::make_pseudo_rng;
 use itertools::Itertools;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
@@ -39,9 +40,9 @@ use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
     MempoolHandle,
 };
-use utils::atomics::AcqRelAtomicBool;
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
+use utils::{atomics::AcqRelAtomicBool, bloom_filters::rolling_bloom_filter::RollingBloomFilter};
 
 use crate::{
     config::P2pConfig,
@@ -60,6 +61,21 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
+use super::LocalEvent;
+
+/// Use the same parameters as Bitcoin Core (see `m_tx_inventory_known_filter`)
+const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE: usize = 50000;
+const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP: f64 = 0.000001;
+
+/// Helper for `RollingBloomFilter` because `Id` does not implement `Hash`
+struct TxIdWrapper(Id<Transaction>);
+
+impl std::hash::Hash for TxIdWrapper {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_ref().hash(state);
+    }
+}
+
 // TODO: Take into account the chain work when syncing.
 /// A peer context.
 ///
@@ -74,7 +90,7 @@ pub struct Peer<T: NetworkingService> {
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
-    new_tip: UnboundedReceiver<SignedBlockHeader>,
+    local_event_rx: UnboundedReceiver<LocalEvent>,
     is_initial_block_download: Arc<AcqRelAtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -85,6 +101,8 @@ pub struct Peer<T: NetworkingService> {
     blocks_queue: VecDeque<Id<Block>>,
     /// The index of the best known block of a peer.
     best_known_block: Option<BlockIndex>,
+    /// A rolling filter of all known transactions (sent to us or sent by us)
+    known_transactions: RollingBloomFilter<TxIdWrapper>,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
@@ -118,12 +136,18 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
-        new_tip: UnboundedReceiver<SignedBlockHeader>,
+        local_event_rx: UnboundedReceiver<LocalEvent>,
         is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
         let local_services: Services = (*p2p_config.node_type).into();
         let common_services = local_services & remote_services;
+
+        let known_transactions = RollingBloomFilter::new(
+            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE,
+            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP,
+            &mut make_pseudo_rng(),
+        );
 
         Self {
             id: id.into(),
@@ -135,12 +159,13 @@ where
             peer_manager_sender,
             messaging_handle,
             sync_rx,
-            new_tip,
+            local_event_rx,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
             blocks_queue: VecDeque::new(),
             best_known_block: None,
+            known_transactions,
             announced_transactions: BTreeSet::new(),
             unconnected_headers: 0,
             last_activity: PeerActivity::Pending,
@@ -184,9 +209,9 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                header = self.new_tip.recv() => {
-                    let header = header.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_new_tip(header)?;
+                event = self.local_event_rx.recv() => {
+                    let event = event.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_new_event(event)?;
                 }
 
                 _ = stalling_interval.tick(), if !matches!(self.last_activity, PeerActivity::Pending) => {}
@@ -201,14 +226,28 @@ where
         }
     }
 
-    fn handle_new_tip(&mut self, header: SignedBlockHeader) -> Result<()> {
-        if self.send_tip_updates {
-            self.messaging_handle.send_message(
-                self.id(),
-                SyncMessage::HeaderList(HeaderList::new(vec![header])),
-            )
-        } else {
-            Ok(())
+    fn handle_new_event(&mut self, event: LocalEvent) -> Result<()> {
+        match event {
+            LocalEvent::ChainstateNewTip(header) => {
+                if self.send_tip_updates && self.common_services.has_service(Service::Blocks) {
+                    self.messaging_handle.send_message(
+                        self.id(),
+                        SyncMessage::HeaderList(HeaderList::new(vec![header])),
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+            LocalEvent::MempoolNewTx(txid) => {
+                if !self.known_transactions.contains(&TxIdWrapper(txid))
+                    && self.common_services.has_service(Service::Transactions)
+                {
+                    self.add_known_transaction(txid);
+                    self.messaging_handle.send_message(self.id(), SyncMessage::NewTransaction(txid))
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -579,10 +618,16 @@ where
         Ok(())
     }
 
+    fn add_known_transaction(&mut self, txid: Id<Transaction>) {
+        self.known_transactions.insert(&TxIdWrapper(txid), &mut make_pseudo_rng());
+    }
+
     // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
     // for details.
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!("Transaction announcement from {} peer: {tx}", self.id());
+
+        self.add_known_transaction(tx);
 
         if self.is_initial_block_download.load() {
             log::debug!(

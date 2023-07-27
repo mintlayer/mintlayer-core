@@ -32,7 +32,6 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     error::P2pError,
-    error::ProtocolError,
     message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::transport::{TransportListener, TransportSocket},
@@ -42,8 +41,6 @@ use crate::{
     types::peer_id::PeerId,
     P2pConfig, P2pEventHandler,
 };
-
-use super::types::services::Service;
 
 #[derive(Debug)]
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
@@ -213,27 +210,6 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer,
-            message: message.into(),
-        })?)
-    }
-
-    fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()> {
-        let service = match &message {
-            SyncMessage::HeaderList(_) => Service::Blocks,
-            SyncMessage::NewTransaction(_) => Service::Transactions,
-            SyncMessage::HeaderListRequest(_)
-            | SyncMessage::BlockListRequest(_)
-            | SyncMessage::BlockResponse(_)
-            | SyncMessage::TransactionRequest(_)
-            | SyncMessage::TransactionResponse(_) => {
-                return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                    format!("Unable to broadcast message: {message:?}"),
-                )))
-            }
-        };
-
-        Ok(self.command_sender.send(types::Command::AnnounceData {
-            service,
             message: message.into(),
         })?)
     }
