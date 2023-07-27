@@ -29,7 +29,7 @@ use common::primitives::Amount;
 use common::time_getter::TimeGetter;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, unbounded_channel, Receiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::backend::chainstate_event_handler::ChainstateEventHandler;
 use crate::backend::p2p_event_handler::P2pEventHandler;
@@ -37,13 +37,11 @@ use crate::backend::p2p_event_handler::P2pEventHandler;
 use self::error::BackendError;
 use self::messages::{BackendEvent, BackendRequest};
 
-const UI_CHANNEL_BUF: usize = 10;
-
 #[derive(Debug)]
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
     pub backend_sender: BackendSender,
-    pub backend_receiver: Receiver<BackendEvent>,
+    pub backend_receiver: UnboundedReceiver<BackendEvent>,
 }
 
 /// `UnboundedSender` wrapper, used to make sure there is only one instance and it doesn't get cloned
@@ -92,7 +90,7 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     let manager_join_handle = tokio::spawn(async move { node.main().await });
 
     let (request_tx, request_rx) = unbounded_channel();
-    let (event_tx, event_rx) = channel(UI_CHANNEL_BUF);
+    let (event_tx, event_rx) = unbounded_channel();
     let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
     // Subscribe to chainstate before getting the current chain_info!
