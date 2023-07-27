@@ -36,6 +36,8 @@ pub fn view_stake(
         // We print the table only if there are staking pools
         if account.staking_balance.is_empty() {
             Grid::with_columns(2)
+                .push(field("No staking pools found".to_owned()))
+                .push(field(String::new()))
         } else {
             let mut staking_balance_grid = Grid::with_columns(2)
                 .push(field("Pool Id".to_owned()))
@@ -44,11 +46,6 @@ pub fn view_stake(
                 staking_balance_grid = staking_balance_grid
                     .push(field(pool_id.hex_encode()))
                     .push(field(print_coin_amount(chain_config, *balance)));
-            }
-            if account.staking_balance.is_empty() {
-                staking_balance_grid = staking_balance_grid
-                    .push(field("No staking pools found".to_owned()))
-                    .push(field(String::new()));
             }
             staking_balance_grid
         }
@@ -71,13 +68,6 @@ pub fn view_stake(
         row![]
     };
 
-    // Horizontal line separating the table isn't necessary if there's no table
-    let table_separator = if !account.staking_balance.is_empty() {
-        row![iced::widget::horizontal_rule(10)]
-    } else {
-        row![]
-    };
-
     column![
         row![
             text_input("Pledge amount for the new staking pool", stake_amount)
@@ -88,7 +78,7 @@ pub fn view_stake(
                 .on_press(WalletMessage::CreateStakingPool)
         ],
         staking_enabled_row.spacing(10).align_items(Alignment::Center),
-        table_separator,
+        iced::widget::horizontal_rule(10),
         staking_balance_grid,
     ]
     .spacing(10)
