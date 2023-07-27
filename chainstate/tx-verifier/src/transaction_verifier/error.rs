@@ -44,8 +44,8 @@ pub enum ConnectTransactionError {
     TxNumWrongInBlockOnDisconnect(usize, Id<Block>),
     #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
-    #[error("Output is not found in the cache or database")]
-    MissingOutputOrSpent,
+    #[error("Output is not found in the cache or database: {0:?}")]
+    MissingOutputOrSpent(UtxoOutPoint),
     #[error("No inputs in a transaction")]
     MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
@@ -154,8 +154,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateDelegationFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
-    #[error("Input output policy error: `{0}`")]
-    IOPolicyError(#[from] IOPolicyError),
+    #[error("Input output policy error: `{0}` in : `{1:?}`")]
+    IOPolicyError(IOPolicyError, OutPointSourceId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

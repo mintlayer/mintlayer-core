@@ -384,11 +384,15 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
 
         assert_eq!(
             tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::BlockHeightArithmeticError
+                ConnectTransactionError::IOPolicyError(
+                    chainstate::IOPolicyError::BlockHeightArithmeticError,
+                    tx_id.into()
+                )
             ))
         );
     });

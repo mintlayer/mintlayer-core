@@ -408,12 +408,13 @@ fn transaction_processing_order(#[case] seed: Seed) {
             vec![empty_witness(&mut rng)],
         )
         .expect("invalid witness count");
+        let tx1_id = tx1.transaction().get_id();
 
         // Transaction that spends tx1
         let tx2 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::from_utxo(tx1.transaction().get_id().into(), 0)],
+                vec![TxInput::from_utxo(tx1_id.into(), 0)],
                 vec![TxOutput::Transfer(
                     get_output_value(&tx1.transaction().outputs()[0]).unwrap(),
                     anyonecanspend_address(),
@@ -431,7 +432,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(tx1_id.into(), 0))
             ))
         );
     });

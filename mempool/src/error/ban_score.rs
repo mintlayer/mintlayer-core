@@ -110,7 +110,7 @@ impl MempoolBanScore for ConnectTransactionError {
         match self {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
-            ConnectTransactionError::MissingOutputOrSpent => 0,
+            ConnectTransactionError::MissingOutputOrSpent(_) => 0,
             ConnectTransactionError::TimeLockViolation(_) => 0,
             ConnectTransactionError::NonceIsNotIncremental(..) => 0,
 
@@ -137,7 +137,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
-            ConnectTransactionError::IOPolicyError(err) => err.ban_score(),
+            ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -368,6 +368,10 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
+            IOPolicyError::MissingOutputOrSpent(_) => 0,
+            IOPolicyError::BlockHeightArithmeticError => 0,
+            IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
+            IOPolicyError::PledgeAmountNotFound(_) => 0,
         }
     }
 }

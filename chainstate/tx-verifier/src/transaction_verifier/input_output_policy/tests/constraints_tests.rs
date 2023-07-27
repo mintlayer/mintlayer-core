@@ -177,7 +177,8 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
         assert_eq!(
             err,
             ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                tx.get_id().into()
             )
         );
     }
@@ -299,7 +300,8 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         assert_eq!(
             res,
             ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                tx.get_id().into()
             )
         )
     }

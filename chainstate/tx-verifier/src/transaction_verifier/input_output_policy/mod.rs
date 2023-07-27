@@ -14,8 +14,11 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::BlockRewardTransactable, ChainConfig, PoolId, Transaction, TxInput},
-    primitives::BlockHeight,
+    chain::{
+        block::BlockRewardTransactable, Block, ChainConfig, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
+    },
+    primitives::{BlockHeight, Id, Idable},
 };
 use pos_accounting::PoSAccountingView;
 
@@ -46,13 +49,22 @@ pub enum IOPolicyError {
     AttemptToPrintMoneyOrViolateTimelockConstraints,
     #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
     InputsAndInputsUtxosLengthMismatch(usize, usize),
+    #[error("Output is not found in the cache or database: {0:?}")]
+    MissingOutputOrSpent(UtxoOutPoint),
+    #[error("Error while calculating block height; possibly an overflow")]
+    BlockHeightArithmeticError,
+    #[error("PoS accounting error")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("Pledge amount not found for pool: `{0}`")]
+    PledgeAmountNotFound(PoolId),
 }
 
 pub fn check_reward_inputs_outputs_policy(
     reward: &BlockRewardTransactable,
     utxo_view: &impl utxo::UtxosView,
+    block_id: Id<Block>,
 ) -> Result<(), ConnectTransactionError> {
-    purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view)
+    purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view, block_id)
 }
 
 pub fn check_tx_inputs_outputs_policy(
@@ -62,7 +74,10 @@ pub fn check_tx_inputs_outputs_policy(
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<(), ConnectTransactionError> {
-    purposes_check::check_tx_inputs_outputs_purposes(tx, utxo_view)?;
+    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
+
+    purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
 
@@ -71,10 +86,9 @@ pub fn check_tx_inputs_outputs_policy(
         .iter()
         .map(|input| match input {
             TxInput::Utxo(outpoint) => {
-                let utxo = utxo_view
-                    .utxo(outpoint)
-                    .map_err(|_| utxo::Error::ViewRead)?
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                let utxo = utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                    ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
+                )?;
                 Ok(Some(utxo.take_output()))
             }
             TxInput::Account(_) => Ok(None),
@@ -85,21 +99,47 @@ pub fn check_tx_inputs_outputs_policy(
         Ok(pos_accounting_view
             .get_pool_data(pool_id)
             .map_err(|_| pos_accounting::Error::ViewFail)?
-            .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?
-            .pledge_amount())
+            .map(|pool_data| pool_data.pledge_amount()))
     };
 
-    constraints_accumulator.process_inputs(
-        chain_config,
-        block_height,
-        pledge_getter,
-        tx.inputs(),
-        &inputs_utxos,
-    )?;
+    constraints_accumulator
+        .process_inputs(
+            chain_config,
+            block_height,
+            pledge_getter,
+            tx.inputs(),
+            &inputs_utxos,
+        )
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
-    constraints_accumulator.process_outputs(tx.outputs())?;
+    constraints_accumulator
+        .process_outputs(tx.outputs())
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
 
     Ok(())
+}
+
+// TODO: use FallibleIterator to avoid manually collecting to a Result
+fn get_inputs_utxos(
+    utxo_view: &impl utxo::UtxosView,
+    inputs: &[TxInput],
+) -> Result<Vec<TxOutput>, ConnectTransactionError> {
+    inputs
+        .iter()
+        .filter_map(|input| match input {
+            TxInput::Utxo(outpoint) => Some(outpoint),
+            TxInput::Account(_) => None,
+        })
+        .map(|outpoint| {
+            utxo_view
+                .utxo(outpoint)
+                .map_err(|_| utxo::Error::ViewRead)?
+                .map(|u| u.output().clone())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent(
+                    outpoint.clone(),
+                ))
+        })
+        .collect::<Result<Vec<_>, _>>()
 }
 
 #[cfg(test)]

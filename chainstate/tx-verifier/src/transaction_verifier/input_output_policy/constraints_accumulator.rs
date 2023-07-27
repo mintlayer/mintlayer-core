@@ -21,8 +21,6 @@ use common::{
 };
 use utils::ensure;
 
-use crate::error::ConnectTransactionError;
-
 use super::IOPolicyError;
 
 /// `ConstrainedValueAccumulator` helps avoiding messy inputs/outputs combinations analysis by
@@ -64,9 +62,9 @@ impl ConstrainedValueAccumulator {
         pledge_amount_getter: PledgeAmountGetterFn,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
-    ) -> Result<(), ConnectTransactionError>
+    ) -> Result<(), IOPolicyError>
     where
-        PledgeAmountGetterFn: Fn(PoolId) -> Result<Amount, ConnectTransactionError>,
+        PledgeAmountGetterFn: Fn(PoolId) -> Result<Option<Amount>, IOPolicyError>,
     {
         ensure!(
             inputs.len() == inputs_utxos.len(),
@@ -75,10 +73,10 @@ impl ConstrainedValueAccumulator {
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
-                TxInput::Utxo(_) => {
+                TxInput::Utxo(outpoint) => {
                     match input_utxo
                         .as_ref()
-                        .ok_or(ConnectTransactionError::MissingOutputOrSpent)?
+                        .ok_or(IOPolicyError::MissingOutputOrSpent(outpoint.clone()))?
                     {
                         TxOutput::Transfer(value, _)
                         | TxOutput::LockThenTransfer(value, _, _)
@@ -98,7 +96,8 @@ impl ConstrainedValueAccumulator {
                             let block_distance = chain_config
                                 .as_ref()
                                 .decommission_pool_maturity_distance(block_height);
-                            let pledged_amount = pledge_amount_getter(*pool_id)?;
+                            let pledged_amount = pledge_amount_getter(*pool_id)?
+                                .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
                             match self.timelock_constrained.entry(block_distance) {
                                 Entry::Vacant(e) => {
                                     e.insert(pledged_amount);
@@ -135,7 +134,7 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    pub fn process_outputs(&mut self, outputs: &[TxOutput]) -> Result<(), ConnectTransactionError> {
+    pub fn process_outputs(&mut self, outputs: &[TxOutput]) -> Result<(), IOPolicyError> {
         for output in outputs {
             match output {
                 TxOutput::Transfer(value, _) | TxOutput::Burn(value) => {
@@ -164,7 +163,7 @@ impl ConstrainedValueAccumulator {
                         if let Some(mut coins) = value.coin_amount() {
                             let block_count: i64 = (*block_count)
                                 .try_into()
-                                .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
+                                .map_err(|_| IOPolicyError::BlockHeightArithmeticError)?;
                             let distance = BlockDistance::from(block_count);
 
                             // find the range that can be saturated with the current timelock
@@ -260,7 +259,7 @@ mod tests {
         let fee_atoms = rng.gen_range(1..100);
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
+        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
 
         let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
             OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -313,7 +312,7 @@ mod tests {
         let delegated_atoms = rng.gen_range(100..1000);
         let fee_atoms = rng.gen_range(1..100);
 
-        let pledge_getter = |_| Ok(Amount::ZERO);
+        let pledge_getter = |_| Ok(None);
 
         let inputs_utxos = vec![None];
         let inputs = vec![TxInput::from_account(
@@ -363,7 +362,7 @@ mod tests {
         let staked_atoms = rng.gen_range(100..1000);
         let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
+        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
 
         let inputs = vec![
             TxInput::from_utxo(
@@ -418,9 +417,7 @@ mod tests {
         let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
         assert_eq!(
             result,
-            ConnectTransactionError::IOPolicyError(
-                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
-            )
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
         );
     }
 
@@ -461,7 +458,7 @@ mod tests {
 
         let transferred_atoms = rng.gen_range(100..1000);
 
-        let pledge_getter = |_| Ok(Amount::from_atoms(staked_atoms));
+        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
 
         let inputs = vec![
             TxInput::from_utxo(

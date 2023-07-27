@@ -247,9 +247,10 @@ where
         Ok(())
     }
 
-    fn get_pool_data_from_output(
+    fn get_pool_data_from_output_in_reward(
         &self,
         output: &TxOutput,
+        block_id: Id<Block>,
     ) -> Result<PoolData, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _)
@@ -258,6 +259,7 @@ where
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
+                block_id.into(),
             )),
             TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id) => self
@@ -268,9 +270,10 @@ where
         }
     }
 
-    fn get_pool_id_from_output(
+    fn get_pool_id_from_output_in_reward(
         &self,
         output: &TxOutput,
+        block_id: Id<Block>,
     ) -> Result<PoolId, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _)
@@ -279,6 +282,7 @@ where
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
+                block_id.into(),
             )),
             TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
             TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
@@ -311,16 +315,20 @@ where
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
 
-                let kernel_pool_id = self.get_pool_id_from_output(&kernel_output)?;
-                let reward_pool_id = self.get_pool_id_from_output(reward_output)?;
+                let kernel_pool_id =
+                    self.get_pool_id_from_output_in_reward(&kernel_output, block.get_id())?;
+                let reward_pool_id =
+                    self.get_pool_id_from_output_in_reward(reward_output, block.get_id())?;
 
                 ensure!(
                     kernel_pool_id == reward_pool_id,
                     SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
                 );
 
-                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
-                let reward_pool_data = self.get_pool_data_from_output(reward_output)?;
+                let kernel_pool_data =
+                    self.get_pool_data_from_output_in_reward(&kernel_output, block.get_id())?;
+                let reward_pool_data =
+                    self.get_pool_data_from_output_in_reward(reward_output, block.get_id())?;
 
                 ensure!(
                     kernel_pool_data == reward_pool_data,
@@ -341,6 +349,7 @@ where
         input_output_policy::check_reward_inputs_outputs_policy(
             &block.block_reward_transactable(),
             &self.utxo_cache,
+            block.get_id(),
         )?;
 
         self.check_stake_outputs_in_reward(block)?;
@@ -405,11 +414,10 @@ where
         tx_source: TransactionSource,
         input_outpoint: &UtxoOutPoint,
     ) -> Result<Option<PoSAccountingUndo>, ConnectTransactionError> {
-        let input_utxo = self
-            .utxo_cache
-            .utxo(input_outpoint)
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let input_utxo =
+            self.utxo_cache.utxo(input_outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                ConnectTransactionError::MissingOutputOrSpent(input_outpoint.clone()),
+            )?;
         match input_utxo.output() {
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                 // If the input spends `CreateStakePool` or `ProduceBlockFromStake` utxo,

@@ -23,7 +23,7 @@ use common::{
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
         AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Id},
+    primitives::{Amount, Id, Idable},
 };
 use fallible_iterator::FallibleIterator;
 use pos_accounting::PoSAccountingView;
@@ -87,6 +87,7 @@ where
         utxo_view,
         pos_accounting_view,
         tx.inputs(),
+        tx.get_id().into(),
         issuance_token_id_getter,
     )?;
     let outputs_total_map = calculate_total_outputs(pos_accounting_view, tx.outputs(), None)?;
@@ -124,6 +125,7 @@ fn calculate_total_inputs<U, P, IssuanceTokenIdGetterFunc>(
     utxo_view: &U,
     pos_accounting_view: &P,
     inputs: &[TxInput],
+    inputs_source: OutPointSourceId,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError>
 where
@@ -134,10 +136,9 @@ where
 {
     let iter = inputs.iter().map(|input| match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = utxo_view
-                .utxo(outpoint)
-                .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+            let utxo = utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
+            )?;
 
             let output_value = match utxo.output() {
                 TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
@@ -155,6 +156,7 @@ where
                 | TxOutput::DelegateStaking(_, _) => {
                     return Err(ConnectTransactionError::IOPolicyError(
                         super::IOPolicyError::InvalidInputTypeInTx,
+                        inputs_source.clone(),
                     ))
                 }
             };
@@ -294,8 +296,10 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     let inputs_total = inputs.map_or_else(
         || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
         |ins| {
-            calculate_total_inputs(utxo_view, pos_accounting_view, ins, |_| Ok(None))
-                .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
+            calculate_total_inputs(utxo_view, pos_accounting_view, ins, block_id.into(), |_| {
+                Ok(None)
+            })
+            .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
         },
     )?;
     let outputs_total = outputs.map_or_else(

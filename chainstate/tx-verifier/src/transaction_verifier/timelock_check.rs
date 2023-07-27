@@ -99,10 +99,9 @@ where
         .iter()
         .map(|input| match input {
             TxInput::Utxo(outpoint) => {
-                let utxo = utxos_view
-                    .utxo(outpoint)
-                    .map_err(|_| utxo::Error::ViewRead)?
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                let utxo = utxos_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                    ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
+                )?;
                 Ok(Some((outpoint.clone(), utxo)))
             }
             TxInput::Account(_) => Ok(None),

@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{
-    block::BlockRewardTransactable, signature::Signable, Transaction, TxInput, TxOutput,
+use common::{
+    chain::{block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxOutput},
+    primitives::Id,
 };
 use consensus::ConsensusPoSError;
 use utils::ensure;
@@ -23,35 +24,15 @@ use crate::transaction_verifier::input_output_policy::IOPolicyError;
 
 use super::super::error::{ConnectTransactionError, SpendStakeError};
 
-// TODO: use FallibleIterator to avoid manually collecting to a Result
-fn get_inputs_utxos(
-    utxo_view: &impl utxo::UtxosView,
-    inputs: &[TxInput],
-) -> Result<Vec<TxOutput>, ConnectTransactionError> {
-    inputs
-        .iter()
-        .filter_map(|input| match input {
-            TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_) => None,
-        })
-        .map(|outpoint| {
-            utxo_view
-                .utxo(outpoint)
-                .map_err(|_| utxo::Error::ViewRead)?
-                .map(|u| u.output().clone())
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-        })
-        .collect::<Result<Vec<_>, _>>()
-}
-
 /// Not all `TxOutput` combinations can be used in a block reward.
 pub fn check_reward_inputs_outputs_purposes(
     reward: &BlockRewardTransactable,
     utxo_view: &impl utxo::UtxosView,
+    block_id: Id<Block>,
 ) -> Result<(), ConnectTransactionError> {
     match reward.inputs() {
         Some(inputs) => {
-            let inputs_utxos = get_inputs_utxos(&utxo_view, inputs)?;
+            let inputs_utxos = super::get_inputs_utxos(&utxo_view, inputs)?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
@@ -68,6 +49,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
+                        block_id.into(),
                     )),
                     TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
                         let outputs =
@@ -87,6 +69,7 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::DelegateStaking(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
+                                        block_id.into(),
                                     ))
                                 }
                                 TxOutput::ProduceBlockFromStake(..) => Ok(()),
@@ -123,7 +106,10 @@ pub fn check_reward_inputs_outputs_purposes(
                 });
             ensure!(
                 all_lock_then_transfer,
-                ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::InvalidOutputTypeInReward,
+                    block_id.into()
+                )
             );
             Ok(())
         }
@@ -133,11 +119,9 @@ pub fn check_reward_inputs_outputs_purposes(
 /// Not all `TxOutput` combinations can be used in a transaction.
 pub fn check_tx_inputs_outputs_purposes(
     tx: &Transaction,
-    utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
+    inputs_utxos: &[TxOutput],
+) -> Result<(), IOPolicyError> {
     // Check inputs
-    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
-
     let are_inputs_valid = inputs_utxos.iter().all(|input_utxo| match input_utxo {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)

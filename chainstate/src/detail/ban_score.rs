@@ -99,7 +99,7 @@ impl BanScore for ConnectTransactionError {
             // this is zero because it's used when we add the outputs whose transactions we tested beforehand
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
-            ConnectTransactionError::MissingOutputOrSpent => 100,
+            ConnectTransactionError::MissingOutputOrSpent(_) => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
@@ -151,7 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::IOPolicyError(err) => err.ban_score(),
+            ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
         }
     }
 }
@@ -496,6 +496,10 @@ impl BanScore for IOPolicyError {
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
+            IOPolicyError::MissingOutputOrSpent(_) => 100,
+            IOPolicyError::BlockHeightArithmeticError => 100,
+            IOPolicyError::PoSAccountingError(err) => err.ban_score(),
+            IOPolicyError::PledgeAmountNotFound(_) => 100,
         }
     }
 }

@@ -140,6 +140,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             OutputTimeLock::ForBlockCount(50),
         ))
         .build();
+    let decommission_tx_id = decommission_tx.transaction().get_id();
 
     let result = tf
         .make_pos_block_builder(&mut rng)
@@ -153,7 +154,8 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
             ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                decommission_tx_id.into()
             )
         ))
     );
@@ -296,6 +298,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             OutputTimeLock::ForBlockCount(50),
         ))
         .build();
+    let spend_share_tx_id = spend_share_tx.transaction().get_id();
 
     let result = tf
         .make_pos_block_builder(&mut rng)
@@ -309,7 +312,8 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         result,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
             ConnectTransactionError::IOPolicyError(
-                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+                chainstate::IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
+                spend_share_tx_id.into()
             )
         ))
     );

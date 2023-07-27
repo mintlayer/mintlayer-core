@@ -58,11 +58,9 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
-    let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
-    assert_eq!(
-        result,
-        ConnectTransactionError::IOPolicyError(IOPolicyError::MultiplePoolCreated)
-    );
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
+    assert_eq!(result, IOPolicyError::MultiplePoolCreated);
 }
 
 #[rstest]
@@ -94,11 +92,9 @@ fn tx_create_multiple_delegations(#[case] seed: Seed) {
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
-    let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
-    assert_eq!(
-        result,
-        ConnectTransactionError::IOPolicyError(IOPolicyError::MultipleDelegationCreated)
-    );
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
+    assert_eq!(result, IOPolicyError::MultipleDelegationCreated);
 }
 
 #[rstest]
@@ -121,7 +117,8 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         number_of_outputs,
         None,
     );
-    check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap();
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap();
 }
 
 #[rstest]
@@ -149,10 +146,11 @@ fn tx_many_to_many_invalid(#[case] seed: Seed) {
 
     let outputs = get_random_outputs_combination(&mut rng, &valid_outputs, number_of_outputs);
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
 
     assert_eq!(
-        check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err(),
-        ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInTx,),
+        check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err(),
+        IOPolicyError::InvalidInputTypeInTx,
     );
 }
 
@@ -182,10 +180,11 @@ fn tx_produce_block_in_output(#[case] seed: Seed) {
     };
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
 
     assert_eq!(
-        check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err(),
-        ConnectTransactionError::IOPolicyError(IOPolicyError::ProduceBlockInTx,),
+        check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err(),
+        IOPolicyError::ProduceBlockInTx,
     );
 }
 
@@ -201,70 +200,71 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
     let input_utxos = get_random_outputs_combination(&mut rng, &source_inputs, number_of_inputs);
 
     let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs.to_vec());
-    assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
+    let inputs_utxos = get_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    assert_eq!(check_tx_inputs_outputs_purposes(&tx, &inputs_utxos), Ok(()));
 }
 
 #[rstest]
 #[rustfmt::skip]
-#[case(transfer(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), produce_block(),      Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(transfer(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
+#[case(transfer(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(transfer(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(burn(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), produce_block(),      Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(burn(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
+#[case(burn(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(burn(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(lock_then_transfer(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(lock_then_transfer(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
+#[case(lock_then_transfer(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(stake_pool(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(stake_pool(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
+#[case(stake_pool(), transfer(),           Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), burn(),               Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(stake_pool(), produce_block(),      Ok(()))]
-#[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
+#[case(stake_pool(), create_delegation(),  Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), delegate_staking(),   Err(IOPolicyError::InvalidOutputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(produce_block(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(produce_block(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
+#[case(produce_block(), transfer(),           Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(produce_block(), burn(),               Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(produce_block(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(produce_block(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(produce_block(), produce_block(),      Ok(()))]
-#[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
-#[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)))]
+#[case(produce_block(), create_delegation(),  Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(produce_block(), delegate_staking(),   Err(IOPolicyError::InvalidOutputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(create_delegation(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
+#[case(create_delegation(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(create_delegation(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
-#[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), burn(),               Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
-#[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidInputTypeInReward)))]
+#[case(delegate_staking(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
 fn reward_one_to_one(
     #[case] input_utxo: TxOutput,
     #[case] output: TxOutput,
-    #[case] result: Result<(), ConnectTransactionError>,
+    #[case] result: Result<(), IOPolicyError>,
 ) {
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let utxo_db = UtxosDBInMemoryImpl::new(
@@ -277,7 +277,8 @@ fn reward_one_to_one(
 
     let block = make_block(vec![outpoint.into()], vec![output]);
 
-    assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db));
+    assert_eq!(result.map_err(|e| ConnectTransactionError::IOPolicyError(e, block.get_id().into())),
+               check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db, block.get_id()));
 }
 
 #[rstest]
@@ -302,8 +303,12 @@ fn reward_one_to_none(#[case] seed: Seed) {
 
     let block = make_block(vec![outpoint.into()], vec![]);
 
-    let res = check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
-        .unwrap_err();
+    let res = check_reward_inputs_outputs_purposes(
+        &block.block_reward_transactable(),
+        &utxo_db,
+        block.get_id(),
+    )
+    .unwrap_err();
     assert_eq!(
         res,
         ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs)
@@ -326,7 +331,12 @@ fn reward_none_to_any(#[case] seed: Seed) {
         let outputs = get_random_outputs_combination(&mut rng, &valid_purposes, number_of_outputs);
         let block = make_block_no_kernel(outputs);
 
-        check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db).unwrap();
+        check_reward_inputs_outputs_purposes(
+            &block.block_reward_transactable(),
+            &utxo_db,
+            block.get_id(),
+        )
+        .unwrap();
     }
 
     {
@@ -345,12 +355,18 @@ fn reward_none_to_any(#[case] seed: Seed) {
             get_random_outputs_combination(&mut rng, &invalid_purposes, number_of_outputs);
         let block = make_block_no_kernel(outputs);
 
-        let res =
-            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
-                .unwrap_err();
+        let res = check_reward_inputs_outputs_purposes(
+            &block.block_reward_transactable(),
+            &utxo_db,
+            block.get_id(),
+        )
+        .unwrap_err();
         assert_eq!(
             res,
-            ConnectTransactionError::IOPolicyError(IOPolicyError::InvalidOutputTypeInReward)
+            ConnectTransactionError::IOPolicyError(
+                IOPolicyError::InvalidOutputTypeInReward,
+                block.get_id().into()
+            )
         );
     }
 }
@@ -392,8 +408,12 @@ fn reward_many_to_none(#[case] seed: Seed) {
 
     let block = make_block(inputs, vec![]);
 
-    let res = check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
-        .unwrap_err();
+    let res = check_reward_inputs_outputs_purposes(
+        &block.block_reward_transactable(),
+        &utxo_db,
+        block.get_id(),
+    )
+    .unwrap_err();
     assert_eq!(
         res,
         ConnectTransactionError::SpendStakeError(SpendStakeError::ConsensusPoSError(

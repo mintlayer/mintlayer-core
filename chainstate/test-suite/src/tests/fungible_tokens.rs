@@ -21,6 +21,7 @@ use chainstate::{
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuance, TokenIssuance, TokenTransfer};
+use common::chain::UtxoOutPoint;
 use common::primitives::{id, Id};
 use common::{
     chain::{
@@ -433,7 +434,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -446,7 +447,10 @@ fn token_transfer_test(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    genesis_outpoint_id,
+                    0
+                ))
             ))
         );
 
@@ -998,7 +1002,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(second_burn_outpoint_id, 0),
+                        TxInput::from_utxo(second_burn_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1015,7 +1019,10 @@ fn burn_tokens(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    second_burn_outpoint_id,
+                    0
+                ))
             ))
         );
     })
@@ -1141,7 +1148,10 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    b1_outpoint_id.clone(),
+                    0
+                ))
             ))
         );
 
@@ -1300,7 +1310,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::from_utxo(d2_outpoint_id, 1),
+                        TxInput::from_utxo(d2_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1314,7 +1324,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(d2_outpoint_id, 0))
             ))
         );
     })

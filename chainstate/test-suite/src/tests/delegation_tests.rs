@@ -260,12 +260,16 @@ fn create_delegation_twice(#[case] seed: Seed) {
                 pool_id,
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(IOPolicyError::MultipleDelegationCreated)
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::MultipleDelegationCreated,
+                    tx_id.into()
+                )
             ))
         );
     });
@@ -283,7 +287,7 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
         let (_, _, _, delegation_outpoint, _) = prepare_delegation(&mut rng, &mut tf);
 
         let tx = TransactionBuilder::new()
-            .add_input(delegation_outpoint.into(), empty_witness(&mut rng))
+            .add_input(delegation_outpoint.clone().into(), empty_witness(&mut rng))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::ZERO),
                 Destination::AnyoneCanSpend,
@@ -294,7 +298,7 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(delegation_outpoint)
             ))
         );
     });
