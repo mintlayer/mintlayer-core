@@ -162,15 +162,15 @@ pub enum WalletCommand {
 
     /// Issue a new token
     IssueNewNft {
-        creator: Option<HexEncoded<PublicKey>>,
+        destination_address: String,
+        media_hash: String,
         name: String,
         description: String,
         ticker: String,
+        creator: Option<HexEncoded<PublicKey>>,
         icon_uri: Option<String>,
-        additional_metadata_uri: Option<String>,
         media_uri: Option<String>,
-        media_hash: String,
-        destination_address: String,
+        additional_metadata_uri: Option<String>,
     },
 
     /// Rescan
@@ -708,7 +708,7 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
                     "A new token has been issued with ID: {}",
-                    token_id
+                    HexEncode::hex_encode(&token_id),
                 )))
             }
 
@@ -750,7 +750,7 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
                     "A new NFT has been issued with ID: {}",
-                    token_id
+                    HexEncode::hex_encode(&token_id),
                 )))
             }
 
@@ -767,21 +767,34 @@ impl CommandHandler {
             }
 
             WalletCommand::GetBalance { utxo_states } => {
-                let coin_balance = controller_opt
+                let mut balances = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .get_balance(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         CliUtxoState::to_wallet_states(utxo_states),
                     )
-                    .map_err(WalletCliError::Controller)?
-                    .get(&Currency::Coin)
-                    .copied()
-                    .unwrap_or(Amount::ZERO);
-                Ok(ConsoleCommand::Print(print_coin_amount(
-                    chain_config,
-                    coin_balance,
-                )))
+                    .map_err(WalletCliError::Controller)?;
+                let coin_balance = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
+
+                let output = std::iter::once((Currency::Coin, coin_balance))
+                    .chain(balances.into_iter())
+                    .map(|(currency, amount)| match currency {
+                        Currency::Token(token_id) => {
+                            format!(
+                                "Token: {} amount: {}",
+                                HexEncode::hex_encode(&token_id),
+                                print_coin_amount(chain_config, amount)
+                            )
+                        }
+                        Currency::Coin => {
+                            format!("Coins amount: {}", print_coin_amount(chain_config, amount))
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n");
+
+                Ok(ConsoleCommand::Print(output))
             }
 
             WalletCommand::ListUtxo {

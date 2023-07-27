@@ -170,8 +170,11 @@ fn test_knapsack_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
     assert!(!result.outputs.is_empty());
 }
 
-#[test]
-fn test_knapsack_solver_not_exact_solution() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_knapsack_solver_not_exact_solution(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut groups = vec![];
     for value in [1, 2, 5, 10, 20] {
         add_output(Amount::from_atoms(value), &mut groups);
@@ -179,7 +182,7 @@ fn test_knapsack_solver_not_exact_solution() {
 
     // cannot make 34 from the above values but can make 35
     let target_value = Amount::from_atoms(34);
-    let cost_of_change = Amount::ZERO;
+    let cost_of_change = Amount::from_atoms(1);
     let max_weight = 100;
     let result = knapsack_solver(
         &mut groups,
@@ -196,19 +199,35 @@ fn test_knapsack_solver_not_exact_solution() {
 
     // cannot make 9 from [1,2,5] will use lowest larger value which is 10
     let target_value = Amount::from_atoms(9);
-    let result = knapsack_solver(
+    let pay_fees = if rng.gen::<bool>() {
+        PayFee::PayFeeWithThisCurrency
+    } else {
+        PayFee::DoNotPayFeeWithThisCurrency
+    };
+    let mut result = knapsack_solver(
         &mut groups,
         target_value,
         cost_of_change,
         &mut make_pseudo_rng(),
         max_weight,
-        PayFee::PayFeeWithThisCurrency,
+        pay_fees,
     )
     .unwrap();
+    result
+        .compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change, pay_fees)
+        .unwrap();
 
     // found exact match
     assert_eq!(result.effective_value, Amount::from_atoms(10));
     assert_eq!(result.outputs.len(), 1);
+    match pay_fees {
+        PayFee::PayFeeWithThisCurrency => {
+            assert_eq!(result.change, Amount::from_atoms(0));
+        }
+        PayFee::DoNotPayFeeWithThisCurrency => {
+            assert_eq!(result.change, Amount::from_atoms(1));
+        }
+    }
 }
 
 #[rstest]

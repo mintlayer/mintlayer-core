@@ -91,7 +91,7 @@ async fn produce_blocks(#[case] seed: Seed) {
     let output = test.run(&[&cmd1, "getbalance", "generateblocks 20"]).await;
     assert_eq!(output.len(), 3, "Unexpected output: {:?}", output);
     assert_eq!(output[0], "New wallet created successfully");
-    assert_eq!(output[1], "99960000");
+    assert_eq!(output[1], "Coins amount: 99960000");
     assert_eq!(output[2], "Success");
 
     test.shutdown().await;

@@ -16,6 +16,7 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
+use serialization::hex::HexEncode;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
@@ -103,7 +104,7 @@ pub fn format_pool_info(
 ) -> String {
     format!(
         "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
-        pool_id,
+        HexEncode::hex_encode(&pool_id),
         balance.into_atoms(),
         block_height,
         block_timestamp
