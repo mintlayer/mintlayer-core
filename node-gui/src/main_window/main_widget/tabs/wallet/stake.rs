@@ -32,39 +32,54 @@ pub fn view_stake(
 ) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
 
-    let mut staking_balance_grid = Grid::with_columns(2)
-        .push(field("PoolId".to_owned()))
-        .push(field("Balance".to_owned()));
-    for (pool_id, balance) in account.staking_balance.iter() {
-        staking_balance_grid = staking_balance_grid
-            .push(field(pool_id.hex_encode()))
-            .push(field(print_coin_amount(chain_config, *balance)));
-    }
-    if account.staking_balance.is_empty() {
-        staking_balance_grid = staking_balance_grid
-            .push(field("No staking pools found".to_owned()))
-            .push(field(String::new()));
-    }
-
-    let (staking_status, staking_button, new_state) = if account.staking_enabled {
-        ("Staking started", "Stop", false)
-    } else {
-        ("Staking stopped", "Start", true)
+    let staking_balance_grid = {
+        // We print the table only if there are staking pools
+        if account.staking_balance.is_empty() {
+            Grid::with_columns(2)
+                .push(field("No staking pools found".to_owned()))
+                .push(field(String::new()))
+        } else {
+            let mut staking_balance_grid = Grid::with_columns(2)
+                .push(field("Pool Id".to_owned()))
+                .push(field("Pool balance".to_owned()));
+            for (pool_id, balance) in account.staking_balance.iter() {
+                staking_balance_grid = staking_balance_grid
+                    .push(field(pool_id.hex_encode()))
+                    .push(field(print_coin_amount(chain_config, *balance)));
+            }
+            staking_balance_grid
+        }
     };
 
-    column![
+    // We only show the staking button if there's something to stake
+    let staking_enabled_row = if !account.staking_balance.is_empty() {
+        let (staking_status, staking_button, new_state) = if account.staking_enabled {
+            ("Staking running", "Stop", false)
+        } else {
+            ("Staking is stopped", "Start", true)
+        };
+
         row![
             Text::new(staking_status),
             iced::widget::button(Text::new(staking_button))
                 .on_press(WalletMessage::ToggleStaking(new_state))
         ]
-        .spacing(10)
-        .align_items(Alignment::Center),
+    } else {
+        row![]
+    };
+
+    column![
+        row![
+            text_input("Pledge amount for the new staking pool", stake_amount)
+                .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
+                .padding(15),
+            iced::widget::button(Text::new("Create staking pool"))
+                .padding(15)
+                .on_press(WalletMessage::CreateStakingPool)
+        ],
+        staking_enabled_row.spacing(10).align_items(Alignment::Center),
+        iced::widget::horizontal_rule(10),
         staking_balance_grid,
-        text_input("Stake amount", stake_amount)
-            .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
-            .padding(15),
-        iced::widget::button(Text::new("Stake")).on_press(WalletMessage::Stake),
     ]
     .spacing(10)
     .into()

@@ -45,7 +45,7 @@ pub enum SelectedPanel {
     Transactions,
     Addresses,
     Send,
-    Stake,
+    Staking,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +69,7 @@ pub enum WalletMessage {
     Send,
 
     StakeAmountEdit(String),
-    Stake,
+    CreateStakingPool,
 
     ToggleStaking(bool),
 
@@ -188,7 +188,7 @@ impl WalletTab {
                 self.account_state.stake_amount = value;
                 Command::none()
             }
-            WalletMessage::Stake => {
+            WalletMessage::CreateStakingPool => {
                 let request = StakeRequest {
                     wallet_id: self.wallet_id,
                     account_id: self.selected_account,
@@ -266,7 +266,7 @@ impl Tab for WalletTab {
                             &self.account_state.send_address,
                             &self.account_state.send_amount,
                         ),
-                        SelectedPanel::Stake => stake::view_stake(
+                        SelectedPanel::Staking => stake::view_stake(
                             &node_state.chain_config,
                             account,
                             &self.account_state.stake_amount,
