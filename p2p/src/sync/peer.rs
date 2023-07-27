@@ -21,7 +21,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::{
-    sync::mpsc::{Receiver, UnboundedSender},
+    sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::MissedTickBehavior,
 };
 
@@ -74,6 +74,7 @@ pub struct Peer<T: NetworkingService> {
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
+    new_tip: UnboundedReceiver<SignedBlockHeader>,
     is_initial_block_download: Arc<AcqRelAtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -96,6 +97,9 @@ pub struct Peer<T: NetworkingService> {
     /// disconnect the peer in case we haven't received expected data within a certain time period.
     last_activity: PeerActivity,
     time_getter: TimeGetter,
+    /// If set, send the new tip notification when the tip moves.
+    /// It's set when we know that the peer knows about all of our headers.
+    send_tip_updates: bool,
 }
 
 impl<T> Peer<T>
@@ -114,6 +118,7 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
+        new_tip: UnboundedReceiver<SignedBlockHeader>,
         is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
@@ -130,6 +135,7 @@ where
             peer_manager_sender,
             messaging_handle,
             sync_rx,
+            new_tip,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
@@ -139,6 +145,7 @@ where
             unconnected_headers: 0,
             last_activity: PeerActivity::Pending,
             time_getter,
+            send_tip_updates: false,
         }
     }
 
@@ -177,6 +184,11 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
+                header = self.new_tip.recv() => {
+                    let header = header.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_new_tip(header)?;
+                }
+
                 _ = stalling_interval.tick(), if !matches!(self.last_activity, PeerActivity::Pending) => {}
             }
 
@@ -186,6 +198,17 @@ where
             {
                 self.handle_stalling_interval(time).await?;
             }
+        }
+    }
+
+    fn handle_new_tip(&mut self, header: SignedBlockHeader) -> Result<()> {
+        if self.send_tip_updates {
+            self.messaging_handle.send_message(
+                self.id(),
+                SyncMessage::HeaderList(HeaderList::new(vec![header])),
+            )
+        } else {
+            Ok(())
         }
     }
 
@@ -240,6 +263,10 @@ where
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
         debug_assert!(headers.len() <= limit);
+
+        // All headers have been sent, it's OK to start sending new tip notifications
+        self.send_tip_updates = headers.len() < limit;
+
         self.messaging_handle
             .send_message(self.id(), SyncMessage::HeaderList(HeaderList::new(headers)))
     }
