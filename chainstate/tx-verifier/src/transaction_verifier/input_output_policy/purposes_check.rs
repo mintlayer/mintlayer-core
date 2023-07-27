@@ -23,7 +23,7 @@ use crate::transaction_verifier::input_output_policy::IOPolicyError;
 
 use super::super::error::{ConnectTransactionError, SpendStakeError};
 
-// TODO: avoid collecting by using FallibleIterator
+// TODO: use FallibleIterator to avoid manually collecting to a Result
 fn get_inputs_utxos(
     utxo_view: &impl utxo::UtxosView,
     inputs: &[TxInput],

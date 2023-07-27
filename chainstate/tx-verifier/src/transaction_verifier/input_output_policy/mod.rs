@@ -44,6 +44,8 @@ pub enum IOPolicyError {
     AmountOverflow,
     #[error("Attempt to print money or violate timelock constraints")]
     AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
+    InputsAndInputsUtxosLengthMismatch(usize, usize),
 }
 
 pub fn check_reward_inputs_outputs_policy(
@@ -64,41 +66,38 @@ pub fn check_tx_inputs_outputs_policy(
 
     let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
 
-    for input in tx.inputs() {
-        match input {
+    let inputs_utxos = tx
+        .inputs()
+        .iter()
+        .map(|input| match input {
             TxInput::Utxo(outpoint) => {
                 let utxo = utxo_view
                     .utxo(outpoint)
                     .map_err(|_| utxo::Error::ViewRead)?
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-                let pledge_getter = |pool_id: PoolId| {
-                    Ok(pos_accounting_view
-                        .get_pool_data(pool_id)
-                        .map_err(|_| pos_accounting::Error::ViewFail)?
-                        .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?
-                        .pledge_amount())
-                };
-                constraints_accumulator.process_input_utxo(
-                    chain_config,
-                    block_height,
-                    pledge_getter,
-                    utxo.output(),
-                )?;
+                Ok(Some(utxo.take_output()))
             }
-            TxInput::Account(account) => {
-                constraints_accumulator.process_input_from_account(
-                    chain_config,
-                    block_height,
-                    account,
-                )?;
-            }
-        };
-    }
+            TxInput::Account(_) => Ok(None),
+        })
+        .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
-    for output in tx.outputs() {
-        constraints_accumulator.process_output(output)?;
-    }
+    let pledge_getter = |pool_id: PoolId| {
+        Ok(pos_accounting_view
+            .get_pool_data(pool_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?
+            .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?
+            .pledge_amount())
+    };
+
+    constraints_accumulator.process_inputs(
+        chain_config,
+        block_height,
+        pledge_getter,
+        tx.inputs(),
+        &inputs_utxos,
+    )?;
+
+    constraints_accumulator.process_outputs(tx.outputs())?;
 
     Ok(())
 }
