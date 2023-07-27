@@ -36,12 +36,12 @@ pub fn view_transactions(
 
     let current_transaction_list = &account.transaction_list;
     let mut transaction_list = Grid::with_columns(6)
-        .push("Num")
-        .push("Txid")
-        .push("Timestamp (UTC)")
-        .push("Type")
-        .push("Amount")
-        .push("State");
+        .push(field("#".into()))
+        .push(field("Tx Id".into()))
+        .push(field("Timestamp (UTC)".into()))
+        .push(field("Type".into()))
+        .push(field("Amount".into()))
+        .push(field("State".into()));
     for (index, tx) in current_transaction_list.txs.iter().enumerate() {
         let amount_str = tx
             .tx_type
