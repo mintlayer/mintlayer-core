@@ -53,20 +53,32 @@ pub fn view_stake(
             staking_balance_grid
         }
     };
-    let (staking_status, staking_button, new_state) = if account.staking_enabled {
-        ("Staking running", "Stop", false)
-    } else {
-        ("Staking is stopped", "Start", true)
-    };
 
-    column![
+    // We only show the staking button if there's something to stake
+    let staking_enabled_row = if !account.staking_balance.is_empty() {
+        let (staking_status, staking_button, new_state) = if account.staking_enabled {
+            ("Staking running", "Stop", false)
+        } else {
+            ("Staking is stopped", "Start", true)
+        };
+
         row![
             Text::new(staking_status),
             iced::widget::button(Text::new(staking_button))
                 .on_press(WalletMessage::ToggleStaking(new_state))
         ]
-        .spacing(10)
-        .align_items(Alignment::Center),
+    } else {
+        row![]
+    };
+
+    // Horizontal line separating the table isn't necessary if there's no table
+    let table_separator = if !account.staking_balance.is_empty() {
+        row![iced::widget::horizontal_rule(10)]
+    } else {
+        row![]
+    };
+
+    column![
         row![
             text_input("Pledge amount for the new staking pool", stake_amount)
                 .on_input(|value| { WalletMessage::StakeAmountEdit(value) })
@@ -75,7 +87,8 @@ pub fn view_stake(
                 .padding(15)
                 .on_press(WalletMessage::CreateStakingPool)
         ],
-        iced::widget::horizontal_rule(10),
+        staking_enabled_row.spacing(10).align_items(Alignment::Center),
+        table_separator,
         staking_balance_grid,
     ]
     .spacing(10)
