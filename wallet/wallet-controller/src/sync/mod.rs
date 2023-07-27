@@ -19,10 +19,11 @@ use common::{
 };
 use logging::log;
 use node_comm::node_traits::NodeInterface;
-use serialization::hex::HexEncode;
 use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
 
 use crate::ControllerError;
+
+const MAX_FETCH_BLOCK_COUNT: usize = 1000;
 
 pub trait SyncingWallet {
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight);
@@ -84,8 +85,8 @@ struct NextBlockInfo {
     block_id: Id<Block>,
 }
 
-struct FetchedBlock {
-    block: Block,
+struct FetchedBlocks {
+    blocks: Vec<Block>,
     common_block_height: BlockHeight,
 }
 
@@ -121,16 +122,19 @@ pub async fn sync_once<T: NodeInterface>(
                 wallet_block_height,
                 chain_config,
                 rpc_client,
-                &mut |common_block_height: BlockHeight, block: Block| {
-                    let block_id = block.header().block_id();
+                &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
+                    let block_id =
+                        blocks.last().expect("blocks must not be empty").header().block_id();
+                    let new_height = common_block_height.into_int() + blocks.len() as u64;
+
                     wallet
-                        .scan_blocks_unsynced_acc(common_block_height, vec![block], wallet_events)
+                        .scan_blocks_unsynced_acc(common_block_height, blocks, wallet_events)
                         .map_err(ControllerError::<T>::WalletError)?;
 
                     log::info!(
-                        "Node chainstate updated for new account, block height: {}, tip block id: {}",
-                        common_block_height.next_height(),
-                        block_id.hex_encode()
+                        "Node chainstate updated, block height: {}, tip block id: {}",
+                        new_height,
+                        block_id
                     );
 
                     Ok(())
@@ -152,15 +156,19 @@ pub async fn sync_once<T: NodeInterface>(
                 wallet_block_height,
                 chain_config,
                 rpc_client,
-                &mut |common_block_height: BlockHeight, block: Block| {
-                    let block_id = block.header().block_id();
+                &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
+                    let block_id =
+                        blocks.last().expect("blocks must not be empty").header().block_id();
+                    let new_height = common_block_height.into_int() + blocks.len() as u64;
+
                     wallet
-                        .scan_blocks(common_block_height, vec![block], wallet_events)
+                        .scan_blocks(common_block_height, blocks, wallet_events)
                         .map_err(ControllerError::WalletError)?;
+
                     log::info!(
                         "Node chainstate updated, block height: {}, tip block id: {}",
-                        common_block_height.next_height(),
-                        block_id.hex_encode()
+                        new_height,
+                        block_id
                     );
 
                     Ok(())
@@ -177,17 +185,17 @@ async fn fetch_and_sync<T: NodeInterface>(
     wallet_block_height: BlockHeight,
     chain_config: &ChainConfig,
     rpc_client: &T,
-    wallet_sync: &mut impl FnMut(BlockHeight, Block) -> Result<(), ControllerError<T>>,
+    wallet_sync: &mut impl FnMut(BlockHeight, Vec<Block>) -> Result<(), ControllerError<T>>,
 ) -> Result<(), ControllerError<T>> {
     // TODO: use chain trust instead of height
     utils::ensure!(
         chain_info.best_block_height >= wallet_block_height,
         ControllerError::NotEnoughBlockHeight(wallet_block_height, chain_info.best_block_height,)
     );
-    let FetchedBlock {
-        block,
+    let FetchedBlocks {
+        blocks,
         common_block_height,
-    } = fetch_new_block(
+    } = fetch_new_blocks(
         chain_config,
         rpc_client,
         chain_info.best_block_id,
@@ -198,7 +206,7 @@ async fn fetch_and_sync<T: NodeInterface>(
     .await
     .map_err(|e| ControllerError::SyncError(e.to_string()))?;
 
-    wallet_sync(common_block_height, block)
+    wallet_sync(common_block_height, blocks)
 }
 
 // TODO: For security reasons, the wallet should probably keep track of latest blocks
@@ -254,14 +262,14 @@ async fn get_next_block_info<T: NodeInterface>(
 }
 
 // `node_block_height` can't be less than `wallet_block_height` and `node_block_height` can't be equal to `wallet_block_id`
-async fn fetch_new_block<T: NodeInterface>(
+async fn fetch_new_blocks<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     node_block_id: Id<GenBlock>,
     node_block_height: BlockHeight,
     wallet_block_id: Id<GenBlock>,
     wallet_block_height: BlockHeight,
-) -> Result<FetchedBlock, FetchBlockError<T>> {
+) -> Result<FetchedBlocks, FetchBlockError<T>> {
     let NextBlockInfo {
         common_block_id,
         common_block_height,
@@ -276,18 +284,20 @@ async fn fetch_new_block<T: NodeInterface>(
     )
     .await?;
 
-    let block = rpc_client
-        .get_block(block_id)
+    let blocks = rpc_client
+        .get_mainchain_blocks(common_block_height.next_height(), MAX_FETCH_BLOCK_COUNT)
         .await
-        .map_err(FetchBlockError::UnexpectedRpcError)?
-        .ok_or(FetchBlockError::BlockNotFound(block_id))?;
-    utils::ensure!(
-        *block.header().prev_block_id() == common_block_id,
-        FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
-    );
+        .map_err(FetchBlockError::UnexpectedRpcError)?;
+    match blocks.first() {
+        Some(block) => utils::ensure!(
+            *block.header().prev_block_id() == common_block_id,
+            FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
+        ),
+        None => return Err(FetchBlockError::BlockNotFound(block_id)),
+    }
 
-    Ok(FetchedBlock {
-        block,
+    Ok(FetchedBlocks {
+        blocks,
         common_block_height,
     })
 }

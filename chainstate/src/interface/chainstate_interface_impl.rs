@@ -128,6 +128,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_mainchain_blocks(from, max_count)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn get_block_header(
         &self,
         block_id: Id<Block>,

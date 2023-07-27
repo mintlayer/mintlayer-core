@@ -106,6 +106,14 @@ where
         self.deref().get_block(block_id)
     }
 
+    fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, ChainstateError> {
+        self.deref().get_mainchain_blocks(from, max_count)
+    }
+
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
         self.deref().get_locator()
     }

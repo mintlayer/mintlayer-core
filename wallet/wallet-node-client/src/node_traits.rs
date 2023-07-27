@@ -30,6 +30,11 @@ pub trait NodeInterface {
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, Self::Error>;
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
     async fn get_block_id_at_height(
         &self,

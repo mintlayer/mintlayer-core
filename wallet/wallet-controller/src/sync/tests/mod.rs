@@ -144,6 +144,19 @@ impl NodeInterface for MockNode {
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         Ok(self.tf.lock().unwrap().chainstate.get_block(block_id).unwrap())
     }
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, Self::Error> {
+        Ok(self
+            .tf
+            .lock()
+            .unwrap()
+            .chainstate
+            .get_mainchain_blocks(from, max_count)
+            .unwrap())
+    }
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {
         unreachable!()
     }
