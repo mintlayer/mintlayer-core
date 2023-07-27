@@ -162,15 +162,15 @@ pub enum WalletCommand {
 
     /// Issue a new token
     IssueNewNft {
-        creator: Option<HexEncoded<PublicKey>>,
+        destination_address: String,
+        media_hash: String,
         name: String,
         description: String,
         ticker: String,
+        creator: Option<HexEncoded<PublicKey>>,
         icon_uri: Option<String>,
-        additional_metadata_uri: Option<String>,
         media_uri: Option<String>,
-        media_hash: String,
-        destination_address: String,
+        additional_metadata_uri: Option<String>,
     },
 
     /// Rescan
@@ -750,7 +750,7 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
                     "A new NFT has been issued with ID: {}",
-                    token_id
+                    HexEncode::hex_encode(&token_id),
                 )))
             }
 
