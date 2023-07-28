@@ -82,6 +82,40 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block(id)
     }
 
+    pub fn get_mainchain_blocks(
+        &self,
+        mut from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, PropertyQueryError> {
+        utils::ensure!(
+            from != BlockHeight::zero(),
+            PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(from)
+        );
+
+        let mut res = Vec::new();
+        for _ in 0..max_count {
+            match self.get_block_id_from_height(&from)? {
+                Some(get_block_id) => {
+                    match get_block_id.classify(self.chainstate_ref.chain_config()) {
+                        common::chain::GenBlockId::Genesis(_) => {
+                            panic!("genesis block received at non-zero height {from}")
+                        }
+                        common::chain::GenBlockId::Block(block_id) => {
+                            let block = self.get_block(block_id)?.unwrap_or_else(|| {
+                                panic!("can't find block {block_id} at height {from}")
+                            });
+                            res.push(block);
+                        }
+                    }
+                }
+                None => break,
+            }
+            from = from.next_height();
+        }
+
+        Ok(res)
+    }
+
     pub fn get_block_index(
         &self,
         id: &Id<Block>,

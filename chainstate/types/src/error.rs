@@ -58,6 +58,8 @@ pub enum PropertyQueryError {
     PoolBalanceNotFound(PoolId),
     #[error("Failed to read balance of pool {0}")]
     PoolBalanceReadError(PoolId),
+    #[error("Invalid starting block height: {0}")]
+    InvalidStartingBlockHeightForMainchainBlocks(BlockHeight),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

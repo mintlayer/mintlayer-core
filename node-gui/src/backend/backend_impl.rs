@@ -23,7 +23,7 @@ use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_lib::node_controller::NodeController;
 use tokio::{
-    sync::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
 use wallet::{
@@ -70,7 +70,7 @@ pub struct Backend {
 
     /// The bounded sender is used so that the UI is not overloaded with messages.
     /// With an unbounded sender, high latency was experienced when wallet scan was enabled.
-    event_tx: Sender<BackendEvent>,
+    event_tx: UnboundedSender<BackendEvent>,
 
     wallet_updated_tx: UnboundedSender<WalletId>,
 
@@ -84,7 +84,7 @@ pub struct Backend {
 impl Backend {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        event_tx: Sender<BackendEvent>,
+        event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
         controller: NodeController,
         manager_join_handle: JoinHandle<()>,
@@ -449,51 +449,51 @@ impl Backend {
         match request {
             BackendRequest::OpenWallet { file_path } => {
                 let open_res = self.open_wallet(file_path).await;
-                Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
             }
             BackendRequest::CreateWallet {
                 mnemonic,
                 file_path,
             } => {
                 let import_res = self.create_wallet(mnemonic, file_path).await;
-                Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {
                 if let Some(wallet) = self.wallets.remove(&wallet_id) {
                     drop(wallet);
-                    Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id)).await;
+                    Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
                 }
             }
 
             BackendRequest::UpdateEncryption { wallet_id, action } => {
                 let res = self.update_encryption(wallet_id, action);
-                Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res));
             }
 
             BackendRequest::NewAccount { wallet_id, name } => {
                 let res = self.new_account(wallet_id, name);
-                Self::send_event(&self.event_tx, BackendEvent::NewAccount(res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::NewAccount(res));
             }
 
             BackendRequest::NewAddress(wallet_id, account_id) => {
                 let address_res = self.new_address(wallet_id, account_id);
-                Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
             }
             BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
                 let toggle_res = self.toggle_staking(wallet_id, account_id, enabled);
-                Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
             }
             BackendRequest::SendAmount(send_request) => {
                 let send_res = self.send_amount(send_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
             }
             BackendRequest::StakeAmount(stake_request) => {
                 let stake_res = self.stake_amount(stake_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
             }
             BackendRequest::Broadcast(transaction) => {
                 let broadcast_res = self.broadcast(transaction).await;
-                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res)).await;
+                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res));
             }
             BackendRequest::TransactionList {
                 wallet_id,
@@ -504,15 +504,18 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
-                )
-                .await;
+                );
             }
             BackendRequest::Shutdown => unreachable!(),
         }
     }
 
-    pub async fn send_event(event_tx: &Sender<BackendEvent>, event: BackendEvent) {
-        _ = event_tx.send(event).await;
+    pub fn send_event(event_tx: &UnboundedSender<BackendEvent>, event: BackendEvent) {
+        // The unbounded channel is used to avoid blocking the backend event loop.
+        // Iced has a problem when it stops processing messages when the display is turned off.
+        // It has been reproduced on Lunux, and here is a bug reported on Windows: https://github.com/iced-rs/iced/issues/1870.
+        // As a result, using the bounded channel can break staking, because once the channel is full, the backend event loop is paused.
+        _ = event_tx.send(event);
     }
 
     async fn shutdown(self) {
@@ -531,8 +534,7 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::WalletBestBlock(*wallet_id, best_block),
-                )
-                .await;
+                );
                 wallet_data.best_block = best_block;
             }
 
@@ -544,8 +546,7 @@ impl Backend {
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
-                )
-                .await;
+                );
 
                 // GuiWalletEvents will notify about stake pool balance update
                 // (when a new wallet block is added/removed from the DB)
@@ -567,8 +568,7 @@ impl Backend {
                                 *account_id,
                                 Ok(transaction_list),
                             ),
-                        )
-                        .await;
+                        );
                     }
                     Err(err) => {
                         log::error!("Transaction list loading failed: {err}");
@@ -597,8 +597,7 @@ impl Backend {
                                 *account_id,
                                 staking_balance.clone(),
                             ),
-                        )
-                        .await;
+                        );
                         account_data.update_pool_balance = false;
                     }
                     Err(err) => {

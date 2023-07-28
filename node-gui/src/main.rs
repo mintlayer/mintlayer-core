@@ -27,7 +27,7 @@ use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -47,7 +47,7 @@ enum MintlayerNodeGUI {
 
 #[derive(Debug)]
 pub enum Message {
-    FromBackend(Receiver<BackendEvent>, BackendEvent),
+    FromBackend(UnboundedReceiver<BackendEvent>, BackendEvent),
     Loaded(anyhow::Result<BackendControls>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
@@ -190,7 +190,7 @@ impl Application for MintlayerNodeGUI {
     }
 }
 
-fn recv_backend_command(mut backend_receiver: Receiver<BackendEvent>) -> Command<Message> {
+fn recv_backend_command(mut backend_receiver: UnboundedReceiver<BackendEvent>) -> Command<Message> {
     Command::perform(
         async move {
             match backend_receiver.recv().await {

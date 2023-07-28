@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateEvent};
 use subsystem::Handle;
-use tokio::sync::mpsc::{unbounded_channel, Sender, UnboundedReceiver};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_error_log::LogError;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
@@ -25,14 +25,14 @@ use super::{backend_impl::Backend, messages::BackendEvent};
 pub struct ChainstateEventHandler {
     chainstate: Handle<Box<dyn ChainstateInterface>>,
     chainstate_event_rx: UnboundedReceiver<ChainstateEvent>,
-    event_tx: Sender<BackendEvent>,
+    event_tx: UnboundedSender<BackendEvent>,
     chain_info_updated: bool,
 }
 
 impl ChainstateEventHandler {
     pub async fn new(
         chainstate: &Handle<Box<dyn ChainstateInterface>>,
-        event_tx: Sender<BackendEvent>,
+        event_tx: UnboundedSender<BackendEvent>,
     ) -> Self {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
         chainstate
@@ -65,7 +65,7 @@ impl ChainstateEventHandler {
                     .call(|this| this.info().expect("Chainstate::info should not fail"))
                     .await
                     .expect("Chainstate::info should not fail");
-                Backend::send_event(&self.event_tx, BackendEvent::ChainInfo(chain_info)).await;
+                Backend::send_event(&self.event_tx, BackendEvent::ChainInfo(chain_info));
                 self.chain_info_updated = false;
             }
 

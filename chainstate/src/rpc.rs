@@ -42,6 +42,14 @@ trait ChainstateRpc {
     #[method(name = "get_block")]
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
 
+    /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
+    #[method(name = "get_mainchain_blocks")]
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> RpcResult<Vec<HexEncoded<Block>>>;
+
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
@@ -104,6 +112,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block: Option<Block> =
             rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(HexEncoded::new))
+    }
+
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> RpcResult<Vec<HexEncoded<Block>>> {
+        let blocks: Vec<Block> = rpc::handle_result(
+            self.call(move |this| this.get_mainchain_blocks(from, max_count)).await,
+        )?;
+        Ok(blocks.into_iter().map(HexEncoded::new).collect())
     }
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {

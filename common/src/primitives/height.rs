@@ -135,15 +135,15 @@ impl BlockHeight {
         Self(height)
     }
 
-    pub fn zero() -> BlockHeight {
+    pub const fn zero() -> BlockHeight {
         BlockHeight::ZERO
     }
 
-    pub fn one() -> BlockHeight {
+    pub const fn one() -> BlockHeight {
         BlockHeight::ONE
     }
 
-    pub fn max() -> BlockHeight {
+    pub const fn max() -> BlockHeight {
         BlockHeight::MAX
     }
 
@@ -159,7 +159,7 @@ impl BlockHeight {
         self.0.checked_sub(1).map(Self)
     }
 
-    pub fn into_int(self) -> HeightIntType {
+    pub const fn into_int(self) -> HeightIntType {
         self.0
     }
 }

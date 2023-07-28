@@ -67,12 +67,16 @@ impl MockWallet {
 }
 
 impl SyncingWallet for MockWallet {
-    fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
-        (self.get_best_block_id(), self.get_block_height())
+    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
+        BTreeMap::from([(
+            U31::ZERO,
+            (self.get_best_block_id(), self.get_block_height()),
+        )])
     }
 
     fn scan_blocks(
         &mut self,
+        _account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
         _wallet_events: &mut impl WalletEvents,
@@ -104,19 +108,6 @@ impl SyncingWallet for MockWallet {
         self.latest_median_time = median_time;
         Ok(())
     }
-
-    fn best_block_unsynced_acc(&self) -> Option<(Id<GenBlock>, BlockHeight)> {
-        None
-    }
-
-    fn scan_blocks_unsynced_acc(
-        &mut self,
-        _common_block_height: BlockHeight,
-        _blocks: Vec<Block>,
-        _wallet_events: &mut impl WalletEvents,
-    ) -> WalletResult<()> {
-        Err(wallet::WalletError::NoUnsyncedAccount)
-    }
 }
 
 #[derive(Clone)]
@@ -143,6 +134,19 @@ impl NodeInterface for MockNode {
     }
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         Ok(self.tf.lock().unwrap().chainstate.get_block(block_id).unwrap())
+    }
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, Self::Error> {
+        Ok(self
+            .tf
+            .lock()
+            .unwrap()
+            .chainstate
+            .get_mainchain_blocks(from, max_count)
+            .unwrap())
     }
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {
         unreachable!()

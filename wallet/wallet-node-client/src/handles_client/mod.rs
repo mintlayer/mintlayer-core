@@ -100,6 +100,18 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, Self::Error> {
+        let blocks = self
+            .chainstate
+            .call(move |this| this.get_mainchain_blocks(from, max_count))
+            .await??;
+        Ok(blocks)
+    }
+
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {
         let result = self.chainstate.call(move |this| this.get_best_block_height()).await??;
         Ok(result)

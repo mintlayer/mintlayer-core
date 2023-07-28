@@ -46,6 +46,17 @@ impl NodeInterface for NodeRpcClient {
             .map(|block_opt| block_opt.map(HexEncoded::take))
     }
 
+    async fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, Self::Error> {
+        ChainstateRpcClient::get_mainchain_blocks(&self.http_client, from, max_count)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+            .map(|blocks| blocks.into_iter().map(HexEncoded::take).collect())
+    }
+
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         ChainstateRpcClient::best_block_id(&self.http_client)
             .await

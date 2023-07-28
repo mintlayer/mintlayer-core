@@ -59,6 +59,11 @@ pub trait ChainstateInterface: Send {
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
+    fn get_mainchain_blocks(
+        &self,
+        from: BlockHeight,
+        max_count: usize,
+    ) -> Result<Vec<Block>, ChainstateError>;
     fn get_block_header(
         &self,
         block_id: Id<Block>,
