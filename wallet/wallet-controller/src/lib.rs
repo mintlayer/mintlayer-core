@@ -523,9 +523,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     /// Wallet sync progress
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
-        self.wallet
-            .get_best_block_for_unsynced_account()
-            .unwrap_or_else(|| self.wallet.get_best_block())
+        *self
+            .wallet
+            .get_best_block()
+            .values()
+            .min_by_key(|(_block_id, block_height)| block_height)
+            .expect("there must be at least one account")
     }
 
     pub async fn get_stake_pool_balances(
