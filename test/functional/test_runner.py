@@ -101,6 +101,7 @@ BASE_SCRIPTS = [
 
     # vv Tests less than 30s vv
     'blockprod_generate_pos_blocks.py',
+    'blockprod_generate_pos_blocks_rand_genesis_keys.py',
     'blockprod_generate_pos_genesis_blocks.py',
     'blockprod_generate_pow_blocks.py',
     'example_test.py',
