@@ -42,7 +42,7 @@ trait ChainstateRpc {
     #[method(name = "get_block")]
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
 
-    /// Returns a hex-encoded serialized block with the given id.
+    /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
     async fn get_mainchain_blocks(
         &self,
