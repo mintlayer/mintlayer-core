@@ -591,10 +591,34 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // decrement nonce if disconnected input spent from account
+        // Note: it's not strictly required to check inputs/outputs to undo accounting operations
+        //       because `accounting_block_undo` is not empty in that case. But we do it anyway
+        //       to double check that the logic is consistent.
+        let mut apply_accounting_delta_undo = false;
+
         for input in tx.inputs() {
             match input {
-                TxInput::Utxo(_) => { /* do nothing */ }
+                // handle undo of pool decommissioning
+                TxInput::Utxo(input_outpoint) => {
+                    let input_utxo = self
+                        .utxo_cache
+                        .utxo(input_outpoint)
+                        .map_err(|_| utxo::Error::ViewRead)?
+                        .ok_or(ConnectTransactionError::MissingOutputOrSpent(
+                            input_outpoint.clone(),
+                        ))?;
+                    match input_utxo.output() {
+                        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+                            apply_accounting_delta_undo = true;
+                        }
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => { /* do nothing */ }
+                    }
+                }
+                // decrement nonce if disconnected input spent from account
                 TxInput::Account(account_input) => {
                     let account: AccountType = (*account_input.account()).into();
                     let new_nonce = self
@@ -609,29 +633,33 @@ where
         }
 
         // apply undos to accounting
-        tx.outputs().iter().try_for_each(|output| match output {
+        tx.outputs().iter().for_each(|output| match output {
             TxOutput::CreateStakePool(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => {
-                let block_undo_fetcher = |id: Id<Block>| {
-                    self.storage
-                        .get_accounting_undo(id)
-                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-                };
-                self.accounting_block_undo
-                    .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
-                    .into_inner()
-                    .into_iter()
-                    .try_for_each(|undo| {
-                        self.accounting_delta_adapter.operations(tx_source).undo(undo)?;
-                        Ok(())
-                    })
+                apply_accounting_delta_undo = true;
             }
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
-        })
+            | TxOutput::ProduceBlockFromStake(_, _) => { /* do nothing */ }
+        });
+
+        if apply_accounting_delta_undo {
+            let block_undo_fetcher = |id: Id<Block>| {
+                self.storage
+                    .get_accounting_undo(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            };
+            self.accounting_block_undo
+                .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
+                .into_inner()
+                .into_iter()
+                .try_for_each(|undo| {
+                    self.accounting_delta_adapter.operations(tx_source).undo(undo)
+                })?;
+        }
+        Ok(())
     }
 
     pub fn connect_transaction(
@@ -910,9 +938,9 @@ where
             TransactionSource::Mempool => { /* do nothing */ }
         };
 
-        self.disconnect_pos_accounting_outputs(*tx_source, tx.transaction())?;
-
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
+
+        self.disconnect_pos_accounting_outputs(*tx_source, tx.transaction())?;
 
         // pre-cache token ids before removing them
         self.token_issuance_cache.precache_token_issuance(

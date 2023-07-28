@@ -16,7 +16,9 @@
 use itertools::Itertools;
 use std::num::NonZeroU64;
 
-use super::helpers::new_pub_key_destination;
+use super::helpers::{
+    new_pub_key_destination, pos::create_stake_pool_data_with_all_reward_to_owner,
+};
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
@@ -28,6 +30,7 @@ use common::{
     chain::{
         config::{create_unit_test_config, Builder as ConfigBuilder},
         stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         tokens::OutputValue,
         Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -120,10 +123,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_c
             let destination_c = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let tx_b_outpoint0 = UtxoOutPoint::new(
-                OutPointSourceId::Transaction(tx_b.transaction().get_id()),
-                0,
-            );
+            let tx_b_outpoint0 = UtxoOutPoint::new(tx_b.transaction().get_id().into(), 0);
             let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
             let tx_c = TransactionBuilder::new()
                 .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
@@ -290,4 +290,172 @@ fn long_chain_reorg(#[case] seed: Seed) {
         assert_ne!(old_tip, new_tip);
         assert_eq!(new_tip, tf.best_block_id());
     });
+}
+
+// Produce `genesis -> a -> b` chain, where block `a` creates additional staking pool and
+// block `b` decommissions the pool from genesis.
+// Then produce a parallel `genesis -> a -> c` that should trigger a in-memory reorg for block `b`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+    let (stake_pool_data, staking_sk) =
+        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk.clone());
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        amount_to_stake,
+        pool_id,
+        stake_pool_data,
+    )
+    .build();
+    let target_block_time =
+        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.get());
+
+    // produce block `a` at height 1 and create additional pool
+    let (stake_pool_data_2, staking_sk_2) =
+        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+    let genesis_outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let stake_pool_2_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_2_id,
+            Box::new(stake_pool_data_2),
+        ))
+        .build();
+    let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(stake_pool_2_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+    let block_a_id = tf.best_block_id();
+
+    // produce block `b` at height 2: decommission pool_1 with ProduceBlock from genesis
+    let produce_block_outpoint = UtxoOutPoint::new(block_a_id.into(), 0);
+
+    let decommission_pool_tx = TransactionBuilder::new()
+        .add_input(produce_block_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount_to_stake),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
+        .build();
+
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(decommission_pool_tx)
+        .with_stake_pool(pool_2_id)
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_block_signing_key(staking_sk_2.clone())
+        .with_stake_spending_key(staking_sk_2.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+
+    // produce block at height 2 that should trigger in memory reorg for block `b`
+    tf.make_pos_block_builder(&mut rng)
+        .with_parent(block_a_id)
+        .with_stake_pool(pool_2_id)
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_block_signing_key(staking_sk_2.clone())
+        .with_stake_spending_key(staking_sk_2)
+        .with_vrf_key(vrf_sk)
+        .build_and_process()
+        .unwrap();
+}
+
+// Produce `genesis -> a -> b` chain, where block `a` creates additional staking pool and
+// block `b` decommissions the pool from `a`.
+// Then produce a parallel `genesis -> a -> c` that should trigger a in-memory reorg for block `b`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random_using(&mut rng));
+    let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+    let (stake_pool_data, staking_sk) =
+        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk.clone());
+
+    let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        amount_to_stake,
+        pool_id,
+        stake_pool_data,
+    )
+    .build();
+    let target_block_time =
+        chainstate_test_framework::get_target_block_time(&chain_config, BlockHeight::new(1));
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+    tf.progress_time_seconds_since_epoch(target_block_time.get());
+
+    // produce block `a` at height 1 and create additional pool
+    let (stake_pool_data_2, _) =
+        create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+    let genesis_outpoint = UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_2_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let stake_pool_2_tx = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_2_id,
+            Box::new(stake_pool_data_2),
+        ))
+        .build();
+    let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(stake_pool_2_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+    let block_a_id = tf.best_block_id();
+
+    // produce block `b` at height 2: decommission pool_2 from prev block
+    let stake_pool_2_outpoint = UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0);
+
+    let decommission_pool_tx = TransactionBuilder::new()
+        .add_input(stake_pool_2_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount_to_stake),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
+        .build();
+
+    tf.make_pos_block_builder(&mut rng)
+        .add_transaction(decommission_pool_tx)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk.clone())
+        .with_vrf_key(vrf_sk.clone())
+        .build_and_process()
+        .unwrap();
+
+    // produce block at height 2 that should trigger in memory reorg for block `b`
+    tf.make_pos_block_builder(&mut rng)
+        .with_parent(block_a_id)
+        .with_block_signing_key(staking_sk.clone())
+        .with_stake_spending_key(staking_sk)
+        .with_vrf_key(vrf_sk)
+        .build_and_process()
+        .unwrap();
 }

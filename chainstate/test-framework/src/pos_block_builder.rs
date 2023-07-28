@@ -139,6 +139,16 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
+    pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
+        self.staking_pool = Some(pool_id);
+        self
+    }
+
+    pub fn with_kernel_input(mut self, outpoint: UtxoOutPoint) -> Self {
+        self.kernel_input_outpoint = Some(outpoint);
+        self
+    }
+
     fn build_impl(self) -> (Block, &'f mut TestFramework) {
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
