@@ -104,6 +104,8 @@ pub enum WalletError {
     InconsistentDelegationRemovalNegativeNonce(DelegationId),
     #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
+    #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
+    InconsistentProduceBlockFromStake(PoolId),
     #[error("Delfation amount overflow for id: {0}")]
     DelegationAmountOverflow(DelegationId),
     #[error("Delfation nonce overflow for id: {0}")]
@@ -134,6 +136,8 @@ pub enum WalletError {
     CannotFindTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+    #[error("Unknown pool id {0}")]
+    UnknownPoolId(PoolId),
 }
 
 /// Result type used for the wallet
@@ -592,6 +596,30 @@ impl<B: storage::Backend> Wallet<B> {
                 current_fee_rate,
                 consolidate_fee_rate,
             )
+        })
+    }
+
+    pub fn decomission_stake_pool(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let tx =
+                account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
+
+            let [tx] = txs;
+            Ok(tx)
         })
     }
 

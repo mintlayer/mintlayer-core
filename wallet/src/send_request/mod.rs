@@ -145,6 +145,22 @@ pub fn make_address_output_from_delegation(
     ))
 }
 
+pub fn make_decomission_stake_pool_output(
+    chain_config: &ChainConfig,
+    destination: Destination,
+    amount: Amount,
+    current_block_height: BlockHeight,
+) -> WalletResult<TxOutput> {
+    let num_blocks_to_lock: i64 =
+        chain_config.spend_share_maturity_distance(current_block_height).into();
+
+    Ok(TxOutput::LockThenTransfer(
+        OutputValue::Coin(amount),
+        destination,
+        ForBlockCount(num_blocks_to_lock as u64),
+    ))
+}
+
 pub fn make_stake_output(
     pool_id: PoolId,
     amount: Amount,

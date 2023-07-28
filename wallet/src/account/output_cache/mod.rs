@@ -50,6 +50,26 @@ impl DelegationData {
     }
 }
 
+pub struct PoolData {
+    pub utxo_outpoint: UtxoOutPoint,
+    pub creation_block: BlockInfo,
+    pub decommission_key: Destination,
+}
+
+impl PoolData {
+    fn new(
+        utxo_outpoint: UtxoOutPoint,
+        creation_block: BlockInfo,
+        decommission_key: Destination,
+    ) -> Self {
+        PoolData {
+            utxo_outpoint,
+            creation_block,
+            decommission_key,
+        }
+    }
+}
+
 /// A helper structure for the UTXO search.
 ///
 /// All transactions and blocks from the DB are cached here. If a transaction
@@ -65,7 +85,7 @@ pub struct OutputCache {
     txs: BTreeMap<OutPointSourceId, WalletTx>,
     consumed: BTreeMap<UtxoOutPoint, TxState>,
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
-    pools: BTreeMap<PoolId, (UtxoOutPoint, BlockInfo)>,
+    pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
 }
 
@@ -101,10 +121,15 @@ impl OutputCache {
     pub fn pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
         self.pools
             .iter()
-            .filter_map(|(pool_id, (outpoint, block_info))| {
-                (!self.consumed.contains_key(outpoint)).then_some((*pool_id, *block_info))
+            .filter_map(|(pool_id, pool_data)| {
+                (!self.consumed.contains_key(&pool_data.utxo_outpoint))
+                    .then_some((*pool_id, pool_data.creation_block))
             })
             .collect()
+    }
+
+    pub fn pool_data(&self, pool_id: PoolId) -> WalletResult<&PoolData> {
+        self.pools.get(&pool_id).ok_or(WalletError::UnknownPoolId(pool_id))
     }
 
     pub fn delegation_ids(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
@@ -180,13 +205,25 @@ impl OutputCache {
         if let Some(block_info) = tx_block_info {
             for (idx, output) in tx.outputs().iter().enumerate() {
                 match output {
-                    TxOutput::ProduceBlockFromStake(_, pool_id)
-                    | TxOutput::CreateStakePool(pool_id, _) => {
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        if let Some(data) = self.pools.get_mut(pool_id) {
+                            data.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                        } else {
+                            return Err(WalletError::InconsistentProduceBlockFromStake(*pool_id));
+                        }
+                    }
+                    TxOutput::CreateStakePool(pool_id, data) => {
                         self.pools
                             .entry(*pool_id)
-                            .and_modify(|entry| entry.0 = UtxoOutPoint::new(tx.id(), idx as u32))
+                            .and_modify(|entry| {
+                                entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                            })
                             .or_insert_with(|| {
-                                (UtxoOutPoint::new(tx.id(), idx as u32), block_info)
+                                PoolData::new(
+                                    UtxoOutPoint::new(tx.id(), idx as u32),
+                                    block_info,
+                                    data.decommission_key().clone(),
+                                )
                             });
                     }
                     TxOutput::DelegateStaking(amount, delegation_id) => {

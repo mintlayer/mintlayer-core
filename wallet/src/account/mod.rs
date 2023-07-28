@@ -29,7 +29,10 @@ pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
-use crate::send_request::{make_address_output, make_address_output_token, make_stake_output};
+use crate::send_request::{
+    make_address_output, make_address_output_token, make_decomission_stake_pool_output,
+    make_stake_output,
+};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
@@ -330,6 +333,51 @@ impl Account {
         // TODO: Randomize inputs and outputs
 
         let tx = self.sign_transaction_from_req(request, db_tx)?;
+        Ok(tx)
+    }
+
+    pub fn decommission_stake_pool(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let pool_data = self.output_cache.pool_data(pool_id)?;
+        let best_block_height = self.best_block().1;
+        let tx_input = TxInput::Utxo(pool_data.utxo_outpoint.clone());
+
+        let network_fee: Amount = {
+            let output = make_decomission_stake_pool_output(
+                self.chain_config.as_ref(),
+                pool_data.decommission_key.clone(),
+                pool_balance,
+                best_block_height,
+            )?;
+            let outputs = vec![output];
+
+            current_fee_rate
+                .compute_fee(
+                    tx_size_with_outputs(outputs.as_slice())
+                        + input_signature_size(&pool_data.decommission_key)?
+                        + serialization::Encode::encoded_size(&tx_input),
+                )
+                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                .into()
+        };
+
+        let output = make_decomission_stake_pool_output(
+            self.chain_config.as_ref(),
+            pool_data.decommission_key.clone(),
+            (pool_balance - network_fee)
+                .ok_or(WalletError::NotEnoughUtxo(network_fee, pool_balance))?,
+            best_block_height,
+        )?;
+
+        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+
+        let input_utxo = self.output_cache.get_txo(&pool_data.utxo_outpoint);
+        let tx = self.sign_transaction(tx, &[&pool_data.decommission_key], &[input_utxo], db_tx)?;
         Ok(tx)
     }
 

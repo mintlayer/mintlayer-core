@@ -241,6 +241,10 @@ pub enum WalletCommand {
         decomission_key: Option<HexEncoded<PublicKey>>,
     },
 
+    DecomissionStakePool {
+        pool_id: HexEncoded<PoolId>,
+    },
+
     /// Node version
     NodeVersion,
 
@@ -1015,6 +1019,19 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
 
                 Ok(Self::handle_mempool_tx_status(status))
+            }
+
+            WalletCommand::DecomissionStakePool { pool_id } => {
+                let tx = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .decomission_stake_pool(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        pool_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::NodeVersion => {
