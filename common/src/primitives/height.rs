@@ -174,7 +174,7 @@ impl BlockDistance {
         Self(distance)
     }
 
-    pub fn into_int(self) -> DistanceIntType {
+    pub fn to_int(&self) -> DistanceIntType {
         self.0
     }
 }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 
 use common::{
     chain::{timelock::OutputTimeLock, AccountSpending, ChainConfig, PoolId, TxInput, TxOutput},
@@ -48,8 +48,7 @@ impl ConstrainedValueAccumulator {
     #[allow(dead_code)]
     pub fn consume(self) -> Result<Amount, IOPolicyError> {
         self.timelock_constrained
-            .values()
-            .copied()
+            .into_values()
             .sum::<Option<Amount>>()
             .and_then(|v| v + self.unconstrained_value)
             .ok_or(IOPolicyError::AmountOverflow)
@@ -98,16 +97,13 @@ impl ConstrainedValueAccumulator {
                                 .decommission_pool_maturity_distance(block_height);
                             let pledged_amount = pledge_amount_getter(*pool_id)?
                                 .ok_or(IOPolicyError::PledgeAmountNotFound(*pool_id))?;
-                            match self.timelock_constrained.entry(block_distance) {
-                                Entry::Vacant(e) => {
-                                    e.insert(pledged_amount);
-                                }
-                                Entry::Occupied(mut e) => {
-                                    let new_balance = (*e.get() + pledged_amount)
-                                        .ok_or(IOPolicyError::AmountOverflow)?;
-                                    *e.get_mut() = new_balance;
-                                }
-                            };
+
+                            let balance = self
+                                .timelock_constrained
+                                .entry(block_distance)
+                                .or_insert(Amount::ZERO);
+                            *balance =
+                                (*balance + pledged_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
                     };
                 }
@@ -116,16 +112,13 @@ impl ConstrainedValueAccumulator {
                         AccountSpending::Delegation(_, spend_amount) => {
                             let block_distance =
                                 chain_config.as_ref().spend_share_maturity_distance(block_height);
-                            match self.timelock_constrained.entry(block_distance) {
-                                Entry::Vacant(e) => {
-                                    e.insert(*spend_amount);
-                                }
-                                Entry::Occupied(mut e) => {
-                                    let new_balance = (*e.get() + *spend_amount)
-                                        .ok_or(IOPolicyError::AmountOverflow)?;
-                                    *e.get_mut() = new_balance;
-                                }
-                            };
+
+                            let balance = self
+                                .timelock_constrained
+                                .entry(block_distance)
+                                .or_insert(Amount::ZERO);
+                            *balance =
+                                (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
                     };
                 }
@@ -273,7 +266,7 @@ mod tests {
         let outputs = vec![TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(staked_atoms - fee_atoms)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.into_int() as u64),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
         )];
 
         let mut constraints_accumulator = ConstrainedValueAccumulator::new();
@@ -323,7 +316,7 @@ mod tests {
         let outputs = vec![TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(delegated_atoms - fee_atoms)),
             Destination::AnyoneCanSpend,
-            OutputTimeLock::ForBlockCount(required_maturity_distance.into_int() as u64),
+            OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
         )];
 
         let mut constraints_accumulator = ConstrainedValueAccumulator::new();
@@ -389,12 +382,12 @@ mod tests {
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(staked_atoms - 10)),
                 Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.into_int() as u64),
+                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64),
             ),
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
                 Destination::AnyoneCanSpend,
-                OutputTimeLock::ForBlockCount(required_maturity_distance.into_int() as u64 - 1),
+                OutputTimeLock::ForBlockCount(required_maturity_distance.to_int() as u64 - 1),
             ),
             TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),

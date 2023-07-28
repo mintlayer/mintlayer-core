@@ -243,8 +243,16 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
 #[case(produce_block(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(produce_block(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(produce_block(), produce_block(),      Ok(()))]
-#[case(produce_block(), create_delegation(),  Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(produce_block(), delegate_staking(),   Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(
+    produce_block(),
+    create_delegation(),
+    Err(IOPolicyError::InvalidOutputTypeInReward)
+)]
+#[case(
+    produce_block(),
+    delegate_staking(),
+    Err(IOPolicyError::InvalidOutputTypeInReward)
+)]
 /*-----------------------------------------------------------------------------------------------*/
 #[case(create_delegation(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
 #[case(create_delegation(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
@@ -269,16 +277,19 @@ fn reward_one_to_one(
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let utxo_db = UtxosDBInMemoryImpl::new(
         Id::<GenBlock>::new(H256::zero()),
-        BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(input_utxo),
-        )]),
+        BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input_utxo))]),
     );
 
     let block = make_block(vec![outpoint.into()], vec![output]);
 
-    assert_eq!(result.map_err(|e| ConnectTransactionError::IOPolicyError(e, block.get_id().into())),
-               check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db, block.get_id()));
+    assert_eq!(
+        result.map_err(|e| ConnectTransactionError::IOPolicyError(e, block.get_id().into())),
+        check_reward_inputs_outputs_purposes(
+            &block.block_reward_transactable(),
+            &utxo_db,
+            block.get_id()
+        )
+    );
 }
 
 #[rstest]
