@@ -211,7 +211,7 @@ where
 
                 event = self.local_event_rx.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_new_event(event)?;
+                    self.handle_local_event(event)?;
                 }
 
                 _ = stalling_interval.tick(), if !matches!(self.last_activity, PeerActivity::Pending) => {}
@@ -226,7 +226,7 @@ where
         }
     }
 
-    fn handle_new_event(&mut self, event: LocalEvent) -> Result<()> {
+    fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
         match event {
             LocalEvent::ChainstateNewTip(header) => {
                 if self.send_tip_updates && self.common_services.has_service(Service::Blocks) {
