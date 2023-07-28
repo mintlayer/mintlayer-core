@@ -26,7 +26,7 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
+        config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
         Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Idable},

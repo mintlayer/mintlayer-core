@@ -18,8 +18,8 @@ use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        output_value::OutputValue,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
         ChainConfig, Destination, PoWStatus, TxOutput,
     },
     primitives::BlockHeight,

@@ -16,7 +16,7 @@
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
-    chain::{tokens::OutputValue, OutPointSourceId, TxInput, TxOutput},
+    chain::{output_value::OutputValue, OutPointSourceId, TxInput, TxOutput},
     primitives::{Amount, Id, Idable, H256},
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};

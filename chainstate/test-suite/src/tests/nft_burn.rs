@@ -19,8 +19,9 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
+    output_value::OutputValue,
     signature::inputsig::InputWitness,
-    tokens::{token_id, OutputValue, TokenData, TokenTransfer},
+    tokens::{token_id, TokenData, TokenTransfer},
     Destination, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};

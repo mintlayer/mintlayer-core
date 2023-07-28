@@ -36,10 +36,11 @@ use crate::send_request::{
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
+use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
+use common::chain::tokens::{TokenData, TokenId, TokenTransfer};
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,

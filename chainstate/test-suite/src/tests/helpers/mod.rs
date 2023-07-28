@@ -16,8 +16,9 @@
 use chainstate_test_framework::{anyonecanspend_address, TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
-        timelock::OutputTimeLock, tokens::OutputValue, Destination, Transaction, TxInput, TxOutput,
+        block::timestamp::BlockTimestamp, output_value::OutputValue,
+        signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination, Transaction,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };

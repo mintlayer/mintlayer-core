@@ -22,9 +22,8 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        tokens::{
-            token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer,
-        },
+        output_value::OutputValue,
+        tokens::{token_id, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer},
         Destination, OutPointSourceId, SpendablePosition, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },

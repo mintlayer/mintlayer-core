@@ -19,8 +19,9 @@ use common::{
     amount_sum,
     chain::{
         block::{BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, TokenData, TokenId},
         AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},

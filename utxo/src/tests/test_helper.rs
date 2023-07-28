@@ -21,7 +21,7 @@ use crate::{
 };
 use common::{
     chain::{
-        tokens::OutputValue, Destination, GenBlock, OutPointSourceId, Transaction, TxInput,
+        output_value::OutputValue, Destination, GenBlock, OutPointSourceId, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},

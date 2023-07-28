@@ -224,7 +224,7 @@ impl Eq for WithId<Block> {}
 mod tests {
     use crate::{
         chain::{
-            signature::inputsig::InputWitness, tokens::OutputValue, transaction::Transaction,
+            output_value::OutputValue, signature::inputsig::InputWitness, transaction::Transaction,
             Destination, OutPointSourceId, TxInput, TxOutput,
         },
         primitives::{id, Amount},

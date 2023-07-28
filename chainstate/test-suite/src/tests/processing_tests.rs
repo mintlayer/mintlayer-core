@@ -36,8 +36,8 @@ use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        output_value::OutputValue,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
         OutputSpentState, PoolId, TxInput, TxOutput, UpgradeVersion,
     },

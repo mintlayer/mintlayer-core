@@ -32,8 +32,8 @@ use common::{
         BlockHeader, BlockReward, ConsensusData,
     },
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, RequiredConsensus,
-        TxOutput,
+        output_value::OutputValue, timelock::OutputTimeLock, ChainConfig, Destination,
+        RequiredConsensus, TxOutput,
     },
     primitives::BlockHeight,
 };

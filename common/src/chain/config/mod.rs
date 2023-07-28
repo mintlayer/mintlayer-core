@@ -25,7 +25,6 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionSchedu
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::TxOutput;
@@ -43,6 +42,7 @@ use std::time::Duration;
 
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
+use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);

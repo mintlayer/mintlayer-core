@@ -20,7 +20,8 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        tokens::{token_id, OutputValue, TokenData, TokenIssuance, TokenTransfer},
+        output_value::OutputValue,
+        tokens::{token_id, TokenData, TokenIssuance, TokenTransfer},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},

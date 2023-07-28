@@ -138,7 +138,7 @@ mod unit_test {
     use super::*;
     use crate::UtxoSource;
     use common::{
-        chain::{tokens::OutputValue, Destination, TxOutput},
+        chain::{output_value::OutputValue, Destination, TxOutput},
         primitives::Amount,
     };
     use rstest::rstest;

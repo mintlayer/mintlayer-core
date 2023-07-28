@@ -21,8 +21,9 @@ use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuil
 use common::primitives::Idable;
 use common::{
     chain::{
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenTransfer},
+        tokens::{token_id, Metadata, NftIssuance, TokenData, TokenId, TokenTransfer},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},

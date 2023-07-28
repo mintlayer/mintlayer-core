@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, GenBlock},
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
         OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},

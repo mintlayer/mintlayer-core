@@ -91,34 +91,6 @@ impl TokenAuxiliaryData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub enum OutputValue {
-    Coin(Amount),
-    Token(Box<TokenData>),
-}
-
-impl OutputValue {
-    pub fn coin_amount(&self) -> Option<Amount> {
-        match self {
-            OutputValue::Coin(v) => Some(*v),
-            OutputValue::Token(_) => None,
-        }
-    }
-
-    pub fn token_data(&self) -> Option<&TokenData> {
-        match self {
-            OutputValue::Coin(_) => None,
-            OutputValue::Token(d) => Some(d),
-        }
-    }
-}
-
-impl From<TokenData> for OutputValue {
-    fn from(d: TokenData) -> Self {
-        Self::Token(Box::new(d))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TokenTransfer {
     pub token_id: TokenId,
@@ -162,23 +134,5 @@ impl From<NftIssuance> for TokenData {
 impl From<TokenIssuance> for TokenData {
     fn from(d: TokenIssuance) -> Self {
         Self::TokenIssuance(Box::new(d))
-    }
-}
-
-impl From<TokenTransfer> for OutputValue {
-    fn from(d: TokenTransfer) -> Self {
-        TokenData::TokenTransfer(d).into()
-    }
-}
-
-impl From<NftIssuance> for OutputValue {
-    fn from(d: NftIssuance) -> Self {
-        TokenData::NftIssuance(Box::new(d)).into()
-    }
-}
-
-impl From<TokenIssuance> for OutputValue {
-    fn from(d: TokenIssuance) -> Self {
-        TokenData::TokenIssuance(Box::new(d)).into()
     }
 }

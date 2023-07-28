@@ -21,6 +21,7 @@ use super::utils::*;
 use crate::{
     chain::{
         config::create_mainnet,
+        output_value::OutputValue,
         signature::{
             sighash::sighashtype::{OutputsMode, SigHashType},
             tests::{
@@ -30,7 +31,6 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        tokens::OutputValue,
         AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },

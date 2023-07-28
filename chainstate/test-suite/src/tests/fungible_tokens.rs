@@ -25,8 +25,9 @@ use common::chain::UtxoOutPoint;
 use common::primitives::{id, Id};
 use common::{
     chain::{
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{token_id, OutputValue, TokenData, TokenId},
+        tokens::{token_id, TokenData, TokenId},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},

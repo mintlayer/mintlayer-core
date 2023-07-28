@@ -23,8 +23,8 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
         config::ChainConfig,
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::OutputValue,
         transaction::{Destination, TxInput, TxOutput},
         OutPointSourceId, Transaction, UtxoOutPoint,
     },

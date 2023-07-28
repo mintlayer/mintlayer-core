@@ -115,7 +115,7 @@ mod tests {
 
     use super::*;
 
-    use crate::chain::tokens::OutputValue;
+    use crate::chain::output_value::OutputValue;
     use crate::chain::TxInput;
     use crate::primitives::id::Id;
     use crate::primitives::H256;

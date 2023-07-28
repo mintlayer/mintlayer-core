@@ -18,11 +18,12 @@ pub mod chaintrust;
 pub mod config;
 pub mod gen_block;
 pub mod genesis;
+pub mod tokens;
+pub mod transaction;
+
 mod mlt;
 mod pos;
 mod pow;
-pub mod tokens;
-pub mod transaction;
 mod upgrades;
 
 pub use signed_transaction::SignedTransaction;

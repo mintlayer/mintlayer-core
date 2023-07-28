@@ -28,7 +28,7 @@ use common::chain::signed_transaction::SignedTransaction;
 use common::chain::UtxoOutPoint;
 use common::primitives::Idable;
 use common::{
-    chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
+    chain::{output_value::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
 use crypto::random::SliceRandom;

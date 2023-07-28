@@ -16,9 +16,9 @@
 use super::*;
 use crate::key_chain::MasterKeyChain;
 use common::chain::config::create_regtest;
+use common::chain::output_value::OutputValue;
 use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::OutputValue;
 use common::chain::{GenBlock, Transaction, TxInput};
 use common::primitives::amount::UnsignedIntType;
 use common::primitives::{Amount, Id, H256};

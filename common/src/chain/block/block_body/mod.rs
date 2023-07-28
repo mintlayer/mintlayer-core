@@ -71,11 +71,11 @@ mod tests {
     use crate::{
         chain::{
             block::BlockReward,
+            output_value::OutputValue,
             signature::{
                 inputsig::{standard_signature::StandardInputSignature, InputWitness},
                 sighash::sighashtype::SigHashType,
             },
-            tokens::OutputValue,
             Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
         },
         primitives::{Amount, Id, H256},
