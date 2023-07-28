@@ -32,6 +32,7 @@ use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, Block},
         config::ChainConfig,
+        Transaction,
     },
     primitives::Id,
     time_getter::TimeGetter,
@@ -55,9 +56,14 @@ use crate::{
     PeerManagerEvent, Result,
 };
 
+pub enum LocalEvent {
+    ChainstateNewTip(SignedBlockHeader),
+    MempoolNewTx(Id<Transaction>),
+}
+
 pub struct PeerContext {
     task: JoinHandle<()>,
-    new_tip: UnboundedSender<SignedBlockHeader>,
+    local_event_tx: UnboundedSender<LocalEvent>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -165,7 +171,7 @@ where
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
-        let (new_tip_tx, new_tip_rx) = mpsc::unbounded_channel();
+        let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
 
         let mut peer = Peer::<T>::new(
             peer_id,
@@ -177,7 +183,7 @@ where
             self.peer_manager_sender.clone(),
             sync_rx,
             self.messaging_handle.clone(),
-            new_tip_rx,
+            local_event_rx,
             Arc::clone(&self.is_initial_block_download),
             self.time_getter.clone(),
         );
@@ -188,7 +194,7 @@ where
 
         let peer_context = PeerContext {
             task: peer_task,
-            new_tip: new_tip_tx,
+            local_event_tx,
         };
 
         let prev_task = self.peers.insert(peer_id, peer_context);
@@ -229,7 +235,7 @@ where
 
         log::debug!("Broadcasting a new tip header {}", header.block_id());
         for peer in self.peers.values_mut() {
-            let _ = peer.new_tip.send(header.clone());
+            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(header.clone()));
         }
         Ok(())
     }
@@ -242,7 +248,9 @@ where
             Ok(()) => match origin {
                 TxOrigin::Peer(_) | TxOrigin::LocalP2p => {
                     log::info!("Broadcasting transaction {tx_id} originating in {origin}");
-                    self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(tx_id))?;
+                    for peer in self.peers.values_mut() {
+                        let _ = peer.local_event_tx.send(LocalEvent::MempoolNewTx(tx_id));
+                    }
                 }
                 TxOrigin::LocalMempool | TxOrigin::PastBlock => {
                     log::trace!("Not propagating transaction {tx_id} originating in {origin}");

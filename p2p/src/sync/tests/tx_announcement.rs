@@ -348,10 +348,8 @@ async fn valid_transaction(#[case] seed: Seed) {
         )
         .await;
 
-    assert_eq!(
-        SyncMessage::NewTransaction(tx.transaction().get_id()),
-        handle.message().await.1
-    );
+    // There should be no `NewTransaction` message because the transaction is already known
+    handle.assert_no_event().await;
 
     handle.join_subsystem_manager().await;
 }

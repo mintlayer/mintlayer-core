@@ -133,9 +133,10 @@ where
             .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
             .unwrap();
         messaging_handle_2
-            .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-                .header()
-                .clone()])))
+            .send_message(
+                peer,
+                SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+            )
             .unwrap();
     });
 

@@ -78,7 +78,7 @@ where
     .await
     .unwrap();
 
-    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
+    let (_, peer1, peer2) = connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     let block = Block::new(
         vec![],
@@ -89,9 +89,10 @@ where
     )
     .unwrap();
     messaging_handle1
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .send_message(
+            peer2.peer_id,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
         .unwrap();
 
     let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
@@ -123,9 +124,10 @@ where
     )
     .unwrap();
     messaging_handle2
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .send_message(
+            peer1.peer_id,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
         .unwrap();
 
     let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
@@ -218,7 +220,7 @@ where
     .await
     .unwrap();
 
-    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
+    let (_, _peer1, peer2) = connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     let block = Block::new(
         vec![],
@@ -229,9 +231,10 @@ where
     )
     .unwrap();
     messaging_handle1
-        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
-            .header()
-            .clone()])))
+        .send_message(
+            peer2.peer_id,
+            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+        )
         .unwrap();
 
     shutdown.store(true);

@@ -30,7 +30,7 @@ use common::{
     primitives::{semver::SemVer, user_agent::UserAgent},
     time_getter::TimeGetter,
 };
-use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
+use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
 use utils::{atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag};
 
@@ -44,10 +44,7 @@ use crate::{
             transport::{TransportListener, TransportSocket},
             types::{Command, Event, Message, PeerEvent},
         },
-        types::{
-            services::{Service, Services},
-            ConnectivityEvent, PeerInfo, SyncingEvent,
-        },
+        types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pEvent, P2pEventHandler,
@@ -261,27 +258,6 @@ where
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         Ok(peer.tx.send(Event::SendMessage(Box::new(message)))?)
-    }
-
-    /// Sends the announcement to all peers.
-    ///
-    /// It is not an error if there are no peers that subscribed to the related topic.
-    fn announce_data(&mut self, topic: Service, message: Message) -> crate::Result<()> {
-        // Send the message to peers in pseudorandom order.
-        let mut peers: Vec<_> = self
-            .peers
-            .iter()
-            .filter(|(_peer_id, peer)| peer.was_accepted.test() && peer.services.has_service(topic))
-            .collect();
-        peers.shuffle(&mut make_pseudo_rng());
-
-        for (peer_id, peer) in peers {
-            if let Err(e) = peer.tx.send(Event::SendMessage(Box::new(message.clone()))) {
-                log::error!("Failed to send announcement to peer {peer_id}: {e:?}")
-            }
-        }
-
-        Ok(())
     }
 
     /// Runs the backend events loop.
@@ -627,12 +603,6 @@ where
                 let res = self.send_message(peer, message);
                 if let Err(e) = res {
                     log::debug!("Failed to send request to peer {peer}: {e}")
-                }
-            }
-            Command::AnnounceData { service, message } => {
-                let res = self.announce_data(service, message);
-                if let Err(e) = res {
-                    log::error!("Failed to send announce data: {e}")
                 }
             }
         };

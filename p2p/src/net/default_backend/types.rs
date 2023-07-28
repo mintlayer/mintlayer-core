@@ -28,7 +28,7 @@ use crate::{
         HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
         TransactionResponse,
     },
-    net::types::services::{Service, Services},
+    net::types::services::Services,
     protocol::NetworkProtocol,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
@@ -39,7 +39,6 @@ pub enum Command<A> {
     Accept { peer_id: PeerId },
     Disconnect { peer_id: PeerId },
     SendMessage { peer: PeerId, message: Message },
-    AnnounceData { service: Service, message: Message },
 }
 
 /// Random nonce sent in outbound handshake.
