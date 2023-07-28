@@ -65,7 +65,6 @@ impl SyncingWallet for DefaultWallet {
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
     common_block_height: BlockHeight,
-    block_id: Id<Block>,
 }
 
 struct FetchedBlocks {
@@ -77,12 +76,8 @@ struct FetchedBlocks {
 enum FetchBlockError<T: NodeInterface> {
     #[error("Unexpected RPC error: {0}")]
     UnexpectedRpcError(T::Error),
-    #[error("Unexpected genesis block received at height {0}")]
-    UnexpectedGenesisBlock(BlockHeight),
-    #[error("There is no block at height {0}")]
-    NoBlockAtHeight(BlockHeight),
-    #[error("Block with id {0} not found")]
-    BlockNotFound(Id<Block>),
+    #[error("No new blocks found")]
+    NoNewBlocksFound,
     #[error("Invalid prev block id: {0}, expected: {1}")]
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
@@ -188,7 +183,7 @@ async fn fetch_and_sync<T: NodeInterface>(
 
 // TODO: For security reasons, the wallet should probably keep track of latest blocks
 // and not allow very large reorgs (for example, the Monero wallet allows reorgs of up to 100 blocks).
-async fn get_next_block_info<T: NodeInterface>(
+async fn get_common_block_info<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     node_block_id: Id<GenBlock>,
@@ -214,27 +209,9 @@ async fn get_next_block_info<T: NodeInterface>(
         None => (chain_config.genesis_block_id(), BlockHeight::zero()),
     };
 
-    let block_height = common_block_height.next_height();
-
-    let gen_block_id = rpc_client
-        .get_block_id_at_height(block_height)
-        .await
-        .map_err(FetchBlockError::UnexpectedRpcError)?
-        .ok_or(FetchBlockError::NoBlockAtHeight(block_height))?;
-
-    // This must not be genesis, but we don't want to trust the remote node and give it power to panic the wallet with expect.
-    // TODO: we should mark this node as malicious if this happens to be genesis.
-    let block_id = match gen_block_id.classify(chain_config) {
-        common::chain::GenBlockId::Genesis(_) => {
-            return Err(FetchBlockError::UnexpectedGenesisBlock(wallet_block_height))
-        }
-        common::chain::GenBlockId::Block(id) => id,
-    };
-
     Ok(NextBlockInfo {
         common_block_id,
         common_block_height,
-        block_id,
     })
 }
 
@@ -250,8 +227,7 @@ async fn fetch_new_blocks<T: NodeInterface>(
     let NextBlockInfo {
         common_block_id,
         common_block_height,
-        block_id,
-    } = get_next_block_info(
+    } = get_common_block_info(
         chain_config,
         rpc_client,
         node_block_id,
@@ -270,7 +246,7 @@ async fn fetch_new_blocks<T: NodeInterface>(
             *block.header().prev_block_id() == common_block_id,
             FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
         ),
-        None => return Err(FetchBlockError::BlockNotFound(block_id)),
+        None => return Err(FetchBlockError::NoNewBlocksFound),
     }
 
     Ok(FetchedBlocks {
