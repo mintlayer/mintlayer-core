@@ -58,8 +58,8 @@ pub enum PropertyQueryError {
     PoolBalanceNotFound(PoolId),
     #[error("Failed to read balance of pool {0}")]
     PoolBalanceReadError(PoolId),
-    #[error("Invalid parameter: {0}: {1}")]
-    InvalidParameter(&'static str, &'static str),
+    #[error("Invalid starting block height: {0}")]
+    InvalidStartingBlockHeightForMainchainBlocks(BlockHeight),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

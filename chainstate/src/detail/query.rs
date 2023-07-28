@@ -89,7 +89,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<Vec<Block>, PropertyQueryError> {
         utils::ensure!(
             from != BlockHeight::zero(),
-            PropertyQueryError::InvalidParameter("from", "cannot be zero")
+            PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(from)
         );
 
         let mut res = Vec::new();
