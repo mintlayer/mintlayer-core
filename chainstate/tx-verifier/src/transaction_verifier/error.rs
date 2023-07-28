@@ -29,6 +29,7 @@ use thiserror::Error;
 use crate::timelock_check;
 
 use super::{
+    input_output_policy::IOPolicyError,
     signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
@@ -43,8 +44,8 @@ pub enum ConnectTransactionError {
     TxNumWrongInBlockOnDisconnect(usize, Id<Block>),
     #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
-    #[error("Output is not found in the cache or database")]
-    MissingOutputOrSpent,
+    #[error("Output is not found in the cache or database: {0:?}")]
+    MissingOutputOrSpent(UtxoOutPoint),
     #[error("No inputs in a transaction")]
     MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
@@ -103,14 +104,6 @@ pub enum ConnectTransactionError {
     MissingPoSAccountingUndo(Id<Transaction>),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
-    #[error("Attempt to use invalid input type in a transaction")]
-    InvalidInputTypeInTx,
-    #[error("Attempt to use invalid output type in a transaction")]
-    InvalidOutputTypeInTx,
-    #[error("Attempted to use a invalid input type in block reward")]
-    InvalidInputTypeInReward,
-    #[error("Attempted to use a invalid output type in block reward")]
-    InvalidOutputTypeInReward,
     #[error("Pool owner balance of pool {0} not found")]
     PoolOwnerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
@@ -161,6 +154,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateDelegationFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
+    #[error("Input output policy error: `{0}` in : `{1:?}`")]
+    IOPolicyError(IOPolicyError, OutPointSourceId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

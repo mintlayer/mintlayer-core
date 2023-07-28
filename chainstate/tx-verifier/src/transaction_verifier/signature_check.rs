@@ -44,7 +44,9 @@ where
             TxInput::Utxo(outpoint) => utxo_view
                 .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent(
+                    outpoint.clone(),
+                ))
                 .map(|utxo| Some(utxo.take_output())),
             TxInput::Account(_) => Ok(None),
         })

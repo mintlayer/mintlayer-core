@@ -27,7 +27,7 @@ impl OrphanType {
         use ConnectTransactionError as CTE;
         match err {
             // Missing UTXO signifies a possible orphan
-            CTE::MissingOutputOrSpent => Some(Self::MissingUtxo),
+            CTE::MissingOutputOrSpent(_) => Some(Self::MissingUtxo),
 
             // Nonce gap signifies a possible orphan
             CTE::NonceIsNotIncremental(_acct, expected, got) => {
@@ -68,10 +68,6 @@ impl OrphanType {
             | CTE::PoSAccountingError(_)
             | CTE::MissingPoSAccountingUndo(_)
             | CTE::SpendStakeError(_)
-            | CTE::InvalidInputTypeInTx
-            | CTE::InvalidOutputTypeInTx
-            | CTE::InvalidInputTypeInReward
-            | CTE::InvalidOutputTypeInReward
             | CTE::PoolOwnerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)
             | CTE::PoolOwnerRewardCalculationFailed(_, _)
@@ -91,7 +87,8 @@ impl OrphanType {
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
             | CTE::AttemptToCreateDelegationFromAccounts
-            | CTE::FailedToIncrementAccountNonce => None,
+            | CTE::FailedToIncrementAccountNonce
+            | CTE::IOPolicyError(_, _) => None,
         }
     }
 }

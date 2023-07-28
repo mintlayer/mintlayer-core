@@ -15,7 +15,7 @@
 
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
@@ -260,12 +260,16 @@ fn create_delegation_twice(#[case] seed: Seed) {
                 pool_id,
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InvalidOutputTypeInTx
+                ConnectTransactionError::IOPolicyError(
+                    IOPolicyError::MultipleDelegationCreated,
+                    tx_id.into()
+                )
             ))
         );
     });
@@ -283,7 +287,7 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
         let (_, _, _, delegation_outpoint, _) = prepare_delegation(&mut rng, &mut tf);
 
         let tx = TransactionBuilder::new()
-            .add_input(delegation_outpoint.into(), empty_witness(&mut rng))
+            .add_input(delegation_outpoint.clone().into(), empty_witness(&mut rng))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::ZERO),
                 Destination::AnyoneCanSpend,
@@ -294,7 +298,7 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(delegation_outpoint)
             ))
         );
     });
@@ -494,10 +498,15 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         assert_eq!(Some(amount_to_delegate), delegation_balance);
 
         // decommission the pool
+        let pledged_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap()
+                .pledge_amount();
         let tx = TransactionBuilder::new()
             .add_input(stake_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
-                OutputValue::Coin(Amount::from_atoms(1)),
+                OutputValue::Coin(pledged_balance),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(1),
             ))

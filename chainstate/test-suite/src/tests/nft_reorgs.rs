@@ -19,7 +19,7 @@ use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenTransfer},
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
@@ -170,7 +170,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    b1_outpoint_id.clone(),
+                    0
+                ))
             ))
         );
 
@@ -346,7 +349,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent(_))
             ))
         ));
     })

@@ -40,6 +40,8 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
+pub use input_output_policy::IOPolicyError;
+
 use std::collections::BTreeMap;
 
 use self::{
@@ -70,7 +72,7 @@ use common::{
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id, Idable, H256},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
@@ -245,18 +247,20 @@ where
         Ok(())
     }
 
-    fn get_pool_data_from_output(
+    fn get_pool_data_from_output_in_reward(
         &self,
         output: &TxOutput,
+        block_id: Id<Block>,
     ) -> Result<PoolData, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward)
-            }
+            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+                IOPolicyError::InvalidOutputTypeInReward,
+                block_id.into(),
+            )),
             TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id) => self
                 .accounting_delta_adapter
@@ -266,18 +270,20 @@ where
         }
     }
 
-    fn get_pool_id_from_output(
+    fn get_pool_id_from_output_in_reward(
         &self,
         output: &TxOutput,
+        block_id: Id<Block>,
     ) -> Result<PoolId, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward)
-            }
+            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+                IOPolicyError::InvalidOutputTypeInReward,
+                block_id.into(),
+            )),
             TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
             TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
         }
@@ -309,16 +315,20 @@ where
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
 
-                let kernel_pool_id = self.get_pool_id_from_output(&kernel_output)?;
-                let reward_pool_id = self.get_pool_id_from_output(reward_output)?;
+                let kernel_pool_id =
+                    self.get_pool_id_from_output_in_reward(&kernel_output, block.get_id())?;
+                let reward_pool_id =
+                    self.get_pool_id_from_output_in_reward(reward_output, block.get_id())?;
 
                 ensure!(
                     kernel_pool_id == reward_pool_id,
                     SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
                 );
 
-                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
-                let reward_pool_data = self.get_pool_data_from_output(reward_output)?;
+                let kernel_pool_data =
+                    self.get_pool_data_from_output_in_reward(&kernel_output, block.get_id())?;
+                let reward_pool_data =
+                    self.get_pool_data_from_output_in_reward(reward_output, block.get_id())?;
 
                 ensure!(
                     kernel_pool_data == reward_pool_data,
@@ -334,15 +344,18 @@ where
         &self,
         block: &WithId<Block>,
         total_fees: Fee,
-        block_subsidy_at_height: Subsidy,
+        block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
-        input_output_policy::check_reward_inputs_outputs_purposes(
+        input_output_policy::check_reward_inputs_outputs_policy(
             &block.block_reward_transactable(),
             &self.utxo_cache,
+            block.get_id(),
         )?;
 
         self.check_stake_outputs_in_reward(block)?;
 
+        let block_subsidy_at_height =
+            Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
         check_transferred_amount_in_reward(
             &self.utxo_cache,
             &self.accounting_delta_adapter.accounting_delta(),
@@ -401,11 +414,10 @@ where
         tx_source: TransactionSource,
         input_outpoint: &UtxoOutPoint,
     ) -> Result<Option<PoSAccountingUndo>, ConnectTransactionError> {
-        let input_utxo = self
-            .utxo_cache
-            .utxo(input_outpoint)
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let input_utxo =
+            self.utxo_cache.utxo(input_outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                ConnectTransactionError::MissingOutputOrSpent(input_outpoint.clone()),
+            )?;
         match input_utxo.output() {
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                 // If the input spends `CreateStakePool` or `ProduceBlockFromStake` utxo,
@@ -503,7 +515,7 @@ where
                             Some(res)
                         }
                         None => Some(Err(
-                            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
+                            ConnectTransactionError::AttemptToCreateDelegationFromAccounts,
                         )),
                     }
                 }
@@ -631,8 +643,6 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
-
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache.precache_token_issuance(
             |id| {
@@ -658,6 +668,14 @@ where
             issuance_token_id_getter,
         )?;
 
+        input_output_policy::check_tx_inputs_outputs_policy(
+            tx.transaction(),
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            &self.accounting_delta_adapter.accounting_delta(),
+            &self.utxo_cache,
+        )?;
+
         // check token issuance fee
         self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
 
@@ -671,7 +689,6 @@ where
             &self.utxo_cache,
             tx,
             tx_source,
-            tx.transaction().get_id().into(),
             median_time_past,
         )?;
 

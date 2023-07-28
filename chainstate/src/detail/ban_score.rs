@@ -19,7 +19,9 @@ use consensus::{
 };
 use tx_verifier::{
     timelock_check::OutputMaturityError,
-    transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
+    transaction_verifier::{
+        signature_destination_getter::SignatureDestinationGetterError, IOPolicyError,
+    },
 };
 
 use super::{
@@ -97,7 +99,7 @@ impl BanScore for ConnectTransactionError {
             // this is zero because it's used when we add the outputs whose transactions we tested beforehand
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
-            ConnectTransactionError::MissingOutputOrSpent => 100,
+            ConnectTransactionError::MissingOutputOrSpent(_) => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
@@ -126,10 +128,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
-            ConnectTransactionError::InvalidInputTypeInTx => 100,
-            ConnectTransactionError::InvalidInputTypeInReward => 100,
-            ConnectTransactionError::InvalidOutputTypeInTx => 100,
-            ConnectTransactionError::InvalidOutputTypeInReward => 100,
             ConnectTransactionError::PoolOwnerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::MissingTxInputs => 100,
@@ -153,6 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
+            ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
         }
     }
 }
@@ -481,6 +480,26 @@ impl BanScore for EpochSealError {
             EpochSealError::SpendStakeError(_) => 100,
             EpochSealError::RandomnessError(err) => err.ban_score(),
             EpochSealError::PoolDataNotFound(_) => 0,
+        }
+    }
+}
+
+impl BanScore for IOPolicyError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            IOPolicyError::InvalidInputTypeInReward => 100,
+            IOPolicyError::InvalidOutputTypeInReward => 100,
+            IOPolicyError::InvalidInputTypeInTx => 100,
+            IOPolicyError::MultiplePoolCreated => 100,
+            IOPolicyError::MultipleDelegationCreated => 100,
+            IOPolicyError::ProduceBlockInTx => 100,
+            IOPolicyError::AmountOverflow => 100,
+            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
+            IOPolicyError::MissingOutputOrSpent(_) => 100,
+            IOPolicyError::BlockHeightArithmeticError => 100,
+            IOPolicyError::PoSAccountingError(err) => err.ban_score(),
+            IOPolicyError::PledgeAmountNotFound(_) => 100,
         }
     }
 }

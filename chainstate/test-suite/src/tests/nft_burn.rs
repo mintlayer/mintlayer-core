@@ -18,12 +18,12 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{token_id, OutputValue, TokenData, TokenTransfer},
     Destination, TxInput, TxOutput,
 };
+use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::Amount;
 use common::primitives::Idable;
 use crypto::random::Rng;
@@ -194,7 +194,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(first_burn_outpoint_id, 0),
+                        TxInput::from_utxo(first_burn_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -211,7 +211,10 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    first_burn_outpoint_id,
+                    0
+                ))
             ))
         );
     })

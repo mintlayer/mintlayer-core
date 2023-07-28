@@ -13,16 +13,113 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{
-    block::BlockRewardTransactable, signature::Signable, Transaction, TxInput, TxOutput,
+use common::{
+    chain::{
+        block::BlockRewardTransactable, Block, ChainConfig, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
+    },
+    primitives::{BlockHeight, Id, Idable},
 };
-use consensus::ConsensusPoSError;
-use utils::ensure;
+use pos_accounting::PoSAccountingView;
 
-use itertools::Itertools;
+use thiserror::Error;
 
-use super::error::{ConnectTransactionError, SpendStakeError};
+use super::error::ConnectTransactionError;
 
+mod constraints_accumulator;
+mod purposes_check;
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum IOPolicyError {
+    #[error("Attempted to use a invalid input type in block reward")]
+    InvalidInputTypeInReward,
+    #[error("Attempted to use a invalid output type in block reward")]
+    InvalidOutputTypeInReward,
+    #[error("Attempted to use a invalid input type in a tx")]
+    InvalidInputTypeInTx,
+    #[error("Attempted to create multiple stake pools in a single tx")]
+    MultiplePoolCreated,
+    #[error("Attempted to create multiple delegations in a single tx")]
+    MultipleDelegationCreated,
+    #[error("Attempted to produce block in a tx")]
+    ProduceBlockInTx,
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Attempt to print money or violate timelock constraints")]
+    AttemptToPrintMoneyOrViolateTimelockConstraints,
+    #[error("Inputs and inputs utxos length mismatch: {0} vs {1}")]
+    InputsAndInputsUtxosLengthMismatch(usize, usize),
+    #[error("Output is not found in the cache or database: {0:?}")]
+    MissingOutputOrSpent(UtxoOutPoint),
+    #[error("Error while calculating block height; possibly an overflow")]
+    BlockHeightArithmeticError,
+    #[error("PoS accounting error")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("Pledge amount not found for pool: `{0}`")]
+    PledgeAmountNotFound(PoolId),
+}
+
+pub fn check_reward_inputs_outputs_policy(
+    reward: &BlockRewardTransactable,
+    utxo_view: &impl utxo::UtxosView,
+    block_id: Id<Block>,
+) -> Result<(), ConnectTransactionError> {
+    purposes_check::check_reward_inputs_outputs_purposes(reward, utxo_view, block_id)
+}
+
+pub fn check_tx_inputs_outputs_policy(
+    tx: &Transaction,
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    pos_accounting_view: &impl PoSAccountingView,
+    utxo_view: &impl utxo::UtxosView,
+) -> Result<(), ConnectTransactionError> {
+    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
+
+    purposes_check::check_tx_inputs_outputs_purposes(tx, &inputs_utxos)
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    let mut constraints_accumulator = constraints_accumulator::ConstrainedValueAccumulator::new();
+
+    let inputs_utxos = tx
+        .inputs()
+        .iter()
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                let utxo = utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+                    ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
+                )?;
+                Ok(Some(utxo.take_output()))
+            }
+            TxInput::Account(_) => Ok(None),
+        })
+        .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
+
+    let pledge_getter = |pool_id: PoolId| {
+        Ok(pos_accounting_view
+            .get_pool_data(pool_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?
+            .map(|pool_data| pool_data.pledge_amount()))
+    };
+
+    constraints_accumulator
+        .process_inputs(
+            chain_config,
+            block_height,
+            pledge_getter,
+            tx.inputs(),
+            &inputs_utxos,
+        )
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    constraints_accumulator
+        .process_outputs(tx.outputs())
+        .map_err(|e| ConnectTransactionError::IOPolicyError(e, tx.get_id().into()))?;
+
+    Ok(())
+}
+
+// TODO: use FallibleIterator to avoid manually collecting to a Result
 fn get_inputs_utxos(
     utxo_view: &impl utxo::UtxosView,
     inputs: &[TxInput],
@@ -38,308 +135,11 @@ fn get_inputs_utxos(
                 .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .map(|u| u.output().clone())
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent(
+                    outpoint.clone(),
+                ))
         })
         .collect::<Result<Vec<_>, _>>()
-}
-
-/// Not all `TxOutput` combinations can be used in a block reward.
-pub fn check_reward_inputs_outputs_purposes(
-    reward: &BlockRewardTransactable,
-    utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
-    match reward.inputs() {
-        Some(inputs) => {
-            let inputs_utxos = get_inputs_utxos(&utxo_view, inputs)?;
-
-            // the rule for single input/output boils down to that the pair should satisfy:
-            // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
-            match inputs_utxos.as_slice() {
-                // no inputs
-                [] => Err(ConnectTransactionError::SpendStakeError(
-                    SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
-                )),
-                // single input
-                [intput_utxo] => match intput_utxo {
-                    TxOutput::Transfer(..)
-                    | TxOutput::LockThenTransfer(..)
-                    | TxOutput::Burn(..)
-                    | TxOutput::CreateDelegationId(..)
-                    | TxOutput::DelegateStaking(..) => {
-                        Err(ConnectTransactionError::InvalidInputTypeInReward)
-                    }
-                    TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
-                        let outputs =
-                            reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::NoBlockRewardOutputs,
-                            ))?;
-                        match outputs {
-                            [] => Err(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::NoBlockRewardOutputs,
-                            )),
-                            [output] => match output {
-                                TxOutput::Transfer(..)
-                                | TxOutput::LockThenTransfer(..)
-                                | TxOutput::Burn(..)
-                                | TxOutput::CreateStakePool(..)
-                                | TxOutput::CreateDelegationId(..)
-                                | TxOutput::DelegateStaking(..) => {
-                                    Err(ConnectTransactionError::InvalidOutputTypeInReward)
-                                }
-                                TxOutput::ProduceBlockFromStake(..) => Ok(()),
-                            },
-                            _ => Err(ConnectTransactionError::SpendStakeError(
-                                SpendStakeError::MultipleBlockRewardOutputs,
-                            )),
-                        }
-                    }
-                },
-                // multiple inputs
-                _ => Err(ConnectTransactionError::SpendStakeError(
-                    SpendStakeError::ConsensusPoSError(ConsensusPoSError::MultipleKernels),
-                )),
-            }
-        }
-        None => {
-            // if no kernel input is present it's allowed to have multiple `LockThenTransfer` outputs,
-            // because this can only happen with PoW block reward.
-            let all_lock_then_transfer = reward
-                .outputs()
-                .ok_or(ConnectTransactionError::SpendStakeError(
-                    SpendStakeError::NoBlockRewardOutputs,
-                ))?
-                .iter()
-                .all(|output| match output {
-                    TxOutput::LockThenTransfer(..) => true,
-                    TxOutput::Transfer(..)
-                    | TxOutput::Burn(..)
-                    | TxOutput::CreateStakePool(..)
-                    | TxOutput::ProduceBlockFromStake(..)
-                    | TxOutput::CreateDelegationId(..)
-                    | TxOutput::DelegateStaking(..) => false,
-                });
-            ensure!(
-                all_lock_then_transfer,
-                ConnectTransactionError::InvalidOutputTypeInReward
-            );
-            Ok(())
-        }
-    }
-}
-
-/// Not all `TxOutput` combinations can be used in a transaction.
-pub fn check_tx_inputs_outputs_purposes(
-    tx: &Transaction,
-    utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
-    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
-
-    match inputs_utxos.as_slice() {
-        // no utxo inputs
-        [] => {
-            is_valid_tx_with_accounting_input(tx)?;
-        }
-        // single input
-        [input_utxo] => match tx.outputs() {
-            // no outputs
-            [] => { /* do nothing, it's ok to burn outputs in this way */ }
-            // single output
-            [output] => {
-                ensure!(
-                    is_valid_one_to_one_combination(input_utxo, output),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-            // multiple outputs
-            _ => {
-                is_valid_one_to_any_combination_for_tx(input_utxo, tx.outputs())?;
-            }
-        },
-        // multiple inputs
-        _ => {
-            is_valid_any_to_any_combination_for_tx(inputs_utxos.as_slice(), tx.outputs())?;
-        }
-    };
-
-    Ok(())
-}
-
-fn is_valid_tx_with_accounting_input(tx: &Transaction) -> Result<(), ConnectTransactionError> {
-    let is_single_accounting_delegation_spend = tx
-        .inputs()
-        .iter()
-        .filter(|input| match input {
-            TxInput::Utxo(_) => false,
-            TxInput::Account(account) => match account.account() {
-                common::chain::AccountSpending::Delegation(_, _) => true,
-            },
-        })
-        .exactly_one()
-        .is_ok();
-    ensure!(
-        is_single_accounting_delegation_spend,
-        ConnectTransactionError::InvalidInputTypeInTx
-    );
-
-    let all_lock_then_transfer_outputs = tx.outputs().iter().all(|output| match output {
-        TxOutput::LockThenTransfer(..) => true,
-        TxOutput::Transfer(..)
-        | TxOutput::Burn(..)
-        | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..) => false,
-    });
-    ensure!(
-        all_lock_then_transfer_outputs,
-        ConnectTransactionError::InvalidOutputTypeInTx
-    );
-
-    Ok(())
-}
-
-#[allow(clippy::unnested_or_patterns)]
-fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> bool {
-    match (input_utxo, output) {
-        | (TxOutput::Transfer(..), TxOutput::Transfer(..))
-        | (TxOutput::Transfer(..), TxOutput::LockThenTransfer(..))
-        | (TxOutput::Transfer(..), TxOutput::Burn(..))
-        | (TxOutput::Transfer(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::Transfer(..), TxOutput::CreateDelegationId(..))
-        | (TxOutput::Transfer(..), TxOutput::DelegateStaking(..)) => true,
-        | (TxOutput::Transfer(..), TxOutput::ProduceBlockFromStake(..)) => false,
-        | (TxOutput::LockThenTransfer(..), TxOutput::Transfer(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::LockThenTransfer(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::Burn(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::CreateDelegationId(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::DelegateStaking(..)) => true,
-        | (TxOutput::LockThenTransfer(..), TxOutput::ProduceBlockFromStake(..)) => false,
-        | (TxOutput::Burn(..), _) => false,
-        | (TxOutput::CreateStakePool(..), TxOutput::Transfer(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::Burn(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::CreateDelegationId(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::DelegateStaking(..)) => false,
-        | (TxOutput::CreateStakePool(..), TxOutput::LockThenTransfer(..)) => true,
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::Transfer(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::Burn(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateDelegationId(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::DelegateStaking(..)) => false,
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::LockThenTransfer(..)) => true,
-        | (TxOutput::CreateDelegationId(..), _) => false,
-        | (TxOutput::DelegateStaking(..), _) => false,
-    }
-}
-
-fn is_valid_one_to_any_combination_for_tx(
-    input_utxo: &TxOutput,
-    outputs: &[TxOutput],
-) -> Result<(), ConnectTransactionError> {
-    if !is_valid_pool_decommissioning(input_utxo, outputs) {
-        let valid_inputs = are_inputs_valid_for_tx(std::slice::from_ref(input_utxo));
-        ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
-        let valid_outputs = are_outputs_valid_for_tx(outputs);
-        ensure!(
-            valid_outputs,
-            ConnectTransactionError::InvalidOutputTypeInTx
-        );
-    }
-    Ok(())
-}
-
-// single CreateStakePool or ProduceBlockFromStake input; any number of LockThenTransfer outputs
-fn is_valid_pool_decommissioning(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
-    let stake_pool_input = match input_utxo {
-        TxOutput::Transfer(..)
-        | TxOutput::LockThenTransfer(..)
-        | TxOutput::Burn(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..) => false,
-        TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => true,
-    };
-
-    let all_outputs_are_lock_then_transfer = outputs.iter().all(|output| match output {
-        TxOutput::Transfer(..)
-        | TxOutput::Burn(..)
-        | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..) => false,
-        TxOutput::LockThenTransfer(..) => true,
-    });
-
-    stake_pool_input && all_outputs_are_lock_then_transfer
-}
-
-fn is_valid_any_to_any_combination_for_tx(
-    inputs_utxos: &[TxOutput],
-    outputs: &[TxOutput],
-) -> Result<(), ConnectTransactionError> {
-    let valid_inputs = are_inputs_valid_for_tx(inputs_utxos);
-    ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
-    let valid_outputs = are_outputs_valid_for_tx(outputs);
-    ensure!(
-        valid_outputs,
-        ConnectTransactionError::InvalidOutputTypeInTx
-    );
-    Ok(())
-}
-
-fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
-    inputs_utxos.iter().all(|input_utxo| match input_utxo {
-        TxOutput::Transfer(..) | TxOutput::LockThenTransfer(..) => true,
-        TxOutput::Burn(..)
-        | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..) => false,
-    })
-}
-
-fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
-    let valid_outputs_types = outputs.iter().all(|output| match output {
-        TxOutput::Transfer(..)
-        | TxOutput::LockThenTransfer(..)
-        | TxOutput::Burn(..)
-        | TxOutput::CreateStakePool(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..) => true,
-        TxOutput::ProduceBlockFromStake(..) => false,
-    });
-
-    let is_stake_pool_unique = outputs
-        .iter()
-        .filter(|output| match output {
-            TxOutput::Transfer(..)
-            | TxOutput::LockThenTransfer(..)
-            | TxOutput::Burn(..)
-            | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::CreateDelegationId(..)
-            | TxOutput::DelegateStaking(..) => false,
-            TxOutput::CreateStakePool(..) => true,
-        })
-        .at_most_one()
-        .is_ok();
-
-    let is_create_delegation_unique = outputs
-        .iter()
-        .filter(|output| match output {
-            TxOutput::Transfer(..)
-            | TxOutput::LockThenTransfer(..)
-            | TxOutput::Burn(..)
-            | TxOutput::CreateStakePool(..)
-            | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::DelegateStaking(..) => false,
-            TxOutput::CreateDelegationId(..) => true,
-        })
-        .at_most_one()
-        .is_ok();
-
-    valid_outputs_types && is_stake_pool_unique && is_create_delegation_unique
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
 use common::chain::signed_transaction::SignedTransaction;
+use common::chain::UtxoOutPoint;
 use common::primitives::Idable;
 use common::{
     chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
@@ -87,6 +88,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
 
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx_id = first_tx.transaction().get_id();
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         assert_eq!(
@@ -95,7 +97,10 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    first_tx_id.into(),
+                    0
+                ))
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -186,7 +191,10 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    tf.genesis().get_id().into(),
+                    0
+                ))
             ))
         );
         assert_eq!(tf.best_block_id(), first_block_id);
@@ -482,6 +490,7 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
                 rng.gen_range(100_000..200_000),
             ))))
             .build();
+        let first_tx_id = first_tx.transaction().get_id();
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
@@ -489,7 +498,10 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    first_tx_id.into(),
+                    0
+                ))
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -524,7 +536,10 @@ fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block_2, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                    first_tx.transaction().get_id().into(),
+                    0
+                ))
             ))
         );
     });
