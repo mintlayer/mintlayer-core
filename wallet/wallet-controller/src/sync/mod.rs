@@ -26,7 +26,7 @@ use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
 
 use crate::ControllerError;
 
-const MAX_FETCH_BLOCK_COUNT: usize = 1000;
+const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
 pub trait SyncingWallet {
     fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)>;
