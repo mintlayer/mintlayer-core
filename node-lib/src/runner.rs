@@ -333,6 +333,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_genesis_staking_settings,
     } = options;
 
     let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
@@ -370,9 +371,12 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder
-            .net_upgrades(NetUpgrades::regtest_with_pos())
-            .genesis_custom(create_regtest_pos_genesis(Destination::AnyoneCanSpend));
+        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
+            create_regtest_pos_genesis(
+                chain_genesis_staking_settings.clone(),
+                Destination::AnyoneCanSpend,
+            ),
+        );
     }
 
     Ok(builder.build())

@@ -61,4 +61,8 @@ pub struct ChainConfigOptions {
     /// PoS NetUpgrade override after Genesis
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
+
+    /// PoS Genesis staking settings
+    #[clap(long)]
+    pub chain_genesis_staking_settings: Option<String>,
 }
