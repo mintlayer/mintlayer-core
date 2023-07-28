@@ -15,13 +15,13 @@
 
 //! Wallet database schema
 
-use common::address::Address;
+use common::{address::Address, chain::SignedTransaction};
 use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     keys::{RootKeyConstant, RootKeys},
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletSTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 storage::decl_schema! {
@@ -41,5 +41,7 @@ storage::decl_schema! {
         pub DBAddresses: Map<AccountDerivationPathId, Address>,
         /// Store for block/transaction entries
         pub DBTxs: Map<AccountWalletTxId, WalletTx>,
+        /// Store for wallet created transactions
+        pub DBSTxs: Map<AccountWalletSTxId, SignedTransaction>,
     }
 }

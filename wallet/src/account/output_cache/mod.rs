@@ -239,11 +239,17 @@ impl OutputCache {
             .collect()
     }
 
-    pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
+    pub fn abandon_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+    ) -> WalletResult<Vec<Id<Transaction>>> {
+        let mut all_abandoned = Vec::new();
         let mut to_abandon = BTreeSet::new();
         to_abandon.insert(OutPointSourceId::from(tx_id));
 
         while let Some(outpoint_source_id) = to_abandon.pop_first() {
+            all_abandoned.push(*outpoint_source_id.get_tx_id().expect("must be a transaction"));
+
             if let Some(descendants) = self.unconfirmed_descendants.remove(&outpoint_source_id) {
                 to_abandon.extend(descendants.into_iter())
             }
@@ -273,7 +279,7 @@ impl OutputCache {
             }?;
         }
 
-        Ok(())
+        Ok(all_abandoned)
     }
 }
 

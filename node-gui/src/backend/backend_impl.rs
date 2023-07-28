@@ -357,13 +357,13 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction = wallet
+        let transaction_status = wallet
             .controller
             .send_to_address(account_id.account_index(), address, amount)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction })
+        Ok(TransactionInfo { transaction_status })
     }
 
     async fn stake_amount(
@@ -384,13 +384,13 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction = wallet
+        let transaction_status = wallet
             .controller
             .create_stake_pool_tx(account_id.account_index(), amount, None)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction })
+        Ok(TransactionInfo { transaction_status })
     }
 
     async fn broadcast(&mut self, transaction: SignedTransaction) -> Result<(), BackendError> {

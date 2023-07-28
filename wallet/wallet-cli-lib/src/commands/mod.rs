@@ -27,6 +27,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
+use mempool::TxStatus;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
@@ -369,11 +370,7 @@ impl CommandHandler {
         }
     }
 
-    pub async fn broadcast_transaction(
-        rpc_client: &NodeRpcClient,
-        tx: SignedTransaction,
-    ) -> Result<ConsoleCommand, WalletCliError> {
-        let status = rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+    pub fn handle_mempool_tx_status(status: TxStatus) -> ConsoleCommand {
         let status_text = match status {
             mempool::TxStatus::InMempool => "The transaction was submitted successfully",
             mempool::TxStatus::InOrphanPool => {
@@ -381,7 +378,15 @@ impl CommandHandler {
                 "The transaction has been added to the orphan pool"
             }
         };
-        Ok(ConsoleCommand::Print(status_text.to_owned()))
+        ConsoleCommand::Print(status_text.to_owned())
+    }
+
+    pub async fn broadcast_transaction(
+        rpc_client: &NodeRpcClient,
+        tx: SignedTransaction,
+    ) -> Result<ConsoleCommand, WalletCliError> {
+        let status = rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+        Ok(Self::handle_mempool_tx_status(status))
     }
 
     pub async fn handle_wallet_command(
@@ -854,7 +859,7 @@ impl CommandHandler {
             WalletCommand::SendToAddress { address, amount } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                let tx = controller_opt
+                let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address(
@@ -864,7 +869,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Self::broadcast_transaction(rpc_client, tx).await
+                Ok(Self::handle_mempool_tx_status(status))
             }
 
             WalletCommand::SendTokensToAddress {
@@ -894,7 +899,7 @@ impl CommandHandler {
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
-                let tx = controller_opt
+                let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_stake_pool_tx(
@@ -904,7 +909,8 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Self::broadcast_transaction(rpc_client, tx).await
+
+                Ok(Self::handle_mempool_tx_status(status))
             }
 
             WalletCommand::NodeVersion => {

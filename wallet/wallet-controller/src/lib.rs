@@ -25,7 +25,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use mempool_types::TxStatus;
@@ -46,6 +46,7 @@ use crypto::{
         hdkd::{child_number::ChildNumber, u31::U31},
         PublicKey,
     },
+    random::{make_pseudo_rng, Rng},
     vrf::VRFPublicKey,
 };
 use futures::stream::FuturesUnordered;
@@ -269,7 +270,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (token_id, tx) = self
             .wallet
             .issue_new_token(
-                &mut self.wallet_events,
                 account_index,
                 address,
                 TokenIssuance {
@@ -305,7 +305,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (token_id, tx) = self
             .wallet
             .issue_new_nft(
-                &mut self.wallet_events,
                 account_index,
                 address,
                 metadata,
@@ -376,12 +375,38 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)
     }
 
+    /// Broadcast a singed transaction to the mempool and update the wallets state if the
+    /// transaction has been added to the mempool
+    async fn broadcast_to_mempool(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let status = self
+            .rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        match status {
+            mempool::TxStatus::InMempool => {
+                self.wallet
+                    .add_unconfirmed_tx(tx, &mut self.wallet_events)
+                    .map_err(ControllerError::WalletError)?;
+            }
+            mempool::TxStatus::InOrphanPool => {
+                // Mempool should reject the transaction and not return `InOrphanPool`
+            }
+        };
+
+        Ok(status)
+    }
+
     pub async fn send_to_address(
         &mut self,
         account_index: U31,
         address: Address,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
         let current_fee_rate = self
@@ -392,15 +417,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let consolidate_fee_rate = current_fee_rate;
 
-        self.wallet
+        let tx = self
+            .wallet
             .create_transaction_to_addresses(
-                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn send_tokens_to_address(
@@ -422,7 +449,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 .map_err(ControllerError::WalletError)?;
         self.wallet
             .create_transaction_to_addresses(
-                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
@@ -436,7 +462,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(5)
@@ -445,16 +471,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let consolidate_fee_rate = current_fee_rate;
 
-        self.wallet
+        let tx = self
+            .wallet
             .create_stake_pool_tx(
-                &mut self.wallet_events,
                 account_index,
                 amount,
                 decomission_key,
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn generate_block(
@@ -590,7 +618,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
+        let mut rebroadcast_txs_timer = Instant::now();
         loop {
             let sync_res = self.sync_once().await;
 
@@ -621,6 +650,31 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
 
             tokio::time::sleep(NORMAL_DELAY).await;
+
+            self.rebroadcast_txs(&mut rebroadcast_txs_timer);
+        }
+    }
+
+    /// Rebroadcast not confirmed transactions
+    fn rebroadcast_txs(&mut self, rebroadcast_txs_timer: &mut Instant) {
+        if Instant::now() >= *rebroadcast_txs_timer {
+            let res = self.wallet.get_transactions_to_be_broadcasted().map(|txs| async {
+                for tx in txs {
+                    let tx_id = tx.transaction().get_id();
+                    let res = self.rpc_client.submit_transaction(tx).await;
+                    if let Err(e) = res {
+                        log::error!("Rebroadcasting for tx {tx_id} failed: {e}");
+                    }
+                }
+            });
+
+            if let Err(e) = res {
+                log::error!("Fetching transactions for rebroadcasting failed: {e}");
+            }
+
+            // Reset the timer with a new random interval between 2 and 5 minutes
+            let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
+            *rebroadcast_txs_timer = Instant::now() + Duration::from_secs(sleep_interval_sec);
         }
     }
 }

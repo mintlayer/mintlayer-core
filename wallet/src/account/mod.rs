@@ -20,6 +20,7 @@ mod utxo_selector;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::primitives::id::WithId;
+use common::primitives::Idable;
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
@@ -56,7 +57,9 @@ use wallet_storage::{
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
-use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
+use wallet_types::{
+    AccountId, AccountInfo, AccountWalletSTxId, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx,
+};
 
 use self::output_cache::OutputCache;
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -763,7 +766,13 @@ impl Account {
                     signed_tx.transaction().clone().into(),
                     tx_state,
                 ));
-                self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+                if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                    let id = AccountWalletSTxId::new(
+                        self.get_account_id(),
+                        signed_tx.transaction().get_id(),
+                    );
+                    db_tx.del_signed_transaction(&id)?;
+                }
             }
         }
 
@@ -792,7 +801,13 @@ impl Account {
                 tx_state,
             ));
 
-            if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+            if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                let id = AccountWalletSTxId::new(
+                    self.get_account_id(),
+                    signed_tx.transaction().get_id(),
+                );
+                db_tx.set_signed_transaction(&id, signed_tx)?;
+            } else {
                 not_added.push(signed_tx);
             }
         }
@@ -807,7 +822,13 @@ impl Account {
                     tx_state,
                 ));
 
-                if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                    let id = AccountWalletSTxId::new(
+                        self.get_account_id(),
+                        signed_tx.transaction().get_id(),
+                    );
+                    db_tx.set_signed_transaction(&id, signed_tx)?;
+                } else {
                     not_added_next.push(*signed_tx);
                 }
             }
@@ -842,8 +863,20 @@ impl Account {
         self.output_cache.pending_transactions()
     }
 
-    pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
-        self.output_cache.abandon_transaction(tx_id)
+    pub fn abandon_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        let abandoned_txs = self.output_cache.abandon_transaction(tx_id)?;
+        let acc_id = self.get_account_id();
+
+        for tx_id in abandoned_txs {
+            let id = AccountWalletSTxId::new(acc_id.clone(), tx_id);
+            db_tx.del_signed_transaction(&id)?;
+        }
+
+        Ok(())
     }
 }
 

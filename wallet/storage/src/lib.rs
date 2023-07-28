@@ -19,14 +19,17 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
-use common::{address::Address, chain::block::timestamp::BlockTimestamp};
+use common::{
+    address::Address,
+    chain::{block::timestamp::BlockTimestamp, SignedTransaction},
+};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
     keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountWalletSTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -60,6 +63,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountWalletTxId, WalletTx>>;
+    fn get_signed_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
     fn get_addresses(
@@ -100,6 +104,12 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
+    fn set_signed_transaction(
+        &mut self,
+        id: &AccountWalletSTxId,
+        tx: &SignedTransaction,
+    ) -> Result<()>;
+    fn del_signed_transaction(&mut self, id: &AccountWalletSTxId) -> crate::Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;
