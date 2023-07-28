@@ -1,19 +1,30 @@
 # Mintlayer core
 
-https://www.mintlayer.org/
+Welcome to the official Github repository for Mintlayer, an innovative, open-source blockchain project. For detailed technical insights, we recommend visiting our [documentation](https://docs.mintlayer.org/).
 
-For a more technical introduction to Mintlayer visit [our docs](https://docs.mintlayer.org/).
+Please note, the code in this repository is currently under active development. Consequently, it should not be deemed production-ready. Nonetheless, you're invited to test the code in our active testnet environment.
 
-As it stands this code base is a work in progress and nothing here should be considered production ready.
+## Security 
 
-## Security issues
-If you find an issue related to the security of Mintlayer then please contact us at security@mintlayer.org so we can address the issue. Mintlayer has a [bug bounty program](https://www.mintlayer.org/bug-bounties) so if your security issue is valid you are eligible for a reward paid in MLT. Do not disclose the security issue publicly until the core Mintlayer team has agreed the issue can be disclosed. See [SECURITY.md](https://github.com/mintlayer/mintlayer-core/blob/master/SECURITY.md) for more info.
+Discovered a potential security issue? We urge you to contact us directly at security@mintlayer.org. When reporting, please encrypt your report using Ben's GPG key which can be found [here](https://www.mintlayer.org/assets/keys/ben).
 
-## Bugs
-Non-security related bugs should be opened as [issues](https://github.com/mintlayer/mintlayer-core/issues/new) in the core Mintlayer repo. Give as much detail as possible. If you want to fix a bug then see our guidelines for [contributing](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md).
+Mintlayer runs a [bug bounty program](https://www.mintlayer.org/bug-bounties), meaning that if your report is valid, you could be eligible for a reward paid in MLT tokens. Please refrain from publicly disclosing any potential security issues until our core Mintlayer team has confirmed that the matter can be shared. Further information can be found in our [SECURITY.md](https://github.com/mintlayer/mintlayer-core/blob/master/SECURITY.md) guidelines.
 
-## Contributing
-[See this guide](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md)
+## Bug Reporting
+
+For non-security related bugs, please open an [issue](https://github.com/mintlayer/mintlayer-core/issues/new) in the core Mintlayer repository. When detailing the bug, please provide as much information as possible to aid our debugging efforts. If you wish to contribute to a bug's resolution, refer to our [contributing](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md) guidelines.
+
+## Contributions
+
+We welcome contributions from all developers. Please refer to our detailed [contributing guide](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md) before proceeding.
 
 ## Building
-Install rust (instructions in the contributing guide), use `cargo build` to build and `cargo test` to run the tests.
+
+To compile the code, you will need to install Rust. Instructions for this can be found in our contributing guide. After installation, use the `cargo build` command to build the project and `cargo test` to run the tests.
+
+## Joining the Testnet
+
+To join the testnet, you have the option to use pre-built binaries or compile the code yourself. The build instructions are available [here](https://docs.mintlayer.org/testnet/node-setup-cli).
+
+To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`. To launch the GUI wallet, use this command: `cargo run --bin node-gui`.
+
