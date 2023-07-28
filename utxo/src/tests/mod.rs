@@ -149,7 +149,7 @@ fn check_spend_utxo(
     // patch the spend result in case it's a double spend with proper outpoint
     // which cannot be known beforehand
     spend_result = spend_result.map_err(|err| match err {
-        UtxoAlreadySpent(_) => UtxoAlreadySpent(child_outpoint.tx_id()),
+        UtxoAlreadySpent(_) => UtxoAlreadySpent(child_outpoint.source_id()),
         _ => err,
     });
 
@@ -601,7 +601,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
     // spend the utxo in a transaction
-    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.source_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
     let undo1 = cache
         .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
@@ -638,7 +638,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     cache.add_utxo(&outpoint, u, false).unwrap();
 
     // burn output in a tx
-    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.source_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output]).unwrap();
     let undo1 = cache
         .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))
@@ -672,7 +672,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.source_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -770,7 +770,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.source_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -821,7 +821,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.source_id(), outpoint.output_index())];
     let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)))];
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -875,7 +875,7 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
         OutputValue::Coin(Amount::from_atoms(10)),
         Destination::AnyoneCanSpend,
     );
-    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.source_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output1, output2]).unwrap();
     let undo1 = cache
         .connect_transaction(&tx, UtxoSource::Blockchain(BlockHeight::new(1)))

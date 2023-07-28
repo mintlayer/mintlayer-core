@@ -121,7 +121,7 @@ impl OutputCache {
 
     pub fn get_txo(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {
         self.txs
-            .get(&outpoint.tx_id())
+            .get(&outpoint.source_id())
             .and_then(|tx| tx.outputs().get(outpoint.output_index() as usize))
     }
 
@@ -167,7 +167,7 @@ impl OutputCache {
                     self.consumed.insert(outpoint.clone(), tx.state());
                     if is_unconfirmed {
                         self.unconfirmed_descendants
-                            .get_mut(&outpoint.tx_id())
+                            .get_mut(&outpoint.source_id())
                             .as_mut()
                             .map(|descendants| descendants.insert(tx_id.clone()));
                     }

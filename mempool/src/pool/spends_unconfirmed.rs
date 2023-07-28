@@ -26,7 +26,7 @@ impl<M: MemoryUsageEstimator> SpendsUnconfirmed<M> for TxInput {
         // TODO: if TxInput spends from an account there is no way to know tx_id
         match self {
             TxInput::Utxo(outpoint) => outpoint
-                .tx_id()
+                .source_id()
                 .get_tx_id()
                 .map_or(false, |tx_id| mempool.contains_transaction(tx_id)),
             TxInput::Account(_) => false,

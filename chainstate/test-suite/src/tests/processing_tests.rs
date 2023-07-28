@@ -355,8 +355,11 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.utxo_outpoint().unwrap();
                 if *tf.chainstate.get_chainstate_config().tx_index_enabled {
-                    let prev_out_tx_index =
-                        tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
+                    let prev_out_tx_index = tf
+                        .chainstate
+                        .get_mainchain_tx_index(&outpoint.source_id())
+                        .unwrap()
+                        .unwrap();
                     assert_eq!(
                         prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
                         OutputSpentState::SpentBy(tx_id.into())

@@ -161,7 +161,11 @@ where
                 }
             };
 
-            amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
+            amount_from_outpoint(
+                outpoint.source_id(),
+                &output_value,
+                &issuance_token_id_getter,
+            )
         }
         TxInput::Account(account_input) => match account_input.account() {
             AccountSpending::Delegation(delegation_id, withdraw_amount) => {

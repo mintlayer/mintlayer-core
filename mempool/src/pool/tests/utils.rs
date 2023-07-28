@@ -169,7 +169,7 @@ pub async fn try_get_fee<M>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee
 
 // unconfirmed means: The outpoint comes from a transaction in the mempool
 pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &UtxoOutPoint) -> Amount {
-    let tx_id = *outpoint.tx_id().get_tx_id().expect("Not a transaction");
+    let tx_id = *outpoint.source_id().get_tx_id().expect("Not a transaction");
     let entry = store.txs_by_id.get(&tx_id).expect("Entry not found");
     let tx = entry.transaction().transaction();
     let output = tx.outputs().get(outpoint.output_index() as usize).expect("output not found");

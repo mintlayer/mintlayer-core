@@ -102,7 +102,7 @@ pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[UtxoOutPoint]) -> Vec<T
         .into_iter()
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
-            TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())
+            TxInput::from_utxo(outpoint.source_id(), outpoint.output_index())
         })
         .collect_vec()
 }

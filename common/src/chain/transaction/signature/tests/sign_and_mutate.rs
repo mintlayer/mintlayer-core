@@ -970,7 +970,7 @@ fn mutate_first_input(
     let mutated_input = match updater.inputs.get(0).unwrap() {
         TxInput::Utxo(outpoint) => {
             if rng.gen::<bool>() {
-                TxInput::Utxo(UtxoOutPoint::new(outpoint.tx_id(), rng.gen()))
+                TxInput::Utxo(UtxoOutPoint::new(outpoint.source_id(), rng.gen()))
             } else {
                 TxInput::Utxo(UtxoOutPoint::new(
                     OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),

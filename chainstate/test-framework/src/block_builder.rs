@@ -98,7 +98,7 @@ impl<'f> BlockBuilder<'f> {
             if !self.used_utxo.contains(outpoint) {
                 let new_utxo_data = create_multiple_utxo_data(
                     &self.framework.chainstate,
-                    outpoint.tx_id(),
+                    outpoint.source_id(),
                     outpoint.output_index() as usize,
                     utxo.output(),
                     rng,
