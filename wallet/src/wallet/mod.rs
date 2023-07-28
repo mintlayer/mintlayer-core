@@ -491,13 +491,19 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         wallet_events: &mut impl WalletEvents,
         account_index: U31,
-        outputs: Vec<TxOutput>,
+        address: Address,
+        amount: Amount,
         delegation_id: DelegationId,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx =
-                account.spend_from_delegation(db_tx, outputs, delegation_id, current_fee_rate)?;
+            let tx = account.spend_from_delegation(
+                db_tx,
+                address,
+                amount,
+                delegation_id,
+                current_fee_rate,
+            )?;
             let txs = [tx];
             account.scan_new_unconfirmed_transactions(
                 &txs,
@@ -513,14 +519,12 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_delegation(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         outputs: Vec<TxOutput>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(DelegationId, SignedTransaction)> {
         let tx = self.create_transaction_to_addresses(
-            wallet_events,
             account_index,
             outputs,
             current_fee_rate,

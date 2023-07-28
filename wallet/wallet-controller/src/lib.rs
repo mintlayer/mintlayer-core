@@ -63,10 +63,7 @@ pub use node_comm::{
 use wallet::{
     account::transaction_list::TransactionList,
     account::Currency,
-    send_request::{
-        make_address_output, make_address_output_from_delegation, make_address_output_token,
-        make_create_delegation_output,
-    },
+    send_request::{make_address_output, make_address_output_token, make_create_delegation_output},
     wallet_events::WalletEvents,
     DefaultWallet, WalletError,
 };
@@ -465,7 +462,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (delegation_id, tx) = self
             .wallet
             .create_delegation(
-                &mut self.wallet_events,
                 account_index,
                 vec![output],
                 current_fee_rate,
@@ -497,7 +493,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let tx = self
             .wallet
             .create_transaction_to_addresses(
-                &mut self.wallet_events,
                 account_index,
                 vec![output],
                 current_fee_rate,
@@ -517,18 +512,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         amount: Amount,
         delegation_id: DelegationId,
     ) -> Result<TxStatus, ControllerError<T>> {
-        let (_, current_block_height) = self
-            .wallet
-            .get_best_block_for_account(account_index)
-            .map_err(ControllerError::WalletError)?;
-
-        let output = make_address_output_from_delegation(
-            self.chain_config.as_ref(),
-            address,
-            amount,
-            current_block_height,
-        )
-        .map_err(ControllerError::WalletError)?;
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(5)
@@ -540,7 +523,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .create_transaction_to_addresses_from_delegation(
                 &mut self.wallet_events,
                 account_index,
-                vec![output],
+                address,
+                amount,
                 delegation_id,
                 current_fee_rate,
             )

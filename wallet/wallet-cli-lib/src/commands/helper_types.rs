@@ -118,8 +118,8 @@ pub fn format_delegation_info(
     decimals: u8,
 ) -> String {
     format!(
-        "Pool Id: {}, Balance: {}",
-        delegation_id,
+        "Delegation Id: {}, Balance: {}",
+        HexEncode::hex_encode(&delegation_id),
         balance.into_fixedpoint_str(decimals),
     )
 }

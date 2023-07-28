@@ -30,8 +30,8 @@ pub use utxo_selector::UtxoSelectorError;
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
-    make_address_output, make_address_output_token, make_decomission_stake_pool_output,
-    make_stake_output,
+    make_address_output, make_address_output_from_delegation, make_address_output_token,
+    make_decomission_stake_pool_output, make_stake_output,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -384,16 +384,25 @@ impl Account {
     pub fn spend_from_delegation(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        outputs: Vec<TxOutput>,
+        address: Address,
+        amount: Amount,
         delegation_id: DelegationId,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
+        let current_block_height = self.best_block().1;
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address,
+            amount,
+            current_block_height,
+        )?;
         let delegation_data = self.output_cache.delegation_data(delegation_id)?;
         let nonce = delegation_data
             .latest_nonce
             .increment()
             .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
 
+        let outputs = vec![output];
         let network_fee: Amount = current_fee_rate
             .compute_fee(
                 tx_size_with_outputs(outputs.as_slice())
@@ -402,14 +411,16 @@ impl Account {
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
             .into();
 
-        let mut amount_with_fee = network_fee;
+        let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
         let mut tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
             Delegation(delegation_id, amount_with_fee),
         ));
+        // as the input size depends on the amount we specify the fee will also change a bit so
+        // loop until it converges.
         let mut input_size = serialization::Encode::encoded_size(&tx_input);
         loop {
-            amount_with_fee = (network_fee
+            let new_amount_with_fee = (amount_with_fee
                 + current_fee_rate
                     .compute_fee(input_size)
                     .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
@@ -417,8 +428,9 @@ impl Account {
             .ok_or(WalletError::OutputAmountOverflow)?;
             tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
-                Delegation(delegation_id, amount_with_fee),
+                Delegation(delegation_id, new_amount_with_fee),
             ));
+
             let new_input_size = serialization::Encode::encoded_size(&tx_input);
             if new_input_size == input_size {
                 break;
@@ -603,13 +615,6 @@ impl Account {
         input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<SignedTransaction> {
-        // let inputs = tx.inputs();
-        // if utxos.len() != inputs.len() {
-        //     return Err(
-        //         TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
-        //     );
-        // }
-
         let witnesses = destinations
             .iter()
             .copied()
@@ -1043,8 +1048,9 @@ fn group_outputs<T, Grouped: Clone>(
                 v.clone()
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+            TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::CreateDelegationId(_, _) => continue,
-            TxOutput::ProduceBlockFromStake(_, _) | TxOutput::DelegateStaking(_, _) => {
+            TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
