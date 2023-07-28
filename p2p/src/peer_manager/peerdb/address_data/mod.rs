@@ -47,10 +47,6 @@ pub enum AddressState {
 
         /// Next time connect to the peer
         next_connect_after: Duration,
-
-        /// Disconnect is done by requesting to do it.
-        /// This flag ensures that p2p will not try to reconnect to the target node.
-        disconnected_by_user: bool,
     },
 
     Unreachable {
@@ -64,17 +60,15 @@ pub enum AddressState {
 pub enum AddressStateTransitionTo {
     Connected,
     Disconnected,
-    DisconnectedByUser,
     ConnectionFailed,
     SetReserved,
     UnsetReserved,
 }
 
 #[cfg(test)]
-pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 6] = [
+pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
     AddressStateTransitionTo::Connected,
     AddressStateTransitionTo::Disconnected,
-    AddressStateTransitionTo::DisconnectedByUser,
     AddressStateTransitionTo::ConnectionFailed,
     AddressStateTransitionTo::SetReserved,
     AddressStateTransitionTo::UnsetReserved,
@@ -93,7 +87,6 @@ impl AddressData {
                 was_reachable,
                 fail_count: 0,
                 next_connect_after: now,
-                disconnected_by_user: false,
             },
             reserved,
         }
@@ -115,8 +108,7 @@ impl AddressData {
                 fail_count: _,
                 next_connect_after,
                 was_reachable: _,
-                disconnected_by_user,
-            } => now >= next_connect_after && !disconnected_by_user,
+            } => now >= next_connect_after,
 
             AddressState::Unreachable { erase_after: _ } => false,
         }
@@ -130,7 +122,6 @@ impl AddressData {
                 was_reachable: _,
                 fail_count: _,
                 next_connect_after: _,
-                disconnected_by_user: _,
             } => true,
             AddressState::Unreachable { erase_after } => erase_after < now,
         }
@@ -144,7 +135,6 @@ impl AddressData {
                 fail_count: _,
                 next_connect_after: _,
                 was_reachable,
-                disconnected_by_user: _,
             } => was_reachable,
             AddressState::Unreachable { erase_after: _ } => false,
         }
@@ -195,7 +185,6 @@ impl AddressData {
                     fail_count: _,
                     next_connect_after: _,
                     was_reachable: _,
-                    disconnected_by_user: _,
                 } => AddressState::Connected {},
                 AddressState::Unreachable { erase_after: _ } => {
                     // Connection to an `Unreachable` node may be requested by RPC at any moment
@@ -208,29 +197,11 @@ impl AddressData {
                     fail_count: 0,
                     next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
                     was_reachable: true,
-                    disconnected_by_user: false,
                 },
                 AddressState::Disconnected {
                     fail_count: _,
                     next_connect_after: _,
                     was_reachable: _,
-                    disconnected_by_user: _,
-                } => unreachable!(),
-                AddressState::Unreachable { erase_after: _ } => unreachable!(),
-            },
-
-            AddressStateTransitionTo::DisconnectedByUser => match self.state {
-                AddressState::Connected {} => AddressState::Disconnected {
-                    fail_count: 0,
-                    next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
-                    was_reachable: true,
-                    disconnected_by_user: true,
-                },
-                AddressState::Disconnected {
-                    fail_count: _,
-                    next_connect_after: _,
-                    was_reachable: _,
-                    disconnected_by_user: _,
                 } => unreachable!(),
                 AddressState::Unreachable { erase_after: _ } => unreachable!(),
             },
@@ -241,7 +212,6 @@ impl AddressData {
                     fail_count,
                     next_connect_after: _,
                     was_reachable,
-                    disconnected_by_user,
                 } => {
                     if self.reserved {
                         AddressState::Disconnected {
@@ -253,7 +223,6 @@ impl AddressData {
                                 rng,
                             ),
                             was_reachable,
-                            disconnected_by_user,
                         }
                     } else if !was_reachable {
                         AddressState::Unreachable {
@@ -271,7 +240,6 @@ impl AddressData {
                                 rng,
                             ),
                             was_reachable,
-                            disconnected_by_user,
                         }
                     }
                 }
@@ -291,7 +259,6 @@ impl AddressData {
                         was_reachable,
                         fail_count,
                         next_connect_after: _,
-                        disconnected_by_user,
                     } => AddressState::Disconnected {
                         was_reachable,
                         fail_count,
@@ -301,14 +268,12 @@ impl AddressData {
                             self.reserved,
                             rng,
                         ),
-                        disconnected_by_user,
                     },
                     // Reserved nodes should not be in the `Unreachable` state
                     AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
                         fail_count: 0,
                         next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
                         was_reachable: false,
-                        disconnected_by_user: false,
                     },
                 }
             }
@@ -323,12 +288,10 @@ impl AddressData {
                         was_reachable,
                         fail_count,
                         next_connect_after,
-                        disconnected_by_user,
                     } => AddressState::Disconnected {
                         was_reachable,
                         fail_count,
                         next_connect_after,
-                        disconnected_by_user,
                     },
                     AddressState::Unreachable { erase_after } => {
                         AddressState::Unreachable { erase_after }

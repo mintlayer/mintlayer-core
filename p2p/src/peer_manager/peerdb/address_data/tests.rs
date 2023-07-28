@@ -29,7 +29,7 @@ fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let started_at = Duration::ZERO;
 
-    let weights = [100, 100, 100, 100, 10, 10];
+    let weights = [100, 100, 100, 10, 10];
     assert_eq!(weights.len(), ALL_TRANSITIONS.len());
     let weights = WeightedIndex::new(weights).unwrap();
 
@@ -45,7 +45,6 @@ fn randomized(#[case] seed: Seed) {
             let is_valid_transition = match transition {
                 AddressStateTransitionTo::Connected => !address_data.is_connected(),
                 AddressStateTransitionTo::Disconnected => address_data.is_connected(),
-                AddressStateTransitionTo::DisconnectedByUser => address_data.is_connected(),
                 AddressStateTransitionTo::ConnectionFailed => !address_data.is_connected(),
                 AddressStateTransitionTo::SetReserved => true,
                 AddressStateTransitionTo::UnsetReserved => true,
@@ -87,28 +86,4 @@ fn reachable_reconnects(#[case] seed: Seed) {
         time_until_removed >= 2 * week && time_until_removed <= 6 * week,
         "invalid time until removed: {time_until_removed:?}"
     );
-}
-
-#[rstest]
-#[trace]
-#[case(
-    Seed::from_entropy(),
-    AddressStateTransitionTo::DisconnectedByUser,
-    false
-)]
-#[case(Seed::from_entropy(), AddressStateTransitionTo::Disconnected, true)]
-fn no_reconnects_after_manual_disconnect(
-    #[case] seed: Seed,
-    #[case] reason: AddressStateTransitionTo,
-    #[case] expected_reconnect: bool,
-) {
-    let mut rng = make_seedable_rng(seed);
-    let now = Duration::from_secs(1600000000);
-
-    let mut address = AddressData::new(true, false, now);
-    address.transition_to(AddressStateTransitionTo::Connected, now, &mut rng);
-    address.transition_to(reason, now, &mut rng);
-    let reconnect = address.connect_now(now + Duration::from_secs(100 * 24 * 3600));
-    // Test that there are no reconnection attempts to peers that were disconnected by RPC
-    assert_eq!(reconnect, expected_reconnect);
 }
