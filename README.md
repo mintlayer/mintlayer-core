@@ -26,5 +26,5 @@ To compile the code, you will need to install Rust. Instructions for this can be
 
 To join the testnet, you have the option to use pre-built binaries or compile the code yourself. The build instructions are available [here](https://docs.mintlayer.org/testnet/node-setup-cli).
 
-To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`.
+To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`. To launch the GUI wallet, use this command: `cargo run --bin node-gui`.
 
