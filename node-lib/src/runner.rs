@@ -58,6 +58,8 @@ use crate::{
     regtest_options::ChainConfigOptions,
 };
 
+const LOCK_FILE_NAME: &str = ".lock";
+
 pub struct Node {
     manager: subsystem::Manager,
     controller: NodeController,
@@ -227,11 +229,26 @@ pub async fn setup(options: Options) -> Result<Node> {
 /// Creates an exclusive lock file in the specified directory.
 /// Fails if the lock file cannot be created or is already locked.
 fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
-    let lock = std::fs::File::create(data_dir.join(".lock"))
+    let lock = std::fs::File::create(data_dir.join(LOCK_FILE_NAME))
         .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
     fs4::FileExt::try_lock_exclusive(&lock)
         .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
     Ok(lock)
+}
+
+fn clean_data_dir(data_dir: &PathBuf, exclude: &Path) -> Result<()> {
+    for entry in std::fs::read_dir(data_dir)? {
+        let entry_path = entry?.path();
+
+        if entry_path.file_name() != exclude.file_name() {
+            if entry_path.is_dir() {
+                std::fs::remove_dir_all(entry_path)?;
+            } else {
+                std::fs::remove_file(entry_path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn start(
@@ -253,6 +270,10 @@ async fn start(
     )
     .expect("Failed to prepare data directory");
     let lock_file = lock_data_dir(&data_dir)?;
+
+    if run_options.clean_data.unwrap_or(false) {
+        clean_data_dir(&data_dir, &data_dir.join(LOCK_FILE_NAME))?;
+    }
 
     log::info!("Starting with the following config:\n {node_config:#?}");
     let (manager, controller) = match initialize(

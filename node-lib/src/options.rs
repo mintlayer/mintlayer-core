@@ -52,6 +52,10 @@ pub enum Command {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
+    /// Clean data dir before starting
+    #[clap(long)]
+    pub clean_data: Option<bool>,
+
     /// Minimum number of connected peers to enable block production.
     #[clap(long)]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
