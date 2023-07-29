@@ -62,6 +62,9 @@ use crate::{
 mod collect_transactions {
     use super::*;
 
+    // A dummy timestamp for tests where the block timestamp is irrelevant
+    const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
+
     // TODO: add tests for mempool rejecting transaction accumulator
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -94,7 +97,8 @@ mod collect_transactions {
                 )
                 .expect("Error initializing blockprod");
 
-                let accumulator = block_production.collect_transactions(current_tip).await;
+                let accumulator =
+                    block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");
@@ -145,7 +149,8 @@ mod collect_transactions {
             )
             .expect("Error initializing blockprod");
 
-            let accumulator = block_production.collect_transactions(current_tip).await;
+            let accumulator =
+                block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load();
             assert!(
@@ -196,7 +201,8 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator = block_production.collect_transactions(current_tip).await;
+                let accumulator =
+                    block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
                 assert!(collected_transactions, "Expected collect_tx() to be called");

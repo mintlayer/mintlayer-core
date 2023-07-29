@@ -147,7 +147,7 @@ impl<P: UtxosView> UtxosCache<P> {
     pub fn connect_transaction(
         &mut self,
         tx: &Transaction,
-        height: BlockHeight,
+        source: UtxoSource,
     ) -> Result<UtxosTxUndoWithSources, Error> {
         let sources = tx
             .inputs()
@@ -167,7 +167,7 @@ impl<P: UtxosView> UtxosCache<P> {
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
-        self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
+        self.add_utxos_from_tx(tx, source, false)?;
 
         Ok(UtxosTxUndoWithSources::new(utxos, sources))
     }

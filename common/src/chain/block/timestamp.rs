@@ -36,21 +36,21 @@ impl std::fmt::Display for BlockTimestamp {
 }
 
 impl BlockTimestamp {
-    pub fn from_int_seconds(timestamp: BlockTimestampInternalType) -> Self {
+    pub const fn from_int_seconds(timestamp: BlockTimestampInternalType) -> Self {
         Self { timestamp }
     }
 
-    pub fn from_duration_since_epoch(duration: Duration) -> Self {
+    pub const fn from_duration_since_epoch(duration: Duration) -> Self {
         Self {
             timestamp: duration.as_secs(),
         }
     }
 
-    pub fn as_duration_since_epoch(&self) -> Duration {
+    pub const fn as_duration_since_epoch(&self) -> Duration {
         Duration::from_secs(self.timestamp)
     }
 
-    pub fn as_int_seconds(&self) -> BlockTimestampInternalType {
+    pub const fn as_int_seconds(&self) -> BlockTimestampInternalType {
         self.timestamp
     }
 

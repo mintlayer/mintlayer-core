@@ -46,9 +46,17 @@ def tx_input(tx_id, index = 0):
         }
     }
 
-def make_tx(inputs, output_amounts, flags = 0):
-    outputs = [ {'Transfer': [ { 'Coin': amt }, { 'AnyoneCanSpend': None } ]}
-               for amt in output_amounts ]
+def tx_output(amount, timelock = None):
+    if isinstance(amount, dict):
+        return amount
+    if timelock is None:
+        return {'Transfer': [ { 'Coin': amount }, { 'AnyoneCanSpend': None } ]}
+    else:
+        return {'LockThenTransfer': [ { 'Coin': amount }, { 'AnyoneCanSpend': None }, timelock ]}
+
+
+def make_tx(inputs, outputs, flags = 0):
+    outputs = [ tx_output(amt) for amt in outputs ]
     witness = { 'NoSignature': None }
     tx = {
         'version': 1,

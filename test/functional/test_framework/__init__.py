@@ -22,6 +22,8 @@ def init_mintlayer_types():
 
             "H256": "[u8; 32]",
 
+            "BlockHeight": "Compact<u64>",
+
             "OutputValue": {
                 "type": "enum",
                 "type_mapping": [

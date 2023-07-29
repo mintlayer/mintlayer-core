@@ -16,6 +16,7 @@
 //! Transaction verifier adapted to mempool
 
 mod chainstate_handle;
+mod utxo_view;
 
 use std::sync::Arc;
 
@@ -23,7 +24,9 @@ pub use chainstate::tx_verifier::flush_to_storage;
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 
-use chainstate_handle::{Chainstate, ChainstateHandle};
+use chainstate_handle::Chainstate;
+pub use chainstate_handle::ChainstateHandle;
+pub use utxo_view::MempoolUtxoView;
 
 /// Mempool instantiation of [chainstate::tx_verifier::TransactionVerifier]
 pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<

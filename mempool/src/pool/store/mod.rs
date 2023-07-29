@@ -831,8 +831,6 @@ impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> PartialOrd for TxMempoolEntryB
 
 impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> Ord for TxMempoolEntryByScore<T> {
     fn cmp(&self, rhs: &Self) -> Ordering {
-        rhs.ancestor_score()
-            .cmp(&self.ancestor_score())
-            .then_with(|| self.tx_id().cmp(rhs.tx_id()))
+        (rhs.ancestor_score(), self.tx_id()).cmp(&(self.ancestor_score(), rhs.tx_id()))
     }
 }

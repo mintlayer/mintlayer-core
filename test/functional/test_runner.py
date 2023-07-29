@@ -113,6 +113,7 @@ BASE_SCRIPTS = [
     'mempool_eviction.py',
     'mempool_submit_tx.py',
     'mempool_submit_orphan.py',
+    'mempool_timelocked_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time

@@ -708,7 +708,7 @@ where
         // spend utxos
         let tx_undo = self
             .utxo_cache
-            .connect_transaction(tx.transaction(), tx_source.expected_block_height())
+            .connect_transaction(tx.transaction(), tx_source.to_utxo_source())
             .map_err(ConnectTransactionError::from)?;
 
         // save spent utxos for undo
@@ -737,7 +737,7 @@ where
                     )?;
                 }
             }
-            TransactionSourceForConnect::Mempool { current_best: _ } => { /* do nothing */ }
+            TransactionSourceForConnect::Mempool { .. } => { /* do nothing */ }
         };
 
         Ok(fee)

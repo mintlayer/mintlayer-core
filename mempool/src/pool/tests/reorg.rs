@@ -13,20 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::GenBlock;
-
 use super::*;
 
-fn make_test_block(txs: Vec<SignedTransaction>, parent: impl Into<Id<GenBlock>>) -> Block {
-    Block::new(
-        txs,
-        parent.into(),
-        BlockTimestamp::from_int_seconds(1639975461),
-        ConsensusData::None,
-        BlockReward::new(vec![]),
-    )
-    .unwrap()
-}
+// Timestamps are not important for these tests, just make something up
+const DUMMY_TIME: BlockTimestamp = BlockTimestamp::from_int_seconds(1639975461);
 
 #[rstest]
 #[trace]
@@ -77,7 +67,7 @@ async fn basic_reorg(#[case] seed: Seed) {
     tokio::time::sleep(Duration::from_millis(1100)).await;
 
     // Submit a block with tx1 and check the corresponding tx has been removed from mempool
-    let block1 = make_test_block(vec![tx1], genesis.get_id());
+    let block1 = make_test_block(vec![tx1], genesis.get_id(), DUMMY_TIME);
     let block1_id = block1.get_id();
     chainstate
         .call_mut(move |c| c.process_block(block1, BlockSource::Local))
@@ -92,7 +82,7 @@ async fn basic_reorg(#[case] seed: Seed) {
     assert_eq!(tx2_time, tx2_time_after_block);
 
     // Submit a block wit tx2 and check transactions are no longer in mempool
-    let block2 = make_test_block(vec![tx2], block1_id);
+    let block2 = make_test_block(vec![tx2], block1_id, DUMMY_TIME);
     let block2_id = block2.get_id();
     chainstate
         .call_mut(move |c| c.process_block(block2, BlockSource::Local))
@@ -104,8 +94,8 @@ async fn basic_reorg(#[case] seed: Seed) {
     assert!(!mempool.contains_transaction(&tx2_id));
 
     // Submit two blocks on top of block1 and reorg out block2, causing tx2 to reappear in mempool
-    let block3 = make_test_block(Vec::new(), block1_id);
-    let block4 = make_test_block(Vec::new(), block3.get_id());
+    let block3 = make_test_block(Vec::new(), block1_id, DUMMY_TIME);
+    let block4 = make_test_block(Vec::new(), block3.get_id(), DUMMY_TIME);
     let block4_id = block4.get_id();
     for (block, name) in [(block3, "block3"), (block4, "block4")] {
         chainstate
@@ -163,7 +153,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
     assert!(mempool.contains_transaction(&tx2_id));
 
     // Submit a block with both transactions
-    let block1 = make_test_block(vec![tx1, tx2], genesis.get_id());
+    let block1 = make_test_block(vec![tx1, tx2], genesis.get_id(), DUMMY_TIME);
     let block1_id = block1.get_id();
     chainstate
         .call_mut(move |c| c.process_block(block1, BlockSource::Local))
@@ -175,8 +165,8 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
     assert!(!mempool.contains_transaction(&tx2_id));
 
     // Reorg the transactions out and check they are back in mempool
-    let block2 = make_test_block(vec![], genesis.get_id());
-    let block3 = make_test_block(vec![], block2.get_id());
+    let block2 = make_test_block(vec![], genesis.get_id(), DUMMY_TIME);
+    let block3 = make_test_block(vec![], block2.get_id(), DUMMY_TIME);
     let block3_id = block3.get_id();
     for (block, name) in [(block2, "block2"), (block3, "block3")] {
         chainstate

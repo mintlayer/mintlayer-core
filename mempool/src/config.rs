@@ -15,6 +15,8 @@
 
 use std::time::Duration;
 
+use common::primitives::BlockDistance;
+
 pub type Time = Duration;
 
 /// Mempool size configuration
@@ -68,3 +70,7 @@ pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Time = Duration::from_secs(5 * 10);
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
 
 pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;
+
+pub const FUTURE_TIMELOCK_TOLERANCE_SECS: Time = Duration::from_secs(5 * 60);
+
+pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);
