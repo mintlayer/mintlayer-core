@@ -36,6 +36,16 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().disconnect(peer_id).await
     }
 
+    async fn list_banned(&mut self) -> crate::Result<Vec<String>> {
+        self.deref_mut().list_banned().await
+    }
+    async fn ban(&mut self, addr: String) -> crate::Result<()> {
+        self.deref_mut().ban(addr).await
+    }
+    async fn unban(&mut self, addr: String) -> crate::Result<()> {
+        self.deref_mut().unban(addr).await
+    }
+
     async fn get_peer_count(&self) -> crate::Result<usize> {
         self.deref().get_peer_count().await
     }

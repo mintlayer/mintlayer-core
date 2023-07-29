@@ -46,9 +46,37 @@ where
 
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
-
         self.tx_peer_manager
             .send(PeerManagerEvent::Disconnect(peer_id, tx))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        rx.await?
+    }
+
+    async fn list_banned(&mut self) -> crate::Result<Vec<String>> {
+        let (tx, rx) = oneshot_nofail::channel();
+        self.tx_peer_manager
+            .send(PeerManagerEvent::ListBanned(tx))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        let list = rx.await?;
+        Ok(list.iter().map(ToString::to_string).collect())
+    }
+    async fn ban(&mut self, addr: String) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
+        let addr = addr
+            .parse::<T::BannableAddress>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+        self.tx_peer_manager
+            .send(PeerManagerEvent::Ban(addr, tx))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        rx.await?
+    }
+    async fn unban(&mut self, addr: String) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
+        let addr = addr
+            .parse::<T::BannableAddress>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+        self.tx_peer_manager
+            .send(PeerManagerEvent::Unban(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await?
     }

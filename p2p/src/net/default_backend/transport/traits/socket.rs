@@ -42,7 +42,7 @@ pub trait TransportSocket: Send + Sync + 'static {
         + AsBannableAddress<BannableAddress = Self::BannableAddress>;
 
     /// A bannable address format.
-    type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
+    type BannableAddress: Clone + Debug + Eq + Ord + Send + ToString + FromStr;
 
     /// A listener type (or acceptor as per boost terminology).
     type Listener: TransportListener<Stream = Self::Stream, Address = Self::Address>;

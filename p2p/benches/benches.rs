@@ -22,6 +22,7 @@ use std::{
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use p2p::{
+    net::AsBannableAddress,
     peer_manager::peerdb::PeerDb,
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
@@ -39,7 +40,7 @@ pub fn peer_db(c: &mut Criterion) {
     }
 
     for _ in 0..1000 {
-        peerdb.ban_peer(&TestTcpAddressMaker::new());
+        peerdb.ban(TestTcpAddressMaker::new().as_bannable());
     }
 
     let normal_outbound = (0..5).map(|_| TestTcpAddressMaker::new()).collect::<BTreeSet<_>>();

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -34,7 +34,7 @@ use super::PeerDb;
 fn unban_peer() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let mut peerdb = PeerDb::new(
+    let mut peerdb = PeerDb::<SocketAddr, _, _>::new(
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
             socks5_proxy: None,
@@ -65,7 +65,7 @@ fn unban_peer() {
     .unwrap();
 
     let address = TestTcpAddressMaker::new();
-    peerdb.ban_peer(&address);
+    peerdb.ban(address.as_bannable());
 
     assert!(peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();

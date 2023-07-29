@@ -328,7 +328,7 @@ where
         );
 
         if peer.score >= *self.p2p_config.ban_threshold {
-            self.peerdb.ban_peer(&peer.address);
+            self.peerdb.ban(peer.address.as_bannable());
             self.disconnect(peer_id, None);
         }
     }
@@ -985,6 +985,17 @@ where
             }
             PeerManagerEvent::RemoveReserved(address) => {
                 self.peerdb.remove_reserved_node(address);
+            }
+            PeerManagerEvent::ListBanned(response) => {
+                response.send(self.peerdb.list_banned().cloned().collect())
+            }
+            PeerManagerEvent::Ban(address, response) => {
+                self.peerdb.ban(address);
+                response.send(Ok(()));
+            }
+            PeerManagerEvent::Unban(address, response) => {
+                self.peerdb.unban(&address);
+                response.send(Ok(()));
             }
         }
     }

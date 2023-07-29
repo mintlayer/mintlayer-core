@@ -81,7 +81,7 @@ pub struct PeerDb<A, B, S> {
 impl<A, B, S> PeerDb<A, B, S>
 where
     A: Ord + FromStr + ToString + Clone + TransportAddress + AsBannableAddress<BannableAddress = B>,
-    B: Ord + FromStr + ToString,
+    B: Ord + FromStr + ToString + Clone,
     S: PeerDbStorage,
 {
     pub fn new(
@@ -316,17 +316,29 @@ where
         self.banned_addresses.contains_key(address)
     }
 
+    pub fn list_banned(&self) -> impl Iterator<Item = &B> {
+        self.banned_addresses.keys()
+    }
+
     /// Changes the address state to banned
-    pub fn ban_peer(&mut self, address: &A) {
-        let bannable_address = address.as_bannable();
+    pub fn ban(&mut self, address: B) {
         let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
 
         storage::update_db(&self.storage, |tx| {
-            tx.add_banned_address(&bannable_address.to_string(), ban_till)
+            tx.add_banned_address(&address.to_string(), ban_till)
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
 
-        self.banned_addresses.insert(bannable_address, ban_till);
+        self.banned_addresses.insert(address, ban_till);
+    }
+
+    pub fn unban(&mut self, address: &B) {
+        storage::update_db(&self.storage, |tx| {
+            tx.del_banned_address(&address.to_string())
+        })
+        .expect("adding banned address is expected to succeed (ban_peer)");
+
+        self.banned_addresses.remove(address);
     }
 }
 

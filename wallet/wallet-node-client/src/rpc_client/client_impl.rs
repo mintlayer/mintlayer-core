@@ -143,6 +143,23 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+
+    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+        P2pRpcClient::list_banned(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_ban(&self, address: String) -> Result<(), Self::Error> {
+        P2pRpcClient::ban(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_unban(&self, address: String) -> Result<(), Self::Error> {
+        P2pRpcClient::unban(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         P2pRpcClient::get_peer_count(&self.http_client)
             .await
