@@ -805,7 +805,7 @@ where
         // Nodes can disconnect each other if all of them are in the initial block download state,
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
-        log::warn!("Disconnecting peer for ignoring requests");
+        log::warn!("Disconnecting peer {} for ignoring requests", self.id());
         self.peer_manager_sender.send(PeerManagerEvent::Disconnect(self.id(), sender))?;
         receiver.await?.or_else(|e| match e {
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),

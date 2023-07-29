@@ -258,11 +258,6 @@ where
         self.change_address_state(address, AddressStateTransitionTo::Disconnected);
     }
 
-    /// Handle peer disconnect event after RPC command
-    pub fn outbound_peer_disconnected_by_user(&mut self, address: A) {
-        self.change_address_state(address, AddressStateTransitionTo::DisconnectedByUser);
-    }
-
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
         let now = self.time_getter.get_time();
 
