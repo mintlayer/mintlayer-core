@@ -48,8 +48,7 @@ pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 impl<B: storage::Backend> Store<B> {
     /// Create a new chainstate storage
     pub fn new(backend: B) -> crate::Result<Self> {
-        let mut storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
-        storage.set_storage_version(1)?;
+        let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         Ok(storage)
     }
 

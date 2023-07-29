@@ -206,6 +206,8 @@ pub enum InitializationError {
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
     GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
+    #[error("Chainstate storage version mismatch: actual `{0}`, expected `{1}`")]
+    ChainstateStorageVersionMismatch(u32, u32),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {
