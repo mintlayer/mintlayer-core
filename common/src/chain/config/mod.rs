@@ -86,7 +86,7 @@ impl ChainType {
     const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
-            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf7],
+            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf8],
             ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
             ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
         }
@@ -562,7 +562,7 @@ fn create_testnet_genesis() -> Genesis {
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1689344000),
+        BlockTimestamp::from_int_seconds(1690620112),
         vec![mint_output, initial_pool],
     )
 }
