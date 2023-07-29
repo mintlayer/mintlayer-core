@@ -188,7 +188,7 @@ macro_rules! impl_read_ops {
             fn get_transactions(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>> {
+            ) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>> {
                 self.storage
                     .get::<db::DBTxs, _>()
                     .prefix_iter_decoded(account_id)

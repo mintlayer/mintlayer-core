@@ -62,7 +62,7 @@ pub trait WalletStorageReadLocked {
     fn get_transactions(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountWalletTxId, WalletTx>>;
+    ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;

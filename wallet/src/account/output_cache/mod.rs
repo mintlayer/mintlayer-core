@@ -100,8 +100,15 @@ impl OutputCache {
         }
     }
 
-    pub fn new(txs: BTreeMap<AccountWalletTxId, WalletTx>) -> WalletResult<Self> {
+    pub fn new(mut txs: Vec<(AccountWalletTxId, WalletTx)>) -> WalletResult<Self> {
         let mut cache = Self::empty();
+
+        txs.sort_by(|x, y| match (x.1.state(), y.1.state()) {
+            (TxState::Confirmed(h1, _), TxState::Confirmed(h2, _)) => h1.cmp(&h2),
+            (TxState::Confirmed(_, _), _) => std::cmp::Ordering::Less,
+            (_, TxState::Confirmed(_, _)) => std::cmp::Ordering::Greater,
+            (_, _) => std::cmp::Ordering::Equal,
+        });
         for (tx_id, tx) in txs {
             cache.add_tx(tx_id.into_item_id(), tx)?;
         }
