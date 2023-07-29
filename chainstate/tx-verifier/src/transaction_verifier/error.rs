@@ -100,8 +100,6 @@ pub enum ConnectTransactionError {
     AttemptToSpendBurnedAmount,
     #[error("PoS accounting error")]
     PoSAccountingError(#[from] pos_accounting::Error),
-    #[error("PoS accounting undo is missing for transaction {0}")]
-    MissingPoSAccountingUndo(Id<Transaction>),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Pool owner balance of pool {0} not found")]

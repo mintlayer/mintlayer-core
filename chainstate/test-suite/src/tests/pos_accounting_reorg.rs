@@ -356,7 +356,8 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
+    let block_b_index = tf
+        .make_pos_block_builder(&mut rng)
         .add_transaction(decommission_pool_tx)
         .with_stake_pool(pool_2_id)
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
@@ -364,7 +365,12 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk_2.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
+        .unwrap()
         .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_b_index.block_id()),
+        tf.best_block_id()
+    );
 
     // produce block at height 2 that should trigger in memory reorg for block `b`
     tf.make_pos_block_builder(&mut rng)
@@ -376,6 +382,11 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .with_vrf_key(vrf_sk)
         .build_and_process()
         .unwrap();
+    // block_b is still the tip
+    assert_eq!(
+        Id::<GenBlock>::from(*block_b_index.block_id()),
+        tf.best_block_id()
+    );
 }
 
 // Produce `genesis -> a -> b` chain, where block `a` creates additional staking pool and
@@ -442,13 +453,19 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         ))
         .build();
 
-    tf.make_pos_block_builder(&mut rng)
+    let block_b_index = tf
+        .make_pos_block_builder(&mut rng)
         .add_transaction(decommission_pool_tx)
         .with_block_signing_key(staking_sk.clone())
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process()
+        .unwrap()
         .unwrap();
+    assert_eq!(
+        Id::<GenBlock>::from(*block_b_index.block_id()),
+        tf.best_block_id()
+    );
 
     // produce block at height 2 that should trigger in memory reorg for block `b`
     tf.make_pos_block_builder(&mut rng)
@@ -458,4 +475,9 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         .with_vrf_key(vrf_sk)
         .build_and_process()
         .unwrap();
+    // block_b is still the tip
+    assert_eq!(
+        Id::<GenBlock>::from(*block_b_index.block_id()),
+        tf.best_block_id()
+    );
 }
