@@ -1,0 +1,24 @@
+# Dockerfile.node-daemon
+
+# Start from a base image with rust installed
+FROM rust:latest as builder
+
+# Create a new empty shell project
+WORKDIR /usr/src
+COPY . .
+
+# Build for release
+RUN cargo build --release --bin node-daemon
+
+# Our production image starts here
+FROM alpine:latest
+
+# Install SSL certificates
+RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates
+
+# Copy the binary from the build stage
+COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
+
+# Run the binary
+CMD ["node-daemon"]
+
