@@ -398,10 +398,10 @@ impl<B: storage::Backend> Wallet<B> {
         account.get_transaction_list(skip, count)
     }
 
-    pub fn get_transactions_to_be_broadcasted(&self) -> WalletResult<Vec<SignedTransaction>> {
+    pub fn get_transactions_to_be_broadcast(&self) -> WalletResult<Vec<SignedTransaction>> {
         self.db
             .transaction_ro()?
-            .get_signed_transactions()
+            .get_user_transactions()
             .map_err(WalletError::DatabaseError)
     }
 
@@ -573,7 +573,7 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
-    /// Save an unconfirmed transaction in case we need to rebroadcase it later
+    /// Save an unconfirmed transaction in case we need to rebroadcast it later
     /// and mark it as Inactive for now
     pub fn add_unconfirmed_tx(
         &mut self,

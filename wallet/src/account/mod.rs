@@ -58,7 +58,8 @@ use wallet_storage::{
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
-    AccountId, AccountInfo, AccountWalletSTxId, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx,
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    WalletTx,
 };
 
 use self::output_cache::OutputCache;
@@ -766,13 +767,12 @@ impl Account {
                     signed_tx.transaction().clone().into(),
                     tx_state,
                 ));
-                if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
-                    let id = AccountWalletSTxId::new(
-                        self.get_account_id(),
-                        signed_tx.transaction().get_id(),
-                    );
-                    db_tx.del_signed_transaction(&id)?;
-                }
+                self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                    db_tx,
+                    wallet_events,
+                    wallet_tx,
+                    signed_tx,
+                )?;
             }
         }
 
@@ -784,6 +784,29 @@ impl Account {
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
         Ok(())
+    }
+
+    /// Add a new wallet tx if relevant for this account and remove it from the user transactions
+    /// to not be rebroadcast again
+    fn add_wallet_tx_if_relevant_and_remove_from_user_txs(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &mut impl WalletEvents,
+        wallet_tx: WalletTx,
+        signed_tx: &SignedTransaction,
+    ) -> Result<bool, WalletError> {
+        Ok(
+            if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                let id = AccountWalletCreatedTxId::new(
+                    self.get_account_id(),
+                    signed_tx.transaction().get_id(),
+                );
+                db_tx.del_user_transaction(&id)?;
+                true
+            } else {
+                false
+            },
+        )
     }
 
     pub fn scan_new_unconfirmed_transactions(
@@ -801,13 +824,12 @@ impl Account {
                 tx_state,
             ));
 
-            if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
-                let id = AccountWalletSTxId::new(
-                    self.get_account_id(),
-                    signed_tx.transaction().get_id(),
-                );
-                db_tx.set_signed_transaction(&id, signed_tx)?;
-            } else {
+            if !self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                db_tx,
+                wallet_events,
+                wallet_tx,
+                signed_tx,
+            )? {
                 not_added.push(signed_tx);
             }
         }
@@ -822,13 +844,12 @@ impl Account {
                     tx_state,
                 ));
 
-                if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
-                    let id = AccountWalletSTxId::new(
-                        self.get_account_id(),
-                        signed_tx.transaction().get_id(),
-                    );
-                    db_tx.set_signed_transaction(&id, signed_tx)?;
-                } else {
+                if self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                    db_tx,
+                    wallet_events,
+                    wallet_tx,
+                    signed_tx,
+                )? {
                     not_added_next.push(*signed_tx);
                 }
             }
@@ -872,8 +893,8 @@ impl Account {
         let acc_id = self.get_account_id();
 
         for tx_id in abandoned_txs {
-            let id = AccountWalletSTxId::new(acc_id.clone(), tx_id);
-            db_tx.del_signed_transaction(&id)?;
+            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
+            db_tx.del_user_transaction(&id)?;
         }
 
         Ok(())

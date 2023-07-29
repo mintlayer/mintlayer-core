@@ -67,7 +67,7 @@ impl<Id: Encode> AccountPrefixedId<Id> {
 
 impl<Id: Encode> HasPrefix<AccountId> for AccountPrefixedId<Id> {}
 
-pub type AccountWalletSTxId = AccountPrefixedId<Id<Transaction>>;
+pub type AccountWalletCreatedTxId = AccountPrefixedId<Id<Transaction>>;
 pub type AccountWalletTxId = AccountPrefixedId<OutPointSourceId>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;

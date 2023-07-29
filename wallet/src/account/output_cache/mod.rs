@@ -239,13 +239,14 @@ impl OutputCache {
             .collect()
     }
 
+    /// Mark a transaction and its descendants as abandoned
+    /// Returns a Vec of the transaction Ids that have been abandoned
     pub fn abandon_transaction(
         &mut self,
         tx_id: Id<Transaction>,
     ) -> WalletResult<Vec<Id<Transaction>>> {
         let mut all_abandoned = Vec::new();
-        let mut to_abandon = BTreeSet::new();
-        to_abandon.insert(OutPointSourceId::from(tx_id));
+        let mut to_abandon = BTreeSet::from_iter([OutPointSourceId::from(tx_id)]);
 
         while let Some(outpoint_source_id) = to_abandon.pop_first() {
             all_abandoned.push(*outpoint_source_id.get_tx_id().expect("must be a transaction"));

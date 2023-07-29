@@ -20,7 +20,8 @@ pub mod utxo_types;
 pub mod wallet_tx;
 
 pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletSTxId, AccountWalletTxId,
+    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId,
 };
 pub use account_info::AccountInfo;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};

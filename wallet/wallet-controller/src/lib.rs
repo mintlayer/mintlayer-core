@@ -25,7 +25,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use mempool_types::TxStatus;
@@ -38,7 +38,7 @@ use common::{
         Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::get_time, Amount, BlockHeight, Id, Idable},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -395,6 +395,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
             mempool::TxStatus::InOrphanPool => {
                 // Mempool should reject the transaction and not return `InOrphanPool`
+                log::warn!("Newly created Transaction was sent to the orphan pool")
+                // We will not save the Tx in our wallet so that we don't start building other
+                // transactions on top of it
             }
         };
 
@@ -619,7 +622,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
-        let mut rebroadcast_txs_timer = Instant::now();
+        let mut rebroadcast_txs_timer = get_time();
         loop {
             let sync_res = self.sync_once().await;
 
@@ -656,25 +659,25 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     /// Rebroadcast not confirmed transactions
-    fn rebroadcast_txs(&mut self, rebroadcast_txs_timer: &mut Instant) {
-        if Instant::now() >= *rebroadcast_txs_timer {
-            let res = self.wallet.get_transactions_to_be_broadcasted().map(|txs| async {
-                for tx in txs {
-                    let tx_id = tx.transaction().get_id();
-                    let res = self.rpc_client.submit_transaction(tx).await;
-                    if let Err(e) = res {
-                        log::error!("Rebroadcasting for tx {tx_id} failed: {e}");
+    fn rebroadcast_txs(&mut self, rebroadcast_txs_timer: &mut Duration) {
+        if get_time() >= *rebroadcast_txs_timer {
+            let _ = self
+                .wallet
+                .get_transactions_to_be_broadcast()
+                .map(|txs| async {
+                    for tx in txs {
+                        let tx_id = tx.transaction().get_id();
+                        let res = self.rpc_client.submit_transaction(tx).await;
+                        if let Err(e) = res {
+                            log::warn!("Rebroadcasting for tx {tx_id} failed: {e}");
+                        }
                     }
-                }
-            });
-
-            if let Err(e) = res {
-                log::error!("Fetching transactions for rebroadcasting failed: {e}");
-            }
+                })
+                .log_err_pfx("Fetching transactions for rebroadcasting failed:");
 
             // Reset the timer with a new random interval between 2 and 5 minutes
             let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
-            *rebroadcast_txs_timer = Instant::now() + Duration::from_secs(sleep_interval_sec);
+            *rebroadcast_txs_timer = get_time() + Duration::from_secs(sleep_interval_sec);
         }
     }
 }

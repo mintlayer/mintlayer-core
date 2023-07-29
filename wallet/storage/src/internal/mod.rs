@@ -34,7 +34,7 @@ mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use wallet_types::{
     wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletSTxId, AccountWalletTxId, KeychainUsageState,
+    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
 };
 
 use self::store_tx::EncryptionState;
@@ -228,7 +228,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>>;
-        fn get_signed_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
+        fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
@@ -246,8 +246,8 @@ impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
         fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
-        fn set_signed_transaction(&mut self, id: &AccountWalletSTxId, tx: &SignedTransaction) -> crate::Result<()>;
-        fn del_signed_transaction(&mut self, id: &AccountWalletSTxId) -> crate::Result<()>;
+        fn set_user_transaction(&mut self, id: &AccountWalletCreatedTxId, tx: &SignedTransaction) -> crate::Result<()>;
+        fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
         fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> crate::Result<()>;

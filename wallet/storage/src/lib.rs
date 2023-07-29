@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 
 use wallet_types::{
     keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletSTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -63,7 +63,7 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountWalletTxId, WalletTx>>;
-    fn get_signed_transactions(&self) -> Result<Vec<SignedTransaction>>;
+    fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
     fn get_addresses(
@@ -104,12 +104,12 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
-    fn set_signed_transaction(
+    fn set_user_transaction(
         &mut self,
-        id: &AccountWalletSTxId,
+        id: &AccountWalletCreatedTxId,
         tx: &SignedTransaction,
     ) -> Result<()>;
-    fn del_signed_transaction(&mut self, id: &AccountWalletSTxId) -> crate::Result<()>;
+    fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;

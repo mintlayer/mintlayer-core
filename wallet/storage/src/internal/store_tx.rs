@@ -28,7 +28,7 @@ use utils::{
 };
 use wallet_types::{
     keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletSTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -197,9 +197,9 @@ macro_rules! impl_read_ops {
             }
 
             /// Collect and return all signed transactions from the storage
-            fn get_signed_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+            fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
                 self.storage
-                    .get::<db::DBSTxs, _>()
+                    .get::<db::DBUserTx, _>()
                     .prefix_iter_decoded(&())
                     .map_err(crate::Error::from)
                     .map(|item| item.map(|item| item.1).collect())
@@ -342,16 +342,16 @@ macro_rules! impl_write_ops {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
             }
 
-            fn set_signed_transaction(
+            fn set_user_transaction(
                 &mut self,
-                id: &AccountWalletSTxId,
+                id: &AccountWalletCreatedTxId,
                 tx: &SignedTransaction,
             ) -> crate::Result<()> {
-                self.write::<db::DBSTxs, _, _, _>(id, tx)
+                self.write::<db::DBUserTx, _, _, _>(id, tx)
             }
 
-            fn del_signed_transaction(&mut self, id: &AccountWalletSTxId) -> crate::Result<()> {
-                self.storage.get_mut::<db::DBSTxs, _>().del(id).map_err(Into::into)
+            fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()> {
+                self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
