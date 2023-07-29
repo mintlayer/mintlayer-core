@@ -37,7 +37,7 @@ use self::{
 
 /// The node configuration.
 #[must_use]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NodeConfigFile {
     // Subsystems configurations.
     pub blockprod: Option<BlockProdConfigFile>,

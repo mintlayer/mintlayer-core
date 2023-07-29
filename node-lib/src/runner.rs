@@ -25,9 +25,10 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
+use chainstate_launcher::StorageBackendConfig;
 use paste::paste;
 
-use chainstate::rpc::ChainstateRpcServer;
+use chainstate::{rpc::ChainstateRpcServer, ChainstateError};
 use common::{
     chain::{
         config::{
@@ -254,7 +255,35 @@ async fn start(
     let lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let (manager, controller) = initialize(chain_config, data_dir, node_config).await?;
+    let (manager, controller) = match initialize(
+        chain_config.clone(),
+        data_dir.clone(),
+        node_config.clone(),
+    )
+    .await
+    {
+        Ok((manager, controller)) => (manager, controller),
+        Err(error) => match error.downcast_ref::<ChainstateError>() {
+            Some(ChainstateError::FailedToInitializeChainstate(e)) => match e {
+                chainstate::InitializationError::ChainstateStorageVersionMismatch(_, _) => {
+                    log::info!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+
+                    let storage_config: StorageBackendConfig =
+                        node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
+
+                    // cleanup storage directory and retry initialization
+                    if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
+                        let path = data_dir.join(storage_subdir_name);
+                        std::fs::remove_dir_all(path).expect("Removing directory must succeed");
+                    }
+
+                    initialize(chain_config, data_dir, node_config).await?
+                }
+                _ => return Err(error),
+            },
+            _ => return Err(error),
+        },
+    };
 
     Ok(Node {
         manager,

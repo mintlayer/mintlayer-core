@@ -31,6 +31,15 @@ impl Default for StorageBackendConfig {
     }
 }
 
+impl StorageBackendConfig {
+    pub fn subdirectory_name(&self) -> Option<&str> {
+        match self {
+            StorageBackendConfig::Lmdb => Some(crate::SUBDIRECTORY_LMDB),
+            StorageBackendConfig::InMemory => None,
+        }
+    }
+}
+
 /// Storage configuration
 #[must_use]
 #[derive(Debug, Default)]
