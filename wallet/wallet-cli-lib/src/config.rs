@@ -29,7 +29,7 @@ pub enum Network {
 #[derive(Parser, Debug)]
 pub struct WalletCliArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    #[arg(long, value_enum, default_value_t = Network::Testnet)]
     pub network: Network,
 
     /// Optional path to the wallet file
