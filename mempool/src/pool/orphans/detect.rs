@@ -66,7 +66,6 @@ impl OrphanType {
             | CTE::BurnAmountSumError(_)
             | CTE::AttemptToSpendBurnedAmount
             | CTE::PoSAccountingError(_)
-            | CTE::MissingPoSAccountingUndo(_)
             | CTE::SpendStakeError(_)
             | CTE::PoolOwnerBalanceNotFound(_)
             | CTE::PoolDataNotFound(_)

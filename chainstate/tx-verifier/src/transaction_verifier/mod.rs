@@ -609,29 +609,23 @@ where
         }
 
         // apply undos to accounting
-        tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::CreateStakePool(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
-                let block_undo_fetcher = |id: Id<Block>| {
-                    self.storage
-                        .get_accounting_undo(id)
-                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-                };
-                self.accounting_block_undo
-                    .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
-                    .into_inner()
-                    .into_iter()
-                    .try_for_each(|undo| {
-                        self.accounting_delta_adapter.operations(tx_source).undo(undo)?;
-                        Ok(())
-                    })
-            }
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
-        })
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_accounting_undo(id)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        };
+        let undos = self.accounting_block_undo.take_tx_undo(
+            &tx_source,
+            &tx.get_id(),
+            block_undo_fetcher,
+        )?;
+        if let Some(undos) = undos {
+            undos.into_inner().into_iter().try_for_each(|undo| {
+                self.accounting_delta_adapter.operations(tx_source).undo(undo)
+            })?;
+        }
+
+        Ok(())
     }
 
     pub fn connect_transaction(

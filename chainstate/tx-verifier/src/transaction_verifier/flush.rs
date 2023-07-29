@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::TransactionSource;
+
 use super::{
     storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
@@ -97,7 +99,14 @@ where
         } else if entry.undo.is_empty() {
             storage.del_utxo_undo_data(tx_source)?;
         } else {
-            panic!("BlockUndo was not used up completely")
+            match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    panic!("BlockUndo utxo entries were not used up completely while disconnecting a block {}", block_id)
+                }
+                TransactionSource::Mempool => {
+                    /* it's ok for the mempool to use tx undos partially */
+                }
+            }
         }
     }
 
@@ -115,7 +124,14 @@ where
         } else if entry.undo.is_empty() {
             storage.del_accounting_undo_data(tx_source)?;
         } else {
-            panic!("BlockUndo was not used up completely")
+            match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    panic!("BlockUndo accounting entries were not used up completely while disconnecting a block {}", block_id)
+                }
+                TransactionSource::Mempool => {
+                    /* it's ok for the mempool to use tx undos partially */
+                }
+            }
         }
     }
 
