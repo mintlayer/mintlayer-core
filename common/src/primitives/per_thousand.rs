@@ -38,7 +38,7 @@ impl PerThousand {
         self.0
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_decimal_str(s: &str) -> Option<Self> {
         // TODO: abstract from_fixedpoint_str() outside of Amount
         let amount = Amount::from_fixedpoint_str(s, 3)?;
         let value: u16 = amount.into_atoms().try_into().ok()?;
