@@ -65,6 +65,8 @@ mod well_known {
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
     declare_entry!(TxIndexEnabled: bool);
+    declare_entry!(MagicBytes: [u8; 4]);
+    declare_entry!(ChainType: String);
 }
 
 /// Read-only chainstate storage transaction
@@ -79,6 +81,14 @@ macro_rules! impl_read_ops {
         impl<'st, B: storage::Backend> BlockchainStorageRead for $TxType<'st, B> {
             fn get_storage_version(&self) -> crate::Result<u32> {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            }
+
+            fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
+                self.read_value::<well_known::MagicBytes>()
+            }
+
+            fn get_chain_type(&self) -> crate::Result<Option<String>> {
+                self.read_value::<well_known::ChainType>()
             }
 
             fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
@@ -386,6 +396,14 @@ impl_read_ops!(StoreTxRw);
 impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
+    }
+
+    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()> {
+        self.write_value::<well_known::MagicBytes>(bytes)
+    }
+
+    fn set_chain_type(&mut self, chain: &str) -> crate::Result<()> {
+        self.write_value::<well_known::ChainType>(&chain.to_owned())
     }
 
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()> {

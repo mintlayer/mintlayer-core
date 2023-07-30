@@ -63,6 +63,12 @@ pub trait BlockchainStorageRead:
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
+    /// Get magic bytes
+    fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
+
+    /// Get chain type name
+    fn get_chain_type(&self) -> crate::Result<Option<String>>;
+
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
@@ -133,6 +139,12 @@ pub trait BlockchainStorageWrite:
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
+
+    /// Set magic bytes
+    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> Result<()>;
+
+    /// Set chain type name
+    fn set_chain_type(&mut self, chain: &str) -> Result<()>;
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> Result<()>;

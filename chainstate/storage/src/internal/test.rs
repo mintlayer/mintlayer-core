@@ -33,7 +33,7 @@ fn test_storage_get_default_version_in_tx() {
         let store = TestStore::new_empty().unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
-        assert_eq!(vtx, 1, "Default storage version wrong");
+        assert_eq!(vtx, 0, "Default storage version wrong");
         assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
     })
 }
@@ -73,7 +73,7 @@ fn test_storage_manipulation() {
     let mut store = TestStore::new_empty().unwrap();
 
     // Storage version manipulation
-    assert_eq!(store.get_storage_version(), Ok(1));
+    assert_eq!(store.get_storage_version(), Ok(0));
     assert_eq!(store.set_storage_version(2), Ok(()));
     assert_eq!(store.get_storage_version(), Ok(2));
 

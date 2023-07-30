@@ -25,9 +25,10 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
+use chainstate_launcher::StorageBackendConfig;
 use paste::paste;
 
-use chainstate::rpc::ChainstateRpcServer;
+use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
 use common::{
     chain::{
         config::{
@@ -56,6 +57,8 @@ use crate::{
     options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
 };
+
+const LOCK_FILE_NAME: &str = ".lock";
 
 pub struct Node {
     manager: subsystem::Manager,
@@ -226,11 +229,30 @@ pub async fn setup(options: Options) -> Result<Node> {
 /// Creates an exclusive lock file in the specified directory.
 /// Fails if the lock file cannot be created or is already locked.
 fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
-    let lock = std::fs::File::create(data_dir.join(".lock"))
+    let lock = std::fs::File::create(data_dir.join(LOCK_FILE_NAME))
         .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
     fs4::FileExt::try_lock_exclusive(&lock)
         .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
     Ok(lock)
+}
+
+fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
+    for entry in std::fs::read_dir(data_dir)? {
+        let entry_path = entry?.path();
+
+        if exclude
+            .iter()
+            .map(|e| e.file_name())
+            .all(|exclude| entry_path.file_name() != exclude)
+        {
+            if entry_path.is_dir() {
+                std::fs::remove_dir_all(entry_path)?;
+            } else {
+                std::fs::remove_file(entry_path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn start(
@@ -253,8 +275,45 @@ async fn start(
     .expect("Failed to prepare data directory");
     let lock_file = lock_data_dir(&data_dir)?;
 
+    if run_options.clean_data.unwrap_or(false) {
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
+    }
+
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let (manager, controller) = initialize(chain_config, data_dir, node_config).await?;
+    let (manager, controller) = match initialize(
+        chain_config.clone(),
+        data_dir.clone(),
+        node_config.clone(),
+    )
+    .await
+    {
+        Ok((manager, controller)) => (manager, controller),
+        Err(error) => match error.downcast_ref::<ChainstateError>() {
+            Some(ChainstateError::FailedToInitializeChainstate(
+                InitializationError::StorageCompatibilityCheckError(e),
+            )) => {
+                log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+
+                let storage_config: StorageBackendConfig =
+                    node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
+
+                // cleanup storage directory and retry initialization
+                if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
+                    let path = data_dir.join(storage_subdir_name);
+                    if path.exists() {
+                        std::fs::remove_dir_all(path)
+                            .expect("Removing chainstate storage directory must succeed");
+                    }
+                }
+
+                initialize(chain_config, data_dir, node_config).await?
+            }
+            _ => return Err(error),
+        },
+    };
 
     Ok(Node {
         manager,
