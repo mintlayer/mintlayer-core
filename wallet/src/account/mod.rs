@@ -41,7 +41,7 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
 use common::chain::{
-    AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
@@ -399,7 +399,7 @@ impl Account {
         let delegation_data = self.output_cache.delegation_data(delegation_id)?;
         let nonce = delegation_data
             .latest_nonce
-            .increment()
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
 
         let outputs = vec![output];
