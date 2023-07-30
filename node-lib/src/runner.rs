@@ -293,7 +293,9 @@ async fn start(
         Ok((manager, controller)) => (manager, controller),
         Err(error) => match error.downcast_ref::<ChainstateError>() {
             Some(ChainstateError::FailedToInitializeChainstate(e)) => match e {
-                chainstate::InitializationError::ChainstateStorageVersionMismatch(_, _) => {
+                chainstate::InitializationError::ChainstateStorageVersionMismatch(_, _)
+                | chainstate::InitializationError::ChainTypeMismatch(_, _)
+                | chainstate::InitializationError::ChainConfigMagicBytesMismatch(_, _) => {
                     log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
 
                     let storage_config: StorageBackendConfig =

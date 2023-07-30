@@ -22,6 +22,7 @@ use std::sync::Arc;
 use chainstate::InitializationError;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use storage_lmdb::resize_callback::MapResizeCallback;
+use utils::ensure;
 
 // Some useful reexports
 pub use chainstate::{
@@ -47,6 +48,8 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 
     check_storage_version(&mut storage)?;
+    check_magic_bytes(&mut storage, chain_config.as_ref())?;
+    check_chain_type(&mut storage, chain_config.as_ref())?;
 
     let chainstate = chainstate::make_chainstate(
         chain_config,
@@ -70,7 +73,7 @@ fn check_storage_version<B: 'static + storage::Backend>(
             .set_storage_version(CURRENT_CHAINSTATE_STORAGE_VERSION)
             .map_err(InitializationError::StorageError)?;
     } else {
-        utils::ensure!(
+        ensure!(
             storage_version == CURRENT_CHAINSTATE_STORAGE_VERSION,
             InitializationError::ChainstateStorageVersionMismatch(
                 storage_version,
@@ -78,6 +81,53 @@ fn check_storage_version<B: 'static + storage::Backend>(
             )
         );
     }
+    Ok(())
+}
+
+fn check_magic_bytes<B: 'static + storage::Backend>(
+    storage: &mut chainstate_storage::Store<B>,
+    chain_config: &ChainConfig,
+) -> Result<(), Error> {
+    let storage_magic_bytes =
+        storage.get_magic_bytes().map_err(InitializationError::StorageError)?;
+    let chain_config_magic_bytes = chain_config.magic_bytes();
+
+    match storage_magic_bytes {
+        Some(storage_magic_bytes) => ensure!(
+            &storage_magic_bytes == chain_config_magic_bytes,
+            InitializationError::ChainConfigMagicBytesMismatch(
+                storage_magic_bytes,
+                chain_config_magic_bytes.to_owned()
+            )
+        ),
+        None => storage
+            .set_magic_bytes(chain_config_magic_bytes)
+            .map_err(InitializationError::StorageError)?,
+    };
+
+    Ok(())
+}
+
+fn check_chain_type<B: 'static + storage::Backend>(
+    storage: &mut chainstate_storage::Store<B>,
+    chain_config: &ChainConfig,
+) -> Result<(), Error> {
+    let storage_chain_type = storage.get_chain_type().map_err(InitializationError::StorageError)?;
+    let chain_config_type = chain_config.chain_type().name();
+
+    match storage_chain_type {
+        Some(storage_chain_type) => ensure!(
+            storage_chain_type == chain_config_type,
+            InitializationError::ChainTypeMismatch(
+                storage_chain_type,
+                chain_config_type.to_owned()
+            )
+        ),
+        None => storage
+            .set_chain_type(chain_config_type)
+            .map_err(InitializationError::StorageError)?,
+    };
+
     Ok(())
 }
 

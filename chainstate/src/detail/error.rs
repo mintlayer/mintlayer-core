@@ -210,6 +210,12 @@ pub enum InitializationError {
         "Node cannot load chainstate database because the versions mismatch: db `{0}`, app `{1}`"
     )]
     ChainstateStorageVersionMismatch(u32, u32),
+    #[error(
+        "Chain's config magic bytes do not match the one from database : expected `{0:?}`, actual `{1:?}`"
+    )]
+    ChainConfigMagicBytesMismatch([u8; 4], [u8; 4]),
+    #[error("Node's chain type doesn't match the one in the database : db `{0}`, app `{1}`")]
+    ChainTypeMismatch(String, String),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {
