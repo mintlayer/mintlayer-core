@@ -57,13 +57,13 @@ async fn wallet_cli_file(#[case] seed: Seed) {
     let output = test.run(&[&format!("createwallet \"{file_name}\""), "closewallet"]).await;
     assert_eq!(output.len(), 2, "Unexpected output: {:?}", output);
     assert!(output[0].starts_with("New wallet created successfully\n"));
-    assert_eq!(output[1], "Success");
+    assert_eq!(output[1], "Successfully closed the wallet.");
 
     // Start the wallet, open it, then close it, then shutdown
     let output = test.run(&[&format!("openwallet \"{file_name}\""), "closewallet"]).await;
     assert_eq!(output.len(), 2, "Unexpected output: {:?}", output);
     assert_eq!(output[0], "Wallet loaded successfully");
-    assert_eq!(output[1], "Success");
+    assert_eq!(output[1], "Successfully closed the wallet.");
 
     test.shutdown().await;
 }
