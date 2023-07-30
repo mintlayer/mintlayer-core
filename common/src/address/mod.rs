@@ -18,7 +18,7 @@ use std::fmt::Display;
 use crate::chain::{ChainConfig, Destination};
 use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 pub mod pubkeyhash;
-use serialization::{Decode, DecodeAll, Encode, Input};
+use serialization::{DecodeAll, Encode};
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
@@ -84,11 +84,6 @@ impl Address {
         Ok(destination)
     }
 
-    fn destination_internal(&self) -> Result<Vec<u8>, AddressError> {
-        let data = encoding::decode(&self.address)?;
-        Ok(data.data().to_owned())
-    }
-
     pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
         let address = Self {
             address: address.to_owned(),
@@ -110,18 +105,6 @@ impl Address {
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.address.fmt(f)
-    }
-}
-
-impl Decode for Address {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let address = String::decode(input)?;
-        let result = Self { address };
-        result.destination_internal().map_err(|_| {
-            serialization::Error::from("Address decoding failed")
-                .chain(format!("with given address {}", result.address))
-        })?;
-        Ok(result)
     }
 }
 
