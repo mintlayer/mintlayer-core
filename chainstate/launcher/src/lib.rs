@@ -34,9 +34,9 @@ pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
-pub const CHAINSTATE_STORAGE_VERSION_UNINITIALIZED: u32 = 0;
-pub const CHAINSTATE_STORAGE_VERSION_V1: u32 = 1;
-pub const CURRENT_CHAINSTATE_STORAGE_VERSION: u32 = CHAINSTATE_STORAGE_VERSION_V1;
+const CHAINSTATE_STORAGE_VERSION_UNINITIALIZED: u32 = 0;
+const CHAINSTATE_STORAGE_VERSION_V1: u32 = 1;
+const CURRENT_CHAINSTATE_STORAGE_VERSION: u32 = CHAINSTATE_STORAGE_VERSION_V1;
 
 fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     storage_backend: B,

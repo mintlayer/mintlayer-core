@@ -236,11 +236,15 @@ fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
     Ok(lock)
 }
 
-fn clean_data_dir(data_dir: &PathBuf, exclude: &Path) -> Result<()> {
+fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
     for entry in std::fs::read_dir(data_dir)? {
         let entry_path = entry?.path();
 
-        if entry_path.file_name() != exclude.file_name() {
+        if exclude
+            .iter()
+            .map(|e| e.file_name())
+            .all(|exclude| entry_path.file_name() != exclude)
+        {
             if entry_path.is_dir() {
                 std::fs::remove_dir_all(entry_path)?;
             } else {
@@ -272,7 +276,10 @@ async fn start(
     let lock_file = lock_data_dir(&data_dir)?;
 
     if run_options.clean_data.unwrap_or(false) {
-        clean_data_dir(&data_dir, &data_dir.join(LOCK_FILE_NAME))?;
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
     }
 
     log::info!("Starting with the following config:\n {node_config:#?}");
@@ -287,7 +294,7 @@ async fn start(
         Err(error) => match error.downcast_ref::<ChainstateError>() {
             Some(ChainstateError::FailedToInitializeChainstate(e)) => match e {
                 chainstate::InitializationError::ChainstateStorageVersionMismatch(_, _) => {
-                    log::info!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+                    log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
 
                     let storage_config: StorageBackendConfig =
                         node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
@@ -295,7 +302,10 @@ async fn start(
                     // cleanup storage directory and retry initialization
                     if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
                         let path = data_dir.join(storage_subdir_name);
-                        std::fs::remove_dir_all(path).expect("Removing directory must succeed");
+                        if path.exists() {
+                            std::fs::remove_dir_all(path)
+                                .expect("Removing chainstate storage directory must succeed");
+                        }
                     }
 
                     initialize(chain_config, data_dir, node_config).await?

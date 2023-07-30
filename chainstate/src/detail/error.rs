@@ -206,7 +206,9 @@ pub enum InitializationError {
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
     GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
-    #[error("Chainstate storage version mismatch: actual `{0}`, expected `{1}`")]
+    #[error(
+        "Node cannot load chainstate database because the versions mismatch: db `{0}`, app `{1}`"
+    )]
     ChainstateStorageVersionMismatch(u32, u32),
 }
 
