@@ -532,7 +532,7 @@ impl CommandHandler {
                 self.state = None;
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
-                    print_message: "Success".to_owned(),
+                    print_message: "Successfully closed the wallet.".to_owned(),
                 })
             }
 
@@ -548,7 +548,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Successfully encrypted the private keys of the wallet.".to_owned(),
+                ))
             }
 
             WalletCommand::RemovePrivateKeysEncryption => {
@@ -561,7 +563,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Successfully removed the encryption from the private keys.".to_owned(),
+                ))
             }
 
             WalletCommand::UnlockPrivateKeys { password } => {
@@ -574,7 +578,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success. The wallet is now unlocked.".to_owned(),
+                ))
             }
 
             WalletCommand::LockPrivateKeys => {
@@ -587,7 +593,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success. The wallet is now locked.".to_owned(),
+                ))
             }
 
             WalletCommand::ChainstateInfo => {
@@ -967,7 +975,10 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success, the create delegation transaction was broadcast to the network"
+                        .to_owned(),
+                ))
             }
 
             WalletCommand::DelegateStaking {
@@ -987,7 +998,10 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success, the delegation staking transaction was broadcast to the network"
+                        .to_owned(),
+                ))
             }
 
             WalletCommand::SendFromDelegationToAddress {
@@ -1009,7 +1023,9 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success. The transaction was broadcast to the network".to_owned(),
+                ))
             }
 
             WalletCommand::CreateStakePool {
