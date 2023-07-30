@@ -20,7 +20,7 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::{
-    address::Address,
+    address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
@@ -49,6 +49,8 @@ pub enum Error {
     WalletLockedWithoutAPassword,
     #[error("Wallet file corrupted root keys expected 1 got {0}")]
     WalletSanityErrorInvalidRootKeyCount(usize),
+    #[error("Cannot decode address from DB {0}")]
+    CannotDecodeAddress(#[from] AddressError),
 }
 
 /// Possibly failing result of wallet storage query
@@ -65,11 +67,11 @@ pub trait WalletStorageReadLocked {
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
-    fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
+    fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
+    ) -> Result<BTreeMap<AccountDerivationPathId, String>>;
     fn check_root_keys_sanity(&self) -> Result<()>;
     fn get_keychain_usage_state(
         &self,

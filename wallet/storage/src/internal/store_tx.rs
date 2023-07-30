@@ -154,14 +154,14 @@ macro_rules! impl_read_ops {
                 Ok(self.storage.get::<db::DBAccounts, _>().prefix_iter_decoded(&())?.collect())
             }
 
-            fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>> {
+            fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>> {
                 self.read::<db::DBAddresses, _, _>(id)
             }
 
             fn get_addresses(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>> {
+            ) -> crate::Result<BTreeMap<AccountDerivationPathId, String>> {
                 self.storage
                     .get::<db::DBAddresses, _>()
                     .prefix_iter_decoded(account_id)
@@ -367,7 +367,7 @@ macro_rules! impl_write_ops {
                 id: &AccountDerivationPathId,
                 address: &Address,
             ) -> crate::Result<()> {
-                self.write::<db::DBAddresses, _, _, _>(id, address)
+                self.write::<db::DBAddresses, _, _, _>(id, address.get().to_owned())
             }
 
             fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {

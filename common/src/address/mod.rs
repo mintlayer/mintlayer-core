@@ -37,7 +37,7 @@ pub trait AddressableData<T: AsRef<[u8]>> {
     fn set_data(&mut self, data: &[u8]);
 }
 
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, PartialOrd, Ord)]
 pub enum AddressError {
     #[error("Bech32 encoding error: {0}")]
     Bech32EncodingError(Bech32Error),
@@ -55,7 +55,7 @@ impl From<Bech32Error> for AddressError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Address {
     address: String,
 }

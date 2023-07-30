@@ -129,6 +129,7 @@ impl LeafKeySoftChain {
     ) -> KeyChainResult<WithPurpose<LeafKeySoftChain>> {
         let mut addresses = WithPurpose::new(BTreeMap::new(), BTreeMap::new());
         for (address_id, address) in db_tx.get_addresses(id)? {
+            let address = Address::from_str(chain_config.as_ref(), address.as_str())?;
             let (purpose, key_index) = get_purpose_and_index(&address_id.into_item_id())?;
             let old_value = addresses.mut_for(purpose).insert(key_index, address);
             if old_value.is_some() {
