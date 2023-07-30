@@ -181,8 +181,18 @@ pub struct ChainConfig {
 impl ChainConfig {
     /// Bech32m addresses in this chain will use this prefix
     #[must_use]
-    pub fn address_prefix(&self, destination: &Destination) -> &'static str {
+    pub fn destination_address_prefix(&self, destination: &Destination) -> &'static str {
         address_prefix(self.chain_type, destination)
+    }
+
+    #[must_use]
+    pub fn pool_id_address_prefix(&self) -> &'static str {
+        match self.chain_type {
+            ChainType::Mainnet => "mpool",
+            ChainType::Testnet => "tpool",
+            ChainType::Regtest => "rpool",
+            ChainType::Signet => "spool",
+        }
     }
 
     /// The BIP44 coin type for this chain

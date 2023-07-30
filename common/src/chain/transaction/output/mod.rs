@@ -48,7 +48,7 @@ impl Addressable for Destination {
     type Error = AddressError;
 
     fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.address_prefix(self)
+        chain_config.destination_address_prefix(self)
     }
 
     fn encode_to_bytes_for_address(&self) -> Vec<u8> {
