@@ -34,7 +34,11 @@ use utils::tap_error_log::LogError;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuance},
+        tokens::{
+            Metadata,
+            RPCTokenInfo::{FungibleToken, NonFungibleToken},
+            TokenId, TokenIssuance,
+        },
         Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -61,7 +65,7 @@ use wallet::{
     account::Currency,
     send_request::{make_address_output, make_address_output_token},
     wallet_events::WalletEvents,
-    DefaultWallet,
+    DefaultWallet, WalletError,
 };
 use wallet_types::BlockInfo;
 pub use wallet_types::{
@@ -458,6 +462,27 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)
+    }
+
+    pub async fn get_token_number_of_decimals(
+        &mut self,
+        token_id: TokenId,
+    ) -> Result<u8, ControllerError<T>> {
+        let token_info = self
+            .rpc_client
+            .get_token_info(token_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
+                token_id,
+            )))?;
+        let decimals = match token_info {
+            FungibleToken(token_info) => token_info.number_of_decimals,
+            // TODO: for now use 0 so you can transfer NFTs with the same command as tokens
+            // later we can separate it into separate commands
+            NonFungibleToken(_) => 0,
+        };
+        Ok(decimals)
     }
 
     pub async fn create_stake_pool_tx(

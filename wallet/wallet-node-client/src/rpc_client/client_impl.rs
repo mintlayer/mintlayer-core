@@ -16,7 +16,10 @@
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock, PoolId, SignedTransaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
@@ -94,6 +97,12 @@ impl NodeInterface for NodeRpcClient {
 
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
