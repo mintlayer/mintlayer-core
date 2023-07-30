@@ -397,7 +397,7 @@ impl Account {
         )?;
         let delegation_data = self.output_cache.delegation_data(delegation_id)?;
         let nonce = delegation_data
-            .latest_nonce
+            .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
             .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
 

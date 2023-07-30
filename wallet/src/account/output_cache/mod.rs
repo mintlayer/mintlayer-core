@@ -38,14 +38,14 @@ use crate::{WalletError, WalletResult};
 pub struct DelegationData {
     pub balance: Amount,
     pub destination: Destination,
-    pub latest_nonce: Option<AccountNonce>,
+    pub last_nonce: Option<AccountNonce>,
 }
 impl DelegationData {
     fn new(destination: Destination) -> DelegationData {
         DelegationData {
             balance: Amount::ZERO,
             destination,
-            latest_nonce: None,
+            last_nonce: None,
         }
     }
 }
@@ -179,7 +179,7 @@ impl OutputCache {
                                 data.balance = (data.balance - *amount)
                                     .ok_or(WalletError::NegativeDelegationAmount(*delegation_id))?;
                                 let next_nonce = data
-                                    .latest_nonce
+                                    .last_nonce
                                     .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
                                     .ok_or(WalletError::DelegationNonceOverflow(*delegation_id))?;
                                 ensure!(
@@ -189,7 +189,7 @@ impl OutputCache {
                                         outpoint.nonce()
                                     )
                                 );
-                                data.latest_nonce = Some(outpoint.nonce());
+                                data.last_nonce = Some(outpoint.nonce());
                             }
                             None => {
                                 return Err(WalletError::InconsistentDelegationRemoval(
@@ -284,7 +284,7 @@ impl OutputCache {
                                     data.balance = (data.balance - *amount).ok_or(
                                         WalletError::InconsistentDelegationRemoval(*delegation_id),
                                     )?;
-                                    data.latest_nonce = outpoint.nonce().decrement();
+                                    data.last_nonce = outpoint.nonce().decrement();
                                 }
                                 None => {
                                     return Err(WalletError::NoUtxos);

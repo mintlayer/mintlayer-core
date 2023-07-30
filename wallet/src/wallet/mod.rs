@@ -108,9 +108,9 @@ pub enum WalletError {
     InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
     InconsistentProduceBlockFromStake(PoolId),
-    #[error("Delfation amount overflow for id: {0}")]
+    #[error("Delegation amount overflow for id: {0}")]
     DelegationAmountOverflow(DelegationId),
-    #[error("Delfation nonce overflow for id: {0}")]
+    #[error("Delegation nonce overflow for id: {0}")]
     DelegationNonceOverflow(DelegationId),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,

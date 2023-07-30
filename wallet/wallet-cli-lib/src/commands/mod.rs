@@ -1070,7 +1070,7 @@ impl CommandHandler {
                             balance,
                             block_info.height,
                             block_info.timestamp,
-                            chain_config.coin_decimals(),
+                            chain_config.as_ref(),
                         )
                     })
                     .collect();
@@ -1084,11 +1084,7 @@ impl CommandHandler {
                     .get_delegations(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
                     .map_err(WalletCliError::Controller)?
                     .map(|(delegation_id, balance)| {
-                        format_delegation_info(
-                            *delegation_id,
-                            balance,
-                            chain_config.coin_decimals(),
-                        )
+                        format_delegation_info(*delegation_id, balance, chain_config.as_ref())
                     })
                     .collect();
                 Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))

@@ -20,6 +20,10 @@ mod sync;
 
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
+/// In which top N MB should we aim for our transactions to be in the mempool
+/// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+/// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+const IN_TOP_N_MB: usize = 5;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -271,7 +275,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -306,7 +310,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -430,7 +434,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)?;
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -457,7 +461,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(DelegationId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -490,7 +494,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
         let consolidate_fee_rate = current_fee_rate;
@@ -519,7 +523,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -549,7 +553,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -598,7 +602,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -629,7 +633,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 

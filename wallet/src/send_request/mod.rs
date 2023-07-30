@@ -152,7 +152,7 @@ pub fn make_decomission_stake_pool_output(
     current_block_height: BlockHeight,
 ) -> WalletResult<TxOutput> {
     let num_blocks_to_lock: i64 =
-        chain_config.spend_share_maturity_distance(current_block_height).into();
+        chain_config.decommission_pool_maturity_distance(current_block_height).into();
 
     Ok(TxOutput::LockThenTransfer(
         OutputValue::Coin(amount),
@@ -161,6 +161,7 @@ pub fn make_decomission_stake_pool_output(
     ))
 }
 
+/// Helper struct to reduce the number of arguments passed around
 pub struct StakePoolDataArguments {
     pub amount: Amount,
     pub margin_ratio_per_thousand: PerThousand,
