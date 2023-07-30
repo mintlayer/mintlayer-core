@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use trust_dns_client::rr::Name;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -40,7 +41,7 @@ pub struct DnsServerConfig {
 
     /// Reserved node address to connect. Can be specified multiple times.
     #[clap(long)]
-    pub reserved_node: Vec<String>,
+    pub reserved_node: Vec<IpOrSocketAddress>,
 
     /// Hostname of the DNS seed
     #[clap(long)]

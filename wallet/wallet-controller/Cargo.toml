@@ -29,6 +29,7 @@ zeroize.workspace = true
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
+p2p-types = { path = "../../p2p/types" }
 test-utils = { path = "../../test-utils" }
 
 anyhow.workspace = true

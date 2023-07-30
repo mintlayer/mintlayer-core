@@ -22,7 +22,7 @@ pub trait TransportAddress: Sized {
     /// Convert abstract socket address to concrete type (PeerAddress)
     fn as_peer_address(&self) -> PeerAddress;
 
-    /// Try get address back from PeerAddress.
+    /// Try to get address back from PeerAddress.
     ///
     /// This may fail if the address is invalid or from another transport.
     fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self>;

@@ -19,6 +19,7 @@ use std::{
     sync::Arc,
 };
 
+use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use p2p::{
@@ -31,9 +32,15 @@ use p2p::{
 
 pub fn peer_db(c: &mut Criterion) {
     let db_store = peerdb_inmemory_store();
+    let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
-    let mut peerdb =
-        PeerDb::<SocketAddr, IpAddr, _>::new(p2p_config, Default::default(), db_store).unwrap();
+    let mut peerdb = PeerDb::<SocketAddr, IpAddr, _>::new(
+        &chain_config,
+        p2p_config,
+        Default::default(),
+        db_store,
+    )
+    .unwrap();
 
     for _ in 0..100000 {
         peerdb.peer_discovered(TestTcpAddressMaker::new());

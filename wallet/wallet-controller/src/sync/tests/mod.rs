@@ -36,6 +36,7 @@ use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
@@ -208,7 +209,7 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
-    async fn p2p_connect(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
     async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
@@ -229,10 +230,13 @@ impl NodeInterface for MockNode {
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         unreachable!()
     }
-    async fn p2p_add_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        _address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         unreachable!()
     }
 

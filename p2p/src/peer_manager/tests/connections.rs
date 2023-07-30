@@ -32,8 +32,8 @@ use crate::{
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -615,7 +615,31 @@ async fn connection_timeout_rpc_notified<T>(
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(test_p2p_config());
+    let p2p_config = Arc::new(P2pConfig {
+        outbound_connection_timeout: Duration::from_secs(1).into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -649,14 +673,15 @@ async fn connection_timeout_rpc_notified<T>(
     });
 
     let (rtx, rrx) = oneshot_nofail::channel();
-    tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
+    tx.send(PeerManagerEvent::Connect(
+        addr2.to_string().parse().unwrap(),
+        rtx,
+    ))
+    .unwrap();
 
-    match timeout(*p2p_config.outbound_connection_timeout, rrx).await {
-        Ok(res) => assert!(std::matches!(
-            res.unwrap(),
-            Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))
-        )),
-        Err(_err) => panic!("did not receive `ConnectionError` in time"),
+    match timeout(*p2p_config.outbound_connection_timeout, rrx).await.unwrap() {
+        Ok(Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))) => {}
+        event => panic!("unexpected event: {event:?}"),
     }
 }
 
@@ -665,7 +690,7 @@ async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
-        TestTransportTcp::make_address(),
+        TestTcpAddressMaker::new(),
     )
     .await;
 }
@@ -675,7 +700,7 @@ async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        TestTransportChannel::make_address(),
+        TestTcpAddressMaker::new(),
     )
     .await;
 }
@@ -685,7 +710,7 @@ async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
-        TestTransportNoise::make_address(),
+        TestTcpAddressMaker::new(),
     )
     .await;
 }
@@ -739,6 +764,7 @@ where
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
     let bind_addresses = timeout(Duration::from_secs(20), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
 
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -746,7 +772,7 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses,
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -863,6 +889,7 @@ where
 
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -870,7 +897,7 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses.clone(),
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -898,13 +925,15 @@ where
     )
     .await;
 
+    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
+
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses,
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),

@@ -4327,6 +4327,7 @@ dependencies = [
  "common",
  "parity-scale-codec",
  "serde",
+ "serde_test",
  "serialization",
 ]
 
@@ -6949,6 +6950,7 @@ dependencies = [
  "node-comm",
  "node-lib",
  "p2p",
+ "p2p-types",
  "reedline",
  "rpc",
  "rstest",
@@ -6982,6 +6984,7 @@ dependencies = [
  "mempool",
  "mempool-types",
  "node-comm",
+ "p2p-types",
  "rstest",
  "serialization",
  "test-utils",

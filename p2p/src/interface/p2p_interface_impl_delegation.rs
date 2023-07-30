@@ -19,6 +19,7 @@ use std::{
 };
 
 use common::chain::SignedTransaction;
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 
@@ -28,7 +29,7 @@ use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
     P2pInterface for T
 {
-    async fn connect(&mut self, addr: String) -> crate::Result<()> {
+    async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().connect(addr).await
     }
 
@@ -58,11 +59,11 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().get_connected_peers().await
     }
 
-    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+    async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().add_reserved_node(addr).await
     }
 
-    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+    async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().remove_reserved_node(addr).await
     }
 

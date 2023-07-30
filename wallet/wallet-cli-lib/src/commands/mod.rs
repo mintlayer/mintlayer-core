@@ -28,6 +28,7 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::TxStatus;
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
@@ -257,7 +258,7 @@ pub enum WalletCommand {
 
     /// Connect to the remote peer
     Connect {
-        address: String,
+        address: IpOrSocketAddress,
     },
 
     /// Disconnected the remote peer
@@ -286,12 +287,12 @@ pub enum WalletCommand {
 
     /// Add reserved peer
     AddReservedPeer {
-        address: String,
+        address: IpOrSocketAddress,
     },
 
     /// Remove reserved peer
     RemoveReservedPeer {
-        address: String,
+        address: IpOrSocketAddress,
     },
 
     /// Quit the REPL

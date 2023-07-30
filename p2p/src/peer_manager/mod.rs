@@ -27,6 +27,7 @@ use std::{
 };
 
 use futures::never::Never;
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
@@ -41,7 +42,7 @@ use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set
 
 use crate::{
     config::P2pConfig,
-    error::{P2pError, PeerError, ProtocolError},
+    error::{ConversionError, P2pError, PeerError, ProtocolError},
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
@@ -145,6 +146,18 @@ where
     peer_eviction_random_state: peers_eviction::RandomState,
 }
 
+/// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used).
+/// It will fail if the socket address uses port 0.
+pub fn ip_or_socket_address_to_peer_address<A: TransportAddress>(
+    address: &IpOrSocketAddress,
+    chain_config: &ChainConfig,
+) -> crate::Result<A> {
+    let peer_address: PeerAddress = address.to_socket_address(chain_config.p2p_port()).into();
+    <A as TransportAddress>::from_peer_address(&peer_address, true).ok_or_else(|| {
+        P2pError::ConversionError(ConversionError::InvalidAddress(address.to_string()))
+    })
+}
+
 impl<T, S> PeerManager<T, S>
 where
     T: NetworkingService + 'static,
@@ -160,8 +173,12 @@ where
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
-        let peerdb =
-            peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
+        let peerdb = peerdb::PeerDb::new(
+            &chain_config,
+            Arc::clone(&p2p_config),
+            time_getter.clone(),
+            peerdb_storage,
+        )?;
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
         Ok(PeerManager {
@@ -952,7 +969,12 @@ where
     fn handle_control_event(&mut self, event: PeerManagerEvent<T>) {
         match event {
             PeerManagerEvent::Connect(address, response) => {
-                self.connect(address, Some(response));
+                let address_res =
+                    ip_or_socket_address_to_peer_address(&address, &self.chain_config);
+                match address_res {
+                    Ok(addr) => self.connect(addr, Some(response)),
+                    Err(err) => response.send(Err(err)),
+                }
             }
             PeerManagerEvent::Disconnect(peer_id, response) => {
                 self.disconnect(peer_id, Some(response));
@@ -978,13 +1000,33 @@ where
                 let peers = self.get_connected_peers();
                 response.send(peers);
             }
-            PeerManagerEvent::AddReserved(address) => {
-                self.peerdb.add_reserved_node(address.clone());
-                // Initiate new outbound connection without waiting for `heartbeat`
-                self.connect(address, None);
+            PeerManagerEvent::AddReserved(address, response) => {
+                let address_res = ip_or_socket_address_to_peer_address::<T::Address>(
+                    &address,
+                    &self.chain_config,
+                );
+                match address_res {
+                    Ok(addr) => {
+                        self.peerdb.add_reserved_node(addr.clone());
+                        // Initiate new outbound connection without waiting for `heartbeat`
+                        self.connect(addr, None);
+                        response.send(Ok(()));
+                    }
+                    Err(err) => response.send(Err(err)),
+                }
             }
-            PeerManagerEvent::RemoveReserved(address) => {
-                self.peerdb.remove_reserved_node(address);
+            PeerManagerEvent::RemoveReserved(address, response) => {
+                let address_res = ip_or_socket_address_to_peer_address::<T::Address>(
+                    &address,
+                    &self.chain_config,
+                );
+                match address_res {
+                    Ok(addr) => {
+                        self.peerdb.remove_reserved_node(addr);
+                        response.send(Ok(()));
+                    }
+                    Err(err) => response.send(Err(err)),
+                }
             }
             PeerManagerEvent::ListBanned(response) => {
                 response.send(self.peerdb.list_banned().cloned().collect())
