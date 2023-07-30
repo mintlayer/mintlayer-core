@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, Destination, PoolId, SignedTransaction, Transaction,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -221,18 +221,18 @@ pub enum WalletCommand {
 
     CreateDelegation {
         address: String,
-        pool_id: HexEncoded<PoolId>,
+        pool_id: String,
     },
 
     DelegateStaking {
         amount: String,
-        delegation_id: HexEncoded<DelegationId>,
+        delegation_id: String,
     },
 
     SendFromDelegationToAddress {
         address: String,
         amount: String,
-        delegation_id: HexEncoded<DelegationId>,
+        delegation_id: String,
     },
 
     CreateStakePool {
@@ -966,21 +966,22 @@ impl CommandHandler {
 
             WalletCommand::CreateDelegation { address, pool_id } => {
                 let address = parse_address(chain_config, &address)?;
+                let pool_id_address = Address::from_str(chain_config, &pool_id)?;
 
-                let _status = controller_opt
+                let (delegation_id, _status) = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_delegation(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         address,
-                        pool_id.take(),
+                        pool_id_address.decode_object(chain_config)?,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print(
-                    "Success, the create delegation transaction was broadcast to the network"
-                        .to_owned(),
-                ))
+                Ok(ConsoleCommand::Print(format!(
+                    "Success, the creation of delegation transaction was broadcast to the network. Delegation id: {}",
+                    Address::new(chain_config, &delegation_id)?
+                )))
             }
 
             WalletCommand::DelegateStaking {
@@ -988,6 +989,7 @@ impl CommandHandler {
                 delegation_id,
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
+                let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
 
                 // TODO: Take status into account
                 let _status = controller_opt
@@ -996,7 +998,7 @@ impl CommandHandler {
                     .delegate_staking(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
-                        delegation_id.take(),
+                        delegation_id_address.decode_object(chain_config)?,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -1012,6 +1014,7 @@ impl CommandHandler {
                 delegation_id,
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
+                let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
                 let address = parse_address(chain_config, &address)?;
                 // TODO: Take status into account
                 let _status = controller_opt
@@ -1021,7 +1024,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         address,
                         amount,
-                        delegation_id.take(),
+                        delegation_id_address.decode_object(chain_config)?,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

@@ -16,7 +16,6 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
-use serialization::hex::HexEncode;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
@@ -120,7 +119,8 @@ pub fn format_delegation_info(
 ) -> String {
     format!(
         "Delegation Id: {}, Balance: {}",
-        HexEncode::hex_encode(&delegation_id),
+        Address::new(chain_config, &delegation_id)
+            .expect("Delegation id address encoding can never fail"),
         balance.into_fixedpoint_str(chain_config.coin_decimals()),
     )
 }
