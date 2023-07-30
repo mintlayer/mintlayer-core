@@ -240,8 +240,7 @@ pub enum WalletCommand {
 
         cost_per_block: String,
 
-        #[arg(default_value_t = 1000)]
-        margin_ratio_per_thousand: u16,
+        margin_ratio_per_thousand: String,
 
         decomission_key: Option<HexEncoded<PublicKey>>,
     },
@@ -322,9 +321,9 @@ pub enum ConsoleCommand {
     Exit,
 }
 
-fn to_per_thousand(value: u16) -> Result<PerThousand, WalletCliError> {
-    PerThousand::new(value).ok_or(WalletCliError::InvalidInput(format!(
-        "Invalid margin ration per thousand '{value}', expected <= 1000"
+fn to_per_thousand(value_str: &str, variable_name: &str) -> Result<PerThousand, WalletCliError> {
+    PerThousand::from_str(&value_str).ok_or(WalletCliError::InvalidInput(format!(
+        "Failed to parse {variable_name} the decimal that must be in the range [0.001,1.000]",
     )))
 }
 
@@ -1037,7 +1036,8 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
                 let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
-                let margin_ratio_per_thousand = to_per_thousand(margin_ratio_per_thousand)?;
+                let margin_ratio_per_thousand =
+                    to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
                 let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?

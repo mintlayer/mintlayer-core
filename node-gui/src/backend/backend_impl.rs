@@ -520,7 +520,7 @@ impl Backend {
     pub fn send_event(event_tx: &UnboundedSender<BackendEvent>, event: BackendEvent) {
         // The unbounded channel is used to avoid blocking the backend event loop.
         // Iced has a problem when it stops processing messages when the display is turned off.
-        // It has been reproduced on Lunux, and here is a bug reported on Windows: https://github.com/iced-rs/iced/issues/1870.
+        // It has been reproduced on Linux, and here is a bug reported on Windows: https://github.com/iced-rs/iced/issues/1870.
         // As a result, using the bounded channel can break staking, because once the channel is full, the backend event loop is paused.
         _ = event_tx.send(event);
     }

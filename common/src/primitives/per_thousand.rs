@@ -16,6 +16,8 @@
 use crypto::random::Rng;
 use serialization::{Decode, Encode, Error, Input};
 
+use super::Amount;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
 pub struct PerThousand(u16);
 
@@ -34,6 +36,14 @@ impl PerThousand {
 
     pub fn value(&self) -> u16 {
         self.0
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        // TODO: abstract from_fixedpoint_str() outside of Amount
+        let amount = Amount::from_fixedpoint_str(s, 3)?;
+        let value: u16 = amount.into_atoms().try_into().ok()?;
+        let result = Self::new(value)?;
+        Some(result)
     }
 }
 
