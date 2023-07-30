@@ -195,6 +195,16 @@ impl ChainConfig {
         }
     }
 
+    #[must_use]
+    pub fn delegation_id_address_prefix(&self) -> &'static str {
+        match self.chain_type {
+            ChainType::Mainnet => "mdelg",
+            ChainType::Testnet => "tdelg",
+            ChainType::Regtest => "rdelg",
+            ChainType::Signet => "sdelg",
+        }
+    }
+
     /// The BIP44 coin type for this chain
     #[must_use]
     pub fn bip44_coin_type(&self) -> ChildNumber {
