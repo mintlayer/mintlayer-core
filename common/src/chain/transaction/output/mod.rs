@@ -22,7 +22,7 @@ use crate::{
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -59,7 +59,7 @@ impl Addressable for Destination {
     where
         Self: Sized,
     {
-        Self::decode(&mut address_bytes.as_ref())
+        Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
     }
 }
