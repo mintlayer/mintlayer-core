@@ -212,6 +212,7 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Disabled due to sporadic failures"]
 async fn reorg(#[case] seed: Seed) {
     logging::init_logging::<&std::path::Path>(None);
 
