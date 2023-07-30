@@ -1,25 +1,19 @@
-# Dockerfile.node-gui
+# Build Stage
+FROM rust AS builder
 
-# Start from a minimal image with rust installed
-FROM rust:1.54.0-alpine as build
+WORKDIR /usr/src/wallet-gui
 
-# Create a new empty shell project
-WORKDIR /usr/src
-RUN USER=root cargo new node-gui
-WORKDIR /usr/src/node-gui
+COPY . .
 
-# Build for release
-RUN cargo build --release
+RUN cargo build --release -j1
 
-# Our production image starts here
-FROM alpine:latest
+# Runtime Stage
+FROM debian:latest
 
-# Install needed libraries
-RUN apk add --no-cache libx11 libxrender libxext libssl1.1
+# Install any necessary dependencies for your GUI (such as X11, GTK, etc.)
+# Replace libgtk-3-0 with the appropriate dependencies for your application
+RUN apt-get update && apt-get install -y ca-certificates libgtk-3-0 && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary from the build stage
-COPY --from=build /usr/src/node-gui/target/release/node-gui .
+COPY --from=builder /usr/src/wallet-gui/target/release/wallet-gui /usr/bin/wallet-gui
 
-# Run the binary
-CMD ["./node-gui"]
-
+CMD ["wallet-gui"]

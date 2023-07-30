@@ -1,22 +1,17 @@
-# Dockerfile.wallet-cli
+# Build Stage
+FROM rust AS builder
 
-# Start from a minimal image with rust installed
-FROM rust:1.54.0-alpine as build
-
-# Create a new empty shell project
-WORKDIR /usr/src
-RUN USER=root cargo new wallet-cli
 WORKDIR /usr/src/wallet-cli
 
-# Build for release
-RUN cargo build --release
+COPY . .
 
-# Our production image starts here
-FROM alpine:latest
+RUN cargo build --release -j1
 
-# Copy the binary from the build stage
-COPY --from=build /usr/src/wallet-cli/target/release/wallet-cli .
+# Runtime Stage
+FROM debian:latest
 
-# Run the binary
-CMD ["./wallet-cli"]
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /usr/src/wallet-cli/target/release/wallet-cli /usr/bin/wallet-cli
+
+CMD ["wallet-cli"]
