@@ -72,8 +72,8 @@ impl<T: Addressable> Address<T> {
 
     pub fn decode_object(&self, cfg: &ChainConfig) -> Result<T, AddressError> {
         let data = encoding::decode(&self.address)?;
-        let raw_dest = data.data();
-        let result = T::decode_from_bytes_from_address(raw_dest)
+        let raw_data = data.data();
+        let result = T::decode_from_bytes_from_address(raw_data)
             .map_err(|e| AddressError::DecodingError(e.to_string()))?;
         if data.hrp() != T::address_prefix(&result, cfg) {
             return Err(AddressError::InvalidPrefix(data.hrp().to_owned()));
