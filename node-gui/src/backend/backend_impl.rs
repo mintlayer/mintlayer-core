@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use common::{
     chain::{ChainConfig, GenBlock, SignedTransaction},
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::u31::U31;
 use logging::log;
@@ -386,7 +386,14 @@ impl Backend {
 
         let transaction_status = wallet
             .controller
-            .create_stake_pool_tx(account_id.account_index(), amount, None)
+            .create_stake_pool_tx(
+                account_id.account_index(),
+                amount,
+                None,
+                // TODO: get value from gui
+                PerThousand::new(1000).expect("Must not fail"),
+                Amount::ZERO,
+            )
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 

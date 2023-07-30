@@ -24,7 +24,7 @@ use common::{
         tokens::{Metadata, TokenCreator, TokenId},
         Block, ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::TxStatus;
@@ -238,6 +238,11 @@ pub enum WalletCommand {
     CreateStakePool {
         amount: String,
 
+        cost_per_block: String,
+
+        #[arg(default_value_t = 1000)]
+        margin_ratio_per_thousand: u16,
+
         decomission_key: Option<HexEncoded<PublicKey>>,
     },
 
@@ -315,6 +320,12 @@ pub enum ConsoleCommand {
         print_message: String,
     },
     Exit,
+}
+
+fn to_per_thousand(value: u16) -> Result<PerThousand, WalletCliError> {
+    PerThousand::new(value).ok_or(WalletCliError::InvalidInput(format!(
+        "Invalid margin ration per thousand '{value}', expected <= 1000"
+    )))
 }
 
 fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
@@ -1003,10 +1014,14 @@ impl CommandHandler {
 
             WalletCommand::CreateStakePool {
                 amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
                 decomission_key,
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
+                let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
+                let margin_ratio_per_thousand = to_per_thousand(margin_ratio_per_thousand)?;
                 let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
@@ -1014,6 +1029,8 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
                         decomission_key,
+                        margin_ratio_per_thousand,
+                        cost_per_block,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

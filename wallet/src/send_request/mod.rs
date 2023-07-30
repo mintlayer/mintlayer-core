@@ -161,25 +161,29 @@ pub fn make_decomission_stake_pool_output(
     ))
 }
 
+pub struct StakePoolDataArguments {
+    pub amount: Amount,
+    pub margin_ratio_per_thousand: PerThousand,
+    pub cost_per_block: Amount,
+}
+
 pub fn make_stake_output(
     pool_id: PoolId,
-    amount: Amount,
+    arguments: StakePoolDataArguments,
     staker: PublicKey,
     decommission_key: PublicKey,
     vrf_public_key: VRFPublicKey,
-    margin_ratio_per_thousand: PerThousand,
-    cost_per_block: Amount,
 ) -> WalletResult<TxOutput> {
     let staker = Destination::PublicKey(staker);
     let decommission_key = Destination::PublicKey(decommission_key);
 
     let stake_data = StakePoolData::new(
-        amount,
+        arguments.amount,
         staker,
         vrf_public_key,
         decommission_key,
-        margin_ratio_per_thousand,
-        cost_per_block,
+        arguments.margin_ratio_per_thousand,
+        arguments.cost_per_block,
     );
     Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
 }

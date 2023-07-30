@@ -42,7 +42,9 @@ use common::{
         Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, time::get_time, Amount, BlockHeight, Id, Idable},
+    primitives::{
+        id::WithId, per_thousand::PerThousand, time::get_time, Amount, BlockHeight, Id, Idable,
+    },
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -63,7 +65,10 @@ pub use node_comm::{
 use wallet::{
     account::transaction_list::TransactionList,
     account::Currency,
-    send_request::{make_address_output, make_address_output_token, make_create_delegation_output},
+    send_request::{
+        make_address_output, make_address_output_token, make_create_delegation_output,
+        StakePoolDataArguments,
+    },
     wallet_events::WalletEvents,
     DefaultWallet, WalletError,
 };
@@ -588,6 +593,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
+        margin_ratio_per_thousand: PerThousand,
+        cost_per_block: Amount,
     ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
@@ -601,10 +608,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .wallet
             .create_stake_pool_tx(
                 account_index,
-                amount,
                 decomission_key,
                 current_fee_rate,
                 consolidate_fee_rate,
+                StakePoolDataArguments {
+                    amount,
+                    margin_ratio_per_thousand,
+                    cost_per_block,
+                },
             )
             .map_err(ControllerError::WalletError)?;
 

@@ -20,7 +20,9 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
-use crate::send_request::{make_issue_nft_outputs, make_issue_token_outputs};
+use crate::send_request::{
+    make_issue_nft_outputs, make_issue_token_outputs, StakePoolDataArguments,
+};
 use crate::wallet_events::WalletEvents;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -585,17 +587,17 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
-        amount: Amount,
-        decomission_key: Option<PublicKey>,
+        decommission_key: Option<PublicKey>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        stake_pool_arguments: StakePoolDataArguments,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.create_stake_pool_tx(
                 db_tx,
-                amount,
-                decomission_key,
+                stake_pool_arguments,
+                decommission_key,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,

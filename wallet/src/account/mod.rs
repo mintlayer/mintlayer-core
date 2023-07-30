@@ -31,7 +31,7 @@ use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decomission_stake_pool_output, make_stake_output,
+    make_decomission_stake_pool_output, make_stake_output, StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -44,7 +44,6 @@ use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
-use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
@@ -476,7 +475,7 @@ impl Account {
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        amount: Amount,
+        stake_pool_arguments: StakePoolDataArguments,
         decomission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
@@ -495,12 +494,10 @@ impl Account {
         let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
         let dummy_stake_output = make_stake_output(
             dummy_pool_id,
-            amount,
+            stake_pool_arguments,
             staker.into_public_key(),
             decommission_key,
             vrf_public_key,
-            PerThousand::new(1000).expect("must not fail"),
-            Amount::ZERO,
         )?;
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
         let mut request = self.select_inputs_for_send_request(
