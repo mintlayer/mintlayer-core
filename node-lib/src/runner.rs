@@ -28,7 +28,7 @@ use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::StorageBackendConfig;
 use paste::paste;
 
-use chainstate::{rpc::ChainstateRpcServer, ChainstateError};
+use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
 use common::{
     chain::{
         config::{
@@ -292,28 +292,25 @@ async fn start(
     {
         Ok((manager, controller)) => (manager, controller),
         Err(error) => match error.downcast_ref::<ChainstateError>() {
-            Some(ChainstateError::FailedToInitializeChainstate(e)) => match e {
-                chainstate::InitializationError::ChainstateStorageVersionMismatch(_, _)
-                | chainstate::InitializationError::ChainTypeMismatch(_, _)
-                | chainstate::InitializationError::ChainConfigMagicBytesMismatch(_, _) => {
-                    log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+            Some(ChainstateError::FailedToInitializeChainstate(
+                InitializationError::StorageCompatibilityCheckError(e),
+            )) => {
+                log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
 
-                    let storage_config: StorageBackendConfig =
-                        node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
+                let storage_config: StorageBackendConfig =
+                    node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
 
-                    // cleanup storage directory and retry initialization
-                    if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
-                        let path = data_dir.join(storage_subdir_name);
-                        if path.exists() {
-                            std::fs::remove_dir_all(path)
-                                .expect("Removing chainstate storage directory must succeed");
-                        }
+                // cleanup storage directory and retry initialization
+                if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
+                    let path = data_dir.join(storage_subdir_name);
+                    if path.exists() {
+                        std::fs::remove_dir_all(path)
+                            .expect("Removing chainstate storage directory must succeed");
                     }
-
-                    initialize(chain_config, data_dir, node_config).await?
                 }
-                _ => return Err(error),
-            },
+
+                initialize(chain_config, data_dir, node_config).await?
+            }
             _ => return Err(error),
         },
     };

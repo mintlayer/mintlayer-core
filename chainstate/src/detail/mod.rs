@@ -34,7 +34,7 @@ pub use self::{
 pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
-    InitializationError, OrphanCheckError,
+    InitializationError, OrphanCheckError, StorageCompatibilityCheckError,
 };
 
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};

@@ -29,8 +29,8 @@ pub use crate::{
         ban_score, calculate_median_time_past, check_nft_issuance_data, check_tokens_issuance_data,
         is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
         CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, OrphanCheckError, SpendStakeError, TokenIssuanceError, TokensError,
-        TransactionVerifierStorageError, TxIndexError,
+        Locator, OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError,
+        TokenIssuanceError, TokensError, TransactionVerifierStorageError, TxIndexError,
     },
 };
 
