@@ -1079,7 +1079,10 @@ impl CommandHandler {
                 let pool_ids: Vec<_> = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .get_pool_ids(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .get_pool_ids(
+                        chain_config,
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                    )
                     .await
                     .map_err(WalletCliError::Controller)?
                     .into_iter()

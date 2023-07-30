@@ -20,6 +20,7 @@ use serialization::hex::HexEncode;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
+    address::Address,
     chain::{block::timestamp::BlockTimestamp, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, BlockHeight},
 };
@@ -105,7 +106,7 @@ pub fn format_pool_info(
 ) -> String {
     format!(
         "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
-        HexEncode::hex_encode(&pool_id),
+        Address::new(chain_config, &pool_id).expect("Encoding pool id should never fail"),
         balance.into_fixedpoint_str(chain_config.coin_decimals()),
         block_height,
         block_timestamp

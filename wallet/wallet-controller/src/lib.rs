@@ -36,7 +36,7 @@ use mempool_types::TxStatus;
 use utils::tap_error_log::LogError;
 
 use common::{
-    address::Address,
+    address::{Address, AddressError},
     chain::{
         tokens::{
             Metadata,
@@ -94,6 +94,8 @@ pub enum ControllerError<T: NodeInterface> {
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),
+    #[error("Encoding error: {0}")]
+    AddressEncodingError(#[from] AddressError),
 }
 
 pub struct Controller<T, W> {
@@ -347,6 +349,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     async fn get_pool_info(
         &self,
+        chain_config: &ChainConfig,
         pool_id: PoolId,
         block_info: BlockInfo,
     ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
@@ -357,7 +360,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .and_then(|balance| {
                 balance.ok_or(ControllerError::SyncError(format!(
                     "Pool id {} from wallet not found in node",
-                    pool_id
+                    Address::new(chain_config, &pool_id)?
                 )))
             })
             .map(|balance| (pool_id, block_info, balance))
@@ -366,6 +369,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     pub async fn get_pool_ids(
         &self,
+        chain_config: &ChainConfig,
         account_index: U31,
     ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
         let pools =
@@ -373,7 +377,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
-            .map(|(pool_id, block_info)| self.get_pool_info(pool_id, block_info))
+            .map(|(pool_id, block_info)| self.get_pool_info(chain_config, pool_id, block_info))
             .collect();
 
         tasks.try_collect().await

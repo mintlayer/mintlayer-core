@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::ChainConfig;
+use common::{address::Address, chain::ChainConfig};
 use iced::{
     widget::{column, container, row, text_input, Text},
     Alignment, Element,
 };
 use iced_aw::Grid;
-use serialization::hex::HexEncode;
 
 use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
 
@@ -44,7 +43,11 @@ pub fn view_stake(
                 .push(field("Pool balance".to_owned()));
             for (pool_id, balance) in account.staking_balance.iter() {
                 staking_balance_grid = staking_balance_grid
-                    .push(field(pool_id.hex_encode()))
+                    .push(field(
+                        Address::new(chain_config, pool_id)
+                            .expect("Encoding pool id to address can't fail (GUI)")
+                            .to_string(),
+                    ))
                     .push(field(print_coin_amount(chain_config, *balance)));
             }
             staking_balance_grid
