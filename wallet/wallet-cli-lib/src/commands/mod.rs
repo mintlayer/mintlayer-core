@@ -323,7 +323,7 @@ pub enum ConsoleCommand {
 
 fn to_per_thousand(value_str: &str, variable_name: &str) -> Result<PerThousand, WalletCliError> {
     PerThousand::from_decimal_str(value_str).ok_or(WalletCliError::InvalidInput(format!(
-        "Failed to parse {variable_name} the decimal that must be in the range [0.001,1.000]",
+        "Failed to parse {variable_name} the decimal that must be in the range [0.001,1.000] or [0.1%,100%]",
     )))
 }
 

@@ -40,8 +40,16 @@ impl PerThousand {
 
     pub fn from_decimal_str(s: &str) -> Option<Self> {
         // TODO: abstract from_fixedpoint_str() outside of Amount
-        let amount = Amount::from_fixedpoint_str(s, 3)?;
+        let amount = if s.trim().ends_with("%") {
+            let s = s.trim_end_matches('%');
+            let amount = Amount::from_fixedpoint_str(s, 1)?;
+            amount
+        } else {
+            let amount = Amount::from_fixedpoint_str(s, 3)?;
+            amount
+        };
         let value: u16 = amount.into_atoms().try_into().ok()?;
+
         let result = Self::new(value)?;
         Some(result)
     }
@@ -64,6 +72,29 @@ mod tests {
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::Seed;
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_from_decimal_str(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        for _ in 0..1000 {
+            let value = rng.gen_range(0..=1000);
+            let per_thousand = PerThousand::new(value).unwrap();
+            let per_thousand_str =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
+            let per_thousand_str_percent =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 1) + "%";
+            assert_eq!(
+                PerThousand::from_decimal_str(&per_thousand_str).unwrap(),
+                per_thousand
+            );
+            assert_eq!(
+                PerThousand::from_decimal_str(&per_thousand_str_percent).unwrap(),
+                per_thousand
+            );
+        }
+    }
 
     #[rstest]
     #[trace]
