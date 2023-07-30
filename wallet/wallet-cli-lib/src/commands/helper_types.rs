@@ -20,7 +20,7 @@ use serialization::hex::HexEncode;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, PoolId},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, BlockHeight},
 };
 
@@ -101,12 +101,25 @@ pub fn format_pool_info(
     balance: Amount,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
+    chain_config: &ChainConfig,
 ) -> String {
     format!(
         "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
         HexEncode::hex_encode(&pool_id),
-        balance.into_atoms(),
+        balance.into_fixedpoint_str(chain_config.coin_decimals()),
         block_height,
         block_timestamp
+    )
+}
+
+pub fn format_delegation_info(
+    delegation_id: DelegationId,
+    balance: Amount,
+    chain_config: &ChainConfig,
+) -> String {
+    format!(
+        "Delegation Id: {}, Balance: {}",
+        HexEncode::hex_encode(&delegation_id),
+        balance.into_fixedpoint_str(chain_config.coin_decimals()),
     )
 }

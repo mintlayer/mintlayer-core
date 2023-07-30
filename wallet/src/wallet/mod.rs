@@ -20,7 +20,9 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
-use crate::send_request::{make_issue_nft_outputs, make_issue_token_outputs};
+use crate::send_request::{
+    make_issue_nft_outputs, make_issue_token_outputs, StakePoolDataArguments,
+};
 use crate::wallet_events::WalletEvents;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -30,8 +32,8 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuance};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-    TransactionCreationError, TxOutput, UtxoOutPoint,
+    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -41,6 +43,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
+use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
@@ -91,6 +94,24 @@ pub enum WalletError {
     UnsupportedInputDestination(Destination),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
+    #[error("Negative delegation amount for id: {0}")]
+    NegativeDelegationAmount(DelegationId),
+    #[error(
+        "Inconsistent delegation state for id: {0}, missing Delegation creation before staking"
+    )]
+    InconsistentDelegationAddition(DelegationId),
+    #[error("Inconsistent delegation state for id: {0}, amount less than 0 while trying to remove transaction")]
+    InconsistentDelegationRemoval(DelegationId),
+    #[error("Inconsistent delegation state for id: {0}, nonce less than 0 while trying to remove transaction")]
+    InconsistentDelegationRemovalNegativeNonce(DelegationId),
+    #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
+    #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
+    InconsistentProduceBlockFromStake(PoolId),
+    #[error("Delegation amount overflow for id: {0}")]
+    DelegationAmountOverflow(DelegationId),
+    #[error("Delegation nonce overflow for id: {0}")]
+    DelegationNonceOverflow(DelegationId),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
@@ -99,6 +120,8 @@ pub enum WalletError {
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] TransactionSigError),
+    #[error("Delegation not found with id {0}")]
+    DelegationNotFound(DelegationId),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
@@ -115,6 +138,8 @@ pub enum WalletError {
     CannotFindTransactionWithId(Id<Transaction>),
     #[error("Address error: {0}")]
     AddressError(#[from] AddressError),
+    #[error("Unknown pool id {0}")]
+    UnknownPoolId(PoolId),
 }
 
 /// Result type used for the wallet
@@ -378,6 +403,14 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(pool_ids)
     }
 
+    pub fn get_delegations(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<impl Iterator<Item = (&DelegationId, Amount)>> {
+        let delegations = self.get_account(account_index)?.get_delegations();
+        Ok(delegations)
+    }
+
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<(ChildNumber, Address)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
@@ -456,6 +489,60 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn create_transaction_to_addresses_from_delegation(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        address: Address,
+        amount: Amount,
+        delegation_id: DelegationId,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let tx = account.spend_from_delegation(
+                db_tx,
+                address,
+                amount,
+                delegation_id,
+                current_fee_rate,
+            )?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
+
+            let [tx] = txs;
+            Ok(tx)
+        })
+    }
+
+    pub fn create_delegation(
+        &mut self,
+        account_index: U31,
+        outputs: Vec<TxOutput>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(DelegationId, SignedTransaction)> {
+        let tx = self.create_transaction_to_addresses(
+            account_index,
+            outputs,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        let input0_outpoint = tx
+            .transaction()
+            .inputs()
+            .get(0)
+            .ok_or(WalletError::NoUtxos)?
+            .utxo_outpoint()
+            .ok_or(WalletError::NoUtxos)?;
+        let delegation_id = make_delegation_id(input0_outpoint);
+        Ok((delegation_id, tx))
+    }
+
     pub fn issue_new_token(
         &mut self,
         account_index: U31,
@@ -500,21 +587,45 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
-        amount: Amount,
-        decomission_key: Option<PublicKey>,
+        decommission_key: Option<PublicKey>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        stake_pool_arguments: StakePoolDataArguments,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.create_stake_pool_tx(
                 db_tx,
-                amount,
-                decomission_key,
+                stake_pool_arguments,
+                decommission_key,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,
             )
+        })
+    }
+
+    pub fn decomission_stake_pool(
+        &mut self,
+        wallet_events: &mut impl WalletEvents,
+        account_index: U31,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let tx =
+                account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)?;
+            let txs = [tx];
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
+                db_tx,
+                wallet_events,
+            )?;
+
+            let [tx] = txs;
+            Ok(tx)
         })
     }
 
@@ -534,6 +645,13 @@ impl<B: storage::Backend> Wallet<B> {
             .iter()
             .map(|(index, account)| (*index, account.best_block()))
             .collect()
+    }
+
+    pub fn get_best_block_for_account(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        Ok(self.get_account(account_index)?.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.

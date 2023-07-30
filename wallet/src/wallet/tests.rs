@@ -32,7 +32,7 @@ use common::{
         tokens::{OutputValue, TokenData, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
-    primitives::Idable,
+    primitives::{per_thousand::PerThousand, Idable},
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
@@ -937,10 +937,14 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
             DEFAULT_ACCOUNT_INDEX,
-            pool_amount,
             None,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+            },
         )
         .unwrap();
     let block2 = Block::new(

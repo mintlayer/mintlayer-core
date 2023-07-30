@@ -22,9 +22,9 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::TxStatus;
@@ -34,7 +34,7 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 
 use crate::{errors::WalletCliError, CliController};
 
-use self::helper_types::{format_pool_info, CliUtxoState, CliUtxoTypes};
+use self::helper_types::{format_delegation_info, format_pool_info, CliUtxoState, CliUtxoTypes};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -197,6 +197,9 @@ pub enum WalletCommand {
     /// List available Pool Ids
     ListPoolIds,
 
+    /// List available Delegation Ids with their balances
+    ListDelegationIds,
+
     /// Generate a new unused address
     NewAddress,
 
@@ -216,10 +219,34 @@ pub enum WalletCommand {
         amount: String,
     },
 
+    CreateDelegation {
+        address: String,
+        pool_id: HexEncoded<PoolId>,
+    },
+
+    DelegateStaking {
+        amount: String,
+        delegation_id: HexEncoded<DelegationId>,
+    },
+
+    SendFromDelegationToAddress {
+        address: String,
+        amount: String,
+        delegation_id: HexEncoded<DelegationId>,
+    },
+
     CreateStakePool {
         amount: String,
 
+        cost_per_block: String,
+
+        margin_ratio_per_thousand: String,
+
         decomission_key: Option<HexEncoded<PublicKey>>,
+    },
+
+    DecomissionStakePool {
+        pool_id: HexEncoded<PoolId>,
     },
 
     /// Node version
@@ -292,6 +319,12 @@ pub enum ConsoleCommand {
         print_message: String,
     },
     Exit,
+}
+
+fn to_per_thousand(value_str: &str, variable_name: &str) -> Result<PerThousand, WalletCliError> {
+    PerThousand::from_decimal_str(value_str).ok_or(WalletCliError::InvalidInput(format!(
+        "Failed to parse {variable_name} the decimal that must be in the range [0.001,1.000] or [0.1%,100%]",
+    )))
 }
 
 fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
@@ -498,7 +531,7 @@ impl CommandHandler {
                 self.state = None;
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
-                    print_message: "Success".to_owned(),
+                    print_message: "Successfully closed the wallet.".to_owned(),
                 })
             }
 
@@ -514,7 +547,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Successfully encrypted the private keys of the wallet.".to_owned(),
+                ))
             }
 
             WalletCommand::RemovePrivateKeysEncryption => {
@@ -527,7 +562,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Successfully removed the encryption from the private keys.".to_owned(),
+                ))
             }
 
             WalletCommand::UnlockPrivateKeys { password } => {
@@ -540,7 +577,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success. The wallet is now unlocked.".to_owned(),
+                ))
             }
 
             WalletCommand::LockPrivateKeys => {
@@ -553,7 +592,9 @@ impl CommandHandler {
                     }
                 }
 
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Success. The wallet is now locked.".to_owned(),
+                ))
             }
 
             WalletCommand::ChainstateInfo => {
@@ -920,12 +961,83 @@ impl CommandHandler {
                 Self::broadcast_transaction(rpc_client, tx).await
             }
 
+            WalletCommand::CreateDelegation { address, pool_id } => {
+                let address = parse_address(chain_config, &address)?;
+
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .create_delegation(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        address,
+                        pool_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Success, the create delegation transaction was broadcast to the network"
+                        .to_owned(),
+                ))
+            }
+
+            WalletCommand::DelegateStaking {
+                amount,
+                delegation_id,
+            } => {
+                let amount = parse_coin_amount(chain_config, &amount)?;
+
+                // TODO: Take status into account
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .delegate_staking(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        amount,
+                        delegation_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Success, the delegation staking transaction was broadcast to the network"
+                        .to_owned(),
+                ))
+            }
+
+            WalletCommand::SendFromDelegationToAddress {
+                address,
+                amount,
+                delegation_id,
+            } => {
+                let amount = parse_coin_amount(chain_config, &amount)?;
+                let address = parse_address(chain_config, &address)?;
+                // TODO: Take status into account
+                let _status = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .send_to_address_from_delegation(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        address,
+                        amount,
+                        delegation_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Success. The transaction was broadcast to the network".to_owned(),
+                ))
+            }
+
             WalletCommand::CreateStakePool {
                 amount,
+                cost_per_block,
+                margin_ratio_per_thousand,
                 decomission_key,
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let decomission_key = decomission_key.map(HexEncoded::take);
+                let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
+                let margin_ratio_per_thousand =
+                    to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
                 let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
@@ -933,11 +1045,26 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
                         decomission_key,
+                        margin_ratio_per_thousand,
+                        cost_per_block,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
 
                 Ok(Self::handle_mempool_tx_status(status))
+            }
+
+            WalletCommand::DecomissionStakePool { pool_id } => {
+                let tx = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .decomission_stake_pool(
+                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        pool_id.take(),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Self::broadcast_transaction(rpc_client, tx).await
             }
 
             WalletCommand::NodeVersion => {
@@ -954,7 +1081,26 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?
                     .into_iter()
                     .map(|(pool_id, block_info, balance)| {
-                        format_pool_info(pool_id, balance, block_info.height, block_info.timestamp)
+                        format_pool_info(
+                            pool_id,
+                            balance,
+                            block_info.height,
+                            block_info.timestamp,
+                            chain_config.as_ref(),
+                        )
+                    })
+                    .collect();
+                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
+            }
+
+            WalletCommand::ListDelegationIds => {
+                let pool_ids: Vec<_> = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .get_delegations(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                    .map_err(WalletCliError::Controller)?
+                    .map(|(delegation_id, balance)| {
+                        format_delegation_info(*delegation_id, balance, chain_config.as_ref())
                     })
                     .collect();
                 Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))

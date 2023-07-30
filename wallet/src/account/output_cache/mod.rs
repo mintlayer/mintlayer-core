@@ -18,10 +18,15 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{token_id, TokenId},
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce,
+        AccountSpending::Delegation,
+        DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
-    primitives::{id::WithId, Id},
+    primitives::{id::WithId, Amount, Id},
 };
+use pos_accounting::make_delegation_id;
+use utils::ensure;
 use wallet_types::{
     utxo_types::{get_utxo_state, UtxoStates},
     wallet_tx::TxState,
@@ -29,6 +34,41 @@ use wallet_types::{
 };
 
 use crate::{WalletError, WalletResult};
+
+pub struct DelegationData {
+    pub balance: Amount,
+    pub destination: Destination,
+    pub last_nonce: Option<AccountNonce>,
+}
+impl DelegationData {
+    fn new(destination: Destination) -> DelegationData {
+        DelegationData {
+            balance: Amount::ZERO,
+            destination,
+            last_nonce: None,
+        }
+    }
+}
+
+pub struct PoolData {
+    pub utxo_outpoint: UtxoOutPoint,
+    pub creation_block: BlockInfo,
+    pub decommission_key: Destination,
+}
+
+impl PoolData {
+    fn new(
+        utxo_outpoint: UtxoOutPoint,
+        creation_block: BlockInfo,
+        decommission_key: Destination,
+    ) -> Self {
+        PoolData {
+            utxo_outpoint,
+            creation_block,
+            decommission_key,
+        }
+    }
+}
 
 /// A helper structure for the UTXO search.
 ///
@@ -45,7 +85,8 @@ pub struct OutputCache {
     txs: BTreeMap<OutPointSourceId, WalletTx>,
     consumed: BTreeMap<UtxoOutPoint, TxState>,
     unconfirmed_descendants: BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
-    pools: BTreeMap<PoolId, (UtxoOutPoint, BlockInfo)>,
+    pools: BTreeMap<PoolId, PoolData>,
+    delegations: BTreeMap<DelegationId, DelegationData>,
 }
 
 impl OutputCache {
@@ -55,15 +96,23 @@ impl OutputCache {
             consumed: BTreeMap::new(),
             unconfirmed_descendants: BTreeMap::new(),
             pools: BTreeMap::new(),
+            delegations: BTreeMap::new(),
         }
     }
 
-    pub fn new(txs: BTreeMap<AccountWalletTxId, WalletTx>) -> Self {
+    pub fn new(mut txs: Vec<(AccountWalletTxId, WalletTx)>) -> WalletResult<Self> {
         let mut cache = Self::empty();
+
+        txs.sort_by(|x, y| match (x.1.state(), y.1.state()) {
+            (TxState::Confirmed(h1, _), TxState::Confirmed(h2, _)) => h1.cmp(&h2),
+            (TxState::Confirmed(_, _), _) => std::cmp::Ordering::Less,
+            (_, TxState::Confirmed(_, _)) => std::cmp::Ordering::Greater,
+            (_, _) => std::cmp::Ordering::Equal,
+        });
         for (tx_id, tx) in txs {
-            cache.add_tx(tx_id.into_item_id(), tx);
+            cache.add_tx(tx_id.into_item_id(), tx)?;
         }
-        cache
+        Ok(cache)
     }
 
     pub fn txs_with_unconfirmed(&self) -> &BTreeMap<OutPointSourceId, WalletTx> {
@@ -79,13 +128,28 @@ impl OutputCache {
     pub fn pool_ids(&self) -> Vec<(PoolId, BlockInfo)> {
         self.pools
             .iter()
-            .filter_map(|(pool_id, (outpoint, block_info))| {
-                (!self.consumed.contains_key(outpoint)).then_some((*pool_id, *block_info))
+            .filter_map(|(pool_id, pool_data)| {
+                (!self.consumed.contains_key(&pool_data.utxo_outpoint))
+                    .then_some((*pool_id, pool_data.creation_block))
             })
             .collect()
     }
 
-    pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) {
+    pub fn pool_data(&self, pool_id: PoolId) -> WalletResult<&PoolData> {
+        self.pools.get(&pool_id).ok_or(WalletError::UnknownPoolId(pool_id))
+    }
+
+    pub fn delegation_ids(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
+        self.delegations.iter()
+    }
+
+    pub fn delegation_data(&self, delegation_id: DelegationId) -> WalletResult<&DelegationData> {
+        self.delegations
+            .get(&delegation_id)
+            .ok_or(WalletError::DelegationNotFound(delegation_id))
+    }
+
+    pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let is_unconfirmed = match tx.state() {
             TxState::Inactive
             | TxState::InMempool
@@ -108,9 +172,33 @@ impl OutputCache {
                             .map(|descendants| descendants.insert(tx_id.clone()));
                     }
                 }
-                TxInput::Account(_) => {
-                    // TODO: Add accounts support
-                }
+                TxInput::Account(outpoint) => match outpoint.account() {
+                    Delegation(delegation_id, amount) => {
+                        match self.delegations.get_mut(delegation_id) {
+                            Some(data) => {
+                                data.balance = (data.balance - *amount)
+                                    .ok_or(WalletError::NegativeDelegationAmount(*delegation_id))?;
+                                let next_nonce = data
+                                    .last_nonce
+                                    .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+                                    .ok_or(WalletError::DelegationNonceOverflow(*delegation_id))?;
+                                ensure!(
+                                    outpoint.nonce() >= next_nonce,
+                                    WalletError::InconsistentDelegationDuplicateNonce(
+                                        *delegation_id,
+                                        outpoint.nonce()
+                                    )
+                                );
+                                data.last_nonce = Some(outpoint.nonce());
+                            }
+                            None => {
+                                return Err(WalletError::InconsistentDelegationRemoval(
+                                    *delegation_id,
+                                ));
+                            }
+                        }
+                    }
+                },
             }
         }
 
@@ -124,27 +212,63 @@ impl OutputCache {
         if let Some(block_info) = tx_block_info {
             for (idx, output) in tx.outputs().iter().enumerate() {
                 match output {
-                    TxOutput::ProduceBlockFromStake(_, pool_id)
-                    | TxOutput::CreateStakePool(pool_id, _) => {
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        if let Some(data) = self.pools.get_mut(pool_id) {
+                            data.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                        } else {
+                            return Err(WalletError::InconsistentProduceBlockFromStake(*pool_id));
+                        }
+                    }
+                    TxOutput::CreateStakePool(pool_id, data) => {
                         self.pools
                             .entry(*pool_id)
-                            .and_modify(|entry| entry.0 = UtxoOutPoint::new(tx.id(), idx as u32))
+                            .and_modify(|entry| {
+                                entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                            })
                             .or_insert_with(|| {
-                                (UtxoOutPoint::new(tx.id(), idx as u32), block_info)
+                                PoolData::new(
+                                    UtxoOutPoint::new(tx.id(), idx as u32),
+                                    block_info,
+                                    data.decommission_key().clone(),
+                                )
                             });
                     }
-                    TxOutput::Burn(_)
+                    TxOutput::DelegateStaking(amount, delegation_id) => {
+                        match self.delegations.entry(*delegation_id) {
+                            Entry::Vacant(_) => {
+                                return Err(WalletError::InconsistentDelegationAddition(
+                                    *delegation_id,
+                                ));
+                            }
+                            Entry::Occupied(mut entry) => {
+                                let data = entry.get_mut();
+                                data.balance = (data.balance + *amount)
+                                    .ok_or(WalletError::OutputAmountOverflow)?;
+                            }
+                        }
+                    }
+                    TxOutput::CreateDelegationId(destination, _) => {
+                        let input0_outpoint = tx
+                            .inputs()
+                            .get(0)
+                            .ok_or(WalletError::NoUtxos)?
+                            .utxo_outpoint()
+                            .ok_or(WalletError::NoUtxos)?;
+                        let delegation_id = make_delegation_id(input0_outpoint);
+                        self.delegations
+                            .insert(delegation_id, DelegationData::new(destination.clone()));
+                    }
+                    | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _) => {}
+                    | TxOutput::LockThenTransfer(_, _, _) => {}
                 };
             }
         }
         self.txs.insert(tx_id, tx);
+        Ok(())
     }
 
-    pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) {
+    pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
             for input in tx.inputs() {
@@ -153,12 +277,25 @@ impl OutputCache {
                         self.consumed.remove(outpoint);
                         self.unconfirmed_descendants.remove(tx_id);
                     }
-                    TxInput::Account(_) => {
-                        // TODO: Add accounts support
-                    }
+                    TxInput::Account(outpoint) => match outpoint.account() {
+                        Delegation(delegation_id, amount) => {
+                            match self.delegations.get_mut(delegation_id) {
+                                Some(data) => {
+                                    data.balance = (data.balance - *amount).ok_or(
+                                        WalletError::InconsistentDelegationRemoval(*delegation_id),
+                                    )?;
+                                    data.last_nonce = outpoint.nonce().decrement();
+                                }
+                                None => {
+                                    return Err(WalletError::NoUtxos);
+                                }
+                            }
+                        }
+                    },
                 }
             }
         }
+        Ok(())
     }
 
     fn valid_utxo(
@@ -256,26 +393,40 @@ impl OutputCache {
             }
 
             match self.txs.entry(outpoint_source_id) {
-                Entry::Occupied(mut entry) => match entry.get_mut() {
-                    WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-                    WalletTx::Tx(tx) => match tx.state() {
-                        TxState::Inactive => {
-                            tx.set_state(TxState::Abandoned);
-                            for input in tx.get_transaction().inputs() {
-                                match input {
-                                    TxInput::Utxo(outpoint) => {
-                                        self.consumed.insert(outpoint.clone(), *tx.state());
-                                    }
-                                    TxInput::Account(_) => {
-                                        // TODO: Add accounts support
+                Entry::Occupied(mut entry) => {
+                    match entry.get_mut() {
+                        WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+                        WalletTx::Tx(tx) => match tx.state() {
+                            TxState::Inactive => {
+                                tx.set_state(TxState::Abandoned);
+                                for input in tx.get_transaction().inputs() {
+                                    match input {
+                                        TxInput::Utxo(outpoint) => {
+                                            self.consumed.insert(outpoint.clone(), *tx.state());
+                                        }
+                                        TxInput::Account(outpoint) => {
+                                            match outpoint.account() {
+                                                Delegation(delegation_id, amount) => {
+                                                    match self.delegations.get_mut(delegation_id) {
+                                                        Some(data) => {
+                                                            data.balance = (data.balance + *amount)
+                                .ok_or(WalletError::DelegationAmountOverflow(*delegation_id))?;
+                                                        }
+                                                        None => {
+                                                            return Err(WalletError::InconsistentDelegationRemoval(*delegation_id));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                Ok(())
                             }
-                            Ok(())
-                        }
-                        state => Err(WalletError::CannotAbandonTransaction(*state)),
-                    },
-                },
+                            state => Err(WalletError::CannotAbandonTransaction(*state)),
+                        },
+                    }
+                }
                 Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
             }?;
         }

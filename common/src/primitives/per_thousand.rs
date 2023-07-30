@@ -16,6 +16,8 @@
 use crypto::random::Rng;
 use serialization::{Decode, Encode, Error, Input};
 
+use super::Amount;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
 pub struct PerThousand(u16);
 
@@ -34,6 +36,20 @@ impl PerThousand {
 
     pub fn value(&self) -> u16 {
         self.0
+    }
+
+    pub fn from_decimal_str(s: &str) -> Option<Self> {
+        // TODO: abstract from_fixedpoint_str() outside of Amount
+        let amount = if s.trim().ends_with('%') {
+            let s = s.trim_end_matches('%');
+            Amount::from_fixedpoint_str(s, 1)?
+        } else {
+            Amount::from_fixedpoint_str(s, 3)?
+        };
+        let value: u16 = amount.into_atoms().try_into().ok()?;
+
+        let result = Self::new(value)?;
+        Some(result)
     }
 }
 
@@ -54,6 +70,38 @@ mod tests {
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::Seed;
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_from_decimal_str(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        for value in 0..=1000 {
+            let per_thousand = PerThousand::new(value).unwrap();
+            let per_thousand_str =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
+            let per_thousand_str_percent =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 1) + "%";
+            assert_eq!(
+                PerThousand::from_decimal_str(&per_thousand_str).unwrap(),
+                per_thousand
+            );
+            assert_eq!(
+                PerThousand::from_decimal_str(&per_thousand_str_percent).unwrap(),
+                per_thousand
+            );
+        }
+        // test an invalid value
+        {
+            let value = rng.gen_range(1001..u16::MAX);
+            let per_thousand_str =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 3);
+            let per_thousand_str_percent =
+                Amount::into_fixedpoint_str(Amount::from_atoms(value as u128), 1) + "%";
+            assert!(PerThousand::from_decimal_str(&per_thousand_str).is_none());
+            assert!(PerThousand::from_decimal_str(&per_thousand_str_percent).is_none());
+        }
+    }
 
     #[rstest]
     #[trace]
