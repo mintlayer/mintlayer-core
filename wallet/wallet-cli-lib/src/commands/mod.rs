@@ -304,6 +304,11 @@ fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, 
         .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
 }
 
+fn parse_token_amount(token_number_of_decimals: u8, value: &str) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(value, token_number_of_decimals)
+        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+}
+
 fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
@@ -890,8 +895,17 @@ impl CommandHandler {
                 address,
                 amount,
             } => {
-                let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
+                let amount = {
+                    let token_number_of_decimals = controller_opt
+                        .as_mut()
+                        .ok_or(WalletCliError::NoWallet)?
+                        .get_token_number_of_decimals(token_id)
+                        .await
+                        .map_err(WalletCliError::Controller)?;
+                    parse_token_amount(token_number_of_decimals, &amount)?
+                };
+
                 let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?

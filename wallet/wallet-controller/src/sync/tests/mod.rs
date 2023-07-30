@@ -21,7 +21,10 @@ use std::{
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        PoolId, SignedTransaction,
+    },
     primitives::Amount,
 };
 use consensus::GenerateBlockInputData;
@@ -174,6 +177,13 @@ impl NodeInterface for MockNode {
         &self,
         _pool_id: PoolId,
     ) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_token_info(
+        &self,
+        _token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, Self::Error> {
         unreachable!()
     }
 

@@ -15,7 +15,10 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock, PoolId, SignedTransaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 
@@ -46,6 +49,7 @@ pub trait NodeInterface {
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+    async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,

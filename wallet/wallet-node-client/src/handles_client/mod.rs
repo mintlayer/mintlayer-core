@@ -16,7 +16,10 @@
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock, PoolId, SignedTransaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
@@ -143,6 +146,14 @@ impl NodeInterface for WalletHandlesClient {
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let result =
             self.chainstate.call(move |this| this.get_stake_pool_balance(pool_id)).await??;
+        Ok(result)
+    }
+
+    async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_token_info_for_rpc(token_id))
+            .await??;
         Ok(result)
     }
 

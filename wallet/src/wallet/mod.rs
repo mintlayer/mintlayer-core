@@ -93,6 +93,8 @@ pub enum WalletError {
     OutputAmountOverflow,
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
+    #[error("Unknown token with Id {0}")]
+    UnknownTokenId(TokenId),
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
