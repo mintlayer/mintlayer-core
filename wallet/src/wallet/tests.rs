@@ -711,7 +711,6 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     assert_eq!(
         wallet.create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output.clone()],
             FeeRate::new(Amount::ZERO),
@@ -727,7 +726,6 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     if rng.gen::<bool>() {
         wallet
             .create_transaction_to_addresses(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
@@ -755,7 +753,6 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
         wallet
             .create_transaction_to_addresses(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
@@ -835,14 +832,9 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
 
     let feerate = FeeRate::new(Amount::from_atoms(1000));
     let transaction = wallet
-        .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
-            DEFAULT_ACCOUNT_INDEX,
-            outputs,
-            feerate,
-            feerate,
-        )
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, feerate, feerate)
         .unwrap();
+    wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
     let fee = feerate.compute_fee(tx_size).unwrap();
@@ -944,7 +936,6 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 
     let stake_pool_transaction = wallet
         .create_stake_pool_tx(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             pool_amount,
             None,
@@ -1051,7 +1042,6 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let (issued_token_id, token_issuance_transaction) = if rng.gen::<bool>() {
         wallet
             .issue_new_token(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
                 TokenIssuance {
@@ -1068,7 +1058,6 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         token_amount_to_issue = Amount::from_atoms(1);
         wallet
             .issue_new_nft(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
                 Metadata {
@@ -1140,12 +1129,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
+        .unwrap();
+    wallet
+        .add_unconfirmed_tx(transfer_tokens_transaction.clone(), &mut WalletEventsNoOp)
         .unwrap();
 
     let block3 = Block::new(
@@ -1206,7 +1197,6 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let transfer_tokens_error = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1310,11 +1300,16 @@ fn lock_then_transfer(#[case] seed: Seed) {
 
     let lock_then_transfer_transaction = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+    wallet
+        .add_unconfirmed_tx(
+            lock_then_transfer_transaction.clone(),
+            &mut WalletEventsNoOp,
         )
         .unwrap();
 
@@ -1561,13 +1556,13 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
             .unwrap();
+        wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
             // assert the utxos used in this transaction have not been used before
@@ -1706,13 +1701,14 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
             .unwrap();
+
+        wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
             // assert the utxos used in this transaction have not been used before
@@ -1738,13 +1734,13 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     );
     let transaction = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+    wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
     for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
         // assert the utxos used in this transaction have not been used before
@@ -1776,7 +1772,6 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     );
     let err = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
@@ -1801,13 +1796,13 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 
     let transaction = wallet
         .create_transaction_to_addresses(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             vec![new_output],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
+    wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
     let transaction_id = transaction.transaction().get_id();
 
@@ -1950,13 +1945,13 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
 
         let transaction = wallet
             .create_transaction_to_addresses(
-                &mut WalletEventsNoOp,
                 DEFAULT_ACCOUNT_INDEX,
                 vec![new_output, change_output],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
             .unwrap();
+        wallet.add_unconfirmed_tx(transaction.clone(), &mut WalletEventsNoOp).unwrap();
 
         for utxo in transaction.inputs().iter().map(|inp| inp.utxo_outpoint().unwrap()) {
             // assert the utxos used in this transaction have not been used before

@@ -439,7 +439,14 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::SendAmount(Ok(transaction_info)) => {
-                    backend_sender.send(BackendRequest::Broadcast(transaction_info.transaction));
+                    match transaction_info.transaction_status {
+                        mempool::TxStatus::InMempool => {}
+                        mempool::TxStatus::InOrphanPool => {
+                            // Mempool should reject the transaction and not return `InOrphanPool`
+                            log::warn!("The transaction has been added to the orphan pool.");
+                        }
+                    }
+                    self.show_info("Success".to_owned());
                     Command::none()
                 }
                 BackendEvent::SendAmount(Err(error)) => {
@@ -447,7 +454,14 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::StakeAmount(Ok(transaction_info)) => {
-                    backend_sender.send(BackendRequest::Broadcast(transaction_info.transaction));
+                    match transaction_info.transaction_status {
+                        mempool::TxStatus::InMempool => {}
+                        mempool::TxStatus::InOrphanPool => {
+                            // Mempool should reject the transaction and not return `InOrphanPool`
+                            log::warn!("The transaction has been added to the orphan pool.");
+                        }
+                    }
+                    self.show_info("Success".to_owned());
                     Command::none()
                 }
                 BackendEvent::StakeAmount(Err(error)) => {

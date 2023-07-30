@@ -26,6 +26,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use mempool::TxStatus;
 use p2p::P2pEvent;
 use wallet::account::{transaction_list::TransactionList, Currency};
 
@@ -99,7 +100,7 @@ pub struct StakeRequest {
 
 #[derive(Debug, Clone)]
 pub struct TransactionInfo {
-    pub transaction: SignedTransaction,
+    pub transaction_status: TxStatus,
 }
 
 #[derive(Debug)]

@@ -15,7 +15,10 @@
 
 use std::collections::BTreeMap;
 
-use common::{address::Address, chain::block::timestamp::BlockTimestamp};
+use common::{
+    address::Address,
+    chain::{block::timestamp::BlockTimestamp, SignedTransaction},
+};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
@@ -25,7 +28,7 @@ use utils::{
 };
 use wallet_types::{
     keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -193,6 +196,15 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
+            /// Collect and return all signed transactions from the storage
+            fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+                self.storage
+                    .get::<db::DBUserTx, _>()
+                    .prefix_iter_decoded(&())
+                    .map_err(crate::Error::from)
+                    .map(|item| item.map(|item| item.1).collect())
+            }
+
             fn get_keychain_usage_state(
                 &self,
                 id: &AccountKeyPurposeId,
@@ -328,6 +340,18 @@ macro_rules! impl_write_ops {
 
             fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
+            }
+
+            fn set_user_transaction(
+                &mut self,
+                id: &AccountWalletCreatedTxId,
+                tx: &SignedTransaction,
+            ) -> crate::Result<()> {
+                self.write::<db::DBUserTx, _, _, _>(id, tx)
+            }
+
+            fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()> {
+                self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {

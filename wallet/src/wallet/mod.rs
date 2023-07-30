@@ -366,8 +366,9 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         tx_id: Id<Transaction>,
     ) -> WalletResult<()> {
-        let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        account.abandon_transaction(tx_id)
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.abandon_transaction(tx_id, db_tx)
+        })
     }
 
     pub fn get_pool_ids(&self, account_index: U31) -> WalletResult<Vec<(PoolId, BlockInfo)>> {
@@ -395,6 +396,13 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<TransactionList> {
         let account = self.get_account(account_index)?;
         account.get_transaction_list(skip, count)
+    }
+
+    pub fn get_transactions_to_be_broadcast(&self) -> WalletResult<Vec<SignedTransaction>> {
+        self.db
+            .transaction_ro()?
+            .get_user_transactions()
+            .map_err(WalletError::DatabaseError)
     }
 
     pub fn get_all_issued_addresses(
@@ -428,7 +436,6 @@ impl<B: storage::Backend> Wallet<B> {
     /// A `WalletResult` containing the signed transaction if successful, or an error indicating the reason for failure.
     pub fn create_transaction_to_addresses(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
         current_fee_rate: FeeRate,
@@ -437,29 +444,18 @@ impl<B: storage::Backend> Wallet<B> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.process_send_request(
+            account.process_send_request(
                 db_tx,
                 request,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,
-            )?;
-            let txs = [tx];
-            account.scan_new_unconfirmed_transactions(
-                &txs,
-                TxState::Inactive,
-                db_tx,
-                wallet_events,
-            )?;
-
-            let [tx] = txs;
-            Ok(tx)
+            )
         })
     }
 
     pub fn issue_new_token(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         token_issuance: TokenIssuance,
@@ -470,7 +466,6 @@ impl<B: storage::Backend> Wallet<B> {
             make_issue_token_outputs(address, token_issuance, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
-            wallet_events,
             account_index,
             outputs,
             current_fee_rate,
@@ -482,7 +477,6 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn issue_new_nft(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address,
         metadata: Metadata,
@@ -492,7 +486,6 @@ impl<B: storage::Backend> Wallet<B> {
         let outputs = make_issue_nft_outputs(address, metadata, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
-            wallet_events,
             account_index,
             outputs,
             current_fee_rate,
@@ -504,7 +497,6 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_stake_pool_tx(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         amount: Amount,
         decomission_key: Option<PublicKey>,
@@ -513,25 +505,14 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.create_stake_pool_tx(
+            account.create_stake_pool_tx(
                 db_tx,
                 amount,
                 decomission_key,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,
-            )?;
-
-            let txs = [tx];
-            account.scan_new_unconfirmed_transactions(
-                &txs,
-                TxState::Inactive,
-                db_tx,
-                wallet_events,
-            )?;
-
-            let [tx] = txs;
-            Ok(tx)
+            )
         })
     }
 
@@ -584,6 +565,28 @@ impl<B: storage::Backend> Wallet<B> {
             account.scan_new_unconfirmed_transactions(
                 transactions,
                 TxState::InMempool,
+                &mut db_tx,
+                wallet_events,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Save an unconfirmed transaction in case we need to rebroadcast it later
+    /// and mark it as Inactive for now
+    pub fn add_unconfirmed_tx(
+        &mut self,
+        transaction: SignedTransaction,
+        wallet_events: &mut impl WalletEvents,
+    ) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        let txs = [transaction];
+        for account in self.accounts.values_mut() {
+            account.scan_new_unconfirmed_transactions(
+                &txs,
+                TxState::Inactive,
                 &mut db_tx,
                 wallet_events,
             )?;
