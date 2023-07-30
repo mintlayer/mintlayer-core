@@ -237,6 +237,19 @@ pub enum WalletCommand {
         peer_id: PeerId,
     },
 
+    /// List banned addresses
+    ListBanned,
+
+    /// Ban address
+    Ban {
+        address: String,
+    },
+
+    /// Unban address
+    Unban {
+        address: String,
+    },
+
     /// Get connected peer count
     PeerCount,
 
@@ -940,6 +953,20 @@ impl CommandHandler {
                 rpc_client.p2p_disconnect(peer_id).await.map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
+
+            WalletCommand::ListBanned => {
+                let list = rpc_client.p2p_list_banned().await.map_err(WalletCliError::RpcError)?;
+                Ok(ConsoleCommand::Print(format!("{list:#?}")))
+            }
+            WalletCommand::Ban { address } => {
+                rpc_client.p2p_ban(address).await.map_err(WalletCliError::RpcError)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+            WalletCommand::Unban { address } => {
+                rpc_client.p2p_unban(address).await.map_err(WalletCliError::RpcError)?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
             WalletCommand::PeerCount => {
                 let peer_count =
                     rpc_client.p2p_get_peer_count().await.map_err(WalletCliError::RpcError)?;

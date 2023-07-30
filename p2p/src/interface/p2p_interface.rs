@@ -25,6 +25,10 @@ pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: String) -> crate::Result<()>;
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
+    async fn list_banned(&mut self) -> crate::Result<Vec<String>>;
+    async fn ban(&mut self, addr: String) -> crate::Result<()>;
+    async fn unban(&mut self, addr: String) -> crate::Result<()>;
+
     async fn get_peer_count(&self) -> crate::Result<usize>;
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>>;
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;

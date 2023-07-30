@@ -69,7 +69,7 @@ pub trait NetworkingService {
     ///
     /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
     /// that consists of an IP address and a port we want to ban the IP address.
-    type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
+    type BannableAddress: Clone + Debug + Eq + Ord + Send + ToString + FromStr;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;

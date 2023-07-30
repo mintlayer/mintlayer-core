@@ -43,4 +43,14 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     AddReserved(T::Address),
 
     RemoveReserved(T::Address),
+
+    ListBanned(oneshot_nofail::Sender<Vec<T::BannableAddress>>),
+    Ban(
+        T::BannableAddress,
+        oneshot_nofail::Sender<crate::Result<()>>,
+    ),
+    Unban(
+        T::BannableAddress,
+        oneshot_nofail::Sender<crate::Result<()>>,
+    ),
 }

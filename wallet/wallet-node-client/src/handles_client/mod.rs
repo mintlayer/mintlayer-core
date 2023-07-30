@@ -192,6 +192,20 @@ impl NodeInterface for WalletHandlesClient {
         let count = self.p2p.call_async_mut(move |this| this.get_peer_count()).await??;
         Ok(count)
     }
+
+    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+        let list = self.p2p.call_async_mut(move |this| this.list_banned()).await??;
+        Ok(list)
+    }
+    async fn p2p_ban(&self, address: String) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.ban(address)).await??;
+        Ok(())
+    }
+    async fn p2p_unban(&self, address: String) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.unban(address)).await??;
+        Ok(())
+    }
+
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         let peers = self.p2p.call_async_mut(move |this| this.get_connected_peers()).await??;
         Ok(peers)

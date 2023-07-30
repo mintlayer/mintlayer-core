@@ -31,6 +31,15 @@ trait P2pRpc {
     #[method(name = "disconnect")]
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
+    #[method(name = "list_banned")]
+    async fn list_banned(&self) -> RpcResult<Vec<String>>;
+
+    #[method(name = "ban")]
+    async fn ban(&self, address: String) -> RpcResult<()>;
+
+    #[method(name = "unban")]
+    async fn unban(&self, address: String) -> RpcResult<()>;
+
     /// Get the number of peers
     #[method(name = "get_peer_count")]
     async fn get_peer_count(&self) -> RpcResult<usize>;
@@ -67,6 +76,21 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.disconnect(peer_id)).await;
+        rpc::handle_result(res)
+    }
+
+    async fn list_banned(&self) -> RpcResult<Vec<String>> {
+        let res = self.call_async_mut(|this| this.list_banned()).await;
+        rpc::handle_result(res)
+    }
+
+    async fn ban(&self, address: String) -> RpcResult<()> {
+        let res = self.call_async_mut(|this| this.ban(address)).await;
+        rpc::handle_result(res)
+    }
+
+    async fn unban(&self, address: String) -> RpcResult<()> {
+        let res = self.call_async_mut(|this| this.unban(address)).await;
         rpc::handle_result(res)
     }
 

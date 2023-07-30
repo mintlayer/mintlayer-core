@@ -204,6 +204,15 @@ impl NodeInterface for MockNode {
     async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
         unreachable!()
     }
+    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_ban(&self, _address: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_unban(&self, _address: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         unreachable!()
     }
