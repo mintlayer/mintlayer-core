@@ -43,8 +43,8 @@ use common::{
             RPCTokenInfo::{FungibleToken, NonFungibleToken},
             TokenId, TokenIssuance,
         },
-        Block, ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::get_time, Amount, BlockHeight, Id, Idable,
@@ -267,7 +267,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn issue_new_token(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         token_ticker: Vec<u8>,
         amount_to_issue: Amount,
         number_of_decimals: u8,
@@ -305,7 +305,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn issue_new_nft(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         metadata: Metadata,
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
@@ -335,7 +335,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn new_address(
         &mut self,
         account_index: U31,
-    ) -> Result<(ChildNumber, Address), ControllerError<T>> {
+    ) -> Result<(ChildNumber, Address<Destination>), ControllerError<T>> {
         self.wallet.get_new_address(account_index).map_err(ControllerError::WalletError)
     }
 
@@ -427,7 +427,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn send_to_address(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
     ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
@@ -456,7 +456,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn create_delegation(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         pool_id: PoolId,
     ) -> Result<(DelegationId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
@@ -517,7 +517,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn send_to_address_from_delegation(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
     ) -> Result<TxStatus, ControllerError<T>> {
@@ -548,7 +548,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         account_index: U31,
         token_id: TokenId,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let current_fee_rate = self
@@ -770,7 +770,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn get_all_issued_addresses(
         &self,
         account_index: U31,
-    ) -> Result<BTreeMap<ChildNumber, Address>, ControllerError<T>> {
+    ) -> Result<BTreeMap<ChildNumber, Address<Destination>>, ControllerError<T>> {
         self.wallet
             .get_all_issued_addresses(account_index)
             .map_err(ControllerError::WalletError)

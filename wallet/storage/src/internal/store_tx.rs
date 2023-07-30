@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     address::Address,
-    chain::{block::timestamp::BlockTimestamp, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
@@ -365,7 +365,7 @@ macro_rules! impl_write_ops {
             fn set_address(
                 &mut self,
                 id: &AccountDerivationPathId,
-                address: &Address,
+                address: &Address<Destination>,
             ) -> crate::Result<()> {
                 self.write::<db::DBAddresses, _, _, _>(id, address.get().to_owned())
             }

@@ -22,7 +22,7 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{GenBlock, PoolId, SignedTransaction},
+    chain::{Destination, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -68,7 +68,7 @@ pub struct WalletInfo {
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
     pub name: Option<String>,
-    pub addresses: BTreeMap<ChildNumber, Address>,
+    pub addresses: BTreeMap<ChildNumber, Address<Destination>>,
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
     pub staking_balance: BTreeMap<PoolId, Amount>,
@@ -80,7 +80,7 @@ pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
     pub index: ChildNumber,
-    pub address: Address,
+    pub address: Address<Destination>,
 }
 
 #[derive(Debug, Clone)]

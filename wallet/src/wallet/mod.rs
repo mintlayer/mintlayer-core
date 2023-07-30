@@ -411,7 +411,10 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(delegations)
     }
 
-    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<(ChildNumber, Address)> {
+    pub fn get_new_address(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
@@ -443,7 +446,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_all_issued_addresses(
         &self,
         account_index: U31,
-    ) -> WalletResult<BTreeMap<ChildNumber, Address>> {
+    ) -> WalletResult<BTreeMap<ChildNumber, Address<Destination>>> {
         let account = self.get_account(account_index)?;
         Ok(account.get_all_issued_addresses())
     }
@@ -493,7 +496,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         wallet_events: &mut impl WalletEvents,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
         current_fee_rate: FeeRate,
@@ -546,7 +549,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn issue_new_token(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         token_issuance: TokenIssuance,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -567,7 +570,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn issue_new_nft(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         metadata: Metadata,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,

@@ -383,7 +383,7 @@ impl Account {
     pub fn spend_from_delegation(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
         current_fee_rate: FeeRate,
@@ -662,7 +662,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
-    ) -> WalletResult<(ChildNumber, Address)> {
+    ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
@@ -675,7 +675,7 @@ impl Account {
         Ok(self.key_chain.issue_key(db_tx, purpose)?.into_public_key())
     }
 
-    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.key_chain.get_all_issued_addresses()
     }
 

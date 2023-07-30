@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -327,7 +327,10 @@ fn to_per_thousand(value_str: &str, variable_name: &str) -> Result<PerThousand, 
     )))
 }
 
-fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
+fn parse_address(
+    chain_config: &ChainConfig,
+    address: &str,
+) -> Result<Address<Destination>, WalletCliError> {
     Address::from_str(chain_config, address)
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
 }

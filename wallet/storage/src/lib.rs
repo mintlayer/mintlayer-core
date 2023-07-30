@@ -21,7 +21,7 @@ pub mod schema;
 
 use common::{
     address::{Address, AddressError},
-    chain::{block::timestamp::BlockTimestamp, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
@@ -114,7 +114,11 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
-    fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;
+    fn set_address(
+        &mut self,
+        id: &AccountDerivationPathId,
+        address: &Address<Destination>,
+    ) -> Result<()>;
     fn del_address(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_keychain_usage_state(
         &mut self,

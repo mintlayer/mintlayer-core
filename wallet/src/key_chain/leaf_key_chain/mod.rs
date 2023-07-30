@@ -52,7 +52,7 @@ pub struct LeafKeySoftChain {
     //       See if we can move them into submodules that are individually testable
     // TODO: We should probably update ChildNumber key to U31 all these maps.
     /// The derived addresses for the receiving funds or change. Those are derived as needed.
-    addresses: BTreeMap<ChildNumber, Address>,
+    addresses: BTreeMap<ChildNumber, Address<Destination>>,
 
     /// The derived keys for the receiving funds or change. Those are derived as needed.
     derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
@@ -94,7 +94,7 @@ impl LeafKeySoftChain {
         account_id: AccountId,
         purpose: KeyPurpose,
         parent_pubkey: ExtendedPublicKey,
-        addresses: BTreeMap<ChildNumber, Address>,
+        addresses: BTreeMap<ChildNumber, Address<Destination>>,
         derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
         usage_state: KeychainUsageState,
     ) -> KeyChainResult<Self> {
@@ -129,7 +129,8 @@ impl LeafKeySoftChain {
     ) -> KeyChainResult<WithPurpose<LeafKeySoftChain>> {
         let mut addresses = WithPurpose::new(BTreeMap::new(), BTreeMap::new());
         for (address_id, address) in db_tx.get_addresses(id)? {
-            let address = Address::from_str(chain_config.as_ref(), address.as_str())?;
+            let address =
+                Address::<Destination>::from_str(chain_config.as_ref(), address.as_str())?;
             let (purpose, key_index) = get_purpose_and_index(&address_id.into_item_id())?;
             let old_value = addresses.mut_for(purpose).insert(key_index, address);
             if old_value.is_some() {
@@ -190,7 +191,7 @@ impl LeafKeySoftChain {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         lookahead_size: u32,
-    ) -> KeyChainResult<(ChildNumber, ExtendedPublicKey, Address)> {
+    ) -> KeyChainResult<(ChildNumber, ExtendedPublicKey, Address<Destination>)> {
         let new_issued_index = self.get_new_issued_index(lookahead_size)?;
 
         let key = self.derive_and_add_key(db_tx, new_issued_index)?;
@@ -291,10 +292,7 @@ impl LeafKeySoftChain {
         // Calculate public key hash
         let public_key_hash = PublicKeyHash::from(&public_key);
         // Calculate the address
-        let address = Address::new_from_destination(
-            &self.chain_config,
-            &Destination::Address(public_key_hash),
-        )?;
+        let address = Address::new(&self.chain_config, &Destination::Address(public_key_hash))?;
         // Calculate account derivation path id
         let account_path_id = AccountDerivationPathId::new(
             self.account_id.clone(),
@@ -443,7 +441,7 @@ impl LeafKeySoftChain {
         self.usage_state.last_issued()
     }
 
-    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         let last_issued = match self.usage_state.last_issued() {
             Some(index) => index,
             None => return BTreeMap::new(),

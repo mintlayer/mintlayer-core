@@ -181,7 +181,7 @@ pub struct ChainConfig {
 impl ChainConfig {
     /// Bech32m addresses in this chain will use this prefix
     #[must_use]
-    pub fn address_prefix(&self, destination: &Destination) -> &str {
+    pub fn address_prefix(&self, destination: &Destination) -> &'static str {
         address_prefix(self.chain_type, destination)
     }
 
