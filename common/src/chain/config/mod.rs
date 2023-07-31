@@ -599,7 +599,7 @@ fn create_testnet_genesis() -> Genesis {
 }
 
 #[derive(Clone, Debug)]
-pub struct GenesisStakingSettings (String);
+pub struct GenesisStakingSettings(String);
 
 impl GenesisStakingSettings {
     pub fn new(settings: String) -> Self {
@@ -607,7 +607,7 @@ impl GenesisStakingSettings {
     }
 
     pub fn get_settings(&self) -> Vec<&str> {
-        self.0.split(",").collect()
+        self.0.split(',').collect()
     }
 }
 
@@ -643,7 +643,7 @@ pub fn regtest_genesis_values(
         .or(Some(
             "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
         ))
-        .map(|s| decode_hex::<PoolId>(s))
+        .map(decode_hex::<PoolId>)
         .expect("Pool Id decoded");
 
     let genesis_stake_private_key = genesis_staking_settings_parts
@@ -652,7 +652,7 @@ pub fn regtest_genesis_values(
         .or(Some(
             "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
         ))
-        .map(|s| decode_hex::<PrivateKey>(s))
+        .map(decode_hex::<PrivateKey>)
         .expect("Private key decoded");
 
     let genesis_vrf_private_key = genesis_staking_settings_parts
@@ -661,7 +661,7 @@ pub fn regtest_genesis_values(
         .or(Some(
             "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
         ))
-        .map(|s| decode_hex::<VRFPrivateKey>(s))
+        .map(decode_hex::<VRFPrivateKey>)
         .expect("VRF private key decoded");
 
     let genesis_stake_public_key = PublicKey::from_private_key(&genesis_stake_private_key);
