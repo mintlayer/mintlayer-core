@@ -36,8 +36,8 @@ use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
-use regex::Regex;
 use std::num::NonZeroU64;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -598,8 +598,35 @@ fn create_testnet_genesis() -> Genesis {
     )
 }
 
+#[derive(Clone, Debug)]
+pub struct GenesisStakingSettings (String);
+
+impl GenesisStakingSettings {
+    pub fn new(settings: String) -> Self {
+        Self(settings)
+    }
+
+    pub fn get_settings(&self) -> Vec<&str> {
+        self.0.split(",").collect()
+    }
+}
+
+impl Default for GenesisStakingSettings {
+    fn default() -> Self {
+        Self::new("".to_string())
+    }
+}
+
+impl FromStr for GenesisStakingSettings {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(s.to_string()))
+    }
+}
+
 pub fn regtest_genesis_values(
-    genesis_staking_settings: Option<String>,
+    genesis_staking_settings: GenesisStakingSettings,
 ) -> (
     PoolId,
     Box<StakePoolData>,
@@ -608,38 +635,34 @@ pub fn regtest_genesis_values(
     VRFPrivateKey,
     VRFPublicKey,
 ) {
-    let genesis_staking_settings = genesis_staking_settings.unwrap_or_default();
+    let genesis_staking_settings_parts = genesis_staking_settings.get_settings();
 
-    let genesis_pool_id = Regex::new("genesis_pool_id:([A-Fa-f0-9]+)")
-        .expect("Regex is ok")
-        .captures(&genesis_staking_settings)
-        .and_then(|c| c.get(1))
-        .map(|c| c.as_str())
+    let genesis_pool_id = genesis_staking_settings_parts
+        .iter()
+        .find_map(|s| s.strip_prefix("genesis_pool_id:"))
         .or(Some(
             "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
         ))
-        .map(decode_hex::<PoolId>)
-        .expect("Parameter decoded {}");
+        .map(|s| decode_hex::<PoolId>(s))
+        .expect("Pool Id decoded");
 
-    let genesis_stake_private_key = Regex::new("genesis_stake_private_key:([A-Fa-f0-9]+)")
-        .expect("Regex is ok")
-        .captures(&genesis_staking_settings)
-        .and_then(|c| c.get(1))
-        .map(|c| c.as_str())
+    let genesis_stake_private_key = genesis_staking_settings_parts
+        .iter()
+        .find_map(|s| s.strip_prefix("genesis_stake_private_key:"))
         .or(Some(
             "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
         ))
-        .map(decode_hex::<PrivateKey>)
-        .expect("Parameter decoded {}");
+        .map(|s| decode_hex::<PrivateKey>(s))
+        .expect("Private key decoded");
 
-    let genesis_vrf_private_key = Regex::new("genesis_vrf_private_key:([A-Fa-f0-9]+)")
-        .expect("Regex is ok")
-        .captures(&genesis_staking_settings)
-        .and_then(|c| c.get(1))
-        .map(|c| c.as_str())
-        .or(Some("003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e"))
-        .map(decode_hex::<VRFPrivateKey>)
-        .expect("Parameter decoded {}");
+    let genesis_vrf_private_key = genesis_staking_settings_parts
+        .iter()
+        .find_map(|s| s.strip_prefix("genesis_vrf_private_key:"))
+        .or(Some(
+            "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
+        ))
+        .map(|s| decode_hex::<VRFPrivateKey>(s))
+        .expect("VRF private key decoded");
 
     let genesis_stake_public_key = PublicKey::from_private_key(&genesis_stake_private_key);
     let genesis_vrf_public_key = VRFPublicKey::from_private_key(&genesis_vrf_private_key);
@@ -664,7 +687,7 @@ pub fn regtest_genesis_values(
 }
 
 pub fn create_regtest_pos_genesis(
-    genesis_staking_settings: Option<String>,
+    genesis_staking_settings: GenesisStakingSettings,
     premine_destination: Destination,
 ) -> Genesis {
     let (

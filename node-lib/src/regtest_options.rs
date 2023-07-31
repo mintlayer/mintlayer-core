@@ -15,6 +15,7 @@
 
 use clap::Args;
 
+use common::chain::config::GenesisStakingSettings;
 use crate::RunOptions;
 
 #[derive(Args, Clone, Debug)]
@@ -64,5 +65,5 @@ pub struct ChainConfigOptions {
 
     /// PoS Genesis staking settings
     #[clap(long)]
-    pub chain_genesis_staking_settings: Option<String>,
+    pub chain_genesis_staking_settings: Option<GenesisStakingSettings>,
 }
