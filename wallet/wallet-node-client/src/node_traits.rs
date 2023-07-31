@@ -50,6 +50,7 @@ pub trait NodeInterface {
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
     async fn generate_block(
         &self,

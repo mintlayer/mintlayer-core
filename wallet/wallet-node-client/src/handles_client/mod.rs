@@ -154,6 +154,15 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_data(pool_id))
+            .await??
+            .map(|data| data.pledge_amount());
+        Ok(result)
+    }
+
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let result = self
             .chainstate

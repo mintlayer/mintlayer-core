@@ -608,7 +608,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn decomission_stake_pool(
+    pub fn decommission_stake_pool(
         &mut self,
         wallet_events: &mut impl WalletEvents,
         account_index: U31,

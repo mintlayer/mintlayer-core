@@ -77,6 +77,9 @@ trait ChainstateRpc {
     #[method(name = "stake_pool_balance")]
     async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
+    #[method(name = "stake_pool_pledge")]
+    async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
+
     /// Get token information
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>>;
@@ -160,6 +163,16 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>> {
         rpc::handle_result(self.call(move |this| this.get_stake_pool_balance(pool_id)).await)
+    }
+
+    async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>> {
+        rpc::handle_result(
+            self.call(move |this| {
+                this.get_stake_pool_data(pool_id)
+                    .map(|opt| opt.map(|data| data.pledge_amount()))
+            })
+            .await,
+        )
     }
 
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>> {

@@ -243,10 +243,10 @@ pub enum WalletCommand {
 
         margin_ratio_per_thousand: String,
 
-        decomission_key: Option<HexEncoded<PublicKey>>,
+        decommission_key: Option<HexEncoded<PublicKey>>,
     },
 
-    DecomissionStakePool {
+    DecommissionStakePool {
         pool_id: String,
     },
 
@@ -1055,10 +1055,10 @@ impl CommandHandler {
                 amount,
                 cost_per_block,
                 margin_ratio_per_thousand,
-                decomission_key,
+                decommission_key,
             } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
-                let decomission_key = decomission_key.map(HexEncoded::take);
+                let decommission_key = decommission_key.map(HexEncoded::take);
                 let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
                 let margin_ratio_per_thousand =
                     to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
@@ -1068,7 +1068,7 @@ impl CommandHandler {
                     .create_stake_pool_tx(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         amount,
-                        decomission_key,
+                        decommission_key,
                         margin_ratio_per_thousand,
                         cost_per_block,
                     )
@@ -1078,12 +1078,12 @@ impl CommandHandler {
                 Ok(Self::handle_mempool_tx_status(status))
             }
 
-            WalletCommand::DecomissionStakePool { pool_id } => {
+            WalletCommand::DecommissionStakePool { pool_id } => {
                 let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
                 let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
-                    .decomission_stake_pool(
+                    .decommission_stake_pool(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         pool_id,
                     )

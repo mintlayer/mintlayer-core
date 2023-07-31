@@ -600,7 +600,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         account_index: U31,
         amount: Amount,
-        decomission_key: Option<PublicKey>,
+        decommission_key: Option<PublicKey>,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
     ) -> Result<TxStatus, ControllerError<T>> {
@@ -616,7 +616,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .wallet
             .create_stake_pool_tx(
                 account_index,
-                decomission_key,
+                decommission_key,
                 current_fee_rate,
                 consolidate_fee_rate,
                 StakePoolDataArguments {
@@ -630,7 +630,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.broadcast_to_mempool(tx).await
     }
 
-    pub async fn decomission_stake_pool(
+    pub async fn decommission_stake_pool(
         &mut self,
         account_index: U31,
         pool_id: PoolId,
@@ -641,9 +641,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        let pool_balance = self
+        let staker_balance = self
             .rpc_client
-            .get_stake_pool_balance(pool_id)
+            .get_stake_pool_pledge(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)?
             .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
@@ -651,11 +651,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )))?;
 
         self.wallet
-            .decomission_stake_pool(
+            .decommission_stake_pool(
                 &mut self.wallet_events,
                 account_index,
                 pool_id,
-                pool_balance,
+                staker_balance,
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)
