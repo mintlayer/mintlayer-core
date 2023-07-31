@@ -950,7 +950,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let chainstate = tx_verifier::ChainstateHandle::new(self.chainstate_handle.shallow_clone());
         let chain_config = self.chain_config.deref();
-        let utxo_view = tx_verifier::MempoolUtxoView::new(self, chainstate.clone());
+        let utxo_view = tx_verifier::MempoolUtxoView::new(self, chainstate.shallow_clone());
+
+        // Transaction verifier to detect cases where mempool is not fully up-to-date with
+        // transaction dependencies.
+        let mut tx_verifier = tx_verifier::create(
+            self.chain_config.shallow_clone(),
+            self.chainstate_handle.shallow_clone(),
+        );
+
+        let verifier_time = tx_accumulator.block_timestamp();
 
         let best_index = self
             .blocking_chainstate_handle()
@@ -966,7 +975,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 let tx = self.store.txs_by_id.get(tx_id)?.deref();
                 chainstate::tx_verifier::timelock_check::check_timelocks(
                     &chainstate,
-                    &chain_config,
+                    chain_config,
                     &utxo_view,
                     tx.transaction(),
                     &tx_source,
@@ -1009,6 +1018,21 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 (None, Some(ready_tx)) => binary_heap::PeekMut::pop(ready_tx).take_entry(),
                 (None, None) => break,
             };
+
+            let verification_result = tx_verifier.connect_transaction(
+                &tx_source,
+                next_tx.transaction(),
+                &verifier_time,
+                None,
+            );
+
+            if let Err(err) = verification_result {
+                log::error!(
+                    "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}. Error: {err}",
+                    next_tx.tx_id()
+                );
+                continue;
+            }
 
             if let Err(err) = tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
                 log::error!(
