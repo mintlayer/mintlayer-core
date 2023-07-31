@@ -1028,7 +1028,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
             if let Err(err) = verification_result {
                 log::error!(
-                    "Verifier and mempool do not agree on transaction deps for {}. Error: {err}",
+                    "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}. Error: {err}",
                     next_tx.tx_id()
                 );
                 continue;
