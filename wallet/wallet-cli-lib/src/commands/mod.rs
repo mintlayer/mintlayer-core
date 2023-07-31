@@ -125,7 +125,7 @@ pub enum WalletCommand {
     StopStaking,
 
     StakePoolBalance {
-        pool_id: HexEncoded<PoolId>,
+        pool_id: String,
     },
 
     /// Submit a block to be included in the chain
@@ -247,7 +247,7 @@ pub enum WalletCommand {
     },
 
     DecomissionStakePool {
-        pool_id: HexEncoded<PoolId>,
+        pool_id: String,
     },
 
     /// Node version
@@ -334,6 +334,12 @@ fn parse_address(
 ) -> Result<Address<Destination>, WalletCliError> {
     Address::from_str(chain_config, address)
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
+}
+
+fn parse_pool_id(chain_config: &ChainConfig, pool_id: &str) -> Result<PoolId, WalletCliError> {
+    Address::<PoolId>::from_str(chain_config, pool_id)
+        .and_then(|address| address.decode_object(chain_config))
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid pool ID '{pool_id}': {e}")))
 }
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, WalletCliError> {
@@ -713,8 +719,9 @@ impl CommandHandler {
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
                 let balance_opt = rpc_client
-                    .get_stake_pool_balance(pool_id.take())
+                    .get_stake_pool_balance(pool_id)
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 match balance_opt {
@@ -1062,12 +1069,13 @@ impl CommandHandler {
             }
 
             WalletCommand::DecomissionStakePool { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
                 let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .decomission_stake_pool(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        pool_id.take(),
+                        pool_id,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

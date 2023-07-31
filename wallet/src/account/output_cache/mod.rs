@@ -409,6 +409,8 @@ impl OutputCache {
                                                 Delegation(delegation_id, amount) => {
                                                     match self.delegations.get_mut(delegation_id) {
                                                         Some(data) => {
+                                                            data.last_nonce =
+                                                                outpoint.nonce().decrement();
                                                             data.balance = (data.balance + *amount)
                                 .ok_or(WalletError::DelegationAmountOverflow(*delegation_id))?;
                                                         }
