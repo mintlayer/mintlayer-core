@@ -1226,6 +1226,7 @@ dependencies = [
  "common",
  "crypto",
  "itertools",
+ "logging",
  "num",
  "parity-scale-codec",
  "pos_accounting",
