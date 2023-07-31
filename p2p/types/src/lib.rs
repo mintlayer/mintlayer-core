@@ -15,6 +15,7 @@
 
 pub mod global_ip;
 pub mod ip_address;
+pub mod ip_or_socket_address;
 pub mod p2p_event;
 pub mod peer_address;
 pub mod peer_id;

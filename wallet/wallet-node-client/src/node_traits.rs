@@ -24,6 +24,7 @@ use common::{
 
 use consensus::GenerateBlockInputData;
 use mempool::FeeRate;
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
@@ -64,15 +65,16 @@ pub trait NodeInterface {
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;
 
-    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error>;
+    async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
     async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error>;
     async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error>;
     async fn p2p_ban(&self, address: String) -> Result<(), Self::Error>;
     async fn p2p_unban(&self, address: String) -> Result<(), Self::Error>;
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error>;
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;
-    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error>;
-    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error>;
+    async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error>;
+    async fn p2p_remove_reserved_node(&self, address: IpOrSocketAddress)
+        -> Result<(), Self::Error>;
 
     async fn mempool_get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Self::Error>;
 }

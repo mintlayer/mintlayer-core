@@ -19,6 +19,7 @@ use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::ChainType;
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use utils::default_data_dir::default_data_dir_common;
 
 use crate::{
@@ -100,11 +101,11 @@ pub struct RunOptions {
 
     /// Optional list of boot node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_boot_node: Option<Vec<String>>,
+    pub p2p_boot_node: Option<Vec<IpOrSocketAddress>>,
 
     /// Optional list of reserved node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_reserved_node: Option<Vec<String>>,
+    pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
 
     /// Maximum allowed number of inbound connections.
     #[clap(long)]

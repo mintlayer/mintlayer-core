@@ -35,7 +35,11 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
-    types::{peer_address::PeerAddress, peer_id::PeerId, IsGlobalIp},
+    peer_manager::ip_or_socket_address_to_peer_address,
+    types::{
+        ip_or_socket_address::IpOrSocketAddress, peer_address::PeerAddress, peer_id::PeerId,
+        IsGlobalIp,
+    },
 };
 use tokio::sync::mpsc;
 
@@ -56,7 +60,7 @@ const STORAGE_VERSION: u32 = 1;
 #[derive(Clone)]
 pub struct CrawlerManagerConfig {
     /// Manually specified list of nodes to connect to
-    pub reserved_nodes: Vec<String>,
+    pub reserved_nodes: Vec<IpOrSocketAddress>,
 
     /// Default p2p port on which nodes normally accept inbound connections;
     /// the DNS server has no way to communicate port numbers,
@@ -113,7 +117,7 @@ where
         let reserved_addresses: BTreeSet<N::Address> = config
             .reserved_nodes
             .iter()
-            .map(|addr| addr.parse())
+            .map(|addr| ip_or_socket_address_to_peer_address(addr, &chain_config))
             .collect::<Result<BTreeSet<N::Address>, _>>()?;
 
         assert!(conn.local_addresses().is_empty());

@@ -18,7 +18,10 @@ use std::{num::NonZeroU64, str::FromStr, time::Duration};
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
 
-use p2p::config::{NodeType, P2pConfig};
+use p2p::{
+    config::{NodeType, P2pConfig},
+    types::ip_or_socket_address::IpOrSocketAddress,
+};
 
 /// A node type.
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, Eq, PartialEq)]
@@ -60,9 +63,9 @@ pub struct P2pConfigFile {
     /// Disable p2p encryption (for tests only).
     pub disable_noise: Option<bool>,
     /// Optional list of boot node addresses to connect.
-    pub boot_nodes: Option<Vec<String>>,
+    pub boot_nodes: Option<Vec<IpOrSocketAddress>>,
     /// Optional list of reserved node addresses to connect.
-    pub reserved_nodes: Option<Vec<String>>,
+    pub reserved_nodes: Option<Vec<IpOrSocketAddress>>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: Option<usize>,
     /// The score threshold after which a peer is banned.

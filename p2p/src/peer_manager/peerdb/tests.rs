@@ -15,7 +15,9 @@
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use common::primitives::user_agent::mintlayer_core_user_agent;
+use common::{
+    chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
+};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
@@ -34,7 +36,9 @@ use super::PeerDb;
 fn unban_peer() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
     let mut peerdb = PeerDb::<SocketAddr, _, _>::new(
+        &chain_config,
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
             socks5_proxy: None,
@@ -86,7 +90,14 @@ fn connected_unreachable() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let p2p_config = Arc::new(test_p2p_config());
-    let mut peerdb = PeerDb::new(p2p_config, time_getter.get_time_getter(), db_store).unwrap();
+    let chain_config = create_unit_test_config();
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        p2p_config,
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
 
     let address = TestTcpAddressMaker::new();
     peerdb.peer_discovered(address);
@@ -106,8 +117,15 @@ fn connected_unreachable() {
 fn connected_unknown() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
-    let mut peerdb = PeerDb::new(p2p_config, time_getter.get_time_getter(), db_store).unwrap();
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        p2p_config,
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
 
     let address = TestTcpAddressMaker::new();
 

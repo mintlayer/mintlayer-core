@@ -16,13 +16,13 @@
 use std::sync::Arc;
 
 use common::chain::SignedTransaction;
-use p2p_types::p2p_event::P2pEvent;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, p2p_event::P2pEvent};
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
-    async fn connect(&mut self, addr: String) -> crate::Result<()>;
+    async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     async fn list_banned(&mut self) -> crate::Result<Vec<String>>;
@@ -33,8 +33,8 @@ pub trait P2pInterface: Send + Sync {
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>>;
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;
 
-    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()>;
-    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()>;
+    async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
+    async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
 
     async fn submit_transaction(
         &mut self,

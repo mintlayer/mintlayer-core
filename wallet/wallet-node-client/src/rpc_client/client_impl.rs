@@ -25,7 +25,11 @@ use common::{
 use consensus::GenerateBlockInputData;
 use mempool::TxStatus;
 use mempool::{rpc::MempoolRpcClient, FeeRate};
-use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
+use p2p::{
+    interface::types::ConnectedPeer,
+    rpc::P2pRpcClient,
+    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
+};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::node_traits::NodeInterface;
@@ -142,7 +146,7 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         P2pRpcClient::connect(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
@@ -179,12 +183,15 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         P2pRpcClient::add_reserved_node(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         P2pRpcClient::remove_reserved_node(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)

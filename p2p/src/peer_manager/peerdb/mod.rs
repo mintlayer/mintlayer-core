@@ -36,7 +36,7 @@ use std::{
     time::Duration,
 };
 
-use common::time_getter::TimeGetter;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
 use itertools::Itertools;
 use logging::log;
@@ -53,7 +53,9 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::{address_groups::AddressGroup, MAX_OUTBOUND_CONNECTIONS};
+use super::{
+    address_groups::AddressGroup, ip_or_socket_address_to_peer_address, MAX_OUTBOUND_CONNECTIONS,
+};
 
 pub struct PeerDb<A, B, S> {
     /// P2P configuration
@@ -85,6 +87,7 @@ where
     S: PeerDbStorage,
 {
     pub fn new(
+        chain_config: &ChainConfig,
         p2p_config: Arc<config::P2pConfig>,
         time_getter: TimeGetter,
         storage: S,
@@ -95,20 +98,12 @@ where
         let boot_nodes = p2p_config
             .boot_nodes
             .iter()
-            .map(|addr| {
-                addr.parse::<A>().map_err(|_err| {
-                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
-                })
-            })
+            .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
             .collect::<Result<BTreeSet<_>, _>>()?;
         let reserved_nodes = p2p_config
             .reserved_nodes
             .iter()
-            .map(|addr| {
-                addr.parse::<A>().map_err(|_err| {
-                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
-                })
-            })
+            .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
             .collect::<Result<BTreeSet<_>, _>>()?;
 
         let now = time_getter.get_time();

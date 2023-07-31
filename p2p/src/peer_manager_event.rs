@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+
 use crate::{
     interface::types::ConnectedPeer, net::NetworkingService, types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -21,7 +23,7 @@ use crate::{
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
-    Connect(T::Address, oneshot_nofail::Sender<crate::Result<()>>),
+    Connect(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
     Disconnect(PeerId, oneshot_nofail::Sender<crate::Result<()>>),
@@ -40,9 +42,9 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 
-    AddReserved(T::Address),
+    AddReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
-    RemoveReserved(T::Address),
+    RemoveReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     ListBanned(oneshot_nofail::Sender<Vec<T::BannableAddress>>),
     Ban(

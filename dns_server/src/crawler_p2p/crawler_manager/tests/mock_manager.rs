@@ -45,7 +45,7 @@ use p2p::{
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
-    types::peer_id::PeerId,
+    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
     P2pEventHandler,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -224,7 +224,7 @@ pub fn test_crawler(
     P2pBasicTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
-    let reserved_nodes = reserved_nodes.iter().map(ToString::to_string).collect();
+    let reserved_nodes = reserved_nodes.into_iter().map(IpOrSocketAddress::Socket).collect();
     let crawler_config = CrawlerManagerConfig {
         reserved_nodes,
         default_p2p_port: 3031,

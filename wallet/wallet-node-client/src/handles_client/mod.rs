@@ -24,7 +24,12 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use mempool::{FeeRate, MempoolHandle};
-use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
+use p2p::{
+    error::P2pError,
+    interface::types::ConnectedPeer,
+    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
+    P2pHandle,
+};
 use serialization::hex::HexError;
 
 use crate::node_traits::NodeInterface;
@@ -191,7 +196,7 @@ impl NodeInterface for WalletHandlesClient {
         unimplemented!()
     }
 
-    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.connect(address)).await??;
         Ok(())
     }
@@ -221,11 +226,14 @@ impl NodeInterface for WalletHandlesClient {
         let peers = self.p2p.call_async_mut(move |this| this.get_connected_peers()).await??;
         Ok(peers)
     }
-    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.add_reserved_node(address)).await??;
         Ok(())
     }
-    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         self.p2p
             .call_async_mut(move |this| this.remove_reserved_node(address))
             .await??;

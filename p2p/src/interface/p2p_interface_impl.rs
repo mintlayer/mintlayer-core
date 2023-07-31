@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common::chain::SignedTransaction;
 use mempool::TxOrigin;
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 
 use crate::{
     error::{ConversionError, P2pError},
@@ -33,11 +34,8 @@ where
     T: NetworkingService,
     T::MessagingHandle: MessagingService,
 {
-    async fn connect(&mut self, addr: String) -> crate::Result<()> {
+    async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
-        let addr = addr
-            .parse::<T::Address>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
         self.tx_peer_manager
             .send(PeerManagerEvent::Connect(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
@@ -99,24 +97,20 @@ where
         Ok(rx.await?)
     }
 
-    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
-        let addr = addr
-            .parse::<T::Address>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+    async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
-            .send(PeerManagerEvent::AddReserved(addr))
+            .send(PeerManagerEvent::AddReserved(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
-        Ok(())
+        Ok(rx.await??)
     }
 
-    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
-        let addr = addr
-            .parse::<T::Address>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+    async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
-            .send(PeerManagerEvent::RemoveReserved(addr))
+            .send(PeerManagerEvent::RemoveReserved(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
-        Ok(())
+        Ok(rx.await??)
     }
 
     async fn submit_transaction(
