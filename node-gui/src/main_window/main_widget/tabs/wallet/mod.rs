@@ -68,11 +68,11 @@ pub enum WalletMessage {
     SendAmountEdit(String),
     SendAddressEdit(String),
     Send,
-    SendSuceed,
+    SendSucceed,
 
     StakeAmountEdit(String),
     CreateStakingPool,
-    CreateStakeingPoolSucceed,
+    CreateStakingPoolSucceed,
 
     ToggleStaking(bool),
 
@@ -187,7 +187,7 @@ impl WalletTab {
                 backend_sender.send(BackendRequest::SendAmount(request));
                 Command::none()
             }
-            WalletMessage::SendSuceed => {
+            WalletMessage::SendSucceed => {
                 self.account_state.send_address.clear();
                 self.account_state.send_amount.clear();
                 Command::none()
@@ -205,7 +205,7 @@ impl WalletTab {
                 backend_sender.send(BackendRequest::StakeAmount(request));
                 Command::none()
             }
-            WalletMessage::CreateStakeingPoolSucceed => {
+            WalletMessage::CreateStakingPoolSucceed => {
                 self.account_state.stake_amount.clear();
                 Command::none()
             }

@@ -456,7 +456,7 @@ impl MainWindow {
                         .update(
                             MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
                                 transaction_info.wallet_id,
-                                WalletMessage::SendSuceed,
+                                WalletMessage::SendSucceed,
                             )),
                             backend_sender,
                         )
@@ -484,7 +484,7 @@ impl MainWindow {
                         .update(
                             MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
                                 transaction_info.wallet_id,
-                                WalletMessage::CreateStakeingPoolSucceed,
+                                WalletMessage::CreateStakingPoolSucceed,
                             )),
                             backend_sender,
                         )
