@@ -25,6 +25,7 @@ use chainstate_types::{
     BlockIndexHandle, EpochStorageRead, GenBlockIndex, PropertyQueryError,
 };
 use common::{
+    address::Address,
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
@@ -215,6 +216,7 @@ where
 }
 
 pub fn stake(
+    chain_config: &ChainConfig,
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
@@ -235,7 +237,8 @@ pub fn stake(
         "Search for a valid block ({}..{}), pool_id: {}",
         block_timestamp,
         finalize_pos_data.max_block_timestamp(),
-        pos_data.stake_pool_id()
+        Address::new(chain_config, pos_data.stake_pool_id())
+            .expect("Pool id to address cannot fail")
     );
 
     while block_timestamp <= finalize_pos_data.max_block_timestamp() {
