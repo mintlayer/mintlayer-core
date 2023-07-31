@@ -204,13 +204,13 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
 
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random_using(&mut rng);
+    let token_id_1 = TokenId::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
         Transaction::new(1, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),
     );
 
-    let token_id_2 = H256::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
     let token_data_2 = TokenAuxiliaryData::new(
         Transaction::new(2, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),
@@ -430,9 +430,9 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
 
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random_using(&mut rng);
+    let token_id_1 = TokenId::random_using(&mut rng);
     let tx_id_1 = Transaction::new(1, vec![], vec![]).unwrap().get_id();
-    let token_id_2 = H256::random_using(&mut rng);
+    let token_id_2 = TokenId::random_using(&mut rng);
     let tx_id_2 = Transaction::new(2, vec![], vec![]).unwrap().get_id();
 
     let mut store = mock::MockStore::new();
@@ -695,7 +695,7 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
 
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random_using(&mut rng);
+    let token_id_1 = TokenId::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
         Transaction::new(1, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),

@@ -1177,7 +1177,7 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id: common::primitives::H256::from_low_u64_ne(0),
+            token_id: TokenId::zero(),
             // TODO: as the  amount is compact there is an edge case where those extra few bytes of
             // size can cause the output fee to be go over the available amount of coins thus not
             // including a change output, and losing money for the user
