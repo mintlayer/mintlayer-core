@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub fn token_id(tx: &Transaction) -> Option<TokenId> {
-    Some(hash_encoded(tx.inputs().get(0)?))
+    Some(TokenId::new(hash_encoded(tx.inputs().get(0)?)))
 }
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {

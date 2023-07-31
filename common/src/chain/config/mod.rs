@@ -205,6 +205,16 @@ impl ChainConfig {
         }
     }
 
+    #[must_use]
+    pub fn token_id_address_prefix(&self) -> &'static str {
+        match self.chain_type {
+            ChainType::Mainnet => "mmltk",
+            ChainType::Testnet => "tmltk",
+            ChainType::Regtest => "rmltk",
+            ChainType::Signet => "smltk",
+        }
+    }
+
     /// The BIP44 coin type for this chain
     #[must_use]
     pub fn bip44_coin_type(&self) -> ChildNumber {

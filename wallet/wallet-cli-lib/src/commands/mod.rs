@@ -125,7 +125,7 @@ pub enum WalletCommand {
     StopStaking,
 
     StakePoolBalance {
-        pool_id: HexEncoded<PoolId>,
+        pool_id: String,
     },
 
     /// Submit a block to be included in the chain
@@ -215,7 +215,7 @@ pub enum WalletCommand {
     },
 
     SendTokensToAddress {
-        token_id: TokenId,
+        token_id: String,
         address: String,
         amount: String,
     },
@@ -247,7 +247,7 @@ pub enum WalletCommand {
     },
 
     DecomissionStakePool {
-        pool_id: HexEncoded<PoolId>,
+        pool_id: String,
     },
 
     /// Node version
@@ -334,6 +334,18 @@ fn parse_address(
 ) -> Result<Address<Destination>, WalletCliError> {
     Address::from_str(chain_config, address)
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
+}
+
+fn parse_pool_id(chain_config: &ChainConfig, pool_id: &str) -> Result<PoolId, WalletCliError> {
+    Address::<PoolId>::from_str(chain_config, pool_id)
+        .and_then(|address| address.decode_object(chain_config))
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid pool ID '{pool_id}': {e}")))
+}
+
+fn parse_token_id(chain_config: &ChainConfig, token_id: &str) -> Result<TokenId, WalletCliError> {
+    Address::<TokenId>::from_str(chain_config, token_id)
+        .and_then(|address| address.decode_object(chain_config))
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid token ID '{token_id}': {e}")))
 }
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, WalletCliError> {
@@ -713,8 +725,9 @@ impl CommandHandler {
             }
 
             WalletCommand::StakePoolBalance { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
                 let balance_opt = rpc_client
-                    .get_stake_pool_balance(pool_id.take())
+                    .get_stake_pool_balance(pool_id)
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 match balance_opt {
@@ -776,7 +789,8 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
                     "A new token has been issued with ID: {}",
-                    HexEncode::hex_encode(&token_id),
+                    Address::new(chain_config, &token_id)
+                        .expect("Encoding token id should never fail"),
                 )))
             }
 
@@ -818,7 +832,8 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
                     "A new NFT has been issued with ID: {}",
-                    HexEncode::hex_encode(&token_id),
+                    Address::new(chain_config, &token_id)
+                        .expect("Encoding token id should never fail"),
                 )))
             }
 
@@ -851,7 +866,8 @@ impl CommandHandler {
                         Currency::Token(token_id) => {
                             format!(
                                 "Token: {} amount: {}",
-                                HexEncode::hex_encode(&token_id),
+                                Address::new(chain_config, &token_id)
+                                    .expect("Encoding token id should never fail"),
                                 print_coin_amount(chain_config, amount)
                             )
                         }
@@ -940,6 +956,7 @@ impl CommandHandler {
                 address,
                 amount,
             } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
                 let address = parse_address(chain_config, &address)?;
                 let amount = {
                     let token_number_of_decimals = controller_opt
@@ -1062,12 +1079,13 @@ impl CommandHandler {
             }
 
             WalletCommand::DecomissionStakePool { pool_id } => {
+                let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
                 let tx = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .decomission_stake_pool(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        pool_id.take(),
+                        pool_id,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
