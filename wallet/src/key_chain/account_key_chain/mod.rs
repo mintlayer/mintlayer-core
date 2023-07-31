@@ -161,7 +161,7 @@ impl AccountKeyChain {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
-    ) -> KeyChainResult<(ChildNumber, Address)> {
+    ) -> KeyChainResult<(ChildNumber, Address<Destination>)> {
         let lookahead_size = self.lookahead_size();
         let (index, _key, address) =
             self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
@@ -314,7 +314,7 @@ impl AccountKeyChain {
         Ok(false)
     }
 
-    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
 }

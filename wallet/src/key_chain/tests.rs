@@ -181,7 +181,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Err(KeyChainError::LookAheadExceeded)
     );
 
-    if let Address(pkh) = last_address.destination(chain_config.as_ref()).unwrap() {
+    if let Address(pkh) = last_address.decode_object(chain_config.as_ref()).unwrap() {
         key_chain.mark_public_key_hash_as_used(&mut db_tx, &pkh).unwrap();
     } else {
         panic!("Address is not a public key hash destination");
@@ -189,7 +189,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 
     // Should be able to issue more addresses
     for _ in 0..key_chain.lookahead_size() {
-        key_chain.issue_address(&mut db_tx, purpose).unwrap();
+        let _address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
     }
     assert_eq!(
         key_chain.issue_address(&mut db_tx, purpose),

@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     address::Address,
-    chain::{block::timestamp::BlockTimestamp, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::key::extended::ExtendedPublicKey;
 
@@ -230,8 +230,8 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
         fn get_transactions(&self, account_id: &AccountId) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>>;
         fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
-        fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
-        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
+        fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>>;
+        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, String>>;
         fn check_root_keys_sanity(&self) -> crate::Result<()>;
         fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
         fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
@@ -250,7 +250,7 @@ impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
         fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
-        fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> crate::Result<()>;
+        fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address<Destination>) -> crate::Result<()>;
         fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
         fn set_keychain_usage_state(&mut self, id: &AccountKeyPurposeId, address: &KeychainUsageState) -> crate::Result<()>;
         fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()>;

@@ -15,34 +15,20 @@
 
 use std::fmt::Display;
 
-use crate::chain::{ChainConfig, Destination};
-use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
+use crate::chain::ChainConfig;
+use crate::primitives::{encoding, Bech32Error};
 pub mod pubkeyhash;
-use serialization::{Decode, DecodeAll, Encode, Input};
+pub mod traits;
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
-pub trait AddressableData<T: AsRef<[u8]>> {
-    fn encode(&self) -> Result<String, Bech32Error> {
-        encoding::encode(self.hrp(), self.data())
-    }
+use self::traits::Addressable;
 
-    fn decode(&mut self, addr: &str) -> Result<DecodedArbitraryDataFromBech32, Bech32Error> {
-        encoding::decode(addr)
-    }
-
-    fn hrp(&self) -> &str;
-    fn set_hrp(&mut self, hrp: String);
-
-    fn data(&self) -> T;
-    fn set_data(&mut self, data: &[u8]);
-}
-
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, PartialOrd, Ord)]
 pub enum AddressError {
     #[error("Bech32 encoding error: {0}")]
     Bech32EncodingError(Bech32Error),
-    #[error("Destination decoding error: {0}")]
-    DestinationDecodingError(String),
+    #[error("Decoding error: {0}")]
+    DecodingError(String),
     #[error("Invalid prefix: {0}")]
     InvalidPrefix(String),
     #[error("QR Code error: {0}")]
@@ -55,50 +41,53 @@ impl From<Bech32Error> for AddressError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode)]
-pub struct Address {
+#[must_use]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Address<T> {
     address: String,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl Address {
-    pub fn new_from_destination(
-        cfg: &ChainConfig,
-        destination: &Destination,
-    ) -> Result<Self, AddressError> {
-        Self::new_with_hrp(cfg.address_prefix(destination), destination.encode())
+impl<T> Address<T> {
+    pub fn get(&self) -> &str {
+        &self.address
+    }
+}
+
+impl<T: Addressable> Address<T> {
+    pub fn new(cfg: &ChainConfig, object: &T) -> Result<Self, AddressError> {
+        Self::new_with_hrp(
+            T::address_prefix(object, cfg),
+            object.encode_to_bytes_for_address(),
+        )
     }
 
-    pub(crate) fn new_with_hrp<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<Self, AddressError> {
+    fn new_with_hrp<D: AsRef<[u8]>>(hrp: &str, data: D) -> Result<Self, AddressError> {
         let d = encoding::encode(hrp, data)?;
-        Ok(Self { address: d })
+        Ok(Self {
+            address: d,
+            _marker: std::marker::PhantomData,
+        })
     }
 
-    pub fn destination(&self, cfg: &ChainConfig) -> Result<Destination, AddressError> {
+    pub fn decode_object(&self, cfg: &ChainConfig) -> Result<T, AddressError> {
         let data = encoding::decode(&self.address)?;
-        let raw_dest = data.data();
-        let destination = Destination::decode_all(&mut &raw_dest[..])
-            .map_err(|e| AddressError::DestinationDecodingError(e.to_string()))?;
-        if data.hrp() != cfg.address_prefix(&destination) {
+        let raw_data = data.data();
+        let result = T::decode_from_bytes_from_address(raw_data)
+            .map_err(|e| AddressError::DecodingError(e.to_string()))?;
+        if data.hrp() != T::address_prefix(&result, cfg) {
             return Err(AddressError::InvalidPrefix(data.hrp().to_owned()));
         }
-        Ok(destination)
-    }
-
-    fn destination_internal(&self) -> Result<Vec<u8>, AddressError> {
-        let data = encoding::decode(&self.address)?;
-        Ok(data.data().to_owned())
+        Ok(result)
     }
 
     pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
         let address = Self {
             address: address.to_owned(),
+            _marker: std::marker::PhantomData,
         };
-        address.destination(cfg)?;
+        address.decode_object(cfg)?;
         Ok(address)
-    }
-
-    pub fn get(&self) -> &str {
-        &self.address
     }
 
     pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
@@ -107,21 +96,9 @@ impl Address {
     }
 }
 
-impl Display for Address {
+impl<T> Display for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.address.fmt(f)
-    }
-}
-
-impl Decode for Address {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let address = String::decode(input)?;
-        let result = Self { address };
-        result.destination_internal().map_err(|_| {
-            serialization::Error::from("Address decoding failed")
-                .chain(format!("with given address {}", result.address))
-        })?;
-        Ok(result)
     }
 }
 
@@ -129,6 +106,7 @@ impl Decode for Address {
 mod tests {
     use super::*;
     use crate::chain::config::create_mainnet;
+    use crate::chain::Destination;
     use crypto::key::{KeyKind, PrivateKey};
     use pubkeyhash::PublicKeyHash;
     use rstest::rstest;
@@ -143,10 +121,10 @@ mod tests {
         let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let public_key_hash_dest = Destination::Address(public_key_hash);
-        let address = Address::new_from_destination(&cfg, &public_key_hash_dest)
+        let address = Address::<Destination>::new(&cfg, &public_key_hash_dest)
             .expect("Address from pubkeyhash failed");
         let public_key_hash_restored_dest = address
-            .destination(&cfg)
+            .decode_object(&cfg)
             .expect("Failed to extract public key hash from address");
         assert_eq!(public_key_hash_restored_dest, public_key_hash_dest);
     }

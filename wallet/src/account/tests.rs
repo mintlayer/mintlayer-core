@@ -90,7 +90,7 @@ fn account_addresses_lookahead() {
     );
 
     // Issue a new address
-    account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
+    let _address = account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
     assert_eq!(
         account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
         Some(U31::from_u32(0).unwrap())
@@ -140,7 +140,7 @@ fn sign_transaction(#[case] seed: Seed) {
                     .get_new_address(&mut db_tx, purpose)
                     .unwrap()
                     .1
-                    .destination(config.as_ref())
+                    .decode_object(config.as_ref())
                     .unwrap(),
             )
         })
@@ -186,7 +186,7 @@ fn sign_transaction(#[case] seed: Seed) {
                 .get_new_address(&mut db_tx, Change)
                 .unwrap()
                 .1
-                .destination(config.as_ref())
+                .decode_object(config.as_ref())
                 .unwrap(),
         ),
     ];

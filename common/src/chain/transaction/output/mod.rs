@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use crate::{
-    address::pubkeyhash::PublicKeyHash,
+    address::{pubkeyhash::PublicKeyHash, traits::Addressable, AddressError},
     chain::{
         tokens::{OutputValue, TokenData},
-        DelegationId, PoolId,
+        ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -42,6 +42,26 @@ pub enum Destination {
     ScriptHash(Id<Script>),
     #[codec(index = 4)]
     ClassicMultisig(PublicKeyHash),
+}
+
+impl Addressable for Destination {
+    type Error = AddressError;
+
+    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
+        chain_config.destination_address_prefix(self)
+    }
+
+    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+        self.encode()
+    }
+
+    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::decode_all(&mut address_bytes.as_ref())
+            .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

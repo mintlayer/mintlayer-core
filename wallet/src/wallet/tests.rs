@@ -138,7 +138,7 @@ fn get_address(
     account_index: U31,
     purpose: KeyPurpose,
     address_index: U31,
-) -> Address {
+) -> Address<Destination> {
     let (root_key, _root_vrf_key) = MasterKeyChain::mnemonic_to_root_key(mnemonic, None).unwrap();
     let mut address_path = make_account_path(chain_config, account_index).into_vec();
     address_path.push(purpose.get_deterministic_index());
@@ -146,7 +146,7 @@ fn get_address(
     let address_priv_key = root_key
         .derive_absolute_path(&DerivationPath::try_from(address_path).unwrap())
         .unwrap();
-    Address::new_from_destination(
+    Address::new(
         chain_config,
         &Destination::PublicKey(address_priv_key.to_public_key().into_public_key()),
     )
@@ -1287,7 +1287,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let destination = address2.destination(chain_config.as_ref()).unwrap();
+    let destination = address2.decode_object(chain_config.as_ref()).unwrap();
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
 
     let block_count_lock = rng.gen_range(1..10);

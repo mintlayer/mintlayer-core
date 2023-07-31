@@ -45,21 +45,21 @@ pub struct SendRequest {
 
 pub fn make_address_output(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     amount: Amount,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
 }
 
 pub fn make_address_output_token(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     amount: Amount,
     token_id: TokenId,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
@@ -71,11 +71,11 @@ pub fn make_address_output_token(
 }
 
 pub fn make_issue_token_outputs(
-    address: Address,
+    address: Address<Destination>,
     token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     chainstate::check_tokens_issuance_data(
         chain_config,
@@ -97,11 +97,11 @@ pub fn make_issue_token_outputs(
 }
 
 pub fn make_issue_nft_outputs(
-    address: Address,
+    address: Address<Destination>,
     nft_metadata: Metadata,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
     let nft_issuance = Box::new(NftIssuance {
         metadata: nft_metadata,
     });
@@ -120,21 +120,21 @@ pub fn make_issue_nft_outputs(
 
 pub fn make_create_delegation_output(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     pool_id: PoolId,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::CreateDelegationId(destination, pool_id))
 }
 
 pub fn make_address_output_from_delegation(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     amount: Amount,
     current_block_height: BlockHeight,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
     let num_blocks_to_lock: i64 =
         chain_config.spend_share_maturity_distance(current_block_height).into();
 
