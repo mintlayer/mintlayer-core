@@ -105,6 +105,12 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
+    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        ChainstateRpcClient::stake_pool_pledge(&self.http_client, pool_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
