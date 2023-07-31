@@ -100,6 +100,7 @@ pub struct StakeRequest {
 
 #[derive(Debug, Clone)]
 pub struct TransactionInfo {
+    pub wallet_id: WalletId,
     pub transaction_status: TxStatus,
 }
 

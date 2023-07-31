@@ -363,7 +363,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction_status })
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     async fn stake_amount(
@@ -397,7 +400,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction_status })
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     fn get_account_balance(
