@@ -716,11 +716,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        log::info!("Start staking, account_index: {}", account_index);
         self.staking_started.insert(account_index);
         Ok(())
     }
 
     pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        log::info!("Stop staking, account_index: {}", account_index);
         self.staking_started.remove(&account_index);
         Ok(())
     }

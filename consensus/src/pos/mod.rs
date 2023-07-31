@@ -37,6 +37,7 @@ use common::{
     Uint256, Uint512,
 };
 use crypto::vrf::VRFPublicKey;
+use logging::log;
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
@@ -230,6 +231,13 @@ pub fn stake(
         ConsensusPoSError::FutureTimestampInThePast
     );
 
+    log::debug!(
+        "Search for a valid block ({}..{}), pool_id: {}",
+        block_timestamp,
+        finalize_pos_data.max_block_timestamp(),
+        pos_data.stake_pool_id()
+    );
+
     while block_timestamp <= finalize_pos_data.max_block_timestamp() {
         let vrf_data = {
             let transcript = construct_transcript(
@@ -253,6 +261,12 @@ pub fn stake(
         )
         .is_ok()
         {
+            log::info!(
+                "Valid block found, timestamp: {}, pool_id: {}",
+                block_timestamp,
+                pos_data.stake_pool_id()
+            );
+
             block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
             block_header.update_timestamp(block_timestamp);
             return Ok(StakeResult::Success);
