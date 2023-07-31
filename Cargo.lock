@@ -1182,7 +1182,6 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "proptest",
- "regex",
  "rstest",
  "script",
  "serde",

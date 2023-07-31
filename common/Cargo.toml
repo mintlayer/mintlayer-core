@@ -25,7 +25,6 @@ lazy_static.workspace = true
 num.workspace = true
 once_cell.workspace = true
 parity-scale-codec.workspace = true
-regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 thiserror.workspace = true
