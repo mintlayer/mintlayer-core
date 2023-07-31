@@ -392,7 +392,7 @@ where
 
         ensure!(
             self.peers.contains_key(&peer_id),
-            P2pError::PeerError(PeerError::PeerDisconnected),
+            P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
         self.peer_connectivity_handle.disconnect(peer_id)?;

@@ -221,7 +221,7 @@ where
             if let PeerActivity::ExpectingHeaderList { time }
             | PeerActivity::ExpectingBlocks { time } = self.last_activity
             {
-                self.handle_stalling_interval(time).await?;
+                self.handle_stalling_interval(time).await;
             }
         }
     }
@@ -797,7 +797,7 @@ where
         )
     }
 
-    async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
+    async fn try_handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
         if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
             return Ok(());
         }
@@ -811,5 +811,12 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             e => Err(e),
         })
+    }
+
+    async fn handle_stalling_interval(&mut self, last_activity: Duration) {
+        let handle_res = self.try_handle_stalling_interval(last_activity).await;
+        if let Err(err) = handle_res {
+            log::warn!("Disconnecting peer failed: {}", err);
+        }
     }
 }
