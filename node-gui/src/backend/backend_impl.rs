@@ -16,7 +16,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use common::{
-    chain::{ChainConfig, GenBlock, SignedTransaction},
+    chain::{ChainConfig, GenBlock},
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::u31::U31;
@@ -363,7 +363,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction_status })
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     async fn stake_amount(
@@ -397,25 +400,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction_status })
-    }
-
-    async fn broadcast(&mut self, transaction: SignedTransaction) -> Result<(), BackendError> {
-        let tx_status = self
-            .controller
-            .p2p
-            .call_async_mut(|p2p| p2p.submit_transaction(transaction))
-            .await
-            .map_err(|e| BackendError::RpcError(e.to_string()))?
-            .map_err(|e| BackendError::RpcError(e.to_string()))?;
-        match tx_status {
-            mempool::TxStatus::InMempool => Ok(()),
-            mempool::TxStatus::InOrphanPool => {
-                // Mempool should reject the transaction and not return `InOrphanPool`
-                log::warn!("The transaction has been added to the orphan pool.");
-                Ok(())
-            }
-        }
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     fn get_account_balance(
@@ -497,10 +485,6 @@ impl Backend {
             BackendRequest::StakeAmount(stake_request) => {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
-            }
-            BackendRequest::Broadcast(transaction) => {
-                let broadcast_res = self.broadcast(transaction).await;
-                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res));
             }
             BackendRequest::TransactionList {
                 wallet_id,

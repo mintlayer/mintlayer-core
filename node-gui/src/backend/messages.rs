@@ -22,7 +22,7 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{Destination, GenBlock, PoolId, SignedTransaction},
+    chain::{Destination, GenBlock, PoolId},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -100,6 +100,7 @@ pub struct StakeRequest {
 
 #[derive(Debug, Clone)]
 pub struct TransactionInfo {
+    pub wallet_id: WalletId,
     pub transaction_status: TxStatus,
 }
 
@@ -148,7 +149,6 @@ pub enum BackendRequest {
     ToggleStaking(WalletId, AccountId, bool),
     SendAmount(SendRequest),
     StakeAmount(StakeRequest),
-    Broadcast(SignedTransaction),
 
     TransactionList {
         wallet_id: WalletId,

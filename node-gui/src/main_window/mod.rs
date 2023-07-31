@@ -446,8 +446,21 @@ impl MainWindow {
                             log::warn!("The transaction has been added to the orphan pool.");
                         }
                     }
-                    self.show_info("Success".to_owned());
-                    Command::none()
+
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::SendSuceed,
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
                 }
                 BackendEvent::SendAmount(Err(error)) => {
                     self.show_error(error.to_string());
@@ -461,8 +474,21 @@ impl MainWindow {
                             log::warn!("The transaction has been added to the orphan pool.");
                         }
                     }
-                    self.show_info("Success".to_owned());
-                    Command::none()
+
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::CreateStakeingPoolSucceed,
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
                 }
                 BackendEvent::StakeAmount(Err(error)) => {
                     self.show_error(error.to_string());
