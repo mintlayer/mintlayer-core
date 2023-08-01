@@ -17,10 +17,10 @@
 
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
-    chain::config::regtest_genesis_values,
+    chain::config::regtest::genesis_values,
     chain::{
         block::timestamp::BlockTimestamp,
-        config::{EpochIndex, GenesisStakingSettings},
+        config::{regtest::GenesisStakingSettings, EpochIndex},
         stakelock::StakePoolData,
         PoolId, TxOutput,
     },

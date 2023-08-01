@@ -16,7 +16,7 @@
 use clap::Args;
 
 use crate::RunOptions;
-use common::chain::config::GenesisStakingSettings;
+use common::chain::config::regtest::GenesisStakingSettings;
 
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {

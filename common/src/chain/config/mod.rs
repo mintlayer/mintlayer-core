@@ -28,16 +28,14 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::TxOutput;
-use crate::chain::{GenBlock, Genesis, PoolId};
+use crate::chain::{GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use std::num::NonZeroU64;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -595,120 +593,6 @@ fn create_testnet_genesis() -> Genesis {
         genesis_message,
         BlockTimestamp::from_int_seconds(1690620112),
         vec![mint_output, initial_pool],
-    )
-}
-
-#[derive(Clone, Debug)]
-pub struct GenesisStakingSettings(String);
-
-impl GenesisStakingSettings {
-    pub fn new(settings: String) -> Self {
-        Self(settings)
-    }
-
-    pub fn get_settings(&self) -> Vec<&str> {
-        self.0.split(',').collect()
-    }
-}
-
-impl Default for GenesisStakingSettings {
-    fn default() -> Self {
-        Self::new("".to_string())
-    }
-}
-
-impl FromStr for GenesisStakingSettings {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s.to_string()))
-    }
-}
-
-pub fn regtest_genesis_values(
-    genesis_staking_settings: GenesisStakingSettings,
-) -> (
-    PoolId,
-    Box<StakePoolData>,
-    PrivateKey,
-    PublicKey,
-    VRFPrivateKey,
-    VRFPublicKey,
-) {
-    let genesis_staking_settings_parts = genesis_staking_settings.get_settings();
-
-    let genesis_pool_id = genesis_staking_settings_parts
-        .iter()
-        .find_map(|s| s.strip_prefix("genesis_pool_id:"))
-        .or(Some(
-            "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
-        ))
-        .map(decode_hex::<PoolId>)
-        .expect("Pool Id decoded");
-
-    let genesis_stake_private_key = genesis_staking_settings_parts
-        .iter()
-        .find_map(|s| s.strip_prefix("genesis_stake_private_key:"))
-        .or(Some(
-            "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
-        ))
-        .map(decode_hex::<PrivateKey>)
-        .expect("Private key decoded");
-
-    let genesis_vrf_private_key = genesis_staking_settings_parts
-        .iter()
-        .find_map(|s| s.strip_prefix("genesis_vrf_private_key:"))
-        .or(Some(
-            "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
-        ))
-        .map(decode_hex::<VRFPrivateKey>)
-        .expect("VRF private key decoded");
-
-    let genesis_stake_public_key = PublicKey::from_private_key(&genesis_stake_private_key);
-    let genesis_vrf_public_key = VRFPublicKey::from_private_key(&genesis_vrf_private_key);
-
-    let genesis_pool_stake_data = Box::new(StakePoolData::new(
-        MIN_STAKE_POOL_PLEDGE,
-        Destination::PublicKey(genesis_stake_public_key.clone()),
-        genesis_vrf_public_key.clone(),
-        Destination::PublicKey(genesis_stake_public_key.clone()),
-        PerThousand::new(1000).expect("Valid per thousand"),
-        Amount::ZERO,
-    ));
-
-    (
-        genesis_pool_id,
-        genesis_pool_stake_data,
-        genesis_stake_private_key,
-        genesis_stake_public_key,
-        genesis_vrf_private_key,
-        genesis_vrf_public_key,
-    )
-}
-
-pub fn create_regtest_pos_genesis(
-    genesis_staking_settings: GenesisStakingSettings,
-    premine_destination: Destination,
-) -> Genesis {
-    let (
-        genesis_pool_id,
-        genesis_stake_pool_data,
-        _genesis_stake_private_key,
-        _genesis_stake_public_key,
-        _genesis_vrf_private_key,
-        _genesis_vrf_public_key,
-    ) = regtest_genesis_values(genesis_staking_settings);
-
-    let create_genesis_pool_txoutput =
-        TxOutput::CreateStakePool(genesis_pool_id, genesis_stake_pool_data);
-
-    let premine_output =
-        TxOutput::Transfer(OutputValue::Coin(DEFAULT_INITIAL_MINT), premine_destination);
-
-    Genesis::new(
-        String::new(),
-        BlockTimestamp::from_int_seconds(1639975460),
-        vec![premine_output, create_genesis_pool_txoutput],
     )
 }
 

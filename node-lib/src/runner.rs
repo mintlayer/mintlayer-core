@@ -32,8 +32,8 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::{
     chain::{
         config::{
-            create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig, ChainType,
-            EmissionScheduleTabular, GenesisStakingSettings,
+            regtest::create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig,
+            ChainType, EmissionScheduleTabular,
         },
         Destination, NetUpgrades,
     },
