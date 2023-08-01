@@ -23,12 +23,13 @@ use common::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},
         config::{Builder as ConfigBuilder, ChainType, EpochIndex},
         create_unittest_pos_config,
+        output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
-        tokens::{OutputValue, TokenData, TokenTransfer},
+        tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         OutPointSourceId, PoolId, RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
         UtxoOutPoint,
@@ -362,7 +363,7 @@ pub fn produce_kernel_signature(
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.tx_id()).unwrap()
+    let utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
         [kernel_outpoint.output_index() as usize];
 
     let kernel_inputs = vec![kernel_outpoint.into()];

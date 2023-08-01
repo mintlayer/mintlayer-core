@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use common::address::Address;
+use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{
-    Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer,
+    Metadata, NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer,
 };
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,

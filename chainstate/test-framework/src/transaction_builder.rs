@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        signature::inputsig::InputWitness, signed_transaction::SignedTransaction,
-        tokens::OutputValue, Destination, Transaction, TxInput, TxOutput,
+        output_value::OutputValue, signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction, Destination, Transaction, TxInput, TxOutput,
     },
     primitives::Amount,
 };

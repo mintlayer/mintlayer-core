@@ -27,9 +27,10 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, Builder, ChainType},
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{OutputValue, TokenData, TokenTransfer},
+        tokens::{TokenData, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable},

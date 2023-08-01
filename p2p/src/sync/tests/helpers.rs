@@ -41,8 +41,8 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::create_mainnet,
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::OutputValue,
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
         TxOutput,
     },

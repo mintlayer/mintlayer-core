@@ -24,13 +24,13 @@ use script::Script;
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        tokens::OutputValue,
         AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
         TransactionCreationError, TxInput, TxOutput,
     },

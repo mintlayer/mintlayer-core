@@ -127,7 +127,7 @@ fn own_input<'a>(
     input: &TxInput,
 ) -> Option<&'a TxOutput> {
     match input {
-        TxInput::Utxo(utxo) => match output_cache.txs_with_unconfirmed().get(&utxo.tx_id()) {
+        TxInput::Utxo(utxo) => match output_cache.txs_with_unconfirmed().get(&utxo.source_id()) {
             Some(tx) => tx
                 .outputs()
                 .get(utxo.output_index() as usize)

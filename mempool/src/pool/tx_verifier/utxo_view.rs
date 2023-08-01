@@ -49,7 +49,7 @@ impl<'m, M, P: UtxosView> UtxosView for MempoolUtxoView<'m, M, P> {
     type Error = Error<P::Error>;
 
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
-        let tx_id = match outpoint.tx_id().get_tx_id() {
+        let tx_id = match outpoint.source_id().get_tx_id() {
             Some(tx_id) => *tx_id,
             None => return Ok(self.parent.utxo(outpoint)?),
         };

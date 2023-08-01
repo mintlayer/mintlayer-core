@@ -18,9 +18,9 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
         Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
         UtxoOutPoint,
     },

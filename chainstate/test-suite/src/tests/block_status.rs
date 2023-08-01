@@ -22,7 +22,7 @@ use chainstate_test_framework::{
 use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{
     chain::{
-        signed_transaction::SignedTransaction, tokens::OutputValue, Block, GenBlock,
+        output_value::OutputValue, signed_transaction::SignedTransaction, Block, GenBlock,
         OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},

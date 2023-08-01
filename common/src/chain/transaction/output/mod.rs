@@ -15,10 +15,7 @@
 
 use crate::{
     address::{pubkeyhash::PublicKeyHash, traits::Addressable, AddressError},
-    chain::{
-        tokens::{OutputValue, TokenData},
-        ChainConfig, DelegationId, PoolId,
-    },
+    chain::{output_value::OutputValue, tokens::TokenData, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -27,6 +24,7 @@ use serialization::{Decode, DecodeAll, Encode};
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
 pub mod classic_multisig;
+pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 

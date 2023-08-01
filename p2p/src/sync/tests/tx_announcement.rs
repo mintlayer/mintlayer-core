@@ -19,8 +19,9 @@ use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        config::create_unit_test_config, signature::inputsig::InputWitness, tokens::OutputValue,
-        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        config::create_unit_test_config, output_value::OutputValue,
+        signature::inputsig::InputWitness, GenBlock, OutPointSourceId, SignedTransaction,
+        Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };

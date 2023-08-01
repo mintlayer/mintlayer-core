@@ -49,7 +49,10 @@ pub enum TxDependency {
 
 impl TxDependency {
     fn from_utxo(outpt: &UtxoOutPoint) -> Option<Self> {
-        outpt.tx_id().get_tx_id().map(|id| Self::TxOutput(*id, outpt.output_index()))
+        outpt
+            .source_id()
+            .get_tx_id()
+            .map(|id| Self::TxOutput(*id, outpt.output_index()))
     }
 
     fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {

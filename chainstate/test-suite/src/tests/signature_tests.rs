@@ -20,8 +20,8 @@ use common::chain::signed_transaction::SignedTransaction;
 use common::primitives::Idable;
 use common::{
     chain::{
+        output_value::OutputValue,
         signature::{inputsig::InputWitness, sighash::sighashtype::SigHashType},
-        tokens::OutputValue,
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::Amount,

@@ -72,7 +72,7 @@ impl UtxoOutPoint {
         }
     }
 
-    pub fn tx_id(&self) -> OutPointSourceId {
+    pub fn source_id(&self) -> OutPointSourceId {
         self.id.clone()
     }
 

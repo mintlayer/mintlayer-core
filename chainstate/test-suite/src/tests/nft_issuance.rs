@@ -18,13 +18,12 @@ use chainstate::{
     CheckBlockTransactionsError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
-use common::chain::tokens::OutputValue;
-use common::chain::tokens::TokenData;
+use common::chain::output_value::OutputValue;
 use common::chain::Block;
 use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{Metadata, NftIssuance},
+    tokens::{Metadata, NftIssuance, TokenData},
     Destination, TxInput, TxOutput,
 };
 use common::primitives::Idable;

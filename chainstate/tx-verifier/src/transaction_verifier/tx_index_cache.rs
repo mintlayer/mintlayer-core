@@ -111,7 +111,7 @@ impl TxIndexCache {
                 TxInput::Account(_) => None,
             })
             .try_for_each(|outpoint| {
-                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.source_id())?;
                 prev_tx_index_op
                     .spend(outpoint.output_index(), spender.clone())
                     .map_err(TxIndexError::from)
@@ -121,7 +121,7 @@ impl TxIndexCache {
     pub fn unspend_tx_index_inputs(&mut self, inputs: &[TxInput]) -> Result<(), TxIndexError> {
         inputs.iter().try_for_each(|input| match input {
             TxInput::Utxo(outpoint) => {
-                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.source_id())?;
                 prev_tx_index_op.unspend(outpoint.output_index()).map_err(TxIndexError::from)
             }
             TxInput::Account(_) => Ok(()),
@@ -139,11 +139,11 @@ impl TxIndexCache {
     {
         inputs.iter().try_for_each(|input| match input {
             TxInput::Utxo(outpoint) => {
-                match self.data.entry(outpoint.tx_id()) {
+                match self.data.entry(outpoint.source_id()) {
                     Entry::Occupied(_) => (),
                     Entry::Vacant(entry) => {
                         // Maybe the utxo is in a previous block?
-                        let tx_index = fetcher_func(&outpoint.tx_id())?
+                        let tx_index = fetcher_func(&outpoint.source_id())?
                             .ok_or(TxIndexError::MissingOutputOrSpent)?;
                         entry.insert(CachedInputsOperation::Read(tx_index));
                     }

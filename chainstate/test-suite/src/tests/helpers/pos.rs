@@ -17,7 +17,7 @@ use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, stakelock::StakePoolData, tokens::OutputValue,
+        block::timestamp::BlockTimestamp, output_value::OutputValue, stakelock::StakePoolData,
         Destination, Genesis, RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, H256},

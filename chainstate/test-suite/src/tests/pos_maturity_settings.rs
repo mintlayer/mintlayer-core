@@ -19,8 +19,8 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, timelock::OutputTimeLock,
-        tokens::OutputValue, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
+        config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
+        timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
         Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, TxInput, TxOutput,
         UpgradeVersion, UtxoOutPoint,
     },

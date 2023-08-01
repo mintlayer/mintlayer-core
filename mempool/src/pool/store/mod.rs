@@ -308,7 +308,7 @@ impl MempoolStore {
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => outpoint.tx_id().get_tx_id().cloned(),
+                TxInput::Utxo(outpoint) => outpoint.source_id().get_tx_id().cloned(),
                 TxInput::Account(_) => None,
             })
             .filter(|id| self.txs_by_id.contains_key(id))

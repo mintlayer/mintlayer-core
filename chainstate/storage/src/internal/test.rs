@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use common::chain::tokens::OutputValue;
+use common::chain::output_value::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Block, Destination, TxOutput};
 use common::primitives::{Amount, Idable, H256};

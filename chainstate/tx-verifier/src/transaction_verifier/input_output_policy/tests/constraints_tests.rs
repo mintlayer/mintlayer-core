@@ -17,8 +17,9 @@ use std::{collections::BTreeMap, ops::Range};
 
 use common::{
     chain::{
-        config::ChainType, stakelock::StakePoolData, timelock::OutputTimeLock, tokens::OutputValue,
-        AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId, TxOutput,
+        config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
+        TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };

@@ -153,7 +153,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .inputs()
             .iter()
             .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => Some(outpoint.tx_id()),
+                TxInput::Utxo(outpoint) => Some(outpoint.source_id()),
                 TxInput::Account(_) => None,
             })
             .collect();
@@ -336,7 +336,7 @@ impl<P: UtxosView> UtxosCache<P> {
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
-        entry.take_utxo().ok_or_else(|| Error::UtxoAlreadySpent(outpoint.tx_id()))
+        entry.take_utxo().ok_or_else(|| Error::UtxoAlreadySpent(outpoint.source_id()))
     }
 
     /// Checks whether utxo exists in the cache

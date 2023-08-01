@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{tokens::OutputValue, Destination, GenBlock, OutPointSourceId, UtxoOutPoint},
+    chain::{output_value::OutputValue, Destination, GenBlock, OutPointSourceId, UtxoOutPoint},
     primitives::Id,
     Uint256,
 };

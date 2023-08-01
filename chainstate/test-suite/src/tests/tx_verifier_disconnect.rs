@@ -22,7 +22,7 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, tokens::OutputValue, ChainConfig, GenBlockId,
+        config::Builder as ConfigBuilder, output_value::OutputValue, ChainConfig, GenBlockId,
         OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},

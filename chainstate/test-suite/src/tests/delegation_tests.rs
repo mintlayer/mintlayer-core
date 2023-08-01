@@ -23,8 +23,8 @@ use chainstate_test_framework::{
 use common::chain::{AccountOutPoint, AccountSpending, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, AccountNonce, Destination, OutPointSourceId,
-        TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue, timelock::OutputTimeLock, AccountNonce, Destination,
+        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable, H256},
 };

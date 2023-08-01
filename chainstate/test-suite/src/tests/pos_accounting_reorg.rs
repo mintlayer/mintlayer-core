@@ -29,9 +29,9 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
         Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
