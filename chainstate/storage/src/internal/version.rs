@@ -13,20 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-#[repr(u32)]
+use serialization::{Decode, Encode};
+
+#[derive(Debug, Encode, Decode, Clone, Copy, Eq, PartialEq)]
 pub enum ChainstateStorageVersion {
-    // skipping 0 for historical reasons
-    V1 = 1,
+    V0,
+    V1,
 }
 
 impl ChainstateStorageVersion {
     pub const CURRENT: Self = Self::V1;
-
-    pub fn new(value: u32) -> Option<Self> {
-        match value {
-            1 => Some(ChainstateStorageVersion::V1),
-            _ => None,
-        }
-    }
 }

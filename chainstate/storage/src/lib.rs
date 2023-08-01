@@ -61,7 +61,7 @@ pub trait BlockchainStorageRead:
     + EpochStorageRead
 {
     /// Get storage version
-    fn get_storage_version(&self) -> crate::Result<Option<u32>>;
+    fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
 
     /// Get magic bytes
     fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
@@ -138,7 +138,7 @@ pub trait BlockchainStorageWrite:
     + EpochStorageWrite
 {
     /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;
 
     /// Set magic bytes
     fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> Result<()>;

@@ -56,7 +56,7 @@ impl<B: storage::Backend> Store<B> {
         // Set defaults if missing
 
         if storage.get_storage_version()?.is_none() {
-            storage.set_storage_version(ChainstateStorageVersion::CURRENT as u32)?;
+            storage.set_storage_version(ChainstateStorageVersion::CURRENT)?;
         }
 
         if storage.get_magic_bytes()?.is_none() {
@@ -224,7 +224,7 @@ macro_rules! delegate_to_transaction {
 
 impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
-        fn get_storage_version(&self) -> crate::Result<Option<u32>>;
+        fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -379,7 +379,7 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
 
 impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
-        fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
         fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()>;
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;

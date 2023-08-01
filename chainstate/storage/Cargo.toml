@@ -17,6 +17,8 @@ utxo = { path = '../../utxo' }
 
 mockall = { workspace = true, optional = true }
 
+parity-scale-codec.workspace = true
+
 [dev-dependencies]
 crypto = { path = '../../crypto' }
 test-utils = {path = '../../test-utils'}

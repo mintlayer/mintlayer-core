@@ -217,8 +217,6 @@ pub enum StorageCompatibilityCheckError {
     StorageError(#[from] chainstate_storage::Error),
     #[error("Storage version is missing in the db")]
     StorageVersionMissing,
-    #[error("Failed to convert storage error")]
-    StorageVersionConversionError,
     #[error("Magic bytes are missing in the db")]
     MagicBytesMissing,
     #[error("Chain type is missing in the db")]

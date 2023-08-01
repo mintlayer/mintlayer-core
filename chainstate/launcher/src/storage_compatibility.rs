@@ -36,8 +36,6 @@ fn check_storage_version(
         .get_storage_version()
         .map_err(StorageCompatibilityCheckError::StorageError)?
         .ok_or(StorageCompatibilityCheckError::StorageVersionMissing)?;
-    let storage_version = ChainstateStorageVersion::new(storage_version)
-        .ok_or(StorageCompatibilityCheckError::StorageVersionConversionError)?;
 
     ensure!(
         storage_version == ChainstateStorageVersion::CURRENT,
