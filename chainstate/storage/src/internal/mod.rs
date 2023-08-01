@@ -51,21 +51,24 @@ pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 impl<B: storage::Backend> Store<B> {
     /// Create a new chainstate storage
     pub fn new(backend: B, chain_config: &ChainConfig) -> crate::Result<Self> {
-        let mut storage = Self::from_backend(backend)?;
+        let storage = Self::from_backend(backend)?;
 
         // Set defaults if missing
+        let mut db_tx = storage.transaction_rw(None)?;
 
-        if storage.get_storage_version()?.is_none() {
-            storage.set_storage_version(ChainstateStorageVersion::CURRENT)?;
+        if db_tx.get_storage_version()?.is_none() {
+            db_tx.set_storage_version(ChainstateStorageVersion::CURRENT)?;
         }
 
-        if storage.get_magic_bytes()?.is_none() {
-            storage.set_magic_bytes(chain_config.magic_bytes())?;
+        if db_tx.get_magic_bytes()?.is_none() {
+            db_tx.set_magic_bytes(chain_config.magic_bytes())?;
         }
 
-        if storage.get_chain_type()?.is_none() {
-            storage.set_chain_type(chain_config.chain_type().name())?;
+        if db_tx.get_chain_type()?.is_none() {
+            db_tx.set_chain_type(chain_config.chain_type().name())?;
         }
+
+        db_tx.commit()?;
 
         Ok(storage)
     }
