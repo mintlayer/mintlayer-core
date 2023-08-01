@@ -21,6 +21,7 @@ use super::{
         storage::TransactionVerifierStorageError,
     },
 };
+use chainstate_storage::ChainstateStorageVersion;
 use chainstate_types::{GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
@@ -214,10 +215,18 @@ pub enum InitializationError {
 pub enum StorageCompatibilityCheckError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
+    #[error("Storage version is missing in the db")]
+    StorageVersionMissing,
+    #[error("Failed to convert storage error")]
+    StorageVersionConversionError,
+    #[error("Magic bytes are missing in the db")]
+    MagicBytesMissing,
+    #[error("Chain type is missing in the db")]
+    ChainTypeMissing,
     #[error(
-        "Node cannot load chainstate database because the versions mismatch: db `{0}`, app `{1}`"
+        "Node cannot load chainstate database because the versions mismatch: db `{0:?}`, app `{1:?}`"
     )]
-    ChainstateStorageVersionMismatch(u32, u32),
+    ChainstateStorageVersionMismatch(ChainstateStorageVersion, ChainstateStorageVersion),
     #[error(
         "Chain's config magic bytes do not match the one from database : expected `{0:?}`, actual `{1:?}`"
     )]

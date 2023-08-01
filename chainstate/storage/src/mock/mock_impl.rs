@@ -44,7 +44,7 @@ mockall::mock! {
     pub Store {}
 
     impl crate::BlockchainStorageRead for Store {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<u32>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -300,7 +300,7 @@ mockall::mock! {
     pub StoreTxRo {}
 
     impl crate::BlockchainStorageRead for StoreTxRo {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<u32>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -414,7 +414,7 @@ mockall::mock! {
     pub StoreTxRw {}
 
     impl crate::BlockchainStorageRead for StoreTxRw {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<u32>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;

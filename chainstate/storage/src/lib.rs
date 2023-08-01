@@ -24,7 +24,7 @@ pub mod schema;
 use std::collections::BTreeMap;
 
 use common::chain::block::signed_block_header::SignedBlockHeader;
-pub use internal::Store;
+pub use internal::{ChainstateStorageVersion, Store};
 
 use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
 use common::chain::block::BlockReward;
@@ -61,7 +61,7 @@ pub trait BlockchainStorageRead:
     + EpochStorageRead
 {
     /// Get storage version
-    fn get_storage_version(&self) -> crate::Result<u32>;
+    fn get_storage_version(&self) -> crate::Result<Option<u32>>;
 
     /// Get magic bytes
     fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;

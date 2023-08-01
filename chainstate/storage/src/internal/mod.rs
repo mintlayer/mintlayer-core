@@ -22,8 +22,8 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
+        PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -42,12 +42,35 @@ use crate::{
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 
+mod version;
+pub use version::ChainstateStorageVersion;
+
 /// Store for blockchain data, parametrized over the backend B
 pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 
 impl<B: storage::Backend> Store<B> {
     /// Create a new chainstate storage
-    pub fn new(backend: B) -> crate::Result<Self> {
+    pub fn new(backend: B, chain_config: &ChainConfig) -> crate::Result<Self> {
+        let mut storage = Self::from_backend(backend)?;
+
+        // Set defaults if missing
+
+        if storage.get_storage_version()?.is_none() {
+            storage.set_storage_version(ChainstateStorageVersion::CURRENT as u32)?;
+        }
+
+        if storage.get_magic_bytes()?.is_none() {
+            storage.set_magic_bytes(chain_config.magic_bytes())?;
+        }
+
+        if storage.get_chain_type()?.is_none() {
+            storage.set_chain_type(chain_config.chain_type().name())?;
+        }
+
+        Ok(storage)
+    }
+
+    fn from_backend(backend: B) -> crate::Result<Self> {
         let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         Ok(storage)
     }
@@ -146,7 +169,7 @@ impl<B: storage::Backend> Store<B> {
 impl<B: Default + storage::Backend> Store<B> {
     /// Create a default storage (mostly for testing, may want to remove this later)
     pub fn new_empty() -> crate::Result<Self> {
-        Self::new(B::default())
+        Self::from_backend(B::default())
     }
 }
 
@@ -201,7 +224,7 @@ macro_rules! delegate_to_transaction {
 
 impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<u32>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;

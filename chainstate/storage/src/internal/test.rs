@@ -33,7 +33,7 @@ fn test_storage_get_default_version_in_tx() {
         let store = TestStore::new_empty().unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
-        assert_eq!(vtx, 0, "Default storage version wrong");
+        assert_eq!(vtx, None, "Default storage version wrong");
         assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
     })
 }
@@ -73,9 +73,9 @@ fn test_storage_manipulation() {
     let mut store = TestStore::new_empty().unwrap();
 
     // Storage version manipulation
-    assert_eq!(store.get_storage_version(), Ok(0));
+    assert_eq!(store.get_storage_version(), Ok(None));
     assert_eq!(store.set_storage_version(2), Ok(()));
-    assert_eq!(store.get_storage_version(), Ok(2));
+    assert_eq!(store.get_storage_version(), Ok(Some(2)));
 
     // Store is now empty, the block is not there
     assert_eq!(store.get_block(block0.get_id()), Ok(None));
@@ -159,7 +159,7 @@ fn get_set_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
+                let v = tx.get_storage_version().unwrap().unwrap();
                 tx.set_storage_version(v + 1).unwrap();
                 tx.commit().unwrap();
             })
@@ -168,8 +168,8 @@ fn get_set_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let tx = store.transaction_ro().unwrap();
-                let v1 = tx.get_storage_version().unwrap();
-                let v2 = tx.get_storage_version().unwrap();
+                let v1 = tx.get_storage_version().unwrap().unwrap();
+                let v2 = tx.get_storage_version().unwrap().unwrap();
                 assert!([2, 3].contains(&v1));
                 assert_eq!(v1, v2, "Version query in a transaction inconsistent");
             })
@@ -177,7 +177,7 @@ fn get_set_transactions() {
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(3));
+        assert_eq!(store.get_storage_version(), Ok(Some(3)));
     })
 }
 
@@ -193,7 +193,7 @@ fn test_storage_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
+                let v = tx.get_storage_version().unwrap().unwrap();
                 tx.set_storage_version(v + 3).unwrap();
                 tx.commit().unwrap();
             })
@@ -202,7 +202,7 @@ fn test_storage_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
+                let v = tx.get_storage_version().unwrap().unwrap();
                 tx.set_storage_version(v + 5).unwrap();
                 tx.commit().unwrap();
             })
@@ -210,7 +210,7 @@ fn test_storage_transactions() {
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+        assert_eq!(store.get_storage_version(), Ok(Some(10)));
     })
 }
 
@@ -226,7 +226,7 @@ fn test_storage_transactions_with_result_check() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
+                let v = tx.get_storage_version().unwrap().unwrap();
                 assert!(tx.set_storage_version(v + 3).is_ok());
                 assert!(tx.commit().is_ok());
             })
@@ -235,7 +235,7 @@ fn test_storage_transactions_with_result_check() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
+                let v = tx.get_storage_version().unwrap().unwrap();
                 assert!(tx.set_storage_version(v + 5).is_ok());
                 assert!(tx.commit().is_ok());
             })
@@ -243,7 +243,7 @@ fn test_storage_transactions_with_result_check() {
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+        assert_eq!(store.get_storage_version(), Ok(Some(10)));
     })
 }
 

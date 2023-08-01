@@ -79,8 +79,8 @@ macro_rules! impl_read_ops {
     ($TxType:ident) => {
         /// Blockchain data storage transaction
         impl<'st, B: storage::Backend> BlockchainStorageRead for $TxType<'st, B> {
-            fn get_storage_version(&self) -> crate::Result<u32> {
-                self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            fn get_storage_version(&self) -> crate::Result<Option<u32>> {
+                self.read_value::<well_known::StoreVersion>()
             }
 
             fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {

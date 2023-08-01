@@ -92,7 +92,7 @@ fn mock_transaction() {
     let mut store = MockStore::new();
     store.expect_transaction_rw().returning(|_| {
         let mut mock_tx = MockStoreTxRw::new();
-        mock_tx.expect_get_storage_version().return_const(Ok(3));
+        mock_tx.expect_get_storage_version().return_const(Ok(Some(3)));
         mock_tx
             .expect_set_storage_version()
             .with(mockall::predicate::eq(4))
@@ -103,7 +103,7 @@ fn mock_transaction() {
 
     // Test some code against the mock
     let mut tx = store.transaction_rw(None).unwrap();
-    let v = tx.get_storage_version().unwrap();
+    let v = tx.get_storage_version().unwrap().unwrap();
     tx.set_storage_version(v + 1).unwrap();
     tx.commit().unwrap();
 }

@@ -39,10 +39,10 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
 ) -> Result<Box<dyn ChainstateInterface>, Error> {
-    let mut storage = chainstate_storage::Store::new(storage_backend)
+    let storage = chainstate_storage::Store::new(storage_backend, &chain_config)
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 
-    storage_compatibility::check_storage_compatibility(&mut storage, chain_config.as_ref())
+    storage_compatibility::check_storage_compatibility(&storage, chain_config.as_ref())
         .map_err(InitializationError::StorageCompatibilityCheckError)?;
 
     let chainstate = chainstate::make_chainstate(
