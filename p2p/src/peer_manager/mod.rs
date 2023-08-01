@@ -345,7 +345,29 @@ where
         );
 
         if peer.score >= *self.p2p_config.ban_threshold {
-            self.peerdb.ban(peer.address.as_bannable());
+            let address = peer.address.as_bannable();
+            self.ban(address);
+        }
+    }
+
+    fn ban(&mut self, address: T::BannableAddress) {
+        let to_disconnect = self
+            .peers
+            .values()
+            .filter_map(|peer| {
+                if peer.address.as_bannable() == address {
+                    Some(peer.info.peer_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        log::info!("Ban {:?}, disconnect peers: {:?}", address, to_disconnect);
+
+        self.peerdb.ban(address);
+
+        for peer_id in to_disconnect {
             self.disconnect(peer_id, None);
         }
     }
@@ -1032,7 +1054,7 @@ where
                 response.send(self.peerdb.list_banned().cloned().collect())
             }
             PeerManagerEvent::Ban(address, response) => {
-                self.peerdb.ban(address);
+                self.ban(address);
                 response.send(Ok(()));
             }
             PeerManagerEvent::Unban(address, response) => {
