@@ -48,7 +48,7 @@ pub enum Command {
     /// Run the testnet node.
     Testnet(RunOptions),
     /// Run the regtest node.
-    Regtest(RegtestOptions),
+    Regtest(Box<RegtestOptions>),
 }
 
 #[derive(Args, Clone, Debug, Default)]

@@ -16,6 +16,7 @@
 mod builder;
 mod checkpoints;
 pub mod emission_schedule;
+pub mod regtest;
 pub use builder::Builder;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;

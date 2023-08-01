@@ -373,9 +373,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     if chain_pos_netupgrades.unwrap_or(false) {
         builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
             create_regtest_pos_genesis(
-                chain_genesis_staking_settings
-                    .clone()
-                    .unwrap_or(GenesisStakingSettings::default()),
+                chain_genesis_staking_settings.clone(),
                 Destination::AnyoneCanSpend,
             ),
         );
