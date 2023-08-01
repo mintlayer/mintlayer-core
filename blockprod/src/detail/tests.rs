@@ -932,7 +932,7 @@ mod produce_block {
                     let mut rng = make_seedable_rng(seed);
                     let job_key = JobKey::new(
                         vec![],
-                        Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
                     );
                     Ok((job_key, None, cancel_receiver))
                 });
@@ -1643,7 +1643,7 @@ mod stop_all_jobs {
                 .job_manager_handle
                 .add_job(
                     vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
@@ -1653,7 +1653,7 @@ mod stop_all_jobs {
                 .job_manager_handle
                 .add_job(
                     vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
@@ -1733,7 +1733,7 @@ mod stop_job {
         let mut rng = make_seedable_rng(seed);
         let job_key = JobKey::new(
             vec![],
-            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
         let result = block_production.stop_job(job_key).await;
@@ -1769,7 +1769,7 @@ mod stop_job {
                 .job_manager_handle
                 .add_job(
                     vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
@@ -1779,7 +1779,7 @@ mod stop_job {
                 .job_manager_handle
                 .add_job(
                     vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
@@ -1820,7 +1820,7 @@ mod stop_job {
                     .job_manager_handle
                     .add_job(
                         vec![],
-                        Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
                     )
                     .await
                     .unwrap();
@@ -1875,14 +1875,14 @@ mod stop_job {
                 .job_manager_handle
                 .add_job(
                     vec![],
-                    Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
 
         let stop_job_key = JobKey::new(
             vec![],
-            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
@@ -1919,7 +1919,7 @@ mod stop_job {
         let mut rng = make_seedable_rng(seed);
         let job_key = JobKey::new(
             vec![],
-            Id::new(H256::random_using(&mut rng)) as Id<GenBlock>,
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
         let result = block_production.stop_job(job_key).await;
