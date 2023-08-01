@@ -49,7 +49,6 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     for WrappedTransportSocket<S, T>
 {
     type Address = T::Address;
-    type BannableAddress = T::BannableAddress;
     type Listener = AdaptedListener<S, T>;
     type Stream = S::Stream;
 

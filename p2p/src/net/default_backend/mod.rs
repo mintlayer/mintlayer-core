@@ -102,7 +102,6 @@ pub struct SyncingReceiver {
 impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
     type Address = T::Address;
-    type BannableAddress = T::BannableAddress;
     type ConnectivityHandle = ConnectivityHandle<Self, T>;
     type MessagingHandle = MessagingHandle<T>;
     type SyncingEventReceiver = SyncingReceiver;

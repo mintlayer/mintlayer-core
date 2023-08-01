@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common::chain::SignedTransaction;
 use mempool::TxOrigin;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 
 use crate::{
-    error::{ConversionError, P2pError},
+    error::P2pError,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
     net::NetworkingService,
     types::peer_id::PeerId,
@@ -31,7 +31,7 @@ use crate::{
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
 where
-    T: NetworkingService,
+    T: NetworkingService + Send + Sync,
     T::MessagingHandle: MessagingService,
 {
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
@@ -50,29 +50,23 @@ where
         rx.await?
     }
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<String>> {
+    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>> {
         let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::ListBanned(tx))
             .map_err(|_| P2pError::ChannelClosed)?;
         let list = rx.await?;
-        Ok(list.iter().map(ToString::to_string).collect())
+        Ok(list)
     }
-    async fn ban(&mut self, addr: String) -> crate::Result<()> {
+    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
-        let addr = addr
-            .parse::<T::BannableAddress>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
         self.tx_peer_manager
             .send(PeerManagerEvent::Ban(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await?
     }
-    async fn unban(&mut self, addr: String) -> crate::Result<()> {
+    async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
-        let addr = addr
-            .parse::<T::BannableAddress>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
         self.tx_peer_manager
             .send(PeerManagerEvent::Unban(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;

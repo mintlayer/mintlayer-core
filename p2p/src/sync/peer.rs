@@ -87,7 +87,7 @@ pub struct Peer<T: NetworkingService> {
     common_services: Services,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
@@ -133,7 +133,7 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
@@ -673,7 +673,7 @@ where
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
     pub async fn handle_result(
-        peer_manager_sender: &UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
         peer_id: PeerId,
         result: Result<()>,
     ) -> Result<()> {

@@ -19,6 +19,8 @@ use std::{
     time::Duration,
 };
 
+use p2p_types::bannable_address::BannableAddress;
+
 use crate::error::P2pError;
 
 use super::storage::{
@@ -27,13 +29,13 @@ use super::storage::{
 
 const STORAGE_VERSION: u32 = 1;
 
-pub struct LoadedStorage<A, B> {
+pub struct LoadedStorage<A> {
     pub known_addresses: BTreeSet<A>,
-    pub banned_addresses: BTreeMap<B, Duration>,
+    pub banned_addresses: BTreeMap<BannableAddress, Duration>,
 }
 
-impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
-    pub fn load_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A, B>> {
+impl<A: Ord + FromStr> LoadedStorage<A> {
+    pub fn load_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
@@ -47,7 +49,7 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
         }
     }
 
-    fn init_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A, B>> {
+    fn init_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
         let mut tx = storage.transaction_rw()?;
         tx.set_version(STORAGE_VERSION)?;
         tx.commit()?;
@@ -57,7 +59,7 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
         })
     }
 
-    fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A, B>> {
+    fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
         let tx = storage.transaction_ro()?;
 
         // TODO: Is there a concern that the number of addresses will be so huge that it'll cause a hiccup?
@@ -77,7 +79,7 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
             .get_banned_addresses()?
             .iter()
             .map(|(addr, duration)| {
-                addr.parse::<B>()
+                addr.parse::<BannableAddress>()
                     .map_err(|_err| {
                         P2pError::InvalidStorageState(format!(
                             "Invalid banned address in PeerDb storage: {addr}"

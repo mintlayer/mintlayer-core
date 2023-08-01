@@ -20,6 +20,7 @@ use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use common::time_getter::TimeGetter;
+use p2p_types::bannable_address::BannableAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -63,13 +64,7 @@ pub trait NetworkingService {
         + ToString
         + FromStr
         + TransportAddress
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
-
-    /// An address type that can be banned.
-    ///
-    /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
-    /// that consists of an IP address and a port we want to ban the IP address.
-    type BannableAddress: Clone + Debug + Eq + Ord + Send + ToString + FromStr;
+        + AsBannableAddress;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -158,8 +153,6 @@ pub trait SyncingEventReceiver {
 /// `SocketAddr` contains a port in addition to an IP address and we want to ban only the latter
 /// one.
 pub trait AsBannableAddress {
-    type BannableAddress;
-
     /// Returns a bannable part of an address.
-    fn as_bannable(&self) -> Self::BannableAddress;
+    fn as_bannable(&self) -> BannableAddress;
 }

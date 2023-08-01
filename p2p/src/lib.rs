@@ -35,6 +35,7 @@ pub use crate::{
 };
 
 use std::{
+    marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
 };
@@ -78,7 +79,7 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
+    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
     mempool_handle: MempoolHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
@@ -92,11 +93,13 @@ struct P2p<T: NetworkingService> {
     sync_manager_task: JoinHandle<()>,
 
     subscribers_sender: mpsc::UnboundedSender<P2pEventHandler>,
+
+    _phantom: PhantomData<T>,
 }
 
 impl<T> P2p<T>
 where
-    T: 'static + NetworkingService + Send,
+    T: 'static + NetworkingService + Send + Sync,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::MessagingHandle: MessagingService,
     T::SyncingEventReceiver: SyncingEventReceiver,
@@ -198,6 +201,7 @@ where
             peer_manager_task,
             sync_manager_task,
             subscribers_sender,
+            _phantom: PhantomData,
         })
     }
 

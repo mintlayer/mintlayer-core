@@ -19,7 +19,7 @@
 
 use std::{
     collections::BTreeMap,
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -117,7 +117,6 @@ pub struct MockSyncingEventReceiver {}
 impl NetworkingService for MockNetworkingService {
     type Transport = ();
     type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type ConnectivityHandle = MockConnectivityHandle;
     type MessagingHandle = ();
     type SyncingEventReceiver = MockSyncingEventReceiver;

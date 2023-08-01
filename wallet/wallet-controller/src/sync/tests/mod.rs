@@ -36,7 +36,7 @@ use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
@@ -219,13 +219,13 @@ impl NodeInterface for MockNode {
     async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
         unreachable!()
     }
-    async fn p2p_ban(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_ban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn p2p_unban(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_unban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {

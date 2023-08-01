@@ -28,7 +28,7 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::TxStatus;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
@@ -271,12 +271,12 @@ pub enum WalletCommand {
 
     /// Ban address
     Ban {
-        address: String,
+        address: BannableAddress,
     },
 
     /// Unban address
     Unban {
-        address: String,
+        address: BannableAddress,
     },
 
     /// Get connected peer count

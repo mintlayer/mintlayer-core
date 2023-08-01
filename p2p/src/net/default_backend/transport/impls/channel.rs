@@ -84,7 +84,6 @@ impl MpscChannelTransport {
 #[async_trait]
 impl TransportSocket for MpscChannelTransport {
     type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = ChannelListener;
     type Stream = ChannelStream;
 

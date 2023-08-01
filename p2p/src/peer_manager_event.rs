@@ -13,15 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 
-use crate::{
-    interface::types::ConnectedPeer, net::NetworkingService, types::peer_id::PeerId,
-    utils::oneshot_nofail,
-};
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, utils::oneshot_nofail};
 
 #[derive(Debug)]
-pub enum PeerManagerEvent<T: NetworkingService> {
+pub enum PeerManagerEvent {
     /// Try to establish connection with a remote peer
     Connect(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
@@ -46,13 +43,7 @@ pub enum PeerManagerEvent<T: NetworkingService> {
 
     RemoveReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
-    ListBanned(oneshot_nofail::Sender<Vec<T::BannableAddress>>),
-    Ban(
-        T::BannableAddress,
-        oneshot_nofail::Sender<crate::Result<()>>,
-    ),
-    Unban(
-        T::BannableAddress,
-        oneshot_nofail::Sender<crate::Result<()>>,
-    ),
+    ListBanned(oneshot_nofail::Sender<Vec<BannableAddress>>),
+    Ban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
+    Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
 }
