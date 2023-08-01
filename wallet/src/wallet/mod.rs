@@ -53,6 +53,7 @@ use wallet_storage::{
 use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
+use wallet_types::with_locked::WithLocked;
 use wallet_types::{AccountId, BlockInfo, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -356,11 +357,13 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         self.get_account(account_index)?.get_balance(
             utxo_types,
             utxo_states,
             self.latest_median_time,
+            with_locked,
         )
     }
 
@@ -369,9 +372,15 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self.get_account(account_index)?;
-        let utxos = account.get_utxos(utxo_types, self.latest_median_time, utxo_states);
+        let utxos = account.get_utxos(
+            utxo_types,
+            self.latest_median_time,
+            utxo_states,
+            with_locked,
+        );
         let utxos = utxos
             .into_iter()
             .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))

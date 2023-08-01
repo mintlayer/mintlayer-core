@@ -76,11 +76,11 @@ use wallet::{
     wallet_events::WalletEvents,
     DefaultWallet, WalletError,
 };
-use wallet_types::BlockInfo;
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
+use wallet_types::{with_locked::WithLocked, BlockInfo};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -225,12 +225,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         account_index: U31,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(
                 account_index,
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 utxo_states,
+                with_locked,
             )
             .map_err(ControllerError::WalletError)
     }
@@ -240,9 +242,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(account_index, utxo_types, utxo_states)
+            .get_utxos(account_index, utxo_types, utxo_states, with_locked)
             .map_err(ControllerError::WalletError)
     }
 
@@ -747,6 +750,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 account_index,
                 UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
                 UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
             )
             .map_err(ControllerError::WalletError)?;
         let pool_ids = stake_pool_utxos.values().filter_map(|utxo| match utxo {

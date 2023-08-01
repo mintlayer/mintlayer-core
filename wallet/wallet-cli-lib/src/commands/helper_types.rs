@@ -23,6 +23,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, BlockHeight},
 };
+use wallet_types::with_locked::WithLocked;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -123,4 +124,21 @@ pub fn format_delegation_info(
             .expect("Delegation id address encoding can never fail"),
         balance.into_fixedpoint_str(chain_config.coin_decimals()),
     )
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliWithLocked {
+    Any,
+    Unlocked,
+    Locked,
+}
+
+impl CliWithLocked {
+    pub fn to_wallet_type(self) -> WithLocked {
+        match self {
+            CliWithLocked::Any => WithLocked::Any,
+            CliWithLocked::Unlocked => WithLocked::Unlocked,
+            CliWithLocked::Locked => WithLocked::Locked,
+        }
+    }
 }
