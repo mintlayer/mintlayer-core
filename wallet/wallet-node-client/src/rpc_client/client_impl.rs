@@ -28,7 +28,9 @@ use mempool::{rpc::MempoolRpcClient, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
-    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
+    types::{
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+    },
 };
 use serialization::hex_encoded::HexEncoded;
 
@@ -163,17 +165,17 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
         P2pRpcClient::list_banned(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_ban(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
         P2pRpcClient::ban(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_unban(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
         P2pRpcClient::unban(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)

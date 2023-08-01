@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    net::{IpAddr, SocketAddr},
-    panic,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, net::SocketAddr, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
@@ -74,7 +68,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct SyncManagerHandle {
     pub peer_id: PeerId,
-    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
+    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
@@ -119,7 +113,7 @@ impl SyncManagerHandle {
             events_receiver: messaging_receiver,
         };
 
-        let sync = BlockSyncManager::new(
+        let sync = BlockSyncManager::<NetworkingServiceStub>::new(
             chain_config,
             p2p_config,
             messaging_handle,
@@ -469,7 +463,6 @@ struct NetworkingServiceStub {}
 impl NetworkingService for NetworkingServiceStub {
     type Transport = TcpTransportSocket;
     type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type ConnectivityHandle = ();
     type MessagingHandle = MessagingHandleMock;
     type SyncingEventReceiver = SyncingEventReceiverMock;

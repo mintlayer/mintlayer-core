@@ -27,7 +27,9 @@ use mempool::{FeeRate, MempoolHandle};
 use p2p::{
     error::P2pError,
     interface::types::ConnectedPeer,
-    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
+    types::{
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+    },
     P2pHandle,
 };
 use serialization::hex::HexError;
@@ -218,15 +220,15 @@ impl NodeInterface for WalletHandlesClient {
         Ok(count)
     }
 
-    async fn p2p_list_banned(&self) -> Result<Vec<String>, Self::Error> {
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
         let list = self.p2p.call_async_mut(move |this| this.list_banned()).await??;
         Ok(list)
     }
-    async fn p2p_ban(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.ban(address)).await??;
         Ok(())
     }
-    async fn p2p_unban(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.unban(address)).await??;
         Ok(())
     }

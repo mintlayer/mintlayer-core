@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    net::{IpAddr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -48,7 +45,6 @@ impl Socks5TransportSocket {
 #[async_trait]
 impl TransportSocket for Socks5TransportSocket {
     type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = Socks5TransportListener;
     type Stream = Socks5TransportStream;
 

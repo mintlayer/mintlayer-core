@@ -79,7 +79,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     sync_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
-    peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
 
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
@@ -109,7 +109,7 @@ where
         sync_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         time_getter: TimeGetter,
     ) -> Self {
         Self {

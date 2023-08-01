@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod bannable_address;
 pub mod global_ip;
 pub mod ip_address;
 pub mod ip_or_socket_address;

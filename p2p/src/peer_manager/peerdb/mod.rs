@@ -40,6 +40,7 @@ use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
 use itertools::Itertools;
 use logging::log;
+use p2p_types::bannable_address::BannableAddress;
 
 use crate::{
     config,
@@ -57,7 +58,7 @@ use super::{
     address_groups::AddressGroup, ip_or_socket_address_to_peer_address, MAX_OUTBOUND_CONNECTIONS,
 };
 
-pub struct PeerDb<A, B, S> {
+pub struct PeerDb<A, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
@@ -73,17 +74,16 @@ pub struct PeerDb<A, B, S> {
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
     /// when `current_time > ban_duration`.
-    banned_addresses: BTreeMap<B, Duration>,
+    banned_addresses: BTreeMap<BannableAddress, Duration>,
 
     time_getter: TimeGetter,
 
     storage: S,
 }
 
-impl<A, B, S> PeerDb<A, B, S>
+impl<A, S> PeerDb<A, S>
 where
-    A: Ord + FromStr + ToString + Clone + TransportAddress + AsBannableAddress<BannableAddress = B>,
-    B: Ord + FromStr + ToString + Clone,
+    A: Ord + FromStr + ToString + Clone + TransportAddress + AsBannableAddress,
     S: PeerDbStorage,
 {
     pub fn new(
@@ -93,7 +93,7 @@ where
         storage: S,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
-        let loaded_storage = LoadedStorage::<A, B>::load_storage(&storage)?;
+        let loaded_storage = LoadedStorage::<A>::load_storage(&storage)?;
 
         let boot_nodes = p2p_config
             .boot_nodes
@@ -307,16 +307,16 @@ where
     }
 
     /// Checks if the given address is banned
-    pub fn is_address_banned(&self, address: &B) -> bool {
+    pub fn is_address_banned(&self, address: &BannableAddress) -> bool {
         self.banned_addresses.contains_key(address)
     }
 
-    pub fn list_banned(&self) -> impl Iterator<Item = &B> {
+    pub fn list_banned(&self) -> impl Iterator<Item = &BannableAddress> {
         self.banned_addresses.keys()
     }
 
     /// Changes the address state to banned
-    pub fn ban(&mut self, address: B) {
+    pub fn ban(&mut self, address: BannableAddress) {
         let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
 
         storage::update_db(&self.storage, |tx| {
@@ -327,7 +327,7 @@ where
         self.banned_addresses.insert(address, ban_till);
     }
 
-    pub fn unban(&mut self, address: &B) {
+    pub fn unban(&mut self, address: &BannableAddress) {
         storage::update_db(&self.storage, |tx| {
             tx.del_banned_address(&address.to_string())
         })

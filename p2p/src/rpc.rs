@@ -15,7 +15,7 @@
 
 use common::chain::SignedTransaction;
 use mempool::TxStatus;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
@@ -33,13 +33,13 @@ trait P2pRpc {
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
     #[method(name = "list_banned")]
-    async fn list_banned(&self) -> RpcResult<Vec<String>>;
+    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>>;
 
     #[method(name = "ban")]
-    async fn ban(&self, address: String) -> RpcResult<()>;
+    async fn ban(&self, address: BannableAddress) -> RpcResult<()>;
 
     #[method(name = "unban")]
-    async fn unban(&self, address: String) -> RpcResult<()>;
+    async fn unban(&self, address: BannableAddress) -> RpcResult<()>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
@@ -80,18 +80,18 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn list_banned(&self) -> RpcResult<Vec<String>> {
+    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>> {
         let res = self.call_async_mut(|this| this.list_banned()).await;
         rpc::handle_result(res)
     }
 
-    async fn ban(&self, address: String) -> RpcResult<()> {
-        let res = self.call_async_mut(|this| this.ban(address)).await;
+    async fn ban(&self, address: BannableAddress) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.ban(address)).await;
         rpc::handle_result(res)
     }
 
-    async fn unban(&self, address: String) -> RpcResult<()> {
-        let res = self.call_async_mut(|this| this.unban(address)).await;
+    async fn unban(&self, address: BannableAddress) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.unban(address)).await;
         rpc::handle_result(res)
     }
 

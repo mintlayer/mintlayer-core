@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::chain::SignedTransaction;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 
@@ -37,13 +37,13 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().disconnect(peer_id).await
     }
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<String>> {
+    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>> {
         self.deref_mut().list_banned().await
     }
-    async fn ban(&mut self, addr: String) -> crate::Result<()> {
+    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         self.deref_mut().ban(addr).await
     }
-    async fn unban(&mut self, addr: String) -> crate::Result<()> {
+    async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()> {
         self.deref_mut().unban(addr).await
     }
 

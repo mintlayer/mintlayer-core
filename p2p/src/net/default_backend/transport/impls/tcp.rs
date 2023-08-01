@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use p2p_types::bannable_address::BannableAddress;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
@@ -66,7 +67,6 @@ impl TcpTransportSocket {
 #[async_trait]
 impl TransportSocket for TcpTransportSocket {
     type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = TcpTransportListener;
     type Stream = TcpTransportStream;
 
@@ -156,10 +156,8 @@ impl TransportListener for TcpTransportListener {
 }
 
 impl AsBannableAddress for SocketAddr {
-    type BannableAddress = IpAddr;
-
-    fn as_bannable(&self) -> Self::BannableAddress {
-        self.ip()
+    fn as_bannable(&self) -> BannableAddress {
+        BannableAddress::new(self.ip())
     }
 }
 

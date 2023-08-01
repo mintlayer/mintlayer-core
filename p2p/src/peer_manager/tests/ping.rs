@@ -71,8 +71,7 @@ async fn ping_timeout() {
 
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -80,7 +79,7 @@ async fn ping_timeout() {
         conn_rx,
     );
 
-    let peer_manager = PeerManager::new(
+    let peer_manager = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

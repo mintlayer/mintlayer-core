@@ -37,7 +37,7 @@ fn unban_peer() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let mut peerdb = PeerDb::<SocketAddr, _, _>::new(
+    let mut peerdb = PeerDb::<SocketAddr, _>::new(
         &chain_config,
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),

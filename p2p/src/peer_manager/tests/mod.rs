@@ -56,7 +56,7 @@ async fn make_peer_manager_custom<T>(
     time_getter: TimeGetter,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
-    UnboundedSender<PeerManagerEvent<T>>,
+    UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
     UnboundedSender<P2pEventHandler>,
 )
@@ -126,7 +126,7 @@ async fn run_peer_manager<T>(
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
 ) -> (
-    UnboundedSender<PeerManagerEvent<T>>,
+    UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
     UnboundedSender<P2pEventHandler>,
 )
@@ -142,9 +142,7 @@ where
     (tx, shutdown_sender, subscribers_sender)
 }
 
-async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
-    tx: &UnboundedSender<PeerManagerEvent<T>>,
-) -> Vec<ConnectedPeer> {
+async fn get_connected_peers(tx: &UnboundedSender<PeerManagerEvent>) -> Vec<ConnectedPeer> {
     let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
     timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()

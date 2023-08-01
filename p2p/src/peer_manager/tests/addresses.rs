@@ -120,8 +120,7 @@ fn test_addr_list_handling_inbound() {
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -129,7 +128,7 @@ fn test_addr_list_handling_inbound() {
         conn_rx,
     );
 
-    let mut pm = PeerManager::new(
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -204,8 +203,7 @@ fn test_addr_list_handling_outbound() {
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -213,7 +211,7 @@ fn test_addr_list_handling_outbound() {
         conn_rx,
     );
 
-    let mut pm = PeerManager::new(
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,
@@ -303,8 +301,7 @@ async fn resend_own_addresses() {
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (_peer_tx, peer_rx) =
-        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         listening_addresses.clone(),
@@ -312,7 +309,7 @@ async fn resend_own_addresses() {
         conn_rx,
     );
 
-    let mut pm = PeerManager::new(
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         connectivity_handle,

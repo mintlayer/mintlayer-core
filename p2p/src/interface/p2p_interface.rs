@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use common::chain::SignedTransaction;
-use p2p_types::{ip_or_socket_address::IpOrSocketAddress, p2p_event::P2pEvent};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, p2p_event::P2pEvent,
+};
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
@@ -25,9 +27,9 @@ pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
-    async fn list_banned(&mut self) -> crate::Result<Vec<String>>;
-    async fn ban(&mut self, addr: String) -> crate::Result<()>;
-    async fn unban(&mut self, addr: String) -> crate::Result<()>;
+    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>>;
+    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()>;
+    async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>>;

@@ -141,7 +141,6 @@ impl TestTransport {
 #[async_trait]
 impl TransportSocket for TestTransport {
     type Address = <MpscChannelTransport as TransportSocket>::Address;
-    type BannableAddress = <MpscChannelTransport as TransportSocket>::BannableAddress;
     type Listener = TestListener;
     type Stream = <MpscChannelTransport as TransportSocket>::Stream;
 

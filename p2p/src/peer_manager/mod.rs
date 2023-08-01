@@ -125,7 +125,7 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
-    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent>,
 
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
@@ -138,7 +138,7 @@ where
     peers: BTreeMap<PeerId, PeerContext<T::Address>>,
 
     /// Peer database
-    peerdb: peerdb::PeerDb<T::Address, T::BannableAddress, S>,
+    peerdb: peerdb::PeerDb<T::Address, S>,
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
@@ -168,7 +168,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
@@ -966,7 +966,7 @@ where
     /// Handle control event.
     ///
     /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager.
-    fn handle_control_event(&mut self, event: PeerManagerEvent<T>) {
+    fn handle_control_event(&mut self, event: PeerManagerEvent) {
         match event {
             PeerManagerEvent::Connect(address, response) => {
                 let address_res =
