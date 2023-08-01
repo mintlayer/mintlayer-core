@@ -27,7 +27,7 @@ use std::{
 };
 
 use futures::never::Never;
-use p2p_types::ip_or_socket_address::IpOrSocketAddress;
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
@@ -350,7 +350,7 @@ where
         }
     }
 
-    fn ban(&mut self, address: T::BannableAddress) {
+    fn ban(&mut self, address: BannableAddress) {
         let to_disconnect = self
             .peers
             .values()
