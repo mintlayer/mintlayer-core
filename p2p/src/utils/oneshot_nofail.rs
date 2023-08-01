@@ -25,7 +25,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::sync::oneshot;
+use tokio::sync::oneshot::{self, error::TryRecvError};
 
 #[derive(Debug)]
 pub struct Sender<T>(oneshot::Sender<T>);
@@ -44,6 +44,12 @@ impl<T> Future for Receiver<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.0).poll(cx)
+    }
+}
+
+impl<T> Receiver<T> {
+    pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.0.try_recv()
     }
 }
 
