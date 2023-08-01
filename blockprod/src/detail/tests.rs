@@ -526,7 +526,7 @@ mod produce_block {
                         vec![create_genesis_pool_txoutput],
                     )));
 
-                _ = block_production
+                let _ = block_production
                     .job_manager_handle
                     .update_last_used_block_timestamp(
                         block_production.generate_custom_id(&input_data),
@@ -570,7 +570,7 @@ mod produce_block {
             let override_chain_config =
                 Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
 
-            _ = time::set(
+            let _ = time::set(
                 last_used_block_timestamp
                     .saturating_sub(*override_chain_config.max_future_block_time_offset()),
             );
