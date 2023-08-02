@@ -426,7 +426,7 @@ if __name__ == '__main__':
     # We need to spin up a node in order to use the "test-functions/"
     # RPC endpoint so we can generate new genesis staking
     # settings. However, to spin up a node, the framework will create
-    # a chaintate along with its own Genesis, defeating the purpose of
+    # a chainstate along with its own Genesis, defeating the purpose of
     # this test...
     #
     # So what we're doing here is creating a temporary node to just
