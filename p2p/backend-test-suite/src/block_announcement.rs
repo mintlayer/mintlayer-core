@@ -33,6 +33,7 @@ use p2p::{
 };
 use utils::atomics::SeqCstAtomicBool;
 
+// FIXME: do these tests actually make any sense?
 tests![block_announcement, block_announcement_no_subscription,];
 
 #[allow(clippy::extra_unused_type_parameters)]

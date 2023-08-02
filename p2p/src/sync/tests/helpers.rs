@@ -34,7 +34,10 @@ use chainstate::{
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
+        },
         config::create_mainnet,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
@@ -50,7 +53,7 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config::NodeType,
-    message::{SyncMessage, TransactionResponse},
+    message::{HeaderList, SyncMessage, TransactionResponse},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
@@ -194,6 +197,8 @@ impl SyncManagerHandle {
     }
 
     /// Receives a message from the sync manager.
+    // FIXME: rename to get_message or something similar.
+    // Same for other message receiving functions below - try_message, adjust_peer_score_event
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
@@ -208,6 +213,11 @@ impl SyncManagerHandle {
             Err(mpsc::error::TryRecvError::Empty) => None,
             Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
         }
+    }
+
+    /// Send the specified headers.
+    pub async fn send_headers(&mut self, peer: PeerId, headers: Vec<SignedBlockHeader>) {
+        self.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
     }
 
     /// Panics if the sync manager returns an error.
@@ -261,6 +271,16 @@ impl SyncManagerHandle {
     /// Panics if the sync manager sends an event (message or announcement).
     pub async fn assert_no_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
+    }
+
+    pub async fn assert_peer_score_adjustment(
+        &mut self,
+        expected_peer: PeerId,
+        expected_score: u32,
+    ) {
+        let (adjusted_peer, score) = self.adjust_peer_score_event().await;
+        assert_eq!(adjusted_peer, expected_peer);
+        assert_eq!(score, expected_score);
     }
 
     /// Awaits on the sync manager join handle and rethrows the panic.

@@ -179,6 +179,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn get_headers_since_fork_point(
+        &self,
+        block_id: &Id<GenBlock>,
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_headers_since_fork_point(block_id, header_count_limit)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn filter_already_existing_blocks(
         &self,
         headers: Vec<SignedBlockHeader>,

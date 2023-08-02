@@ -29,11 +29,7 @@ use tokio::{
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
-    chain::{
-        block::{signed_block_header::SignedBlockHeader, Block},
-        config::ChainConfig,
-        Transaction,
-    },
+    chain::{config::ChainConfig, Block, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
@@ -57,7 +53,7 @@ use crate::{
 };
 
 pub enum LocalEvent {
-    ChainstateNewTip(SignedBlockHeader),
+    ChainstateNewTip(Id<Block>),
     MempoolNewTx(Id<Transaction>),
 }
 
@@ -131,14 +127,8 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
-        self.is_initial_block_download.store(
-            self.chainstate_handle
-                .call(|c| c.is_initial_block_download())
-                .await
-                // This shouldn't fail unless the chainstate subsystem is down which shouldn't
-                // happen since subsystems are shutdown in reverse order.
-                .expect("Chainstate call failed"),
-        );
+        self.is_initial_block_download
+            .store(self.chainstate_handle.call(|c| c.is_initial_block_download()).await?);
 
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
@@ -226,16 +216,9 @@ where
             return Ok(());
         }
 
-        let header = self
-            .chainstate_handle
-            .call(move |c| c.get_block_header(block_id))
-            .await??
-            // This should never happen because this block has just been produced by chainstate.
-            .expect("A new tip block unavailable");
-
-        log::debug!("Broadcasting a new tip header {}", header.block_id());
+        log::debug!("Broadcasting a new tip {}", block_id);
         for peer in self.peers.values_mut() {
-            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(header.clone()));
+            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id.clone()));
         }
         Ok(())
     }
