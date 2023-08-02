@@ -35,6 +35,10 @@ use crypto::{
 };
 use serialization::hex::HexEncode;
 
+const GENESIS_POOL_ID: &str = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4";
+const GENESIS_STAKE_PRIVATE_KEY: &str = "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638";
+const GENESIS_VRF_PRIVATE_KEY: &str = "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e";
+
 #[derive(Clone, Debug)]
 pub struct GenesisStakingSettings {
     pool_id: PoolId,
@@ -98,9 +102,7 @@ impl FromStr for GenesisStakingSettings {
 
         let pool_id = settings_parts
             .remove("pool_id")
-            .or(Some(
-                "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
-            ))
+            .or(Some(GENESIS_POOL_ID))
             .map(decode_hex::<PoolId>)
             .ok_or(GenesisStakingSettingsInputErrors::InvalidPoolId(
                 settings.into(),
@@ -108,9 +110,7 @@ impl FromStr for GenesisStakingSettings {
 
         let stake_private_key = settings_parts
             .remove("stake_private_key")
-            .or(Some(
-                "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
-            ))
+            .or(Some(GENESIS_STAKE_PRIVATE_KEY))
             .map(decode_hex::<PrivateKey>)
             .ok_or(GenesisStakingSettingsInputErrors::InvalidStakingPrivateKey(
                 settings.into(),
@@ -118,9 +118,7 @@ impl FromStr for GenesisStakingSettings {
 
         let vrf_private_key = settings_parts
             .remove("vrf_private_key")
-            .or(Some(
-                "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
-            ))
+            .or(Some(GENESIS_VRF_PRIVATE_KEY))
             .map(decode_hex::<VRFPrivateKey>)
             .ok_or(GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(settings.into()))?;
 
