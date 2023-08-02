@@ -76,6 +76,7 @@ use common::{
 use logging::log;
 use utils::{
     eventhandler::{EventHandler, EventsController},
+    set_flag::SetFlag,
     tap_error_log::LogError,
 };
 use utxo::UtxosDB;
@@ -103,7 +104,7 @@ pub struct Chainstate<S, V> {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
     time_getter: TimeGetter,
-    is_initial_block_download_finished: bool,
+    is_initial_block_download_finished: SetFlag,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -189,6 +190,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
         }
 
+        chainstate.update_initial_block_download_flag()?;
+
         Ok(chainstate)
     }
 
@@ -210,7 +213,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
             time_getter,
-            is_initial_block_download_finished: false,
+            is_initial_block_download_finished: SetFlag::new(),
         }
     }
 
@@ -621,7 +624,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 bi.block_timestamp(),
             );
 
-            self.is_initial_block_download_finished = self.is_fresh_block(&bi.block_timestamp());
+            self.update_initial_block_download_flag()
+                .map_err(BlockError::BestBlockIdQueryError)?;
         }
 
         Ok(result)
@@ -744,9 +748,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         &self.events_controller
     }
 
-    pub fn is_initial_block_download(&self) -> Result<bool, PropertyQueryError> {
-        if self.is_initial_block_download_finished {
-            return Ok(false);
+    pub fn is_initial_block_download(&self) -> bool {
+        !self.is_initial_block_download_finished.test()
+    }
+
+    /// Returns true if the given block timestamp is newer than `ChainstateConfig::max_tip_age`.
+    fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
+        let now = self.time_getter.get_time();
+        time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
+    }
+
+    /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
+    fn update_initial_block_download_flag(&mut self) -> Result<(), PropertyQueryError> {
+        if self.is_initial_block_download_finished.test() {
+            return Ok(());
         }
 
         // TODO: Add a check for importing and reindex.
@@ -754,18 +769,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // TODO: Add a check for the chain trust.
 
         let tip_timestamp = match self.query()?.get_best_block_header() {
-            Ok(h) => Ok(h.timestamp()),
+            Ok(h) => h.timestamp(),
             // There is only the genesis block, so the initial block download isn't finished yet.
-            Err(PropertyQueryError::GenesisHeaderRequested) => return Ok(true),
-            Err(e) => Err(e),
-        }?;
-        Ok(!self.is_fresh_block(&tip_timestamp))
-    }
+            Err(PropertyQueryError::GenesisHeaderRequested) => return Ok(()),
+            Err(e) => return Err(e),
+        };
 
-    /// Returns true if the given block timestamp is newer than `ChainstateConfig::max_tip_age`.
-    fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
-        let now = self.time_getter.get_time();
-        time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
+        if self.is_fresh_block(&tip_timestamp) {
+            self.is_initial_block_download_finished.set();
+        }
+
+        Ok(())
     }
 
     fn check_legitimate_orphan(

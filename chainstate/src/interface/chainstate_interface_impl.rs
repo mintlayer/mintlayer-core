@@ -478,7 +478,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
-        self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
+        Ok(self.chainstate.is_initial_block_download())
     }
 
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
