@@ -968,7 +968,7 @@ impl CommandHandler {
                     parse_token_amount(token_number_of_decimals, &amount)?
                 };
 
-                let tx = controller_opt
+                let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_tokens_to_address(
@@ -979,7 +979,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Self::broadcast_transaction(rpc_client, tx).await
+                Ok(Self::handle_mempool_tx_status(status))
             }
 
             WalletCommand::CreateDelegation { address, pool_id } => {
@@ -1080,7 +1080,7 @@ impl CommandHandler {
 
             WalletCommand::DecommissionStakePool { pool_id } => {
                 let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                let tx = controller_opt
+                let status = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .decommission_stake_pool(
@@ -1089,7 +1089,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Self::broadcast_transaction(rpc_client, tx).await
+                Ok(Self::handle_mempool_tx_status(status))
             }
 
             WalletCommand::NodeVersion => {

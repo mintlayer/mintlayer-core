@@ -494,7 +494,6 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn create_transaction_to_addresses_from_delegation(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         address: Address<Destination>,
         amount: Amount,
@@ -502,23 +501,7 @@ impl<B: storage::Backend> Wallet<B> {
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx = account.spend_from_delegation(
-                db_tx,
-                address,
-                amount,
-                delegation_id,
-                current_fee_rate,
-            )?;
-            let txs = [tx];
-            account.scan_new_unconfirmed_transactions(
-                &txs,
-                TxState::Inactive,
-                db_tx,
-                wallet_events,
-            )?;
-
-            let [tx] = txs;
-            Ok(tx)
+            account.spend_from_delegation(db_tx, address, amount, delegation_id, current_fee_rate)
         })
     }
 
@@ -610,25 +593,13 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn decommission_stake_pool(
         &mut self,
-        wallet_events: &mut impl WalletEvents,
         account_index: U31,
         pool_id: PoolId,
         pool_balance: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let tx =
-                account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)?;
-            let txs = [tx];
-            account.scan_new_unconfirmed_transactions(
-                &txs,
-                TxState::Inactive,
-                db_tx,
-                wallet_events,
-            )?;
-
-            let [tx] = txs;
-            Ok(tx)
+            account.decommission_stake_pool(db_tx, pool_id, pool_balance, current_fee_rate)
         })
     }
 
