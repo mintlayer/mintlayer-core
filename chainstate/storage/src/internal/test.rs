@@ -75,12 +75,12 @@ fn test_storage_manipulation() {
     // Storage version manipulation
     assert_eq!(store.get_storage_version(), Ok(None));
     assert_eq!(
-        store.set_storage_version(ChainstateStorageVersion::V0),
+        store.set_storage_version(ChainstateStorageVersion::new(0)),
         Ok(())
     );
     assert_eq!(
         store.get_storage_version(),
-        Ok(Some(ChainstateStorageVersion::V0))
+        Ok(Some(ChainstateStorageVersion::new(0)))
     );
 
     // Store is now empty, the block is not there
@@ -159,7 +159,7 @@ fn get_set_transactions() {
         // Set up the store and initialize the version to 0
         let mut store = TestStore::new_empty().unwrap();
         assert_eq!(
-            store.set_storage_version(ChainstateStorageVersion::V0),
+            store.set_storage_version(ChainstateStorageVersion::new(0)),
             Ok(())
         );
 
@@ -168,7 +168,7 @@ fn get_set_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                tx.set_storage_version(ChainstateStorageVersion::V1).unwrap();
+                tx.set_storage_version(ChainstateStorageVersion::new(1)).unwrap();
                 tx.commit().unwrap();
             })
         };
@@ -178,7 +178,10 @@ fn get_set_transactions() {
                 let tx = store.transaction_ro().unwrap();
                 let v1 = tx.get_storage_version().unwrap().unwrap();
                 let v2 = tx.get_storage_version().unwrap().unwrap();
-                assert!([ChainstateStorageVersion::V0, ChainstateStorageVersion::V1].contains(&v1));
+                assert!(
+                    [ChainstateStorageVersion::new(0), ChainstateStorageVersion::new(1)]
+                        .contains(&v1)
+                );
                 assert_eq!(v1, v2, "Version query in a transaction inconsistent");
             })
         };
@@ -187,7 +190,7 @@ fn get_set_transactions() {
         let _ = thr1.join();
         assert_eq!(
             store.get_storage_version(),
-            Ok(Some(ChainstateStorageVersion::V1))
+            Ok(Some(ChainstateStorageVersion::new(1)))
         );
     })
 }

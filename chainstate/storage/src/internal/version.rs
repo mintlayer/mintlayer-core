@@ -16,11 +16,12 @@
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, Copy, Eq, PartialEq)]
-pub enum ChainstateStorageVersion {
-    V0,
-    V1,
-}
+pub struct ChainstateStorageVersion(u32);
 
 impl ChainstateStorageVersion {
-    pub const CURRENT: Self = Self::V1;
+    pub const CURRENT: Self = Self(1);
+
+    pub fn new(value: u32) -> Self {
+        Self(value)
+    }
 }

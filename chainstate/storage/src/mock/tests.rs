@@ -35,7 +35,7 @@ fn basic_mock() {
     let mut mock = MockStore::new();
     mock.expect_set_storage_version().times(1).return_const(Ok(()));
 
-    let r = mock.set_storage_version(ChainstateStorageVersion::V0);
+    let r = mock.set_storage_version(ChainstateStorageVersion::new(0));
     assert_eq!(r, Ok(()));
 }
 
@@ -44,7 +44,7 @@ fn basic_fail() {
     let mut mock = MockStore::new();
     mock.expect_set_storage_version().times(1).return_const(Err(TXFAIL));
 
-    let r = mock.set_storage_version(ChainstateStorageVersion::V0);
+    let r = mock.set_storage_version(ChainstateStorageVersion::new(0));
     assert_eq!(r, Err(TXFAIL));
 }
 
@@ -96,7 +96,7 @@ fn mock_transaction() {
         let mut mock_tx = MockStoreTxRw::new();
         mock_tx
             .expect_set_storage_version()
-            .with(mockall::predicate::eq(ChainstateStorageVersion::V1))
+            .with(mockall::predicate::eq(ChainstateStorageVersion::new(1)))
             .return_const(Ok(()));
         mock_tx.expect_commit().times(1).return_const(Ok(()));
         Ok(mock_tx)
@@ -104,7 +104,7 @@ fn mock_transaction() {
 
     // Test some code against the mock
     let mut tx = store.transaction_rw(None).unwrap();
-    tx.set_storage_version(ChainstateStorageVersion::V1).unwrap();
+    tx.set_storage_version(ChainstateStorageVersion::new(1)).unwrap();
     tx.commit().unwrap();
 }
 
