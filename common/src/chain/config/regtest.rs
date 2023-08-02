@@ -23,7 +23,7 @@ use crate::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::{StakePoolData, DEFAULT_INITIAL_MINT, MIN_STAKE_POOL_PLEDGE},
-        tokens::OutputValue,
+        output_value::OutputValue,
         transaction::Destination,
         Genesis, PoolId, TxOutput,
     },
