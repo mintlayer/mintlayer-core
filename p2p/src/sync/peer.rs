@@ -55,6 +55,7 @@ use crate::{
         types::services::{Service, Services},
         NetworkingService,
     },
+    peer_manager_event::PeerDisconnectionDbAction,
     sync::types::PeerActivity,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -806,7 +807,11 @@ where
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
         log::warn!("Disconnecting peer {} for ignoring requests", self.id());
-        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(self.id(), sender))?;
+        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
+            self.id(),
+            PeerDisconnectionDbAction::Keep,
+            sender,
+        ))?;
         receiver.await?.or_else(|e| match e {
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             e => Err(e),

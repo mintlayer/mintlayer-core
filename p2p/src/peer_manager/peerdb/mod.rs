@@ -253,6 +253,10 @@ where
         self.change_address_state(address, AddressStateTransitionTo::Disconnected);
     }
 
+    pub fn remove_outbound_address(&mut self, address: &A) {
+        self.addresses.remove(address);
+    }
+
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
         let now = self.time_getter.get_time();
 
