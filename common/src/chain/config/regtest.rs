@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    convert::Infallible,
+    collections::HashMap,
     fmt::{Display, Formatter},
     str::FromStr,
 };
@@ -41,37 +41,24 @@ pub struct GenesisStakingSettings {
     vrf_private_key: VRFPrivateKey,
 }
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum GenesisStakingSettingsInputErrors {
+    #[error("Invalid pool Id {0}")]
+    InvalidPoolId(String),
+    #[error("Invalid staking private key {0}")]
+    InvalidStakingPrivateKey(String),
+    #[error("Invalid VRF private key {0}")]
+    InvalidVRFPrivateKey(String),
+    #[error("Unknown staking settings parameter {0}")]
+    UnknownParameter(String),
+}
+
 impl GenesisStakingSettings {
-    pub fn new(settings: &str) -> Self {
-        let settings_parts: Vec<&str> = settings.split(',').map(|s| s.trim()).collect();
-
-        let pool_id = settings_parts
-            .iter()
-            .find_map(|s| s.strip_prefix("genesis_pool_id:"))
-            .or(Some(
-                "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
-            ))
-            .map(decode_hex::<PoolId>)
-            .expect("Pool Id decoded");
-
-        let stake_private_key = settings_parts
-            .iter()
-            .find_map(|s| s.strip_prefix("genesis_stake_private_key:"))
-            .or(Some(
-                "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
-            ))
-            .map(decode_hex::<PrivateKey>)
-            .expect("Private key decoded");
-
-        let vrf_private_key = settings_parts
-            .iter()
-            .find_map(|s| s.strip_prefix("genesis_vrf_private_key:"))
-            .or(Some(
-                "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
-            ))
-            .map(decode_hex::<VRFPrivateKey>)
-            .expect("VRF private key decoded");
-
+    pub fn new(
+        pool_id: PoolId,
+        stake_private_key: PrivateKey,
+        vrf_private_key: VRFPrivateKey,
+    ) -> Self {
         Self {
             pool_id,
             stake_private_key,
@@ -94,15 +81,63 @@ impl GenesisStakingSettings {
 
 impl Default for GenesisStakingSettings {
     fn default() -> Self {
-        Self::new("")
+        Self::from_str("").expect("Default value")
     }
 }
 
 impl FromStr for GenesisStakingSettings {
-    type Err = Infallible;
+    type Err = GenesisStakingSettingsInputErrors;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s))
+    fn from_str(settings: &str) -> Result<Self, Self::Err> {
+        let mut settings_parts = settings
+            .split(',')
+            .filter_map(|s| s.split_once(':'))
+            .map(|(k, v)| (k.trim(), v.trim()))
+            .collect::<HashMap<&str, &str>>();
+
+        let pool_id = settings_parts
+            .remove("genesis_pool_id")
+            .or(Some(
+                "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4",
+            ))
+            .map(decode_hex::<PoolId>)
+            .ok_or(GenesisStakingSettingsInputErrors::InvalidPoolId(
+                settings.into(),
+            ))?;
+
+        let stake_private_key = settings_parts
+            .remove("genesis_stake_private_key")
+            .or(Some(
+                "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
+            ))
+            .map(decode_hex::<PrivateKey>)
+            .ok_or(GenesisStakingSettingsInputErrors::InvalidStakingPrivateKey(
+                settings.into(),
+            ))?;
+
+        let vrf_private_key = settings_parts
+            .remove("genesis_vrf_private_key")
+            .or(Some(
+                "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e",
+            ))
+            .map(decode_hex::<VRFPrivateKey>)
+            .ok_or(GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(settings.into()))?;
+
+        if !settings_parts.is_empty() {
+            return Err(GenesisStakingSettingsInputErrors::UnknownParameter(
+                settings_parts
+                    .drain()
+                    .map(|(k, v)| format!("{}:{}", k, v))
+                    .collect::<Vec<String>>()
+                    .join(","),
+            ));
+        }
+
+        Ok(Self {
+            pool_id,
+            stake_private_key,
+            vrf_private_key,
+        })
     }
 }
 
