@@ -137,7 +137,7 @@ where
                 .await
                 // This shouldn't fail unless the chainstate subsystem is down which shouldn't
                 // happen since subsystems are shutdown in reverse order.
-                .expect("Chainstate call failed")?,
+                .expect("Chainstate call failed"),
         );
 
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
@@ -215,7 +215,7 @@ where
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
         let is_initial_block_download = if self.is_initial_block_download.load() {
-            let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+            let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await?;
             self.is_initial_block_download.store(is_ibd);
             is_ibd
         } else {

@@ -140,7 +140,7 @@ mockall::mock! {
             include_orphans: bool,
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
-        fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+        fn is_initial_block_download(&self) -> bool;
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
