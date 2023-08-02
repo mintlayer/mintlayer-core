@@ -32,7 +32,7 @@ use common::{
         signed_transaction::SignedTransaction,
         Block, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput, UtxoOutPoint,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{Amount, Id, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
@@ -55,6 +55,9 @@ pub struct PoSBlockBuilder<'f> {
 
     staker_sk: PrivateKey,
     staker_vrf_sk: VRFPrivateKey,
+
+    randomness: Option<PoSRandomness>,
+    stake_pool_balance: Option<Amount>,
 }
 
 impl<'f> PoSBlockBuilder<'f> {
@@ -91,6 +94,8 @@ impl<'f> PoSBlockBuilder<'f> {
             kernel_input_outpoint: None,
             staker_sk,
             staker_vrf_sk,
+            randomness: None,
+            stake_pool_balance: None,
         }
     }
 
@@ -141,6 +146,16 @@ impl<'f> PoSBlockBuilder<'f> {
 
     pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
         self.staking_pool = Some(pool_id);
+        self
+    }
+
+    pub fn with_randomness(mut self, randomness: PoSRandomness) -> Self {
+        self.randomness = Some(randomness);
+        self
+    }
+
+    pub fn with_stake_pool_balance(mut self, balance: Amount) -> Self {
+        self.stake_pool_balance = Some(balance);
         self
     }
 
@@ -272,14 +287,19 @@ impl<'f> PoSBlockBuilder<'f> {
             }
         };
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
-        let randomness = match chain_config.sealed_epoch_index(&new_block_height) {
-            Some(epoch) => {
-                *self.framework.storage.get_epoch_data(epoch).unwrap().unwrap().randomness()
+        let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+
+        let randomness = self.randomness.unwrap_or_else(|| {
+            match chain_config.sealed_epoch_index(&new_block_height) {
+                Some(epoch) => {
+                    *self.framework.storage.get_epoch_data(epoch).unwrap().unwrap().randomness()
+                }
+                None => PoSRandomness::new(chain_config.initial_randomness()),
             }
-            None => PoSRandomness::new(chain_config.initial_randomness()),
-        };
-        let pool_balance =
-            self.framework.chainstate.get_stake_pool_balance(staking_pool).unwrap().unwrap();
+        });
+        let pool_balance = self.stake_pool_balance.unwrap_or_else(|| {
+            self.framework.chainstate.get_stake_pool_balance(staking_pool).unwrap().unwrap()
+        });
 
         pos_mine(
             BlockTimestamp::from_duration_since_epoch(self.framework.current_time()),
@@ -289,7 +309,7 @@ impl<'f> PoSBlockBuilder<'f> {
             randomness,
             staking_pool,
             pool_balance,
-            0,
+            epoch_index,
             current_difficulty.into(),
         )
         .unwrap()

@@ -31,8 +31,9 @@ pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateIn
 
 pub use {
     crate::utils::{
-        anyonecanspend_address, create_chain_config_with_staking_pool, empty_witness,
-        get_output_value, get_target_block_time, pos_mine, produce_kernel_signature,
+        anyonecanspend_address, create_chain_config_with_default_staking_pool,
+        create_chain_config_with_staking_pool, empty_witness, get_output_value,
+        get_target_block_time, pos_mine, produce_kernel_signature,
     },
     block_builder::BlockBuilder,
     framework::TestFramework,
