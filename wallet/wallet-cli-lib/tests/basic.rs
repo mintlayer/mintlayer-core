@@ -28,7 +28,7 @@ async fn wallet_cli_basic(#[case] seed: Seed) {
     let test = CliTestFramework::setup(&mut rng).await;
 
     let output = test.run(&["nodeversion"]).await;
-    assert_eq!(output, vec!["0.1.0"]);
+    assert_eq!(output, vec![env!("CARGO_PKG_VERSION")]);
 
     let output = test.run(&["bestblockheight"]).await;
     assert_eq!(output, vec!["0"]);
