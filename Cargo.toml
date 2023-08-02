@@ -11,7 +11,10 @@ edition = "2021"
 
 [workspace]
 members = [
-  "accounting",                   # Accounting and balances abstractions
+  "accounting",                   # Accounting and balances abstractions.
+  "api-server/web-server",        # API server, for light-wallets and block explorers: web-server.
+  "api-server/scanner-lib",       # API server, for light-wallets and block explorers: blockchain scanner library.
+  "api-server/scanner-daemon",    # API server, for light-wallets and block explorers: blockchain scanner daemon.
   "blockprod",                    # Block production with whatever consensus algorithm.
   "chainstate",                   # Code on chainstate of blocks and transactions.
   "chainstate/test-suite",        # Tests for the chainstate, separated to make use of the chainstate test framework.
