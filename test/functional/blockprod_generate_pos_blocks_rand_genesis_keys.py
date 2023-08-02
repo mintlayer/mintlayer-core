@@ -55,9 +55,9 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         genesis_pool_id = self.hex_to_dec_array(genesis_pool_id_hex)
 
         genesis_settings = ",".join([
-            "genesis_pool_id:{}",
-            "genesis_stake_private_key:{}",
-            "genesis_vrf_private_key:{}",
+            "pool_id:{}",
+            "stake_private_key:{}",
+            "vrf_private_key:{}",
         ]).format(
             genesis_pool_id_hex,
             genesis_stake_private_key_hex,

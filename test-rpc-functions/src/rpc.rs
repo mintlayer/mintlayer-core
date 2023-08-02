@@ -15,8 +15,6 @@
 
 //! Block production subsystem RPC handler
 
-use std::str::FromStr;
-
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
     chain::config::regtest::genesis_values,
@@ -29,7 +27,6 @@ use common::{
     primitives::H256,
 };
 use crypto::key::Signature;
-use jsonrpsee::types::error::CallError;
 use serialization::{hex::HexDecode, hex::HexEncode};
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
@@ -102,9 +99,8 @@ trait RpcTestFunctionsRpc {
 #[async_trait::async_trait]
 impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     async fn genesis_pool_id(&self) -> rpc::Result<Option<String>> {
-        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) = genesis_values(
-            GenesisStakingSettings::default().map_err(|e| CallError::Failed(e.into()))?,
-        );
+        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) =
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -115,9 +111,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_private_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, genesis_stake_private_key, _, _, _) =
-            genesis_values(
-                GenesisStakingSettings::default().map_err(|e| CallError::Failed(e.into()))?,
-            );
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -128,9 +122,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_public_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, genesis_stake_public_key, _, _) =
-            genesis_values(
-                GenesisStakingSettings::default().map_err(|e| CallError::Failed(e.into()))?,
-            );
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -141,9 +133,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, genesis_vrf_private_key, _) =
-            genesis_values(
-                GenesisStakingSettings::default().map_err(|e| CallError::Failed(e.into()))?,
-            );
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -154,9 +144,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, _, genesis_vrf_public_key) =
-            genesis_values(
-                GenesisStakingSettings::default().map_err(|e| CallError::Failed(e.into()))?,
-            );
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
