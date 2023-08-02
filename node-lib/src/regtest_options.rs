@@ -64,6 +64,6 @@ pub struct ChainConfigOptions {
     pub chain_pos_netupgrades: Option<bool>,
 
     /// PoS Genesis staking settings
-    #[clap(long, default_value_t = GenesisStakingSettings::new(""))]
+    #[clap(long, default_value_t)]
     pub chain_genesis_staking_settings: GenesisStakingSettings,
 }
