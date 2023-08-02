@@ -36,10 +36,11 @@ use crypto::{
 use serialization::hex::HexEncode;
 
 const GENESIS_POOL_ID: &str = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4";
-const GENESIS_STAKE_PRIVATE_KEY: &str = "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638";
+const GENESIS_STAKE_PRIVATE_KEY: &str =
+    "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638";
 const GENESIS_VRF_PRIVATE_KEY: &str = "003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GenesisStakingSettings {
     pool_id: PoolId,
     stake_private_key: PrivateKey,
@@ -120,7 +121,9 @@ impl FromStr for GenesisStakingSettings {
             .remove("vrf_private_key")
             .or(Some(GENESIS_VRF_PRIVATE_KEY))
             .map(decode_hex::<VRFPrivateKey>)
-            .ok_or(GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(settings.into()))?;
+            .ok_or(GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(
+                settings.into(),
+            ))?;
 
         if !settings_parts.is_empty() {
             return Err(GenesisStakingSettingsInputErrors::UnknownParameter(
@@ -211,4 +214,204 @@ pub fn create_regtest_pos_genesis(
         BlockTimestamp::from_int_seconds(1639975460),
         vec![premine_output, create_genesis_pool_txoutput],
     )
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const NEW_POOL_ID: &str = "ee06c7325d7e18d29f04ada56cda0ed71d3ebd2e8679795b3a99a4985707d3f3";
+    const NEW_STAKE_PRIVATE_KEY: &str =
+        "00cf07d9ea2f571a456619470d5a816023137f22969f9507d37b7a54089a6a12dc";
+    const NEW_VRF_PRIVATE_KEY: &str = "001556d3f237865226dcab9698be70566cf2d018f6bf5421074c37bdeaef85f30c860b56f4c0fef96a97d5906890c5371f6e11eb521b26138c2f8a38dc92edc458";
+
+    #[test]
+    fn default() {
+        let default = GenesisStakingSettings::default();
+
+        assert_eq!(
+            default.pool_id().hex_encode(),
+            GENESIS_POOL_ID,
+            "Default Genesis pool Id is incorrect"
+        );
+        assert_eq!(
+            default.stake_private_key().hex_encode(),
+            GENESIS_STAKE_PRIVATE_KEY,
+            "Default Genesis stake private key is incorrect"
+        );
+        assert_eq!(
+            default.vrf_private_key().hex_encode(),
+            GENESIS_VRF_PRIVATE_KEY,
+            "Default Genesis VRF private key is incorrect"
+        );
+    }
+
+    // #[test]
+    // fn invalid_pool_id() {
+    //     let result = GenesisStakingSettings::from_str("pool_id:invalid_value");
+
+    //     assert_eq!(
+    //         result,
+    //         Err(GenesisStakingSettingsInputErrors::InvalidPoolId(
+    //             "invalid_value".to_string()
+    //         )),
+    //         "Genesis pool Id was valid"
+    //     );
+    // }
+
+    // #[test]
+    // fn invalid_stake_private_key() {
+    //     let result = GenesisStakingSettings::from_str(
+    //         "stake_private_key:invalid_value",
+    //     );
+
+    //     assert_eq!(
+    //         result,
+    //         Err(GenesisStakingSettingsInputErrors::InvalidStakingPrivateKey(
+    //             "invalid_value".to_string()
+    //         )),
+    //         "Genesis staking private key was valid"
+    //     );
+    // }
+
+    // #[test]
+    // fn invalid_vrf_private_key() {
+    //     let result = GenesisStakingSettings::from_str(
+    //         "vrf_private_key:invalid_value",
+    //     );
+
+    //     assert_eq!(
+    //         result,
+    //         Err(GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(
+    //             "invalid_value".to_string()
+    //         )),
+    //         "Genesis vrf private key was valid"
+    //     );
+    // }
+
+    #[test]
+    fn overrides() {
+        for pool_id_override in [true, false] {
+            for stake_private_key_override in [true, false] {
+                for vrf_private_key_override in [true, false] {
+                    let pool_id = if pool_id_override {
+                        NEW_POOL_ID
+                    } else {
+                        GENESIS_POOL_ID
+                    };
+
+                    let stake_private_key = if stake_private_key_override {
+                        NEW_STAKE_PRIVATE_KEY
+                    } else {
+                        GENESIS_STAKE_PRIVATE_KEY
+                    };
+
+                    let vrf_private_key = if vrf_private_key_override {
+                        NEW_VRF_PRIVATE_KEY
+                    } else {
+                        GENESIS_VRF_PRIVATE_KEY
+                    };
+
+                    let new_settings = format!(
+                        "pool_id:{},stake_private_key:{},vrf_private_key:{}",
+                        pool_id, stake_private_key, vrf_private_key,
+                    );
+
+                    let new_genesis_staking_settings =
+                        GenesisStakingSettings::from_str(&new_settings).expect("Parsed ok");
+
+                    assert_eq!(
+                        new_genesis_staking_settings.pool_id().hex_encode(),
+                        pool_id,
+                        "Genesis pool Id is incorrect"
+                    );
+
+                    assert_eq!(
+                        new_genesis_staking_settings.stake_private_key().hex_encode(),
+                        stake_private_key,
+                        "Genesis stake private key is incorrect"
+                    );
+
+                    assert_eq!(
+                        new_genesis_staking_settings.vrf_private_key().hex_encode(),
+                        vrf_private_key,
+                        "Genesis VRF private key is incorrect"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_and_leftover() {
+        for pool_id_missing in [true, false] {
+            for stake_private_key_missing in [true, false] {
+                for vrf_private_key_missing in [true, false] {
+                    for leftover in [true, false] {
+                        let mut expected_values = vec![];
+                        let mut settings_parts = vec![];
+
+                        if pool_id_missing {
+                            expected_values.push(GENESIS_POOL_ID)
+                        } else {
+                            expected_values.push(NEW_POOL_ID);
+                            settings_parts.push(format!("pool_id:{}", NEW_POOL_ID));
+                        };
+
+                        if stake_private_key_missing {
+                            expected_values.push(GENESIS_STAKE_PRIVATE_KEY)
+                        } else {
+                            expected_values.push(NEW_STAKE_PRIVATE_KEY);
+                            settings_parts
+                                .push(format!("stake_private_key:{}", NEW_STAKE_PRIVATE_KEY));
+                        };
+
+                        if vrf_private_key_missing {
+                            expected_values.push(GENESIS_VRF_PRIVATE_KEY)
+                        } else {
+                            expected_values.push(NEW_VRF_PRIVATE_KEY);
+                            settings_parts.push(format!("vrf_private_key:{}", NEW_VRF_PRIVATE_KEY));
+                        };
+
+                        if leftover {
+                            settings_parts.push("unknown_setting:unknown_value".to_string())
+                        }
+
+                        let new_settings = settings_parts.join(",");
+
+                        match GenesisStakingSettings::from_str(&new_settings) {
+                            Ok(new_genesis_staking_settings) => {
+                                assert_eq!(
+                                    new_genesis_staking_settings.pool_id().hex_encode(),
+                                    expected_values[0],
+                                    "Genesis pool Id is incorrect"
+                                );
+
+                                assert_eq!(
+                                    new_genesis_staking_settings.stake_private_key().hex_encode(),
+                                    expected_values[1],
+                                    "Genesis stake private key is incorrect"
+                                );
+
+                                assert_eq!(
+                                    new_genesis_staking_settings.vrf_private_key().hex_encode(),
+                                    expected_values[2],
+                                    "Genesis VRF private key is incorrect"
+                                );
+                            }
+                            Err(GenesisStakingSettingsInputErrors::UnknownParameter(unknown)) => {
+                                assert_eq!(
+                                    unknown, "unknown_setting:unknown_value",
+                                    "Unknown unknown setting"
+                                )
+                            }
+                            Err(_) => {
+                                panic!("Invalid error, handled in other tests");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
