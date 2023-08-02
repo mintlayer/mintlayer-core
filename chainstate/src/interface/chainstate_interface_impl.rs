@@ -477,8 +477,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
-    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
-        self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
+    fn is_initial_block_download(&self) -> bool {
+        self.chainstate.is_initial_block_download()
     }
 
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
@@ -558,7 +558,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
         let median_time = self.calculate_median_time_past(&best_block_id)?;
 
-        let is_initial_block_download = self.is_initial_block_download()?;
+        let is_initial_block_download = self.is_initial_block_download();
 
         Ok(ChainInfo {
             best_block_height,

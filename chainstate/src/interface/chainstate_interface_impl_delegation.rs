@@ -280,7 +280,7 @@ where
         self.deref().utxo(outpoint)
     }
 
-    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
+    fn is_initial_block_download(&self) -> bool {
         self.deref().is_initial_block_download()
     }
 
