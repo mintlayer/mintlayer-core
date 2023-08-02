@@ -227,7 +227,7 @@ impl SyncManagerHandle {
 
     pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
         match self.peer_manager_receiver.recv().await.unwrap() {
-            PeerManagerEvent::Disconnect(peer_id, sender) => {
+            PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
                 assert_eq!(id, peer_id);
                 sender.send(Ok(()));
             }
@@ -239,7 +239,7 @@ impl SyncManagerHandle {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
                 match self.peer_manager_receiver.recv().await.unwrap() {
-                    PeerManagerEvent::Disconnect(peer_id, _) if id == peer_id => {
+                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _) if id == peer_id => {
                         break;
                     }
                     _ => {}

@@ -18,12 +18,26 @@ use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSoc
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, utils::oneshot_nofail};
 
 #[derive(Debug)]
+pub enum PeerDisconnectionDbAction {
+    /// The address is kept in the PeerDb and there can be automatic reconnects
+    Keep,
+    /// The address will be removed from the PeerDb and there will be no reconnect attempts
+    /// (at least until the peer address is rediscovered).
+    /// It only affects outbound addresses.
+    RemoveIfOutbound,
+}
+
+#[derive(Debug)]
 pub enum PeerManagerEvent {
     /// Try to establish connection with a remote peer
     Connect(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(PeerId, oneshot_nofail::Sender<crate::Result<()>>),
+    Disconnect(
+        PeerId,
+        PeerDisconnectionDbAction,
+        oneshot_nofail::Sender<crate::Result<()>>,
+    ),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot_nofail::Sender<usize>),

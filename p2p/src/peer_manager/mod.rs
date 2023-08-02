@@ -57,6 +57,7 @@ use crate::{
         },
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
+    peer_manager_event::PeerDisconnectionDbAction,
     protocol::{NetworkProtocol, NETWORK_PROTOCOL_MIN},
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
@@ -109,6 +110,11 @@ const DNS_SEEDS_TESTNET: [&str; 1] = ["testnet-seed.mintlayer.org"];
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
 
+struct PendingDisconnect {
+    peerdb_action: PeerDisconnectionDbAction,
+    response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
+}
+
 pub struct PeerManager<T, S>
 where
     T: NetworkingService,
@@ -132,7 +138,7 @@ where
         HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Hashmap of pending disconnect requests
-    pending_disconnects: HashMap<PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+    pending_disconnects: HashMap<PeerId, PendingDisconnect>,
 
     /// Map of all connected peers
     peers: BTreeMap<PeerId, PeerContext<T::Address>>,
@@ -368,7 +374,7 @@ where
         self.peerdb.ban(address);
 
         for peer_id in to_disconnect {
-            self.disconnect(peer_id, None);
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -449,6 +455,7 @@ where
     fn disconnect(
         &mut self,
         peer_id: PeerId,
+        peerdb_action: PeerDisconnectionDbAction,
         response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
         log::debug!("disconnect peer {peer_id}");
@@ -456,7 +463,13 @@ where
 
         match res {
             Ok(()) => {
-                let old_value = self.pending_disconnects.insert(peer_id, response);
+                let old_value = self.pending_disconnects.insert(
+                    peer_id,
+                    PendingDisconnect {
+                        peerdb_action,
+                        response,
+                    },
+                );
                 assert!(old_value.is_none());
             }
             Err(e) => {
@@ -534,7 +547,7 @@ where
 
         if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
             log::info!("peer {peer_id} is selected for eviction");
-            self.disconnect(peer_id, None);
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
             true
         } else {
             false
@@ -697,14 +710,27 @@ where
                 peer.address
             );
 
-            let resp_ch = self.pending_disconnects.remove(&peer_id).flatten();
-
             if peer.role == Role::Outbound {
-                self.peerdb.outbound_peer_disconnected(peer.address);
+                self.peerdb.outbound_peer_disconnected(peer.address.clone());
             }
 
-            if let Some(response) = resp_ch {
-                response.send(Ok(()));
+            if let Some(PendingDisconnect {
+                peerdb_action,
+                response,
+            }) = self.pending_disconnects.remove(&peer_id)
+            {
+                match peerdb_action {
+                    PeerDisconnectionDbAction::Keep => {}
+                    PeerDisconnectionDbAction::RemoveIfOutbound => {
+                        if peer.role == Role::Outbound {
+                            self.peerdb.remove_outbound_address(&peer.address)
+                        }
+                    }
+                }
+
+                if let Some(response) = response {
+                    response.send(Ok(()));
+                }
             }
 
             self.subscribed_to_peer_addresses.remove(&peer_id);
@@ -998,8 +1024,8 @@ where
                     Err(err) => response.send(Err(err)),
                 }
             }
-            PeerManagerEvent::Disconnect(peer_id, response) => {
-                self.disconnect(peer_id, Some(response));
+            PeerManagerEvent::Disconnect(peer_id, peerdb_action, response) => {
+                self.disconnect(peer_id, peerdb_action, Some(response));
             }
             PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
@@ -1177,7 +1203,7 @@ where
         }
 
         for peer_id in dead_peers {
-            self.disconnect(peer_id, None);
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 

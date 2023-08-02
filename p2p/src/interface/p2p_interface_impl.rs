@@ -23,6 +23,7 @@ use crate::{
     error::P2pError,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
     net::NetworkingService,
+    peer_manager_event::PeerDisconnectionDbAction,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, P2p, P2pEvent, PeerManagerEvent,
@@ -45,7 +46,11 @@ where
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
-            .send(PeerManagerEvent::Disconnect(peer_id, tx))
+            .send(PeerManagerEvent::Disconnect(
+                peer_id,
+                PeerDisconnectionDbAction::RemoveIfOutbound,
+                tx,
+            ))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await?
     }
