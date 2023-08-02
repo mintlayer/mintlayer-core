@@ -79,14 +79,22 @@ pub trait ChainstateInterface: Send {
     /// Returns a locator starting from the specified height.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
 
-    /// Returns a list of block headers starting from the last locator's block that is in the main
-    /// chain.
+    /// Returns a list of main chain block headers starting from the locator's highest block that
+    /// is in the main chain (or genesis, if there is no such block).
     ///
-    /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
-    /// header is returned in case there is no common ancestor with a better block height.
+    /// The number of returned headers is limited by `header_count_limit`.
     fn get_headers(
         &self,
         locator: Locator,
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+
+    /// Given a (potentially stale) block id, find a point where the corresponding branch diverged
+    /// from the main chain and return headers of all main chain blocks above it (but not more than
+    /// `header_count_limit`).
+    fn get_headers_since_fork_point(
+        &self,
+        block_id: &Id<GenBlock>,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 

@@ -21,8 +21,11 @@ use chainstate::{BlockSource, ChainstateConfig, ChainstateError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    chain::{
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
+        GenBlock,
+    },
+    primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
 };
 use crypto::random::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -221,6 +224,139 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let headers = tf.chainstate.get_headers(locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
         assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+    });
+}
+
+fn get_headers_for_ids(tf: &TestFramework, ids: &[Id<GenBlock>]) -> Vec<SignedBlockHeader> {
+    let mut result = Vec::with_capacity(ids.len());
+    for id in ids {
+        let id = id.classify(tf.chainstate.get_chain_config()).chain_block_id().unwrap();
+        let block_index = tf.chainstate.get_block_index(&id).unwrap().unwrap();
+        result.push(block_index.block_header().clone());
+    }
+    result
+}
+
+// Call get_headers_since_fork_point on a block from the main chain.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_since_fork_point_for_main_chain_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        let ids = tf
+            .create_chain_return_ids(&genesis_id.into(), rng.gen_range(100..250), &mut rng)
+            .unwrap();
+
+        let idx = rng.gen_range((ids.len() / 4)..(3 * ids.len() / 4));
+        let headers = tf.chainstate.get_headers_since_fork_point(&ids[idx], 1000_000).unwrap();
+        let expected_headers = get_headers_for_ids(&tf, &ids[idx + 1..]);
+        assert_eq!(&headers, &expected_headers);
+    });
+}
+
+// Call get_headers_since_fork_point on a block from the main chain, this time with a small limit.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_since_fork_point_for_main_chain_block_with_limit(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        let ids = tf
+            .create_chain_return_ids(&genesis_id.into(), rng.gen_range(100..250), &mut rng)
+            .unwrap();
+
+        let idx = rng.gen_range((ids.len() / 4)..(3 * ids.len() / 4));
+        let limit = ids.len() / 8;
+        let headers = tf.chainstate.get_headers_since_fork_point(&ids[idx], limit).unwrap();
+        let expected_headers = get_headers_for_ids(&tf, &ids[idx + 1..idx + limit + 1]);
+        assert_eq!(&headers, &expected_headers);
+    });
+}
+
+// Call get_headers_since_fork_point on a block from a stale chain.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_since_fork_point_for_stale_chain_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        // Main chain length without genesis.
+        let mc_len = rng.gen_range(100..250);
+        let fork_point = rng.gen_range((mc_len / 4)..(mc_len / 2));
+        // Stale chain length (it's at least mc_len/8)
+        let sc_len = rng.gen_range(((mc_len - fork_point) / 4)..(3 * (mc_len - fork_point) / 4));
+
+        let mc_ids = tf.create_chain_return_ids(&genesis_id.into(), mc_len, &mut rng).unwrap();
+        let sc_ids = tf.create_chain_return_ids(&mc_ids[fork_point], sc_len, &mut rng).unwrap();
+
+        let idx = rng.gen_range((sc_ids.len() / 4)..(3 * sc_ids.len() / 4));
+        let headers = tf.chainstate.get_headers_since_fork_point(&sc_ids[idx], 1000_000).unwrap();
+        let expected_headers = get_headers_for_ids(&tf, &mc_ids[fork_point + 1..]);
+        assert_eq!(&headers, &expected_headers);
+    });
+}
+
+// Call get_headers_since_fork_point on a block from a stale chain, this time with a small limit.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_since_fork_point_for_stale_chain_block_with_limit(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        // Main chain length without genesis.
+        let mc_len = rng.gen_range(100..250);
+        let fork_point = rng.gen_range((mc_len / 4)..(mc_len / 2));
+        // Stale chain length (it's at least mc_len/8)
+        let sc_len = rng.gen_range(((mc_len - fork_point) / 4)..(3 * (mc_len - fork_point) / 4));
+
+        let mc_ids = tf.create_chain_return_ids(&genesis_id.into(), mc_len, &mut rng).unwrap();
+        let sc_ids = tf.create_chain_return_ids(&mc_ids[fork_point], sc_len, &mut rng).unwrap();
+
+        let idx = rng.gen_range((sc_ids.len() / 4)..(3 * sc_ids.len() / 4));
+        let limit = mc_len / 8;
+        let headers = tf.chainstate.get_headers_since_fork_point(&sc_ids[idx], limit).unwrap();
+        let expected_headers =
+            get_headers_for_ids(&tf, &mc_ids[fork_point + 1..fork_point + limit + 1]);
+        assert_eq!(&headers, &expected_headers);
+    });
+}
+
+// Call get_headers_since_fork_point on a block which doesn't exist in the chainstate.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_since_fork_point_for_non_existent_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        tf.create_chain(&genesis_id.into(), rng.gen_range(100..250), &mut rng).unwrap();
+
+        let bogus_block_id = Id::<GenBlock>::new(H256([0x23; 32]));
+        let error = tf
+            .chainstate
+            .get_headers_since_fork_point(&bogus_block_id, 1000_000)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            ChainstateError::FailedToReadProperty(PropertyQueryError::BlockIndexNotFound(
+                bogus_block_id
+            ))
+        );
     });
 }
 

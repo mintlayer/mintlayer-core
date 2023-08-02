@@ -138,33 +138,45 @@ impl TestFramework {
         result
     }
 
-    /// Creates and processes a given amount of blocks. Returns the id of the last produced block.
+    /// Create and process a given amount of blocks. Return the ids of the produced blocks.
     ///
     /// Each block contains a single transaction that spends a random amount from the previous
     /// block outputs.
-    pub fn create_chain(
+    pub fn create_chain_return_ids(
         &mut self,
         parent_block: &Id<GenBlock>,
-        blocks: usize,
+        blocks_count: usize,
         rng: &mut impl Rng,
-    ) -> Result<Id<GenBlock>, ChainstateError> {
+    ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
-        let result = || -> Result<Id<GenBlock>, ChainstateError> {
-            for _ in 0..blocks {
+        let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+            let mut ids = Vec::new();
+            for _ in 0..blocks_count {
                 let block = self
                     .make_block_builder()
                     .add_test_transaction_with_parent(prev_block_id, rng)
                     .with_parent(prev_block_id)
                     .build();
                 prev_block_id = block.get_id().into();
+                ids.push(prev_block_id);
                 self.do_process_block(block, BlockSource::Local)?;
             }
 
-            Ok(prev_block_id)
+            Ok(ids)
         }();
 
         self.refresh_block_indices()?;
         result
+    }
+
+    /// Same as `create_chain_return_ids`, but only return the id of the last produced block.
+    pub fn create_chain(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks_count: usize,
+        rng: &mut impl Rng,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
 
     pub fn create_chain_pos(

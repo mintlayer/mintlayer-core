@@ -130,6 +130,14 @@ where
         self.deref().get_headers(locator, header_count_limit)
     }
 
+    fn get_headers_since_fork_point(
+        &self,
+        block_id: &Id<GenBlock>,
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
+        self.deref().get_headers_since_fork_point(block_id, header_count_limit)
+    }
+
     fn filter_already_existing_blocks(
         &self,
         headers: Vec<SignedBlockHeader>,
