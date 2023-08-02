@@ -33,6 +33,7 @@ use crypto::{
     key::{PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
+use serialization::hex::HexEncode;
 
 #[derive(Clone, Debug)]
 pub struct GenesisStakingSettings {
@@ -145,10 +146,10 @@ impl Display for GenesisStakingSettings {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "{{pool_id: {:?}, stake_private_key: {:?}, vrf_private_key: {:?}}}",
-            self.pool_id(),
-            self.stake_private_key(),
-            self.vrf_private_key()
+            "genesis_pool_id:{},genesis_stake_private_key:{},genesis_vrf_private_key:{}",
+            self.pool_id().hex_encode(),
+            self.stake_private_key().hex_encode(),
+            self.vrf_private_key().hex_encode()
         )
     }
 }
