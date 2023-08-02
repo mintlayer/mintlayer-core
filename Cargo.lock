@@ -872,6 +872,7 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
+ "parity-scale-codec",
  "pos_accounting",
  "rstest",
  "serialization",

@@ -39,12 +39,14 @@ use super::mock_impl_accounting::{
     PoSAccountingStorageWriteTip,
 };
 
+use crate::ChainstateStorageVersion;
+
 mockall::mock! {
     /// A mock object for blockchain storage
     pub Store {}
 
     impl crate::BlockchainStorageRead for Store {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -149,7 +151,7 @@ mockall::mock! {
     }
 
     impl crate::BlockchainStorageWrite for Store {
-        fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
         fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()>;
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
@@ -300,7 +302,7 @@ mockall::mock! {
     pub StoreTxRo {}
 
     impl crate::BlockchainStorageRead for StoreTxRo {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -414,7 +416,7 @@ mockall::mock! {
     pub StoreTxRw {}
 
     impl crate::BlockchainStorageRead for StoreTxRw {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -518,7 +520,7 @@ mockall::mock! {
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
-        fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
         fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()>;
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;

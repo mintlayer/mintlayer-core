@@ -37,11 +37,12 @@ use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
     schema::{self as db, Schema},
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag,
+    BlockchainStorageRead, BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag,
+    TipStorageTag,
 };
 
 mod well_known {
-    use super::{Codec, GenBlock, Id};
+    use super::{ChainstateStorageVersion, Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -61,7 +62,7 @@ mod well_known {
         };
     }
 
-    declare_entry!(StoreVersion: u32);
+    declare_entry!(StoreVersion: ChainstateStorageVersion);
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
     declare_entry!(TxIndexEnabled: bool);
@@ -79,8 +80,8 @@ macro_rules! impl_read_ops {
     ($TxType:ident) => {
         /// Blockchain data storage transaction
         impl<'st, B: storage::Backend> BlockchainStorageRead for $TxType<'st, B> {
-            fn get_storage_version(&self) -> crate::Result<u32> {
-                self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
+                self.read_value::<well_known::StoreVersion>()
             }
 
             fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
@@ -394,7 +395,7 @@ impl_read_ops!(StoreTxRo);
 impl_read_ops!(StoreTxRw);
 
 impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
+    fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
     }
 
