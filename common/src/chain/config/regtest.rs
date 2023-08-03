@@ -50,6 +50,8 @@ pub struct GenesisStakingSettings {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum GenesisStakingSettingsInputErrors {
+    #[error("Duplicate staking setting {0}")]
+    DupicateStakingSetting(String),
     #[error("Hex decoding failed {0}")]
     HexDecodingFailed(String),
     #[error("Invalid pool Id {0}")]
@@ -113,18 +115,29 @@ impl FromStr for GenesisStakingSettings {
             .split(',')
             .filter_map(|s| s.split_once(':').or(if s.is_empty() { None } else { Some((s, "")) }))
             .map(|(k, v)| (k.trim(), v.trim()))
-            .collect::<HashMap<&str, &str>>();
+            .collect::<Vec<(&str, &str)>>();
+
+        let mut settings_parts_uniq = HashMap::new();
+
+        for (key, value) in settings_parts {
+            if settings_parts_uniq.insert(key, value).is_some() {
+                return Err(GenesisStakingSettingsInputErrors::DupicateStakingSetting(
+                    key.into(),
+                ));
+            }
+        }
 
         let pool_id = {
-            let pool_id = settings_parts.remove("pool_id").unwrap_or(GENESIS_POOL_ID);
+            let pool_id = settings_parts_uniq.remove("pool_id").unwrap_or(GENESIS_POOL_ID);
 
             decode_hex::<PoolId>(pool_id)
                 .map_err(|_| GenesisStakingSettingsInputErrors::InvalidPoolId(pool_id.into()))?
         };
 
         let stake_private_key = {
-            let stake_private_key =
-                settings_parts.remove("stake_private_key").unwrap_or(GENESIS_STAKE_PRIVATE_KEY);
+            let stake_private_key = settings_parts_uniq
+                .remove("stake_private_key")
+                .unwrap_or(GENESIS_STAKE_PRIVATE_KEY);
 
             decode_hex::<PrivateKey>(stake_private_key).map_err(|_| {
                 GenesisStakingSettingsInputErrors::InvalidStakingPrivateKey(
@@ -135,18 +148,24 @@ impl FromStr for GenesisStakingSettings {
 
         let vrf_private_key = {
             let vrf_private_key =
-                settings_parts.remove("vrf_private_key").unwrap_or(GENESIS_VRF_PRIVATE_KEY);
+                settings_parts_uniq.remove("vrf_private_key").unwrap_or(GENESIS_VRF_PRIVATE_KEY);
 
             decode_hex::<VRFPrivateKey>(vrf_private_key).map_err(|_| {
                 GenesisStakingSettingsInputErrors::InvalidVRFPrivateKey(vrf_private_key.into())
             })?
         };
 
-        if !settings_parts.is_empty() {
+        if !settings_parts_uniq.is_empty() {
             return Err(GenesisStakingSettingsInputErrors::UnknownParameter(
-                settings_parts
+                settings_parts_uniq
                     .drain()
-                    .map(|(k, v)| format!("{}:{}", k, v))
+                    .map(|(k, v)| {
+                        if v.is_empty() {
+                            k.to_string()
+                        } else {
+                            [k, v].join(":")
+                        }
+                    })
                     .collect::<Vec<String>>()
                     .join(","),
             ));
@@ -298,6 +317,19 @@ mod test {
                 "key".to_string()
             )),
             "Empty value was valid"
+        );
+    }
+
+    #[test]
+    fn duplicate_key() {
+        let result = GenesisStakingSettings::from_str("key:value1,key:value2");
+
+        assert_eq!(
+            result,
+            Err(GenesisStakingSettingsInputErrors::DupicateStakingSetting(
+                "key".to_string()
+            )),
+            "Duplicate key was valid"
         );
     }
 
