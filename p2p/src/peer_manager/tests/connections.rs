@@ -685,12 +685,15 @@ async fn connection_timeout_rpc_notified<T>(
     }
 }
 
+// Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
+const GUARANTEED_TIMEOUT_ADDRESS: &'static str = "198.51.100.2:1";
+
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
-        "127.0.0.1:1".parse().unwrap(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
@@ -700,7 +703,7 @@ async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        "127.0.0.1:1".parse().unwrap(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
@@ -710,7 +713,7 @@ async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
-        "127.0.0.1:1".parse().unwrap(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
