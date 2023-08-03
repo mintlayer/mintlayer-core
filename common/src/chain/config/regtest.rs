@@ -90,12 +90,12 @@ impl GenesisStakingSettings {
         self.pool_id
     }
 
-    pub fn stake_private_key(&self) -> PrivateKey {
-        self.stake_private_key.clone()
+    pub fn stake_private_key(&self) -> &PrivateKey {
+        &self.stake_private_key
     }
 
-    pub fn vrf_private_key(&self) -> VRFPrivateKey {
-        self.vrf_private_key.clone()
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
     }
 }
 
@@ -183,10 +183,10 @@ pub fn genesis_values(
     VRFPublicKey,
 ) {
     let genesis_stake_private_key = genesis_staking_settings.stake_private_key();
-    let genesis_stake_public_key = PublicKey::from_private_key(&genesis_stake_private_key);
+    let genesis_stake_public_key = PublicKey::from_private_key(genesis_stake_private_key);
 
     let genesis_vrf_private_key = genesis_staking_settings.vrf_private_key();
-    let genesis_vrf_public_key = VRFPublicKey::from_private_key(&genesis_vrf_private_key);
+    let genesis_vrf_public_key = VRFPublicKey::from_private_key(genesis_vrf_private_key);
 
     let genesis_pool_stake_data = Box::new(StakePoolData::new(
         MIN_STAKE_POOL_PLEDGE,
@@ -200,9 +200,9 @@ pub fn genesis_values(
     (
         genesis_staking_settings.pool_id(),
         genesis_pool_stake_data,
-        genesis_stake_private_key,
+        genesis_stake_private_key.clone(),
         genesis_stake_public_key,
-        genesis_vrf_private_key,
+        genesis_vrf_private_key.clone(),
         genesis_vrf_public_key,
     )
 }
