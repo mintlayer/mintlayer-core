@@ -109,9 +109,9 @@ impl FromStr for GenesisStakingSettings {
     type Err = GenesisStakingSettingsInputErrors;
 
     fn from_str(settings: &str) -> Result<Self, Self::Err> {
-        let mut settings_parts = settings
+        let settings_parts = settings
             .split(',')
-            .filter_map(|s| s.split_once(':'))
+            .filter_map(|s| s.split_once(':').or(if s.is_empty() { None } else { Some((s, "")) }))
             .map(|(k, v)| (k.trim(), v.trim()))
             .collect::<HashMap<&str, &str>>();
 
@@ -162,13 +162,25 @@ impl FromStr for GenesisStakingSettings {
 
 impl Display for GenesisStakingSettings {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "pool_id:{},stake_private_key:{},vrf_private_key:{}",
-            self.pool_id().hex_encode(),
-            self.stake_private_key().hex_encode(),
-            self.vrf_private_key().hex_encode()
-        )
+        let mut values = vec![];
+
+        let pool_id = self.pool_id().hex_encode();
+        let stake_private_key = self.stake_private_key().hex_encode();
+        let vrf_private_key = self.vrf_private_key().hex_encode();
+
+        if !pool_id.is_empty() {
+            values.push(format!("pool_id:{}", pool_id))
+        }
+
+        if !stake_private_key.is_empty() {
+            values.push(format!("stake_private_key:{}", stake_private_key))
+        }
+
+        if !vrf_private_key.is_empty() {
+            values.push(format!("vrf_private_key:{}", vrf_private_key))
+        }
+
+        write!(f, "{}", values.join(","))
     }
 }
 
@@ -260,6 +272,32 @@ mod test {
             default.vrf_private_key().hex_encode(),
             GENESIS_VRF_PRIVATE_KEY,
             "Default Genesis VRF private key is incorrect"
+        );
+    }
+
+    #[test]
+    fn missing_value() {
+        let result = GenesisStakingSettings::from_str("key");
+
+        assert_eq!(
+            result,
+            Err(GenesisStakingSettingsInputErrors::UnknownParameter(
+                "key".to_string()
+            )),
+            "Missing value was valid"
+        );
+    }
+
+    #[test]
+    fn empty_value() {
+        let result = GenesisStakingSettings::from_str("key:");
+
+        assert_eq!(
+            result,
+            Err(GenesisStakingSettingsInputErrors::UnknownParameter(
+                "key".to_string()
+            )),
+            "Empty value was valid"
         );
     }
 
