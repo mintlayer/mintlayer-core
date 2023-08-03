@@ -30,6 +30,7 @@ use utils::ensure;
 use wallet_types::{
     utxo_types::{get_utxo_state, UtxoStates},
     wallet_tx::TxState,
+    with_locked::WithLocked,
     AccountWalletTxId, BlockInfo, WalletTx,
 };
 
@@ -202,13 +203,8 @@ impl OutputCache {
             }
         }
 
-        let tx_block_info = match tx.state() {
-            TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
-            TxState::Inactive
-            | TxState::Conflicted(_)
-            | TxState::InMempool
-            | TxState::Abandoned => None,
-        };
+        let tx_block_info = get_block_info(&tx);
+
         if let Some(block_info) = tx_block_info {
             for (idx, output) in tx.outputs().iter().enumerate() {
                 match output {
@@ -298,18 +294,6 @@ impl OutputCache {
         Ok(())
     }
 
-    fn valid_utxo(
-        &self,
-        outpoint: &UtxoOutPoint,
-        output: &TxOutput,
-        transaction_block_info: &Option<BlockInfo>,
-        current_block_info: &BlockInfo,
-        utxo_states: UtxoStates,
-    ) -> bool {
-        !self.is_consumed(utxo_states, outpoint)
-            && valid_timelock(output, current_block_info, transaction_block_info, outpoint)
-    }
-
     fn is_consumed(&self, utxo_states: UtxoStates, outpoint: &UtxoOutPoint) -> bool {
         self.consumed.get(outpoint).map_or(false, |consumed_state| {
             utxo_states.contains(get_utxo_state(consumed_state))
@@ -320,44 +304,47 @@ impl OutputCache {
         &self,
         current_block_info: BlockInfo,
         utxo_states: UtxoStates,
+        locked_state: WithLocked,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        let mut utxos = BTreeMap::new();
+        self.txs
+            .values()
+            .filter(|tx| is_in_state(tx, utxo_states))
+            .flat_map(|tx| {
+                let tx_block_info = get_block_info(tx);
+                let token_id = match tx {
+                    WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+                    WalletTx::Block(_) => None,
+                };
 
-        for tx in self.txs.values() {
-            if !utxo_states.contains(get_utxo_state(&tx.state())) {
-                continue;
-            }
-
-            let tx_block_info = match tx.state() {
-                TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
-                TxState::InMempool
-                | TxState::Inactive
-                | TxState::Conflicted(_)
-                | TxState::Abandoned => None,
-            };
-            for (index, output) in tx.outputs().iter().enumerate() {
-                let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
-                if self.valid_utxo(
-                    &outpoint,
-                    output,
-                    &tx_block_info,
-                    &current_block_info,
-                    utxo_states,
-                ) {
-                    let token_id = if output.is_token_or_nft_issuance() {
-                        match tx {
-                            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
-                            WalletTx::Block(_) => None,
-                        }
-                    } else {
-                        None
-                    };
-                    utxos.insert(outpoint, (output, token_id));
-                }
-            }
-        }
-
-        utxos
+                tx.outputs()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, output)| (output, UtxoOutPoint::new(tx.id(), idx as u32)))
+                    .filter(move |(output, outpoint)| {
+                        !self.is_consumed(utxo_states, outpoint)
+                            && is_specific_lock_state(
+                                locked_state,
+                                output,
+                                current_block_info,
+                                tx_block_info,
+                                outpoint,
+                            )
+                    })
+                    .map(move |(output, outpoint)| {
+                        (
+                            outpoint,
+                            (
+                                output,
+                                if output.is_token_or_nft_issuance() {
+                                    token_id
+                                } else {
+                                    None
+                                },
+                            ),
+                        )
+                    })
+            })
+            .collect()
     }
 
     pub fn pending_transactions(&self) -> Vec<&WithId<Transaction>> {
@@ -437,6 +424,40 @@ impl OutputCache {
     }
 }
 
+/// Checks the output against the current block height and compares it with the locked_state parameter.
+/// If they match, the function return true, if they don't, it returns false.
+/// For example, if we would like to check that an output is locked,
+/// we pass locked_state = WithLocked::Locked, and pass the output in question.
+/// If the output is locked, the function returns true. Otherwise, it returns false
+fn is_specific_lock_state(
+    locked_state: WithLocked,
+    output: &TxOutput,
+    current_block_info: BlockInfo,
+    tx_block_info: Option<BlockInfo>,
+    outpoint: &UtxoOutPoint,
+) -> bool {
+    match locked_state {
+        WithLocked::Any => true,
+        WithLocked::Locked => {
+            !valid_timelock(output, &current_block_info, &tx_block_info, outpoint)
+        }
+        WithLocked::Unlocked => {
+            valid_timelock(output, &current_block_info, &tx_block_info, outpoint)
+        }
+    }
+}
+
+/// Get the block info (block height and timestamp) if the Tx is in confirmed state
+fn get_block_info(tx: &WalletTx) -> Option<BlockInfo> {
+    match tx.state() {
+        TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
+        TxState::InMempool | TxState::Inactive | TxState::Conflicted(_) | TxState::Abandoned => {
+            None
+        }
+    }
+}
+
+/// Check the TxOutput's timelock is unlocked
 fn valid_timelock(
     output: &TxOutput,
     current_block_info: &BlockInfo,
@@ -456,4 +477,9 @@ fn valid_timelock(
             .is_ok()
         })
     })
+}
+
+/// Check Tx is in the selected state Confirmed/Inactive/Abandoned...
+fn is_in_state(tx: &WalletTx, utxo_states: UtxoStates) -> bool {
+    utxo_states.contains(get_utxo_state(&tx.state()))
 }

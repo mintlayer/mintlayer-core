@@ -13,17 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account_id;
-pub mod account_info;
-pub mod keys;
-pub mod utxo_types;
-pub mod wallet_tx;
-pub mod with_locked;
-
-pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId,
-};
-pub use account_info::AccountInfo;
-pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
-pub use wallet_tx::{BlockInfo, WalletTx};
+/// Enum used to specify whether to include locked balance/utxos for wallet commands
+#[derive(Debug, Clone, Copy)]
+pub enum WithLocked {
+    Any,
+    Unlocked,
+    Locked,
+}

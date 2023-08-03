@@ -35,7 +35,9 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 
 use crate::{errors::WalletCliError, CliController};
 
-use self::helper_types::{format_delegation_info, format_pool_info, CliUtxoState, CliUtxoTypes};
+use self::helper_types::{
+    format_delegation_info, format_pool_info, CliUtxoState, CliUtxoTypes, CliWithLocked,
+};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -181,6 +183,8 @@ pub enum WalletCommand {
     SyncWallet,
 
     GetBalance {
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
     },
@@ -188,6 +192,8 @@ pub enum WalletCommand {
     ListUtxo {
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
     },
@@ -849,13 +855,17 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::GetBalance { utxo_states } => {
+            WalletCommand::GetBalance {
+                utxo_states,
+                with_locked,
+            } => {
                 let mut balances = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .get_balance(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         CliUtxoState::to_wallet_states(utxo_states),
+                        with_locked.to_wallet_type(),
                     )
                     .map_err(WalletCliError::Controller)?;
                 let coin_balance = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
@@ -884,6 +894,7 @@ impl CommandHandler {
             WalletCommand::ListUtxo {
                 utxo_type,
                 utxo_states,
+                with_locked,
             } => {
                 let utxos = controller_opt
                     .as_mut()
@@ -892,6 +903,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         utxo_type.to_wallet_types(),
                         CliUtxoState::to_wallet_states(utxo_states),
+                        with_locked.to_wallet_type(),
                     )
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))

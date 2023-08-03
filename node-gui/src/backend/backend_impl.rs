@@ -31,6 +31,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
+use wallet_types::with_locked::WithLocked;
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -411,7 +412,11 @@ impl Backend {
         account_index: U31,
     ) -> BTreeMap<Currency, Amount> {
         controller
-            .get_balance(account_index, UtxoState::Confirmed.into())
+            .get_balance(
+                account_index,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            )
             .expect("get_balance should not fail normally")
     }
 

@@ -26,6 +26,7 @@ use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
 pub use utxo_selector::UtxoSelectorError;
+use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
@@ -167,6 +168,7 @@ impl Account {
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 median_time,
                 UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
             )
             .into_iter(),
             |(_, (tx_output, _))| tx_output,
@@ -549,6 +551,7 @@ impl Account {
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
             median_time,
             UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
         );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
@@ -748,9 +751,10 @@ impl Account {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         median_time: BlockTimestamp,
+        with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time, utxo_states).into_iter(),
+            self.get_utxos(utxo_types, median_time, utxo_states, with_locked).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -767,13 +771,15 @@ impl Account {
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
         let mut all_outputs =
-            self.output_cache.utxos_with_token_ids(current_block_info, utxo_states);
+            self.output_cache
+                .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
