@@ -697,11 +697,18 @@ version = "0.1.0"
 name = "blockchain-scanner-lib"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chainstate",
+ "chainstate-test-framework",
  "common",
+ "crypto",
  "logging",
  "node-comm",
+ "rstest",
+ "test-utils",
  "thiserror",
  "tokio",
+ "utils",
 ]
 
 [[package]]
