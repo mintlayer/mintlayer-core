@@ -300,11 +300,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
-            .map(|status| (token_id, status))
+
+        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
     }
 
     pub async fn issue_new_nft(
@@ -330,11 +327,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
-            .map(|status| (token_id, status))
+
+        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
     }
 
     pub fn new_address(
@@ -484,11 +478,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
-            .map(|status| (delegation_id, status))
+
+        self.broadcast_to_mempool(tx).await.map(|status| (delegation_id, status))
     }
 
     pub async fn delegate_staking(
@@ -515,10 +506,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn send_to_address_from_delegation(
@@ -537,7 +526,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let tx = self
             .wallet
             .create_transaction_to_addresses_from_delegation(
-                &mut self.wallet_events,
                 account_index,
                 address,
                 amount,
@@ -545,10 +533,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn send_tokens_to_address(
@@ -557,7 +543,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         token_id: TokenId,
         address: Address<Destination>,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -568,14 +554,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let output =
             make_address_output_token(self.chain_config.as_ref(), address, amount, token_id)
                 .map_err(ControllerError::WalletError)?;
-        self.wallet
+        let tx = self
+            .wallet
             .create_transaction_to_addresses(
                 account_index,
                 [output],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn get_token_number_of_decimals(
@@ -637,7 +626,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         account_index: U31,
         pool_id: PoolId,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -653,15 +642,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 pool_id,
             )))?;
 
-        self.wallet
-            .decommission_stake_pool(
-                &mut self.wallet_events,
-                account_index,
-                pool_id,
-                staker_balance,
-                current_fee_rate,
-            )
-            .map_err(ControllerError::WalletError)
+        let tx = self
+            .wallet
+            .decommission_stake_pool(account_index, pool_id, staker_balance, current_fee_rate)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn generate_block(
