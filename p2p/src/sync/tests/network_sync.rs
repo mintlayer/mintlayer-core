@@ -19,6 +19,7 @@ use common::{
     chain::block::timestamp::BlockTimestamp, primitives::user_agent::mintlayer_core_user_agent,
 };
 use crypto::random::Rng;
+use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
@@ -303,6 +304,12 @@ async fn reorg(#[case] seed: Seed) {
 
     sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
+    log::debug!("Disconnect peers");
+    manager1.disconnect_peer(manager2.peer_id);
+    manager2.disconnect_peer(manager1.peer_id);
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+
+    log::debug!("Shutdown");
     manager1.join_subsystem_manager().await;
     manager2.join_subsystem_manager().await;
 }
