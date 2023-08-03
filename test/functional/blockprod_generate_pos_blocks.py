@@ -25,6 +25,8 @@ from test_framework.util import (
 
 import random, time
 
+COIN = 100_000_000_000
+
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
 GENESIS_STAKE_PUBLIC_KEY = "03c53526caf73cd990148e127cb57249a5e266d78df23968642c976a532197fdaa"
@@ -205,7 +207,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": "4000000000000000",
+                                "value": 40_000*COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -240,7 +242,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "Transfer": [
                             {
-                                "Coin": "10000000000000000",
+                                "Coin": 100_000*COIN,
                             },
                             "AnyoneCanSpend",
                         ],
@@ -313,7 +315,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             new_pool_id,
                             {
-                                "value": "10000000000000000",
+                                "value": 100_000*COIN,
                                 "staker": {
                                     "PublicKey": new_stake_public_key,
                                 },
@@ -351,7 +353,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             "CreateStakePool": [
                 new_pool_id,
                 {
-                    "value": "10000000000000000",
+                    "value": 100_000*COIN,
                     "staker": {
                         "PublicKey": new_stake_public_key,
                     },

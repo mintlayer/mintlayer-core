@@ -25,6 +25,8 @@ from test_framework.util import (
 
 import random, secrets, time
 
+COIN = 100_000_000_000
+
 block_input_data_obj = RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
 outpoint_obj = RuntimeConfiguration().create_scale_object('OutPoint')
 signed_transaction_obj = RuntimeConfiguration().create_scale_object('SignedTransaction')
@@ -231,7 +233,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             genesis_pool_id,
                             {
-                                "value": "4000000000000000",
+                                "value": 40_000*COIN,
                                 "staker": {
                                     "PublicKey": genesis_stake_public_key,
                                 },
@@ -266,7 +268,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "Transfer": [
                             {
-                                "Coin": "10000000000000000",
+                                "Coin": 100_000*COIN,
                             },
                             "AnyoneCanSpend",
                         ],
@@ -339,7 +341,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             new_pool_id,
                             {
-                                "value": "10000000000000000",
+                                "value": 100_000*COIN,
                                 "staker": {
                                     "PublicKey": new_stake_public_key,
                                 },
@@ -377,7 +379,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             "CreateStakePool": [
                 new_pool_id,
                 {
-                    "value": "10000000000000000",
+                    "value": 100_000*COIN,
                     "staker": {
                         "PublicKey": new_stake_public_key,
                     },
