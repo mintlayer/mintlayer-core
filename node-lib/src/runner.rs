@@ -214,7 +214,7 @@ pub async fn setup(options: Options) -> Result<Node> {
             .await
         }
         Command::Regtest(ref regtest_options) => {
-            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
+            let chain_config = regtest_chain_config(&command, &regtest_options.chain_config)?;
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
@@ -322,7 +322,14 @@ async fn start(
     })
 }
 
-fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Result<ChainConfig> {
+    match command {
+        Command::Regtest(_) => {}
+        Command::Mainnet(_) | Command::Testnet(_) => {
+            panic!("RegTest configuration options must only be used on RegTest")
+        }
+    };
+
     let ChainConfigOptions {
         chain_max_future_block_time_offset,
         chain_version,
