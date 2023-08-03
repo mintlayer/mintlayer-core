@@ -990,7 +990,6 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let pool_id = pool_ids.first().unwrap().0;
     let decommission_tx = wallet
         .decommission_stake_pool(
-            &mut WalletEventsNoOp,
             DEFAULT_ACCOUNT_INDEX,
             pool_id,
             pool_amount,
