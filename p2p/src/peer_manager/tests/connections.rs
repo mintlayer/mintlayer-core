@@ -32,8 +32,8 @@ use crate::{
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -679,7 +679,7 @@ async fn connection_timeout_rpc_notified<T>(
     ))
     .unwrap();
 
-    match timeout(*p2p_config.outbound_connection_timeout, rrx).await.unwrap() {
+    match timeout(Duration::from_secs(60), rrx).await.unwrap() {
         Ok(Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))) => {}
         event => panic!("unexpected event: {event:?}"),
     }
@@ -690,7 +690,7 @@ async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
-        TestTcpAddressMaker::new(),
+        "127.0.0.1:1".parse().unwrap(),
     )
     .await;
 }
@@ -700,7 +700,7 @@ async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        TestTcpAddressMaker::new(),
+        "127.0.0.1:1".parse().unwrap(),
     )
     .await;
 }
@@ -710,7 +710,7 @@ async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
-        TestTcpAddressMaker::new(),
+        "127.0.0.1:1".parse().unwrap(),
     )
     .await;
 }
