@@ -127,13 +127,13 @@ fn fetch_disconnected_txs<M>(
         .map(ReorgData::into_disconnected_transactions)
 }
 
-pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
+pub fn handle_new_tip<M: MemoryUsageEstimator>(
+    mempool: &mut Mempool<M>,
+    new_tip: Id<Block>,
+) -> Result<(), ReorgError> {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
-    let is_ibd = mempool
-        .blocking_chainstate_handle()
-        .call(|cs| cs.is_initial_block_download())
-        .expect("Cannot connect to chainstate");
+    let is_ibd = mempool.blocking_chainstate_handle().call(|cs| cs.is_initial_block_download())?;
     if is_ibd {
         log::debug!("Not updating mempool tx verifier during IBD");
 
@@ -142,7 +142,7 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip
         if old_transactions.next().is_some() {
             log::warn!("Discarding mempool transactions during IBD");
         }
-        return;
+        return Ok(());
     }
 
     let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
@@ -152,6 +152,8 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip
         Ok(to_insert) => refresh_mempool(mempool, to_insert),
         Err(_) => refresh_mempool(mempool, std::iter::empty()),
     }
+
+    Ok(())
 }
 
 pub fn refresh_mempool<M: MemoryUsageEstimator>(

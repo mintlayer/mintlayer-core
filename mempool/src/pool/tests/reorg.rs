@@ -74,7 +74,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 
@@ -89,7 +89,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block2");
-    mempool.on_new_tip(block2_id, BlockHeight::new(2));
+    mempool.on_new_tip(block2_id, BlockHeight::new(2)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -104,7 +104,7 @@ async fn basic_reorg(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.on_new_tip(block4_id, BlockHeight::new(3));
+    mempool.on_new_tip(block4_id, BlockHeight::new(3)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
@@ -160,7 +160,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -175,7 +175,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.on_new_tip(block3_id, BlockHeight::new(2));
+    mempool.on_new_tip(block3_id, BlockHeight::new(2)).unwrap();
     assert!(mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
@@ -217,7 +217,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
 
     // We should not be able to add the transaction yet
     let res = mempool.add_transaction(tx1.clone(), TxOrigin::TEST);
@@ -233,7 +233,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block2");
-    mempool.on_new_tip(block2_id, BlockHeight::new(2));
+    mempool.on_new_tip(block2_id, BlockHeight::new(2)).unwrap();
 
     // We should be able to add the transaction now
     let res = mempool.add_transaction(tx1, TxOrigin::TEST);

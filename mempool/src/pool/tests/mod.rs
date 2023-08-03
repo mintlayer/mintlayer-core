@@ -1069,7 +1069,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
-    mempool.on_new_tip(Id::new(H256::zero()), BlockHeight::new(1));
+    mempool.on_new_tip(Id::new(H256::zero()), BlockHeight::new(1)).unwrap();
 
     assert!(!mempool.contains_transaction(&child_2_high_fee_id));
     assert!(mempool
