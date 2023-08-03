@@ -686,7 +686,7 @@ async fn connection_timeout_rpc_notified<T>(
 }
 
 // Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
-const GUARANTEED_TIMEOUT_ADDRESS: &'static str = "198.51.100.2:1";
+const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
