@@ -44,6 +44,9 @@ use self::utils::*;
 
 const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 
+/// Max tip age of about 100 years, useful to avoid the IBD state during testing
+const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365 * 24 * 60 * 60));
+
 #[test]
 fn dummy_size() {
     logging::init_logging::<&str>(None);
@@ -182,16 +185,16 @@ async fn tx_no_inputs() {
     mempool.store.assert_valid();
 }
 
-// TODO this is copy-pasted from libp2p's test utils. This function should be extracted to an
-// external crate to avoid code duplication
-pub async fn start_chainstate_with_config_and_max_tip_age(
+// Starts chainstate with given config. Also sets the max tip age chainstate setting to a huge
+// value to prevent IBD state.
+pub async fn start_chainstate_with_config(
     chain_config: Arc<ChainConfig>,
-    max_tip_age: MaxTipAge,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
-    let chainstate_config = ChainstateConfig {
-        max_tip_age,
-        ..ChainstateConfig::new()
+    let chainstate_config = {
+        let mut config = ChainstateConfig::new();
+        config.max_tip_age = HUGE_MAX_TIP_AGE;
+        config
     };
     let chainstate = make_chainstate(
         chain_config,
@@ -203,12 +206,6 @@ pub async fn start_chainstate_with_config_and_max_tip_age(
     )
     .unwrap();
     start_chainstate(chainstate).await
-}
-
-pub async fn start_chainstate_with_config(
-    chain_config: Arc<ChainConfig>,
-) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
-    start_chainstate_with_config_and_max_tip_age(chain_config, MaxTipAge::CENTURY).await
 }
 
 async fn setup() -> Mempool<StoreMemoryUsageEstimator> {

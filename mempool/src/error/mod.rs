@@ -85,7 +85,7 @@ pub enum MempoolPolicyError {
 pub enum TxValidationError {
     #[error("Chainstate error")]
     ChainstateError(#[from] ChainstateError),
-    #[error("Not accepting transactions during initial block download")]
+    #[error("Transaction added during initial block download")]
     AddedDuringIBD,
     #[error(transparent)]
     TxValidation(#[from] ConnectTransactionError),

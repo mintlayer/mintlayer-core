@@ -97,6 +97,7 @@ impl TestFrameworkBuilder {
         self
     }
 
+    /// Set max tip age in [ChainstateConfig] to given value.
     pub fn with_max_tip_age(mut self, max_tip_age: chainstate::MaxTipAge) -> Self {
         self.chainstate_config.max_tip_age = max_tip_age;
         self
@@ -117,6 +118,7 @@ impl TestFrameworkBuilder {
         self
     }
 
+    /// Set initial mock time to given number of seconds after the genesis timestamp.
     pub fn with_initial_time_since_genesis(mut self, initial_time_since_genesis: u64) -> Self {
         self.initial_time_since_genesis = initial_time_since_genesis;
         self

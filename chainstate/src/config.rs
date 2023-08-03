@@ -33,13 +33,6 @@ make_config_setting!(
 make_config_setting!(TxIndexEnabled, bool, false);
 make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
-impl MaxTipAge {
-    /// Max tip age of 100 years, useful to avoid the IBD state during testing
-    pub const CENTURY: Self = Self {
-        value: Duration::from_secs(100 * 365 * 24 * 60 * 60),
-    };
-}
-
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
 pub struct ChainstateConfig {
