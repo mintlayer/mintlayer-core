@@ -63,7 +63,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     let work_required = match pow_status {
         PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
         PoWStatus::Ongoing => match header.prev_block_id().classify(chain_config) {
-            GenBlockId::Genesis(_) => Err(ConsensusPoWError::GenesisCannotHaveOngoingDifficulty)?,
+            GenBlockId::Genesis(_) => PoW::new(chain_config).difficulty_limit().into(),
             GenBlockId::Block(prev_id) => {
                 let prev_block_index = block_index_handle
                     .get_block_index(&prev_id)
@@ -119,9 +119,7 @@ where
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => match prev_gen_block_index {
-            GenBlockIndex::Genesis(_) => {
-                Err(ConsensusPoWError::GenesisCannotHaveOngoingDifficulty)?
-            }
+            GenBlockIndex::Genesis(_) => Ok(PoW::new(chain_config).difficulty_limit().into()),
             GenBlockIndex::Block(prev_block_index) => PoW::new(chain_config).get_work_required(
                 prev_block_index,
                 block_timestamp,
