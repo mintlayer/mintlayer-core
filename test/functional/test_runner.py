@@ -112,8 +112,9 @@ BASE_SCRIPTS = [
     'feature_lmdb_backend_test.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
-    'mempool_submit_tx.py',
+    'mempool_ibd.py',
     'mempool_submit_orphan.py',
+    'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts

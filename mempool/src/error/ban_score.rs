@@ -84,6 +84,9 @@ impl MempoolBanScore for TxValidationError {
             TxValidationError::ChainstateError(err) => err.mempool_ban_score(),
             TxValidationError::TxValidation(err) => err.mempool_ban_score(),
 
+            // Unsolicited transaction sent during IBD
+            TxValidationError::AddedDuringIBD => 0,
+
             // Internal errors
             TxValidationError::CallError(_) => 0,
             TxValidationError::TipMoved => 0,

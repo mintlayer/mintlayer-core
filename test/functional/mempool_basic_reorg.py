@@ -77,8 +77,8 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # Create two new blocks on top of block1
-        (block2a, block2a_id) = mine_empty_block(block1_id)
-        (block3a, block3a_id) = mine_empty_block(block2a_id)
+        (block2a, block2a_id) = mine_pow_block(block1_id)
+        (block3a, block3a_id) = mine_pow_block(block2a_id)
         self.log.debug("Encoded block2a {}: {}".format(block2a_id, block2a))
         self.log.debug("Encoded block3a {}: {}".format(block3a_id, block3a))
 
