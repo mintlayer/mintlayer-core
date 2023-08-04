@@ -46,7 +46,7 @@ use mempool::{
     MempoolHandle,
 };
 use p2p::P2pHandle;
-use serialization::Encode;
+use serialization::{Decode, Encode};
 use tokio::sync::oneshot;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
 use utils::once_destructor::OnceDestructor;
@@ -63,8 +63,48 @@ pub enum TransactionsSource {
     Provided(Vec<SignedTransaction>),
 }
 
-pub type CustomId = Vec<u8>;
 pub const JOBKEY_DEFAULT_LEN: usize = 32;
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct CustomId {
+    data: Vec<u8>,
+}
+
+impl CustomId {
+    pub fn new_from_entropy() -> Self {
+        let mut rng = make_true_rng();
+
+        Self {
+            data: rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
+        }
+    }
+
+    pub fn new_from_input_data(input_data: &GenerateBlockInputData) -> Self {
+        match input_data {
+            GenerateBlockInputData::PoS(pos_input_data) => Self {
+                data: pos_input_data.stake_public_key().encode(),
+            },
+            GenerateBlockInputData::None | GenerateBlockInputData::PoW(_) => {
+                Self::new_from_entropy()
+            }
+        }
+    }
+
+    pub fn new_from_value(value: Vec<u8>) -> Self {
+        Self { data: value }
+    }
+}
 
 #[allow(dead_code)]
 pub struct BlockProduction {
@@ -262,18 +302,6 @@ impl BlockProduction {
         Ok(best_block_index)
     }
 
-    pub fn generate_custom_id(&self, input_data: &GenerateBlockInputData) -> CustomId {
-        match input_data {
-            GenerateBlockInputData::PoS(pos_input_data) => {
-                pos_input_data.stake_public_key().encode()
-            }
-            GenerateBlockInputData::None | GenerateBlockInputData::PoW(_) => {
-                let mut rng = make_true_rng();
-                rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into()
-            }
-        }
-    }
-
     /// The function the creates a new block.
     ///
     /// Returns the block and a oneshot receiver that will be notified when
@@ -292,7 +320,7 @@ impl BlockProduction {
         &self,
         input_data: GenerateBlockInputData,
         transactions_source: TransactionsSource,
-        custom_id: Option<Vec<u8>>,
+        custom_id_maybe: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let current_peer_count = self
             .p2p_handle
@@ -309,7 +337,10 @@ impl BlockProduction {
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
-        let custom_id = custom_id.unwrap_or_else(|| self.generate_custom_id(&input_data));
+        let custom_id = custom_id_maybe.map_or_else(
+            || CustomId::new_from_input_data(&input_data),
+            CustomId::new_from_value,
+        );
 
         let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) = self
             .job_manager_handle

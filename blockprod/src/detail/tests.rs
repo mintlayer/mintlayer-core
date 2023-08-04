@@ -52,7 +52,7 @@ use utils::once_destructor::OnceDestructor;
 use crate::{
     detail::{
         job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
-        GenerateBlockInputData, TransactionsSource,
+        CustomId, GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool, test_blockprod_config,
     tests::{assert_process_block, setup_blockprod_test, setup_pos},
@@ -529,7 +529,7 @@ mod produce_block {
                 let _ = block_production
                     .job_manager_handle
                     .update_last_used_block_timestamp(
-                        block_production.generate_custom_id(&input_data),
+                        CustomId::new_from_input_data(&input_data),
                         BlockTimestamp::from_int_seconds(u64::MAX),
                     )
                     .await;
@@ -931,7 +931,7 @@ mod produce_block {
                     let (_, cancel_receiver) = unbounded_channel::<()>();
                     let mut rng = make_seedable_rng(seed);
                     let job_key = JobKey::new(
-                        vec![],
+                        CustomId::new_from_entropy(),
                         Id::<GenBlock>::new(H256::random_using(&mut rng)),
                     );
                     Ok((job_key, None, cancel_receiver))
@@ -1642,7 +1642,7 @@ mod stop_all_jobs {
             block_production
                 .job_manager_handle
                 .add_job(
-                    vec![],
+                    CustomId::new_from_entropy(),
                     Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
@@ -1652,7 +1652,7 @@ mod stop_all_jobs {
             block_production
                 .job_manager_handle
                 .add_job(
-                    vec![],
+                    CustomId::new_from_entropy(),
                     Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
@@ -1732,7 +1732,7 @@ mod stop_job {
 
         let mut rng = make_seedable_rng(seed);
         let job_key = JobKey::new(
-            vec![],
+            CustomId::new_from_entropy(),
             Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
@@ -1768,7 +1768,7 @@ mod stop_job {
             block_production
                 .job_manager_handle
                 .add_job(
-                    vec![],
+                    CustomId::new_from_entropy(),
                     Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
@@ -1778,7 +1778,7 @@ mod stop_job {
             block_production
                 .job_manager_handle
                 .add_job(
-                    vec![],
+                    CustomId::new_from_entropy(),
                     Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
@@ -1819,7 +1819,7 @@ mod stop_job {
                 block_production
                     .job_manager_handle
                     .add_job(
-                        vec![],
+                        CustomId::new_from_entropy(),
                         Id::<GenBlock>::new(H256::random_using(&mut rng)),
                     )
                     .await
@@ -1874,14 +1874,14 @@ mod stop_job {
             block_production
                 .job_manager_handle
                 .add_job(
-                    vec![],
+                    CustomId::new_from_entropy(),
                     Id::<GenBlock>::new(H256::random_using(&mut rng)),
                 )
                 .await
                 .unwrap();
 
         let stop_job_key = JobKey::new(
-            vec![],
+            CustomId::new_from_entropy(),
             Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
@@ -1918,7 +1918,7 @@ mod stop_job {
 
         let mut rng = make_seedable_rng(seed);
         let job_key = JobKey::new(
-            vec![],
+            CustomId::new_from_entropy(),
             Id::<GenBlock>::new(H256::random_using(&mut rng)),
         );
 
