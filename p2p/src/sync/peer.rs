@@ -200,12 +200,14 @@ where
         // the first tick.
         stalling_interval.tick().await;
 
+        // FIXME: This doesn't play nicely with send_tip_updates
         if self.common_services.has_service(Service::Blocks) {
             self.request_headers().await?;
         }
 
         loop {
             tokio::select! {
+                // Sam: these 2 must be inside a struct/module (some kind of blackbox...)?
                 message = self.sync_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
@@ -269,7 +271,7 @@ where
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     async fn handle_local_event(&mut self, event: LocalEvent) -> Result<()> {
@@ -338,16 +340,21 @@ where
         } else {
             // We don't send any headers if we're in IBD. But we still want to respond
             // to the peer indicating that we're alive.
-            // TODO: Check if a peer has permissions to ask for headers during the initial block download.
-            // FIXME: The above TODO is an old one, is it still relevant?
-            // Also, why can't we just send the headers (and then blocks) even during IBD?
-            // The peer might be in IBD too and behind us, why not help it?
+            
+            // TODO: in the protocol v2 we should not send empty headers list; instead, we
+            // should communicate our best block (id/height/header?) from the start, so that
+            // the peer just knows that we don't have better blocks and doesn't ask us.
+
+            // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
+            // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
+            // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
+            // does something like that.
             Vec::new()
         };
 
         // Once an empty list has been sent, the peer won't ask us for headers anymore, so we can
         // start sending tip updates.
-        self.send_tip_updates = headers.len() == 0;
+        self.send_tip_updates = headers.is_empty();
 
         self.send_headers(HeaderList::new(headers))?;
 

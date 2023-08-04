@@ -252,7 +252,7 @@ fn get_headers_since_fork_point_for_main_chain_block(#[case] seed: Seed) {
             .unwrap();
 
         let idx = rng.gen_range((ids.len() / 4)..(3 * ids.len() / 4));
-        let headers = tf.chainstate.get_headers_since_fork_point(&ids[idx], 1000_000).unwrap();
+        let headers = tf.chainstate.get_headers_since_fork_point(&ids[idx], 1_000_000).unwrap();
         let expected_headers = get_headers_for_ids(&tf, &ids[idx + 1..]);
         assert_eq!(&headers, &expected_headers);
     });
@@ -300,7 +300,7 @@ fn get_headers_since_fork_point_for_stale_chain_block(#[case] seed: Seed) {
         let sc_ids = tf.create_chain_return_ids(&mc_ids[fork_point], sc_len, &mut rng).unwrap();
 
         let idx = rng.gen_range((sc_ids.len() / 4)..(3 * sc_ids.len() / 4));
-        let headers = tf.chainstate.get_headers_since_fork_point(&sc_ids[idx], 1000_000).unwrap();
+        let headers = tf.chainstate.get_headers_since_fork_point(&sc_ids[idx], 1_000_000).unwrap();
         let expected_headers = get_headers_for_ids(&tf, &mc_ids[fork_point + 1..]);
         assert_eq!(&headers, &expected_headers);
     });
@@ -349,7 +349,7 @@ fn get_headers_since_fork_point_for_non_existent_block(#[case] seed: Seed) {
         let bogus_block_id = Id::<GenBlock>::new(H256([0x23; 32]));
         let error = tf
             .chainstate
-            .get_headers_since_fork_point(&bogus_block_id, 1000_000)
+            .get_headers_since_fork_point(&bogus_block_id, 1_000_000)
             .unwrap_err();
         assert_eq!(
             error,

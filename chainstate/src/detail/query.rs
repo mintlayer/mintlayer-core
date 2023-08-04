@@ -244,7 +244,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let block_index = self
             .chainstate_ref
             .get_gen_block_index(block_id)?
-            .ok_or_else(|| PropertyQueryError::BlockIndexNotFound(*block_id))?;
+            .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))?;
         let last_common_ancestor =
             self.chainstate_ref.last_common_ancestor_in_main_chain(&block_index)?;
 
