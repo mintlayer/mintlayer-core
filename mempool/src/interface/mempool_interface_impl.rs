@@ -97,7 +97,11 @@ impl MempoolSubsystemInterface for MempoolInit {
             tokio::select! {
                 () = shut_rq.recv() => break,
                 call = call_rq.recv() => call(&mut mempool).await,
-                Some(evt) = chainstate_events_rx.recv() => mempool.process_chainstate_event(evt),
+                Some(evt) = chainstate_events_rx.recv() => {
+                    let _ = mempool
+                        .process_chainstate_event(evt)
+                        .log_err_pfx("Error while handling a mempool event");
+                }
             }
         }
     }

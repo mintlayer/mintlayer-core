@@ -755,7 +755,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Returns true if the given block timestamp is newer than `ChainstateConfig::max_tip_age`.
     fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
         let now = self.time_getter.get_time();
-        time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
+        time.as_duration_since_epoch()
+            .checked_add(self.chainstate_config().max_tip_age.clone().into())
+            .map_or(true, |max_tip_time| max_tip_time > now)
     }
 
     /// Update `is_initial_block_download_finished` when tip changes (can only be set once)
@@ -768,12 +770,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // TODO: Add a check for the chain trust.
 
-        let tip_timestamp = match self.query()?.get_best_block_header() {
-            Ok(h) => h.timestamp(),
-            // There is only the genesis block, so the initial block download isn't finished yet.
-            Err(PropertyQueryError::GenesisHeaderRequested) => return Ok(()),
-            Err(e) => return Err(e),
-        };
+        let tip_timestamp = self
+            .query()?
+            .get_best_block_index()?
+            .expect("Best block index should always exist")
+            .block_timestamp();
 
         if self.is_fresh_block(&tip_timestamp) {
             self.is_initial_block_download_finished.set();

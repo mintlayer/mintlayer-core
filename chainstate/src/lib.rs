@@ -24,7 +24,7 @@ use tx_verifier::transaction_verifier::storage::HasTxIndexDisabledError;
 pub mod rpc;
 
 pub use crate::{
-    config::ChainstateConfig,
+    config::{ChainstateConfig, MaxTipAge},
     detail::{
         ban_score, calculate_median_time_past, check_nft_issuance_data, check_tokens_issuance_data,
         is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
