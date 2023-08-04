@@ -1,16 +1,17 @@
 # Build Stage
 FROM rust AS builder
 
-WORKDIR /usr/src/node-daemon
+WORKDIR /usr/src/
 
 COPY . .
 
-RUN cargo build --release -j1
+ARG NUM_JOBS=1
+RUN cargo build --release -j${NUM_JOBS}
 
 # Runtime Stage
-FROM debian:latest
+FROM debian:bookworm-slim
 
-COPY --from=builder /usr/src/node-daemon/target/release/node-daemon /usr/bin/node-daemon
+COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
 
 # Node daemon listens on ports 3030 and 13031
 EXPOSE 3030 13031

@@ -1,17 +1,20 @@
 # Build Stage
 FROM rust AS builder
 
-WORKDIR /usr/src/wallet-cli
+WORKDIR /usr/src/
 
 COPY . .
 
-RUN cargo build --release -j1
+ARG NUM_JOBS=1
+RUN cargo build --release -j${NUM_JOBS}
 
 # Runtime Stage
-FROM debian:latest
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/wallet-cli/target/release/wallet-cli /usr/bin/wallet-cli
+COPY --from=builder /usr/src/target/release/wallet-cli /usr/bin/wallet-cli
 
 CMD ["wallet-cli"]
+
+ 

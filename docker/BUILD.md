@@ -1,6 +1,6 @@
 # Building Docker Images for Mintlayer
 
-This document outlines the steps to build Docker images for the Mintlayer node daemon, wallet-cli, and wallet-gui. 
+This document outlines the steps to build Docker images for the Mintlayer node daemon, wallet-cli, and node-gui. 
 
 Before building make sure you clone the repository and change directory in the root of the repository.
 
@@ -23,13 +23,15 @@ docker build -f docker/Dockerfile.wallet-cli -t wallet-cli .
 ```
 
 
-## Building the Wallet-GUI Docker Image
+## Building the Node-GUI Docker Image
 
-To build the Docker image for the wallet-gui, follow these steps:
+Node-gui is a graphical interface that runs the node itself in the background. 
+To build the Docker image for the node-gui, follow these steps:
 
 ```bash
-docker build -f docker/Dockerfile.wallet-gui -t wallet-gui .
+docker build -f docker/Dockerfile.node-gui -t node-gui .
 ```
+
 
 
 ## Verify the builds 
