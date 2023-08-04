@@ -19,7 +19,7 @@ from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
-    block_input_data_obj,HHH
+    block_input_data_obj,
     outpoint_obj,
     mintlayer_hash,
     MLT_COIN,
