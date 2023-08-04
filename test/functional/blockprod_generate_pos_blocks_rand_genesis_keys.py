@@ -20,9 +20,9 @@ from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
     block_input_data_obj,
+    outpoint_obj,
     mintlayer_hash,
     MLT_COIN,
-    outpoint_obj,
     signed_tx_obj,
 )
 from test_framework.test_framework import BitcoinTestFramework
@@ -30,25 +30,46 @@ from test_framework.util import (
     assert_equal,
 )
 
-import random, time
+import random, secrets, time
 
-GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
-GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
-GENESIS_STAKE_PUBLIC_KEY = "03c53526caf73cd990148e127cb57249a5e266d78df23968642c976a532197fdaa"
-GENESIS_VRF_PUBLIC_KEY = "fa2f59dc7a7e176058e4f2d155cfa03ee007340e0285447892158823d332f744"
+class GenerateGenesisKeys(BitcoinTestFramework):
+    def set_test_params(self):
+        self.setup_clean_chain = True
+        self.num_nodes = 1
 
-GENESIS_VRF_PRIVATE_KEY = (
-    "3fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06"
-    "e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e"
-)
+    def run_test(self):
+        global genesis_stake_private_key_hex, genesis_stake_public_key_hex
+        genesis_stake_private_key_hex = self.nodes[0].test_functions_new_private_key()
+        genesis_stake_public_key_hex = self.nodes[0].test_functions_public_key_from_private_key(genesis_stake_private_key_hex)
+
+        global genesis_vrf_private_key_hex, genesis_vrf_public_key_hex
+        genesis_vrf_private_key_hex = self.nodes[0].test_functions_new_vrf_private_key()
+        genesis_vrf_public_key_hex = self.nodes[0].test_functions_vrf_public_key_from_private_key(genesis_vrf_private_key_hex)
 
 class GeneratePoSBlocksTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+
+        global genesis_pool_id, genesis_stake_private_key_hex, genesis_vrf_private_key_hex
+
+        genesis_pool_id_hex = secrets.token_hex(32)
+        genesis_pool_id = self.hex_to_dec_array(genesis_pool_id_hex)
+
+        genesis_settings = ",".join([
+            "pool_id:{}",
+            "stake_private_key:{}",
+            "vrf_private_key:{}",
+        ]).format(
+            genesis_pool_id_hex,
+            genesis_stake_private_key_hex,
+            genesis_vrf_private_key_hex,
+        )
+
         self.extra_args = [[
             "--chain-pos-netupgrades=true",
             "--blockprod-min-peers-to-produce-blocks=0",
+            "--chain-genesis-staking-settings={}".format(genesis_settings),
         ]]
 
     def assert_chain(self, block, previous_tip):
@@ -109,9 +130,6 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
 
         # Truncate output to match Rust's split()
         return self.hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
-
-    def genesis_pool_id(self):
-        return self.hex_to_dec_array(GENESIS_POOL_ID)
 
     def hex_to_dec_array(self, hex_string):
         return [int(hex_string[i:i+2], 16) for i in range(0, len(hex_string), 2)]
@@ -183,15 +201,23 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         }
 
     def run_test(self):
+        global genesis_stake_private_key_hex, genesis_stake_public_key_hex
+        genesis_stake_private_key = self.stake_private_key(genesis_stake_private_key_hex[2:])
+        genesis_stake_public_key = self.stake_public_key(genesis_stake_public_key_hex[2:])
+
+        global genesis_vrf_private_key_hex, genesis_vrf_public_key_hex
+        genesis_vrf_private_key = self.vrf_private_key(genesis_vrf_private_key_hex[2:])
+        genesis_vrf_public_key = self.vrf_public_key(genesis_vrf_public_key_hex[2:])
+
         #
         # Transfer Genesis UTXO to AnyoneCanSpend
         #
 
         block_input_data = block_input_data_obj.encode({
             "PoS": {
-                "stake_private_key": self.stake_private_key(GENESIS_STAKE_PRIVATE_KEY),
-                "vrf_private_key": self.vrf_private_key(GENESIS_VRF_PRIVATE_KEY),
-                "pool_id": self.genesis_pool_id(),
+                "stake_private_key": genesis_stake_private_key,
+                "vrf_private_key": genesis_vrf_private_key,
+                "pool_id": genesis_pool_id,
                 "kernel_inputs": [
                         {
                             "Utxo": {
@@ -205,15 +231,15 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                  "kernel_input_utxo": [
                     {
                         "CreateStakePool": [
-                            self.genesis_pool_id(),
+                            genesis_pool_id,
                             {
                                 "value": 40_000*MLT_COIN,
                                 "staker": {
-                                    "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                    "PublicKey": genesis_stake_public_key,
                                 },
-                                "vrf_public_key": self.vrf_public_key(GENESIS_VRF_PUBLIC_KEY),
+                                "vrf_public_key": genesis_vrf_public_key,
                                 "decommission_key": {
-                                    "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                    "PublicKey": genesis_stake_public_key,
                                 },
                                 "margin_ratio_per_thousand": 1000,
                                 "cost_per_block" : "0"
@@ -265,9 +291,9 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
 
         block_input_data = block_input_data_obj.encode({
             "PoS": {
-                "stake_private_key": self.stake_private_key(GENESIS_STAKE_PRIVATE_KEY),
-                "vrf_private_key": self.vrf_private_key(GENESIS_VRF_PRIVATE_KEY),
-                "pool_id": self.genesis_pool_id(),
+                "stake_private_key": genesis_stake_private_key,
+                "vrf_private_key": genesis_vrf_private_key,
+                "pool_id": genesis_pool_id,
                 "kernel_inputs": [
                         {
                             "Utxo": {
@@ -282,9 +308,9 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "ProduceBlockFromStake": [
                             {
-                                "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
+                                "PublicKey": genesis_stake_public_key,
                             },
-                            self.genesis_pool_id(),
+                            genesis_pool_id,
                         ],
                     }
                 ],
@@ -399,4 +425,16 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             }
 
 if __name__ == '__main__':
+    # We need to spin up a node in order to use the "test-functions/"
+    # RPC endpoint so we can generate new genesis staking
+    # settings. However, to spin up a node, the framework will create
+    # a chainstate along with its own Genesis, defeating the purpose of
+    # this test...
+    #
+    # So what we're doing here is creating a temporary node to just
+    # generate our new keys, shutting it down, and then creating the
+    # real test node so we can specify the settings on the command
+    # line
+
+    GenerateGenesisKeys().main(exit_on_success=False)
     GeneratePoSBlocksTest().main()
