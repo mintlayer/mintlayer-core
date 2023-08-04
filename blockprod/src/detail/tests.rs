@@ -52,7 +52,7 @@ use utils::once_destructor::OnceDestructor;
 use crate::{
     detail::{
         job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
-        GenerateBlockInputData, TransactionsSource,
+        CustomId, GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool, test_blockprod_config,
     tests::{assert_process_block, setup_blockprod_test, setup_pos},
@@ -480,6 +480,79 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn update_last_used_block_timestamp(#[case] seed: Seed) {
+        let (
+            pos_chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(seed);
+
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(Some(pos_chain_config));
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config.clone(),
+                    Arc::new(test_blockprod_config()),
+                    chainstate.clone(),
+                    mempool,
+                    p2p,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let input_data =
+                    GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                        genesis_stake_private_key,
+                        genesis_vrf_private_key,
+                        PoolId::new(H256::zero()),
+                        vec![TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        )],
+                        vec![create_genesis_pool_txoutput],
+                    )));
+
+                let _ = block_production
+                    .job_manager_handle
+                    .update_last_used_block_timestamp(
+                        CustomId::new_from_input_data(&input_data),
+                        BlockTimestamp::from_int_seconds(u64::MAX),
+                    )
+                    .await;
+
+                let result = block_production
+                    .produce_block(input_data, TransactionsSource::Provided(vec![]))
+                    .await;
+
+                match result {
+                    Err(BlockProductionError::FailedConsensusInitialization(
+                        ConsensusCreationError::TimestampOverflow(_, _),
+                    )) => {}
+                    _ => panic!("Expected timestamp overflow"),
+                };
+
+                assert_job_count(&block_production, 0).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn try_again_later() {
         // Ensure we reset the global mock time on exit
@@ -497,7 +570,7 @@ mod produce_block {
             let override_chain_config =
                 Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
 
-            _ = time::set(
+            let _ = time::set(
                 last_used_block_timestamp
                     .saturating_sub(*override_chain_config.max_future_block_time_offset()),
             );
@@ -857,15 +930,22 @@ mod produce_block {
                 mock_job_manager.expect_add_job().times(1).returning(move |_, _| {
                     let (_, cancel_receiver) = unbounded_channel::<()>();
                     let mut rng = make_seedable_rng(seed);
-                    let job_key =
-                        JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
-                    Ok((job_key, cancel_receiver))
+                    let job_key = JobKey::new(
+                        CustomId::new_from_entropy(),
+                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                    );
+                    Ok((job_key, None, cancel_receiver))
                 });
 
                 mock_job_manager.expect_make_job_stopper_function().times(1).returning(|| {
                     let (_, result_receiver) = oneshot::channel::<usize>();
                     (Box::new(|_| {}), result_receiver)
                 });
+
+                mock_job_manager
+                    .expect_update_last_used_block_timestamp()
+                    .times(..=1)
+                    .returning(|_, _| Ok(()));
 
                 block_production.set_job_manager(mock_job_manager);
 
@@ -1558,17 +1638,25 @@ mod stop_all_jobs {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    CustomId::new_from_entropy(),
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                )
+                .await
+                .unwrap();
 
-        let (_stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
+        let (_stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    CustomId::new_from_entropy(),
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                )
+                .await
+                .unwrap();
 
         let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
         assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
@@ -1643,7 +1731,10 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let job_key = JobKey::new(
+            CustomId::new_from_entropy(),
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
+        );
 
         let result = block_production.stop_job(job_key).await;
 
@@ -1673,17 +1764,25 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    CustomId::new_from_entropy(),
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                )
+                .await
+                .unwrap();
 
-        let (stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
+        let (stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    CustomId::new_from_entropy(),
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                )
+                .await
+                .unwrap();
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(job_stopped, "Failed to stop job");
@@ -1716,11 +1815,15 @@ mod stop_job {
         let jobs_to_create = rng.gen::<usize>() % 20 + 1;
 
         for _ in 1..=jobs_to_create {
-            let (job_key, _stop_job_cancel_receiver) = block_production
-                .job_manager_handle
-                .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-                .await
-                .unwrap();
+            let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
+                block_production
+                    .job_manager_handle
+                    .add_job(
+                        CustomId::new_from_entropy(),
+                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                    )
+                    .await
+                    .unwrap();
 
             job_keys.push(job_key)
         }
@@ -1767,13 +1870,20 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager_handle
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
+        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
+            block_production
+                .job_manager_handle
+                .add_job(
+                    CustomId::new_from_entropy(),
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
+                )
+                .await
+                .unwrap();
 
-        let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let stop_job_key = JobKey::new(
+            CustomId::new_from_entropy(),
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
+        );
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -1807,7 +1917,10 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let job_key = JobKey::new(
+            CustomId::new_from_entropy(),
+            Id::<GenBlock>::new(H256::random_using(&mut rng)),
+        );
 
         let result = block_production.stop_job(job_key).await;
 
