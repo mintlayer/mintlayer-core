@@ -218,7 +218,7 @@ where
 
         log::debug!("Broadcasting a new tip {}", block_id);
         for peer in self.peers.values_mut() {
-            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id.clone()));
+            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id));
         }
         Ok(())
     }
