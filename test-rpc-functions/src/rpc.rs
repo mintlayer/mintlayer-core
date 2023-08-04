@@ -17,10 +17,12 @@
 
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
-    chain::config::regtest_genesis_values,
+    chain::config::regtest::genesis_values,
     chain::{
-        block::timestamp::BlockTimestamp, config::EpochIndex, stakelock::StakePoolData, PoolId,
-        TxOutput,
+        block::timestamp::BlockTimestamp,
+        config::{regtest::GenesisStakingSettings, EpochIndex},
+        stakelock::StakePoolData,
+        PoolId, TxOutput,
     },
     primitives::H256,
 };
@@ -97,7 +99,8 @@ trait RpcTestFunctionsRpc {
 #[async_trait::async_trait]
 impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     async fn genesis_pool_id(&self) -> rpc::Result<Option<String>> {
-        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) = regtest_genesis_values();
+        let (genesis_pool_id, genesis_stake_pool_data, _, _, _, _) =
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -108,7 +111,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_private_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, genesis_stake_private_key, _, _, _) =
-            regtest_genesis_values();
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -119,7 +122,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_public_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, genesis_stake_public_key, _, _) =
-            regtest_genesis_values();
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -130,7 +133,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_vrf_private_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, genesis_vrf_private_key, _) =
-            regtest_genesis_values();
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)
@@ -141,7 +144,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
     async fn genesis_vrf_public_key(&self) -> rpc::Result<Option<String>> {
         let (genesis_pool_id, genesis_stake_pool_data, _, _, _, genesis_vrf_public_key) =
-            regtest_genesis_values();
+            genesis_values(GenesisStakingSettings::default());
 
         Ok(
             assert_genesis_values(self, genesis_pool_id, genesis_stake_pool_data)

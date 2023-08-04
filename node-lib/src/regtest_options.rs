@@ -16,6 +16,7 @@
 use clap::Args;
 
 use crate::RunOptions;
+use common::chain::config::regtest::GenesisStakingSettings;
 
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
@@ -61,4 +62,8 @@ pub struct ChainConfigOptions {
     /// PoS NetUpgrade override after Genesis
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
+
+    /// PoS Genesis staking settings
+    #[clap(long, default_value_t)]
+    pub chain_genesis_staking_settings: GenesisStakingSettings,
 }

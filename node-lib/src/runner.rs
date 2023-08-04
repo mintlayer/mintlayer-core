@@ -32,8 +32,8 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::{
     chain::{
         config::{
-            create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig, ChainType,
-            EmissionScheduleTabular,
+            regtest::create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig,
+            ChainType, EmissionScheduleTabular,
         },
         Destination, NetUpgrades,
     },
@@ -214,7 +214,7 @@ pub async fn setup(options: Options) -> Result<Node> {
             .await
         }
         Command::Regtest(ref regtest_options) => {
-            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
+            let chain_config = regtest_chain_config(&command, &regtest_options.chain_config)?;
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
@@ -322,7 +322,14 @@ async fn start(
     })
 }
 
-fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Result<ChainConfig> {
+    match command {
+        Command::Regtest(_) => {}
+        Command::Mainnet(_) | Command::Testnet(_) => {
+            panic!("RegTest configuration options must only be used on RegTest")
+        }
+    };
+
     let ChainConfigOptions {
         chain_max_future_block_time_offset,
         chain_version,
@@ -333,6 +340,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_genesis_staking_settings,
     } = options;
 
     let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
@@ -370,9 +378,12 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder
-            .net_upgrades(NetUpgrades::regtest_with_pos())
-            .genesis_custom(create_regtest_pos_genesis(Destination::AnyoneCanSpend));
+        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
+            create_regtest_pos_genesis(
+                chain_genesis_staking_settings.clone(),
+                Destination::AnyoneCanSpend,
+            ),
+        );
     }
 
     Ok(builder.build())

@@ -15,18 +15,20 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use common::{chain::GenBlock, primitives::Id};
-use crypto::random::{make_true_rng, Rng};
+use crate::detail::CustomId;
+use common::{
+    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    primitives::Id,
+};
 use logging::log;
 use tokio::sync::oneshot;
 
 use super::{JobHandle, JobKey, JobManagerError, NewJobEvent};
 
-pub const JOBKEY_DEFAULT_LEN: usize = 32;
-
 #[derive(Default)]
 pub struct JobsContainer {
     jobs: BTreeMap<JobKey, JobHandle>,
+    last_used_block_timestamps: BTreeMap<CustomId, BlockTimestamp>,
 }
 
 impl JobsContainer {
@@ -36,18 +38,13 @@ impl JobsContainer {
 
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
         let NewJobEvent {
-            mut custom_id,
+            custom_id,
             current_tip_id,
             cancel_sender,
             result_sender,
         } = event;
 
-        if custom_id.is_none() {
-            let mut rng = make_true_rng();
-            custom_id = Some(rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into())
-        }
-
-        let job_key = JobKey::new(custom_id, current_tip_id);
+        let job_key = JobKey::new(custom_id.clone(), current_tip_id);
 
         if self.jobs.contains_key(&job_key) {
             if let Err(e) = result_sender.send(Err(JobManagerError::JobAlreadyExists)) {
@@ -56,7 +53,10 @@ impl JobsContainer {
         } else {
             self.jobs.insert(job_key.clone(), JobHandle { cancel_sender });
 
-            if let Err(e) = result_sender.send(Ok(job_key)) {
+            let last_used_block_timestamp =
+                self.last_used_block_timestamps.get(&custom_id).copied();
+
+            if let Err(e) = result_sender.send(Ok((job_key, last_used_block_timestamp))) {
                 log::error!("Error sending new job event: {e:?}");
             }
         }
@@ -71,10 +71,10 @@ impl JobsContainer {
             .collect();
 
         for job_key in jobs_to_stop {
-            if let Some(handle) = self.jobs.remove(&job_key) {
-                _ = handle.cancel_sender.send(())
-            }
+            self.remove_job(job_key, true);
         }
+
+        self.last_used_block_timestamps = BTreeMap::new();
     }
 
     /// Remove a job by its key
@@ -101,13 +101,16 @@ impl JobsContainer {
         let taken_jobs = std::mem::take(&mut self.jobs);
         let count = taken_jobs.len();
         let stop_results = taken_jobs
-            .into_values()
-            .map(|job_handle| job_handle.cancel_sender.send(()))
+            .into_keys()
+            .map(|job_key| self.remove_job(job_key, true))
+            .filter(|stopped| *stopped)
             .collect::<Vec<_>>();
 
-        let send_fail_count = stop_results.into_iter().filter_map(|r| r.ok()).count();
-        if send_fail_count > 0 {
-            log::info!("Sending stop jobs for block production failed for {send_fail_count}");
+        if !stop_results.is_empty() {
+            log::info!(
+                "Sending stop jobs for block production failed for {}",
+                stop_results.len()
+            );
         }
 
         // We don't do `count - send_fail_count` because the failures
@@ -130,6 +133,16 @@ impl JobsContainer {
     pub fn handle_shutdown(&mut self, result_sender: oneshot::Sender<usize>) {
         log::info!("Stopping block production job manager");
         self.handle_stop_job((None, result_sender));
+    }
+
+    pub fn handle_update_last_used_block_timestamp(
+        &mut self,
+        event: (CustomId, BlockTimestamp, oneshot::Sender<()>),
+    ) {
+        let (custom_id, last_used_block_timestamp, result_sender) = event;
+        self.last_used_block_timestamps.insert(custom_id, last_used_block_timestamp);
+
+        _ = result_sender.send(());
     }
 }
 

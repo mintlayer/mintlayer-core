@@ -124,7 +124,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.options.timeout_factor = 99999
         self.rpc_timeout = int(self.rpc_timeout * self.options.timeout_factor) # optionally, increase timeout by a factor
 
-    def main(self):
+    def main(self, exit_on_success=True):
         """Main function. This should not be overridden by the subclass test scripts."""
 
         assert hasattr(self, "num_nodes"), "Test must set self.num_nodes in set_test_params()"
@@ -155,7 +155,8 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.success = TestStatus.FAILED
         finally:
             exit_code = self.shutdown()
-            sys.exit(exit_code)
+            if exit_on_success:
+                sys.exit(exit_code)
 
     def parse_args(self):
         previous_releases_path = os.getenv("PREVIOUS_RELEASES_DIR") or os.getcwd() + "/releases"
