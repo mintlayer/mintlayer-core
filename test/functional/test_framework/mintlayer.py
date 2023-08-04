@@ -75,7 +75,7 @@ def make_tx(inputs, outputs, flags = 0):
     encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
     return (encoded_tx, tx_id)
 
-def make_empty_block(parent_id, nonce, transactions = []):
+def make_pow_block(parent_id, nonce, transactions = [], timestamp = None):
     empty_merkle_root = "0x" + hash_object(vec_output_obj, [])
     pow_data = {
         'bits': 0x207fffff,
@@ -86,7 +86,7 @@ def make_empty_block(parent_id, nonce, transactions = []):
         'prev_block_id': "0x{}".format(parent_id),
         'tx_merkle_root': empty_merkle_root,
         'witness_merkle_root': empty_merkle_root,
-        'timestamp': int(time.time()),
+        'timestamp': int(timestamp or time.time()),
         'consensus_data': { 'PoW': pow_data },
     }
     signed_header = {
@@ -107,9 +107,9 @@ def make_empty_block(parent_id, nonce, transactions = []):
     encoded_block = block_obj.encode(block).to_hex()[2:]
     return (encoded_block, block_id)
 
-def mine_empty_block(parent_id):
+def mine_pow_block(parent_id, transactions = [], timestamp = None):
     for nonce in range(1000):
-        (block, block_id) = make_empty_block(parent_id, nonce)
+        (block, block_id) = make_pow_block(parent_id, nonce, transactions, timestamp)
         if block_id[-2] in "0123456":
             return (block, block_id)
     assert False, "Cannot mine block"
