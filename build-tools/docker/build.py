@@ -80,12 +80,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--push', action='store_true', help='Push the Docker image to Docker Hub')
     parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest while pushing')
+    parser.add_argument('--build', type=lambda x: (str(x).lower() == 'true'), default=True, help="Set to false avoid the build")
     args = parser.parse_args()
     version = get_cargo_version("Cargo.toml")
 
-    build_instances(version)
-    latest = args.latest
+    if args.build:
+        build_instances(version)
 
+    latest = args.latest
     # Only push the image if the --push flag is provided
     if args.push:
         push_docker_image("node-daemon",version , latest)

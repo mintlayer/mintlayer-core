@@ -6,3 +6,6 @@ install-pip-dependencies:
 
 build_docker_images: install-pip-dependencies
 	. env/bin/activate && python3 build-tools/docker/build.py
+
+push_docker_images: install-pip-dependencies
+	. env/bin/activate && python3 build-tools/docker/build.py --build=false --push --latest
