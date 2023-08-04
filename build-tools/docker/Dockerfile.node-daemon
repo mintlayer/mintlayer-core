@@ -1,12 +1,6 @@
 # Build Stage
-FROM rust AS builder
+FROM mintlayer-builder AS builder
 
-WORKDIR /usr/src/
-
-COPY . .
-
-ARG NUM_JOBS=1
-RUN cargo build --release -j${NUM_JOBS}
 
 # Runtime Stage
 FROM debian:bookworm-slim
