@@ -8,3 +8,14 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+blockchain-scanner-lib = { path = "../scanner-lib" }
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+node-comm = { path = "../../wallet/wallet-node-client" }
+rpc = { path = "../../rpc" }
+utils = { path = "../../utils" }
+
+clap = { version = "4", features = ["derive"] }
+
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }

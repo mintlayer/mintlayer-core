@@ -13,12 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common::chain::ChainConfig;
-use node_comm::rpc_client::NodeRpcClient;
-
 pub mod sync;
-
-#[allow(clippy::unused_async)]
-pub async fn run(_chain_config: &Arc<ChainConfig>, _rpc_client: &NodeRpcClient) {}
