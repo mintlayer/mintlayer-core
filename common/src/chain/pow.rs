@@ -33,14 +33,8 @@ pub struct PoWChainConfig {
 }
 
 impl PoWChainConfig {
-    pub(crate) const fn new(chain_type: ChainType) -> Self {
-        PoWChainConfig {
-            no_retargeting: no_retargeting(chain_type),
-            allow_min_difficulty_blocks: allow_min_difficulty_blocks(chain_type),
-            limit: limit(chain_type),
-            // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
-            reward_maturity_distance: BlockDistance::new(500),
-        }
+    pub(crate) fn new(chain_type: ChainType) -> Self {
+        PoWChainConfigBuilder::new(chain_type).build()
     }
 
     pub const fn no_retargeting(&self) -> bool {
