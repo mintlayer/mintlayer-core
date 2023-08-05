@@ -77,6 +77,66 @@ impl PoWChainConfig {
     }
 }
 
+pub struct PoWChainConfigBuilder {
+    chain_type: ChainType,
+    no_retargeting: Option<bool>,
+    allow_min_difficulty_blocks: Option<bool>,
+    limit: Option<Uint256>,
+    reward_maturity_distance: Option<BlockDistance>,
+}
+
+impl PoWChainConfigBuilder {
+    pub fn new(chain_type: ChainType) -> Self {
+        Self {
+            chain_type: chain_type,
+            no_retargeting: None,
+            allow_min_difficulty_blocks: None,
+            limit: None,
+            reward_maturity_distance: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn no_retargeting(mut self, value: Option<bool>) -> Self {
+        self.no_retargeting = value;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn allow_min_difficulty_blocks(mut self, value: Option<bool>) -> Self {
+        self.allow_min_difficulty_blocks = value;
+        self
+    }
+
+    pub fn limit(mut self, value: Option<Uint256>) -> Self {
+        self.limit = value;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn reward_maturity_distance(mut self, value: Option<BlockDistance>) -> Self {
+        self.reward_maturity_distance = value;
+        self
+    }
+
+    pub fn build(self) -> PoWChainConfig {
+        PoWChainConfig {
+            no_retargeting: self.no_retargeting.unwrap_or_else(|| no_retargeting(self.chain_type)),
+            allow_min_difficulty_blocks: self
+                .allow_min_difficulty_blocks
+                .unwrap_or_else(|| allow_min_difficulty_blocks(self.chain_type)),
+            limit: self.limit.unwrap_or_else(|| limit(self.chain_type)),
+
+            // If block time is 2 minutes (which is my goal
+            // eventually), then 500 is equivalent to 100 in bitcoin's
+            // 10 minutes.
+            reward_maturity_distance: self
+                .reward_maturity_distance
+                .unwrap_or_else(|| BlockDistance::new(500)),
+        }
+    }
+}
+
 const fn no_retargeting(chain_type: ChainType) -> bool {
     match chain_type {
         ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => false,
