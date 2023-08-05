@@ -18,10 +18,13 @@ use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+pub mod traits;
 use node_comm::{
     node_traits::NodeInterface,
     rpc_client::{NodeRpcClient, NodeRpcError},
 };
+
+use self::traits::{LocalNode, RemoteNode};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
@@ -35,42 +38,8 @@ pub enum SyncError {
     NoNewBlocksFound,
     #[error("Invalid prev block id: {0}, expected: {1}")]
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
-    #[error("NotEnoughBlockHeight")]
+    #[error("Attempted to sync the API server to a height that doesn't exist")]
     NotEnoughBlockHeight,
-}
-
-pub trait LocalNode {
-    type Error: ToString;
-
-    /// Returns the current best known block (may be genesis)
-    fn best_block(&self) -> (Id<GenBlock>, BlockHeight);
-
-    /// Scan new blocks:
-    /// 1. Reset local blocks to the common block height
-    /// (it will be lower than the current block height in case of reorg).
-    /// 2. Append new blocks.
-    fn scan_blocks(
-        &mut self,
-        common_block_height: BlockHeight,
-        blocks: Vec<Block>,
-    ) -> Result<(), Self::Error>;
-}
-
-#[async_trait::async_trait]
-pub trait RemoteNode {
-    type Error: ToString;
-
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error>;
-    async fn last_common_ancestor(
-        &self,
-        first_block: Id<GenBlock>,
-        second_block: Id<GenBlock>,
-    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
-    async fn mainchain_blocks(
-        &self,
-        from: BlockHeight,
-        max_count: usize,
-    ) -> Result<Vec<Block>, Self::Error>;
 }
 
 #[async_trait::async_trait]
@@ -227,7 +196,7 @@ async fn get_common_block_info(
         // Common branch not found, restart from genesis block.
         // This happens when:
         // 1. The node is downloading blocks.
-        // 2. Blocks in the blockchain were pruned, so the block the wallet knows about is now unrecognized in the block tree.
+        // 2. Blocks in the blockchain were pruned, so the block the API server knows about is now unrecognized in the block tree.
         None => (chain_config.genesis_block_id(), BlockHeight::zero()),
     };
 
