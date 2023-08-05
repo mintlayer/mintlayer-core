@@ -82,7 +82,7 @@ pub struct PoWChainConfigBuilder {
 impl PoWChainConfigBuilder {
     pub fn new(chain_type: ChainType) -> Self {
         Self {
-            chain_type: chain_type,
+            chain_type,
             no_retargeting: None,
             allow_min_difficulty_blocks: None,
             limit: None,
