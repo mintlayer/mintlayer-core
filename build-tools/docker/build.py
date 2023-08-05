@@ -75,9 +75,9 @@ def build_instances(version):
     delete_docker_image("mintlayer-builder", "latest")
 
 def push_instances(version, latest):
-    push_docker_image("node-daemon",version , latest)
-    push_docker_image("node-gui",version , latest)
-    push_docker_image("wallet-cli",version , latest)
+    push_docker_image("mintlayer/node-daemon",version , latest)
+    push_docker_image("mintlayer/node-gui",version , latest)
+    push_docker_image("mintlayer/wallet-cli",version , latest)
 
 def main():
     parser = argparse.ArgumentParser()
