@@ -1,5 +1,5 @@
 # Build Stage
-FROM mintlayer-builder AS builder
+FROM mintlayer-builder:latest AS builder
 
 # Runtime Stage
 FROM debian:bookworm-slim

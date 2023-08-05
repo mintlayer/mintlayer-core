@@ -68,11 +68,11 @@ def delete_docker_image(image_name, version):
         print(f"Failed to delete {full_image_name}.")
 
 def build_instances(version):
-    build_docker_image("build-tools/docker/Dockerfile.builder", "mintlayer-builder", version)
+    build_docker_image("build-tools/docker/Dockerfile.builder", "mintlayer-builder", "latest")
     build_docker_image("build-tools/docker/Dockerfile.node-daemon", "mintlayer/node-daemon", version)
     build_docker_image("build-tools/docker/Dockerfile.node-gui", "mintlayer/node-gui", version)
     build_docker_image("build-tools/docker/Dockerfile.wallet-cli", "mintlayer/wallet-cli", version)
-    delete_docker_image("mintlayer-builder", version)
+    delete_docker_image("mintlayer-builder", "latest")
 
 def push_instances(version, latest):
     push_docker_image("node-daemon",version , latest)
