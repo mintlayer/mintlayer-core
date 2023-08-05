@@ -29,13 +29,13 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
 
-struct MockLocalNode {
+struct MockLocalState {
     genesis_id: Id<GenBlock>,
     blocks: Vec<Id<Block>>,
     new_tip_tx: mpsc::UnboundedSender<Id<Block>>,
 }
 
-impl MockLocalNode {
+impl MockLocalState {
     fn new(chain_config: &ChainConfig, new_tip_tx: mpsc::UnboundedSender<Id<Block>>) -> Self {
         Self {
             genesis_id: chain_config.genesis_block_id(),
@@ -53,7 +53,7 @@ impl MockLocalNode {
     }
 }
 
-impl LocalBlockchainState for MockLocalNode {
+impl LocalBlockchainState for MockLocalState {
     type Error = Infallible;
 
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
@@ -80,7 +80,7 @@ impl LocalBlockchainState for MockLocalNode {
         }
 
         log::debug!(
-            "new block added to wallet: {}, block height: {}",
+            "new block added to local state: {}, block height: {}",
             self.get_best_block_id(),
             self.get_block_height()
         );
@@ -154,10 +154,10 @@ async fn wait_new_tip(node: &MockRemoteNode, new_tip_tx: &mut mpsc::UnboundedRec
     tokio::time::timeout(Duration::from_secs(60), wait_fut).await.unwrap();
 }
 
-fn run_sync(chain_config: Arc<ChainConfig>, node: MockRemoteNode, mut wallet: MockLocalNode) {
+fn run_sync(chain_config: Arc<ChainConfig>, node: MockRemoteNode, mut local_state: MockLocalState) {
     tokio::spawn(async move {
         loop {
-            let _ = sync_once(&chain_config, &node, &mut wallet).await;
+            let _ = sync_once(&chain_config, &node, &mut local_state).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     });
@@ -172,9 +172,9 @@ async fn basic_sync(#[case] seed: Seed) {
     let node = MockRemoteNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
     let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
-    let wallet = MockLocalNode::new(&chain_config, new_tip_tx);
+    let local_state = MockLocalState::new(&chain_config, new_tip_tx);
 
-    run_sync(Arc::clone(&chain_config), node.clone(), wallet);
+    run_sync(Arc::clone(&chain_config), node.clone(), local_state);
 
     // Build blocks
     for height in 1..10 {
@@ -210,9 +210,9 @@ async fn restart_from_genesis(#[case] seed: Seed) {
     let node = MockRemoteNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
     let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
-    let wallet = MockLocalNode::new(&chain_config, new_tip_tx);
+    let local_state = MockLocalState::new(&chain_config, new_tip_tx);
 
-    run_sync(Arc::clone(&chain_config), node.clone(), wallet);
+    run_sync(Arc::clone(&chain_config), node.clone(), local_state);
 
     create_chain(&node, &mut rng, 0, 10);
     wait_new_tip(&node, &mut new_tip_rx).await;
@@ -232,9 +232,9 @@ async fn randomized(#[case] seed: Seed) {
     let node = MockRemoteNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
     let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
-    let wallet = MockLocalNode::new(&chain_config, new_tip_tx);
+    let local_state = MockLocalState::new(&chain_config, new_tip_tx);
 
-    run_sync(Arc::clone(&chain_config), node.clone(), wallet);
+    run_sync(Arc::clone(&chain_config), node.clone(), local_state);
 
     create_chain(&node, &mut rng, 0, 1);
     wait_new_tip(&node, &mut new_tip_rx).await;

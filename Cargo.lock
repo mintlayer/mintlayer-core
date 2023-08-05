@@ -570,6 +570,17 @@ dependencies = [
 [[package]]
 name = "blockchain-scanner-daemon"
 version = "0.1.1"
+dependencies = [
+ "blockchain-scanner-lib",
+ "clap",
+ "common",
+ "logging",
+ "node-comm",
+ "rpc",
+ "thiserror",
+ "tokio",
+ "utils",
+]
 
 [[package]]
 name = "blockchain-scanner-lib"
