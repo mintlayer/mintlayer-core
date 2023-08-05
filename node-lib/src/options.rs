@@ -20,6 +20,8 @@ use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::ChainType;
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
+use std::io::{Error, ErrorKind};
+use std::net::ToSocketAddrs;
 use utils::default_data_dir::default_data_dir_common;
 
 use crate::{
@@ -146,7 +148,7 @@ pub struct RunOptions {
 
     /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]
-    pub http_rpc_addr: Option<SocketAddr>,
+    pub http_rpc_addr: Option<String>,
 
     /// Enable/Disable http RPC.
     #[clap(long)]
@@ -154,7 +156,7 @@ pub struct RunOptions {
 
     /// Address to bind websocket RPC to.
     #[clap(long, value_name = "ADDR")]
-    pub ws_rpc_addr: Option<SocketAddr>,
+    pub ws_rpc_addr: Option<String>,
 
     /// Enable/Disable websocket RPC.
     #[clap(long)]
@@ -174,6 +176,48 @@ pub struct RunOptions {
     /// If not set, the cookie file is created in the data dir.
     #[clap(long)]
     pub rpc_cookie_file: Option<String>,
+}
+
+impl RunOptions {
+    /// Resolve the hostname and return a <SocketAddr>
+    pub fn resolve_http_rpc_addr(&self) -> std::io::Result<SocketAddr> {
+        let mut addrs = match self.http_rpc_addr.as_ref().unwrap().to_socket_addrs() {
+            Ok(addrs) => addrs,
+            Err(_) => panic!(
+                "could not resolve address: {}",
+                self.http_rpc_addr.as_ref().unwrap()
+            ),
+        };
+        addrs.next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "couldn't resolve address: {}",
+                    self.http_rpc_addr.as_ref().unwrap()
+                ),
+            )
+        })
+    }
+
+    /// Resolve the hostname and return a <SocketAddr>
+    pub fn resolve_ws_rpc_addr(&self) -> std::io::Result<SocketAddr> {
+        let mut addrs = match self.ws_rpc_addr.as_ref().unwrap().to_socket_addrs() {
+            Ok(addrs) => addrs,
+            Err(_) => panic!(
+                "could not resolve address: {}",
+                self.ws_rpc_addr.as_ref().unwrap()
+            ),
+        };
+        addrs.next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::Other,
+                format!(
+                    "couldn't resolve address: {}",
+                    self.ws_rpc_addr.as_ref().unwrap()
+                ),
+            )
+        })
+    }
 }
 
 impl Options {

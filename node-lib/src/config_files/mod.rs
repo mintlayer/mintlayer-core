@@ -214,14 +214,16 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     } = config;
 
     let http_bind_address = options
-        .http_rpc_addr
-        .unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
+        .resolve_http_rpc_addr()
+        .or_else(|_| http_bind_address.ok_or("No address found"))
+        .unwrap_or(default_http_rpc_addr);
     let http_enabled = options
         .http_rpc_enabled
         .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
     let ws_bind_address = options
-        .ws_rpc_addr
-        .unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
+        .resolve_ws_rpc_addr()
+        .or_else(|_| ws_bind_address.ok_or("No address found"))
+        .unwrap_or(default_ws_rpc_addr);
     let ws_enabled = options
         .ws_rpc_enabled
         .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
