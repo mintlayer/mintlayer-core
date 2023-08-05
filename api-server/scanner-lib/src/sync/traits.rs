@@ -1,10 +1,11 @@
-use chainstate::ChainInfo;
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
-pub trait LocalNode {
+/// An abstraction that represents the state of the API server locally.
+/// This state is updated by the sync process, which uses a RemoteNode to fetch new blocks.
+pub trait LocalBlockchainState {
     type Error: std::error::Error;
 
     /// Returns the current best known block (may be genesis)
@@ -19,21 +20,4 @@ pub trait LocalNode {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error>;
-}
-
-#[async_trait::async_trait]
-pub trait RemoteNode {
-    type Error: std::error::Error;
-
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error>;
-    async fn last_common_ancestor(
-        &self,
-        first_block: Id<GenBlock>,
-        second_block: Id<GenBlock>,
-    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
-    async fn mainchain_blocks(
-        &self,
-        from: BlockHeight,
-        max_count: usize,
-    ) -> Result<Vec<Block>, Self::Error>;
 }
