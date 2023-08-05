@@ -69,14 +69,17 @@ def delete_docker_image(image_name, version):
 
 def build_instances(version):
     build_docker_image("build-tools/docker/Dockerfile.builder", "mintlayer-builder", version)
-    build_docker_image("build-tools/docker/Dockerfile.node-daemon", "node-daemon", version)
-    build_docker_image("build-tools/docker/Dockerfile.node-gui", "node-gui", version)
-    build_docker_image("build-tools/docker/Dockerfile.wallet-cli", "wallet-cli", version)
+    build_docker_image("build-tools/docker/Dockerfile.node-daemon", "mintlayer/node-daemon", version)
+    build_docker_image("build-tools/docker/Dockerfile.node-gui", "mintlayer/node-gui", version)
+    build_docker_image("build-tools/docker/Dockerfile.wallet-cli", "mintlayer/wallet-cli", version)
     delete_docker_image("mintlayer-builder", version)
 
+def push_instances(version, latest):
+    push_docker_image("node-daemon",version , latest)
+    push_docker_image("node-gui",version , latest)
+    push_docker_image("wallet-cli",version , latest)
 
 def main():
-    # Argument parsing
     parser = argparse.ArgumentParser()
     parser.add_argument('--push', action='store_true', help='Push the Docker image to Docker Hub')
     parser.add_argument('--latest', action='store_true', help='Tag the Docker image as latest while pushing')
@@ -87,12 +90,10 @@ def main():
     if args.build:
         build_instances(version)
 
-    latest = args.latest
     # Only push the image if the --push flag is provided
     if args.push:
-        push_docker_image("node-daemon",version , latest)
-        push_docker_image("node-gui",version , latest)
-        push_docker_image("wallet-cli",version , latest)
+        latest = args.latest
+        push_instances(version, latest)
 
 if __name__ == "__main__":
     main()
