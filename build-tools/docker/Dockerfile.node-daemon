@@ -1,0 +1,16 @@
+# Build Stage
+FROM mintlayer-builder AS builder
+
+
+# Runtime Stage
+FROM debian:bookworm-slim
+
+COPY --from=builder /usr/src/target/release/node-daemon /usr/bin
+
+# Node daemon listens on ports 3030 and 13031
+EXPOSE 3030 13031
+
+# Define mintlayer directory as a volume
+VOLUME ["/root/.mintlayer"]
+
+CMD ["node-daemon"]
