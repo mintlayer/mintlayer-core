@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{traits::RemoteNode, *};
+use super::*;
 
 use std::{
     convert::Infallible,
@@ -53,7 +53,7 @@ impl MockLocalNode {
     }
 }
 
-impl LocalNode for MockLocalNode {
+impl LocalBlockchainState for MockLocalNode {
     type Error = Infallible;
 
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
