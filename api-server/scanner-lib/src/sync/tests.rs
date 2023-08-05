@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use super::{traits::RemoteNode, *};
 
 use std::{
+    convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -53,7 +54,7 @@ impl MockLocalNode {
 }
 
 impl LocalNode for MockLocalNode {
-    type Error = String;
+    type Error = Infallible;
 
     fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         (self.get_best_block_id(), self.get_block_height())
@@ -102,7 +103,7 @@ impl MockRemoteNode {
 
 #[async_trait::async_trait]
 impl RemoteNode for MockRemoteNode {
-    type Error = String;
+    type Error = Infallible;
 
     async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
         Ok(self.tf.lock().unwrap().chainstate.info().unwrap())
