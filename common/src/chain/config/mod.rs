@@ -43,6 +43,8 @@ use std::time::Duration;
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
+use super::pow::PoWChainConfigBuilder;
+use super::ConsensusUpgrade;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
@@ -454,10 +456,27 @@ impl ChainConfig {
         self.empty_consensus_reward_maturity_distance
     }
 
-    // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     #[must_use]
-    pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
-        PoWChainConfig::new(self.chain_type)
+    pub fn get_proof_of_work_config(&self) -> PoWChainConfig {
+        let (_, genesis_upgrade_version) = self
+            .net_upgrades
+            .version_at_height(BlockHeight::new(0))
+            .expect("Genesis must have an upgrade version");
+
+        let limit = match genesis_upgrade_version {
+            UpgradeVersion::SomeUpgrade => None,
+            UpgradeVersion::ConsensusUpgrade(consensus_upgrade) => match consensus_upgrade {
+                ConsensusUpgrade::IgnoreConsensus | ConsensusUpgrade::PoS { .. } => None,
+                ConsensusUpgrade::PoW { initial_difficulty } => {
+                    let limit = (*initial_difficulty)
+                        .try_into()
+                        .expect("Genesis initial difficulty to be valid");
+                    Some(limit)
+                }
+            },
+        };
+
+        PoWChainConfigBuilder::new(self.chain_type).limit(limit).build()
     }
 
     /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
