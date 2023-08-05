@@ -16,6 +16,7 @@
 mod builder;
 mod checkpoints;
 pub mod emission_schedule;
+pub mod regtest;
 pub use builder::Builder;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
@@ -28,14 +29,13 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::TxOutput;
-use crate::chain::{GenBlock, Genesis, PoolId};
+use crate::chain::{GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -594,73 +594,6 @@ fn create_testnet_genesis() -> Genesis {
         genesis_message,
         BlockTimestamp::from_int_seconds(1690620112),
         vec![mint_output, initial_pool],
-    )
-}
-
-pub fn regtest_genesis_values() -> (
-    PoolId,
-    Box<StakePoolData>,
-    PrivateKey,
-    PublicKey,
-    VRFPrivateKey,
-    VRFPublicKey,
-) {
-    let genesis_pool_id =
-        decode_hex::<PoolId>("123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4");
-
-    let genesis_stake_private_key = decode_hex::<PrivateKey>(
-        "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638",
-    );
-
-    let genesis_stake_public_key = decode_hex::<PublicKey>(
-        "0003c53526caf73cd990148e127cb57249a5e266d78df23968642c976a532197fdaa",
-    );
-
-    let genesis_vrf_private_key = decode_hex::<VRFPrivateKey>("003fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e");
-
-    let genesis_vrf_public_key = decode_hex::<VRFPublicKey>(
-        "00fa2f59dc7a7e176058e4f2d155cfa03ee007340e0285447892158823d332f744",
-    );
-
-    let genesis_pool_stake_data = Box::new(StakePoolData::new(
-        MIN_STAKE_POOL_PLEDGE,
-        Destination::PublicKey(genesis_stake_public_key.clone()),
-        genesis_vrf_public_key.clone(),
-        Destination::PublicKey(genesis_stake_public_key.clone()),
-        PerThousand::new(1000).expect("Valid per thousand"),
-        Amount::ZERO,
-    ));
-
-    (
-        genesis_pool_id,
-        genesis_pool_stake_data,
-        genesis_stake_private_key,
-        genesis_stake_public_key,
-        genesis_vrf_private_key,
-        genesis_vrf_public_key,
-    )
-}
-
-pub fn create_regtest_pos_genesis(premine_destination: Destination) -> Genesis {
-    let (
-        genesis_pool_id,
-        genesis_stake_pool_data,
-        _genesis_stake_private_key,
-        _genesis_stake_public_key,
-        _genesis_vrf_private_key,
-        _genesis_vrf_public_key,
-    ) = regtest_genesis_values();
-
-    let create_genesis_pool_txoutput =
-        TxOutput::CreateStakePool(genesis_pool_id, genesis_stake_pool_data);
-
-    let premine_output =
-        TxOutput::Transfer(OutputValue::Coin(DEFAULT_INITIAL_MINT), premine_destination);
-
-    Genesis::new(
-        String::new(),
-        BlockTimestamp::from_int_seconds(1639975460),
-        vec![premine_output, create_genesis_pool_txoutput],
     )
 }
 

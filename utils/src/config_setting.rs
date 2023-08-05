@@ -22,6 +22,12 @@ macro_rules! make_config_setting {
             value: $tp,
         }
 
+        impl $name {
+            pub const fn new(value: $tp) -> Self {
+                Self { value }
+            }
+        }
+
         impl From<$tp> for $name {
             fn from(v: $tp) -> Self {
                 Self { value: v }

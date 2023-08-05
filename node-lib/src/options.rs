@@ -48,7 +48,7 @@ pub enum Command {
     /// Run the testnet node.
     Testnet(RunOptions),
     /// Run the regtest node.
-    Regtest(RegtestOptions),
+    Regtest(Box<RegtestOptions>),
 }
 
 #[derive(Args, Clone, Debug, Default)]
@@ -141,7 +141,7 @@ pub struct RunOptions {
     ///
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
-    #[clap(long)]
+    #[clap(long, overrides_with("max_tip_age"))]
     pub max_tip_age: Option<u64>,
 
     /// Address to bind http RPC to.

@@ -355,6 +355,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     ) -> Result<VerificationOutcome, TxValidationError> {
         let chainstate_handle = self.blocking_chainstate_handle();
 
+        let is_ibd = chainstate_handle.call(|chainstate| chainstate.is_initial_block_download())?;
+        ensure!(!is_ibd, TxValidationError::AddedDuringIBD);
+
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
@@ -1080,20 +1083,29 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         self.events_controller.subscribe_to_events(handler)
     }
 
-    pub fn process_chainstate_event(&mut self, evt: chainstate::ChainstateEvent) {
+    pub fn process_chainstate_event(
+        &mut self,
+        evt: chainstate::ChainstateEvent,
+    ) -> Result<(), reorg::ReorgError> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
             chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.on_new_tip(block_id, block_height);
+                self.on_new_tip(block_id, block_height)?;
             }
         }
+        Ok(())
     }
 
-    pub fn on_new_tip(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn on_new_tip(
+        &mut self,
+        block_id: Id<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), reorg::ReorgError> {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
-        reorg::handle_new_tip(self, block_id);
+        reorg::handle_new_tip(self, block_id)?;
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());
+        Ok(())
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {

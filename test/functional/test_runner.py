@@ -101,6 +101,7 @@ BASE_SCRIPTS = [
 
     # vv Tests less than 30s vv
     'blockprod_generate_pos_blocks.py',
+    'blockprod_generate_pos_blocks_rand_genesis_keys.py',
     'blockprod_generate_pos_genesis_blocks.py',
     'blockprod_generate_pow_blocks.py',
     'example_test.py',
@@ -111,8 +112,9 @@ BASE_SCRIPTS = [
     'feature_lmdb_backend_test.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
-    'mempool_submit_tx.py',
+    'mempool_ibd.py',
     'mempool_submit_orphan.py',
+    'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts
