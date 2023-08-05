@@ -17,10 +17,10 @@ use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
-mod remote_node;
 pub mod local_state;
+mod remote_node;
 
-use self::{remote_node::RemoteNode, local_state::LocalBlockchainState};
+use self::{local_state::LocalBlockchainState, remote_node::RemoteNode};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
