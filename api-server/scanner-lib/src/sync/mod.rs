@@ -13,18 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ChainInfo;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+mod remote_node;
 pub mod traits;
-use node_comm::{
-    node_traits::NodeInterface,
-    rpc_client::{NodeRpcClient, NodeRpcError},
-};
 
-use self::traits::{LocalNode, RemoteNode};
+use self::{remote_node::RemoteNode, traits::LocalBlockchainState};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
@@ -42,30 +38,6 @@ pub enum SyncError {
     NotEnoughBlockHeight,
 }
 
-#[async_trait::async_trait]
-impl RemoteNode for NodeRpcClient {
-    type Error = NodeRpcError;
-
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
-        self.chainstate_info().await
-    }
-    async fn last_common_ancestor(
-        &self,
-        first_block: Id<GenBlock>,
-        second_block: Id<GenBlock>,
-    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
-        self.get_last_common_ancestor(first_block, second_block).await
-    }
-
-    async fn mainchain_blocks(
-        &self,
-        from: BlockHeight,
-        max_count: usize,
-    ) -> Result<Vec<Block>, Self::Error> {
-        self.get_mainchain_blocks(from, max_count).await
-    }
-}
-
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
     common_block_height: BlockHeight,
@@ -81,7 +53,7 @@ struct FetchedBlocks {
 pub async fn sync_once(
     chain_config: &ChainConfig,
     rpc_client: &impl RemoteNode,
-    local_node: &mut impl LocalNode,
+    local_node: &mut impl LocalBlockchainState,
 ) -> Result<(), SyncError> {
     loop {
         let chain_info = rpc_client
@@ -113,7 +85,7 @@ async fn fetch_and_sync(
     best_block_height: BlockHeight,
     chain_config: &ChainConfig,
     rpc_client: &impl RemoteNode,
-    local_node: &mut impl LocalNode,
+    local_node: &mut impl LocalBlockchainState,
 ) -> Result<(), SyncError> {
     // TODO: use chain trust instead of height
     utils::ensure!(
