@@ -18,9 +18,9 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 mod remote_node;
-pub mod traits;
+pub mod local_state;
 
-use self::{remote_node::RemoteNode, traits::LocalBlockchainState};
+use self::{remote_node::RemoteNode, local_state::LocalBlockchainState};
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
