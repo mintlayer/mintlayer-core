@@ -199,19 +199,17 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
 fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     const DEFAULT_HTTP_RPC_ENABLED: bool = true;
     // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
-    const DEFAULT_WS_RPC_ENABLED: bool = false;
     let default_http_rpc_addr = "127.0.0.1:3030";
 
     let RpcConfigFile {
-        http_bind_address,
+        http_rpc_addr: _,
         http_enabled,
         username,
         password,
         cookie_file,
     } = config;
 
-    let http_bind_address =
-        options.http_rpc_addr.clone().unwrap_or(default_http_rpc_addr.to_string());
+    let http_rpc_addr = options.http_rpc_addr.clone().unwrap_or(default_http_rpc_addr.to_string());
     let http_enabled = options
         .http_rpc_enabled
         .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
@@ -220,7 +218,7 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
     RpcConfigFile {
-        http_bind_address: Some(http_bind_address),
+        http_rpc_addr: Some(http_rpc_addr),
         http_enabled: Some(http_enabled),
         username,
         password,

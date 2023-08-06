@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
+use std::{num::NonZeroU64, path::Path};
 
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use tempfile::TempDir;
@@ -67,7 +67,7 @@ fn create_default_config() {
     );
 
     assert_eq!(
-        config.rpc.unwrap_or_default().http_bind_address,
+        config.rpc.unwrap_or_default().http_rpc_addr,
         Some("127.0.0.1:3030".to_string())
     );
 }
@@ -98,7 +98,6 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let http_rpc_addr = "localhost:5432";
-    let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
     let max_tip_age = 1000;
@@ -209,7 +208,7 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
 
     assert_eq!(
-        config.rpc.clone().unwrap().http_bind_address.map(|addr| addr.to_string()),
+        config.rpc.clone().unwrap().http_rpc_addr.map(|addr| addr.to_string()),
         Some(http_rpc_addr.to_string())
     );
 

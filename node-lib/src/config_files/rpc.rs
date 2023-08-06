@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct RpcConfigFile {
     /// Address to bind http RPC to
-    pub http_bind_address: Option<String>,
+    pub http_rpc_addr: Option<String>,
 
     /// Whether http RPC is enabled
     pub http_enabled: Option<bool>,
@@ -39,7 +39,7 @@ pub struct RpcConfigFile {
 impl From<RpcConfigFile> for RpcConfig {
     fn from(c: RpcConfigFile) -> Self {
         RpcConfig {
-            http_rpc_addr: c.http_bind_address,
+            http_rpc_addr: c.http_rpc_addr,
             http_enabled: c.http_enabled.into(),
         }
     }
