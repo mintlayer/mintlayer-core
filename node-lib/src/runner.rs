@@ -155,7 +155,7 @@ async fn initialize(
 
     // RPC subsystem
     let rpc_config = node_config.rpc.unwrap_or_default();
-    if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
+    if rpc_config.http_enabled.unwrap_or(true) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
             rpc_config.username.as_deref(),

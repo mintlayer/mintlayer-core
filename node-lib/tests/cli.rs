@@ -68,7 +68,7 @@ fn create_default_config() {
 
     assert_eq!(
         config.rpc.unwrap_or_default().http_bind_address,
-        Some(SocketAddr::from_str("127.0.0.1:3030").unwrap())
+        Some("127.0.0.1:3030".to_string())
     );
 }
 
@@ -129,8 +129,6 @@ fn read_config_override_values() {
         max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr.to_string()),
         http_rpc_enabled: Some(true),
-        ws_rpc_addr: Some(ws_rpc_addr.to_string()),
-        ws_rpc_enabled: Some(false),
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
@@ -216,12 +214,6 @@ fn read_config_override_values() {
     );
 
     assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
-
-    assert_eq!(
-        config.rpc.clone().unwrap().ws_bind_address,
-        Some(ws_rpc_addr)
-    );
-    assert!(!config.rpc.clone().unwrap().ws_enabled.unwrap());
 
     assert_eq!(
         config.rpc.as_ref().unwrap().username.as_deref(),

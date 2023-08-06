@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
-
 use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
@@ -23,16 +21,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct RpcConfigFile {
     /// Address to bind http RPC to
-    pub http_bind_address: Option<SocketAddr>,
+    pub http_bind_address: Option<String>,
 
     /// Whether http RPC is enabled
     pub http_enabled: Option<bool>,
-
-    /// Address to bind websocket RPC to
-    pub ws_bind_address: Option<SocketAddr>,
-
-    /// Whether websocket RPC is enabled
-    pub ws_enabled: Option<bool>,
 
     /// Username for RPC HTTP and WebSocket server basic authorization
     pub username: Option<String>,
@@ -47,10 +39,8 @@ pub struct RpcConfigFile {
 impl From<RpcConfigFile> for RpcConfig {
     fn from(c: RpcConfigFile) -> Self {
         RpcConfig {
-            http_bind_address: c.http_bind_address.into(),
+            http_rpc_addr: c.http_bind_address,
             http_enabled: c.http_enabled.into(),
-            ws_bind_address: c.ws_bind_address.into(),
-            ws_enabled: c.ws_enabled.into(),
         }
     }
 }

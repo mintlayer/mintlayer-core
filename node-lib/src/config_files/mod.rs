@@ -23,7 +23,7 @@ mod chainstate_launcher;
 mod p2p;
 mod rpc;
 
-use std::{fs, net::SocketAddr, path::Path, str::FromStr};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -200,33 +200,20 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     const DEFAULT_HTTP_RPC_ENABLED: bool = true;
     // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
     const DEFAULT_WS_RPC_ENABLED: bool = false;
-    let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
-    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3032").expect("Can't fail");
+    let default_http_rpc_addr = "127.0.0.1:3030";
 
     let RpcConfigFile {
         http_bind_address,
         http_enabled,
-        ws_bind_address,
-        ws_enabled,
         username,
         password,
         cookie_file,
     } = config;
 
-    let http_bind_address = options
-        .resolve_http_rpc_addr()
-        .or_else(|_| http_bind_address.ok_or("No address found"))
-        .unwrap_or(default_http_rpc_addr);
+    let http_bind_address = options.http_rpc_addr.clone().unwrap_or(default_http_rpc_addr.to_string());
     let http_enabled = options
         .http_rpc_enabled
         .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
-    let ws_bind_address = options
-        .resolve_ws_rpc_addr()
-        .or_else(|_| ws_bind_address.ok_or("No address found"))
-        .unwrap_or(default_ws_rpc_addr);
-    let ws_enabled = options
-        .ws_rpc_enabled
-        .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
     let username = username.or(options.rpc_username.clone());
     let password = password.or(options.rpc_password.clone());
     let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
@@ -234,8 +221,6 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     RpcConfigFile {
         http_bind_address: Some(http_bind_address),
         http_enabled: Some(http_enabled),
-        ws_bind_address: Some(ws_bind_address),
-        ws_enabled: Some(ws_enabled),
         username,
         password,
         cookie_file,

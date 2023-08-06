@@ -13,38 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, net::SocketAddr, str::FromStr};
+use std::fmt::Debug;
 
 use utils::make_config_setting;
 
 make_config_setting!(
     HttpBindAddress,
-    SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3030").expect("Address must be correct")
+    Option<String>,
+    Some("127.0.0.1:3030".to_string())
 );
 
 make_config_setting!(HttpRpcEnabled, bool, true);
-
-make_config_setting!(
-    WebsocketBindAddress,
-    SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3032").expect("Address must be correct")
-);
-
-make_config_setting!(WebsocketRpcEnabled, bool, true);
 
 /// The rpc subsystem configuration.
 #[derive(Debug, Default)]
 pub struct RpcConfig {
     /// Address to bind http RPC to.
-    pub http_bind_address: HttpBindAddress,
+    pub http_rpc_addr: Option<String>,
 
     /// Whether http RPC is enabled
     pub http_enabled: HttpRpcEnabled,
-
-    /// Address to bind websocket RPC to.
-    pub ws_bind_address: WebsocketBindAddress,
-
-    /// Whether websocket RPC is enabled
-    pub ws_enabled: WebsocketRpcEnabled,
 }
