@@ -20,7 +20,7 @@ use std::{
 
 use common::{
     chain::{Block, Transaction},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 use serialization::{DecodeAll, Encode};
 
@@ -34,11 +34,13 @@ pub struct ApiInMemoryStorage {
     mutex: RwLock<()>,
     block_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
     transaction_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
+    best_block: Arc<RwLock<(BlockHeight, Id<Block>)>>,
+    storage_version: Arc<RwLock<Option<u32>>>,
 }
 
 impl ApiStorageRead for ApiInMemoryStorage {
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError> {
-        let _handle = self.mutex.read().expect("Poisoned mutex");
+        let _lock = self.mutex.read().expect("Poisoned mutex");
         let block_table_handle = self.block_table.read().expect("Poisoned table mutex");
         let block_result = block_table_handle.get(&block_id.encode());
         let block_data = match block_result {
@@ -54,7 +56,7 @@ impl ApiStorageRead for ApiInMemoryStorage {
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<Transaction>, ApiStorageError> {
-        let _handle = self.mutex.read().expect("Poisoned mutex");
+        let _lock = self.mutex.read().expect("Poisoned mutex");
         let transaction_table_handle = self.transaction_table.read().expect("Poisoned table mutex");
         let transaction_result = transaction_table_handle.get(&transaction_id.encode());
         let transaction_data = match transaction_result {
@@ -65,11 +67,23 @@ impl ApiStorageRead for ApiInMemoryStorage {
             .map_err(|e| ApiStorageError::DeserializationError(e.to_string()))?;
         Ok(Some(tx))
     }
+
+    fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError> {
+        let _lock = self.mutex.write().expect("Poisoned mutex");
+        let version_table_handle = self.storage_version.read().expect("Poisoned table mutex");
+        Ok(*version_table_handle)
+    }
+
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<Block>), ApiStorageError> {
+        let _lock = self.mutex.write().expect("Poisoned mutex");
+        let best_block_table_handle = self.best_block.read().expect("Poisoned table mutex");
+        Ok(*best_block_table_handle)
+    }
 }
 
 impl ApiStorageWrite for ApiInMemoryStorage {
     fn set_block(&self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError> {
-        let _handle = self.mutex.write().expect("Poisoned mutex");
+        let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut block_table_handle = self.block_table.write().expect("Poisoned table mutex");
         block_table_handle.insert(block_id.encode(), block.encode());
         Ok(())
@@ -80,10 +94,30 @@ impl ApiStorageWrite for ApiInMemoryStorage {
         transaction_id: Id<Transaction>,
         transaction: Transaction,
     ) -> Result<(), ApiStorageError> {
-        let _handle = self.mutex.write().expect("Poisoned mutex");
+        let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut transaction_table_handle =
             self.transaction_table.write().expect("Poisoned table mutex");
         transaction_table_handle.insert(transaction_id.encode(), transaction.encode());
+        Ok(())
+    }
+
+    fn set_storage_version(&self, version: u32) -> Result<(), ApiStorageError> {
+        let _lock = self.mutex.write().expect("Poisoned mutex");
+
+        let mut version_table_handle = self.storage_version.write().expect("Poisoned table mutex");
+        *version_table_handle = Some(version);
+        Ok(())
+    }
+
+    fn set_best_block(
+        &self,
+        block_height: BlockHeight,
+        block_id: Id<Block>,
+    ) -> Result<(), ApiStorageError> {
+        let _lock = self.mutex.write().expect("Poisoned mutex");
+
+        let mut best_block_table_handle = self.best_block.write().expect("Poisoned table mutex");
+        *best_block_table_handle = (block_height, block_id);
         Ok(())
     }
 }
