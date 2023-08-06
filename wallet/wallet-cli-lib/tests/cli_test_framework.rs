@@ -199,10 +199,8 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
 
     let rpc_config = RpcConfig {
-        http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+        http_rpc_addr: Some("127.0.0.1:0".to_string()),
         http_enabled: true.into(),
-        ws_bind_address: Default::default(),
-        ws_enabled: false.into(),
     };
 
     let mut manager = subsystem::Manager::new("wallet-cli-test-manager");

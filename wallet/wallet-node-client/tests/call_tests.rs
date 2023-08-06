@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use blockprod::{test_blockprod_config, BlockProductionHandle};
 use chainstate::{
@@ -123,14 +123,8 @@ pub async fn start_subsystems(
     );
 
     let rpc_config = RpcConfig {
-        http_bind_address: SocketAddr::from_str(&rpc_bind_address)
-            .expect("Address must be correct")
-            .into(),
+        http_rpc_addr: Some(rpc_bind_address.to_string()),
         http_enabled: true.into(),
-        ws_bind_address: SocketAddr::from_str("127.0.0.1:3030")
-            .expect("Address must be correct")
-            .into(),
-        ws_enabled: false.into(),
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)
