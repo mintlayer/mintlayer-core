@@ -210,7 +210,8 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         cookie_file,
     } = config;
 
-    let http_bind_address = options.http_rpc_addr.clone().unwrap_or(default_http_rpc_addr.to_string());
+    let http_bind_address =
+        options.http_rpc_addr.clone().unwrap_or(default_http_rpc_addr.to_string());
     let http_enabled = options
         .http_rpc_enabled
         .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
