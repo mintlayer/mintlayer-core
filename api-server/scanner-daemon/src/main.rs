@@ -83,7 +83,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
     let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 
-    let rpc_client = make_rpc_client(rpc_address, rpc_auth)
+    let rpc_client = make_rpc_client(rpc_address.to_string(), rpc_auth)
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 
