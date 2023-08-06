@@ -41,18 +41,18 @@ pub trait ApiStorageRead {
 }
 
 pub trait ApiStorageWrite: ApiStorageRead {
-    fn set_storage_version(&self, version: u32) -> Result<(), ApiStorageError>;
+    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiStorageError>;
 
     fn set_best_block(
-        &self,
+        &mut self,
         block_height: BlockHeight,
         block_id: Id<Block>,
     ) -> Result<(), ApiStorageError>;
 
-    fn set_block(&self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError>;
+    fn set_block(&mut self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError>;
 
     fn set_transaction(
-        &self,
+        &mut self,
         transaction_id: Id<Transaction>,
         transaction: Transaction,
     ) -> Result<(), ApiStorageError>;

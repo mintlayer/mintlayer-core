@@ -82,7 +82,7 @@ impl ApiStorageRead for ApiInMemoryStorage {
 }
 
 impl ApiStorageWrite for ApiInMemoryStorage {
-    fn set_block(&self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError> {
+    fn set_block(&mut self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut block_table_handle = self.block_table.write().expect("Poisoned table mutex");
         block_table_handle.insert(block_id.encode(), block.encode());
@@ -90,7 +90,7 @@ impl ApiStorageWrite for ApiInMemoryStorage {
     }
 
     fn set_transaction(
-        &self,
+        &mut self,
         transaction_id: Id<Transaction>,
         transaction: Transaction,
     ) -> Result<(), ApiStorageError> {
@@ -101,7 +101,7 @@ impl ApiStorageWrite for ApiInMemoryStorage {
         Ok(())
     }
 
-    fn set_storage_version(&self, version: u32) -> Result<(), ApiStorageError> {
+    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
 
         let mut version_table_handle = self.storage_version.write().expect("Poisoned table mutex");
@@ -110,7 +110,7 @@ impl ApiStorageWrite for ApiInMemoryStorage {
     }
 
     fn set_best_block(
-        &self,
+        &mut self,
         block_height: BlockHeight,
         block_id: Id<Block>,
     ) -> Result<(), ApiStorageError> {
