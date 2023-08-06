@@ -19,12 +19,14 @@ use std::{
 };
 
 use common::{
-    chain::{Block, Transaction},
+    chain::{Block, ChainConfig, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 use serialization::{DecodeAll, Encode};
 
 use crate::storage::storage_api::{ApiStorageError, ApiStorageRead, ApiStorageWrite};
+
+pub const CURRENT_STORAGE_VERSION: u32 = 1;
 
 pub type RowIndex = Vec<u8>;
 pub type Data = Vec<u8>;
@@ -34,11 +36,29 @@ pub struct ApiInMemoryStorage {
     mutex: RwLock<()>,
     block_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
     transaction_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
-    best_block: Arc<RwLock<(BlockHeight, Id<Block>)>>,
+    best_block: Arc<RwLock<(BlockHeight, Id<GenBlock>)>>,
     storage_version: Arc<RwLock<Option<u32>>>,
 }
 
+impl ApiInMemoryStorage {
+    pub fn new(chain_config: &ChainConfig) -> Self {
+        Self {
+            mutex: RwLock::new(()),
+            block_table: Arc::new(RwLock::new(BTreeMap::new())),
+            transaction_table: Arc::new(RwLock::new(BTreeMap::new())),
+            best_block: Arc::new(RwLock::new((0.into(), chain_config.genesis_block_id()))),
+            storage_version: Arc::new(RwLock::new(None)),
+        }
+    }
+}
+
 impl ApiStorageRead for ApiInMemoryStorage {
+    fn is_initialized(&self) -> Result<bool, ApiStorageError> {
+        let _lock = self.mutex.read().expect("Poisoned mutex");
+        let storage_version_handle = self.storage_version.read().expect("Poisoned table mutex");
+        Ok(storage_version_handle.is_some())
+    }
+
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError> {
         let _lock = self.mutex.read().expect("Poisoned mutex");
         let block_table_handle = self.block_table.read().expect("Poisoned table mutex");
@@ -74,7 +94,7 @@ impl ApiStorageRead for ApiInMemoryStorage {
         Ok(*version_table_handle)
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<Block>), ApiStorageError> {
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let best_block_table_handle = self.best_block.read().expect("Poisoned table mutex");
         Ok(*best_block_table_handle)
@@ -112,12 +132,24 @@ impl ApiStorageWrite for ApiInMemoryStorage {
     fn set_best_block(
         &mut self,
         block_height: BlockHeight,
-        block_id: Id<Block>,
+        block_id: Id<GenBlock>,
     ) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
 
         let mut best_block_table_handle = self.best_block.write().expect("Poisoned table mutex");
         *best_block_table_handle = (block_height, block_id);
+        Ok(())
+    }
+
+    fn initialize_storage(&mut self, chain_config: &ChainConfig) -> Result<(), ApiStorageError> {
+        let _lock = self.mutex.write().expect("Poisoned mutex");
+
+        let mut best_block_table_handle = self.best_block.write().expect("Poisoned table mutex");
+        let mut version_table_handle = self.storage_version.write().expect("Poisoned table mutex");
+
+        *best_block_table_handle = (0.into(), chain_config.genesis_block_id());
+        *version_table_handle = Some(CURRENT_STORAGE_VERSION);
+
         Ok(())
     }
 }

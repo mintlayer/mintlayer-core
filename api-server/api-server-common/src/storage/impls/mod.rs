@@ -1,2 +1,2 @@
-mod in_memory;
-mod sqlx;
+pub mod in_memory;
+pub mod sqlx;
