@@ -12,3 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use crate::storage::storage_api::ApiStorageError;
+
+pub struct SqlxStorage {
+    db_pool: sqlx::AnyConnection,
+}
+
+impl SqlxStorage {
+    pub fn new(db_pool: sqlx::AnyConnection) -> Result<Self, ApiStorageError> {
+        Ok(Self { db_pool })
+    }
+
+    pub fn backend_name(&self) -> &str {
+        self.db_pool.backend_name()
+    }
+}
