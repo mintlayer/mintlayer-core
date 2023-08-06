@@ -24,7 +24,7 @@ use common::{
 };
 use serialization::{DecodeAll, Encode};
 
-use super::storage_api::{ApiStorageError, ApiStorageRead, ApiStorageWrite};
+use crate::storage::storage_api::{ApiStorageError, ApiStorageRead, ApiStorageWrite};
 
 pub type RowIndex = Vec<u8>;
 pub type Data = Vec<u8>;
