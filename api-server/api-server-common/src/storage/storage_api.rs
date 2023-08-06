@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, Transaction},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 
 #[allow(dead_code)]
@@ -28,6 +28,10 @@ pub enum ApiStorageError {
 }
 
 pub trait ApiStorageRead {
+    fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError>;
+
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<Block>), ApiStorageError>;
+
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError>;
 
     fn get_transaction(
@@ -37,6 +41,14 @@ pub trait ApiStorageRead {
 }
 
 pub trait ApiStorageWrite: ApiStorageRead {
+    fn set_storage_version(&self, version: u32) -> Result<(), ApiStorageError>;
+
+    fn set_best_block(
+        &self,
+        block_height: BlockHeight,
+        block_id: Id<Block>,
+    ) -> Result<(), ApiStorageError>;
+
     fn set_block(&self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError>;
 
     fn set_transaction(
