@@ -21,6 +21,8 @@ use wallet_cli_lib::{
 
 #[tokio::main]
 async fn main() {
+    utils::rust_backtrace::enable();
+
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }

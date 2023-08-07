@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,26 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod atomics;
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod graph_traversals;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod rust_backtrace;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
-
-mod concurrency_impl;
-pub use concurrency_impl::*;
+/// Set the `RUST_BACKTRACE` environment variable to `full` if it's not already set
+pub fn enable() {
+    if std::env::var("RUST_BACKTRACE").is_err() {
+        std::env::set_var("RUST_BACKTRACE", "full");
+    }
+}

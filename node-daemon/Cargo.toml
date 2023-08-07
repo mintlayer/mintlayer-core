@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 logging = { path = "../logging" }
 node-lib = { path = "../node-lib/" }
+utils = { path = "../utils" }
 
 anyhow.workspace = true
 tokio = { workspace = true, default-features = false }
