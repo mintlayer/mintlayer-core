@@ -90,26 +90,8 @@ impl PoWChainConfigBuilder {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn no_retargeting(mut self, value: Option<bool>) -> Self {
-        self.no_retargeting = value;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn allow_min_difficulty_blocks(mut self, value: Option<bool>) -> Self {
-        self.allow_min_difficulty_blocks = value;
-        self
-    }
-
     pub fn limit(mut self, value: Option<Uint256>) -> Self {
         self.limit = value;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn reward_maturity_distance(mut self, value: Option<BlockDistance>) -> Self {
-        self.reward_maturity_distance = value;
         self
     }
 
