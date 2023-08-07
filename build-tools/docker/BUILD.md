@@ -2,42 +2,38 @@
 
 This document outlines the steps to build Docker images for the Mintlayer node daemon, wallet-cli, and node-gui. 
 
-Before building make sure you clone the repository and change directory in the root of the repository.
+Before building make sure you clone the repository and change the current directory in the root of the repository.
 
+# The python build script
 
-## Building the Node Daemon Docker Image
-
-To build the Docker image for the node daemon, follow these steps:
+Make sure you have python installed together with the `toml` package, you may want to create a specific environment:
 
 ```bash
-docker build -f docker/Dockerfile.node-daemon -t node-daemon .
+python3 -m venv env
+source env/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install toml
 ```
 
-
-## Building the Wallet-CLI Docker Image
-
-To build the Docker image for the wallet-cli, follow these steps:
+In order to build the images run:
 
 ```bash
-docker build -f docker/Dockerfile.wallet-cli -t wallet-cli .
+python3 build-tools/docker/build.py
 ```
 
+NOTE: to change the version of the images use the `-version` flag such as `--version=1.2.3`.
 
-## Building the Node-GUI Docker Image
-
-Node-gui is a graphical interface that runs the node itself in the background. 
-To build the Docker image for the node-gui, follow these steps:
+For verifing images are built with use the following command:
 
 ```bash
-docker build -f docker/Dockerfile.node-gui -t node-gui .
+docker images | grep mintlayer
 ```
 
+The result should similar to the following:
 
-
-## Verify the builds 
-
-Once the build process finishes, you can verify the image was created successfully by running:
-
-```bash
-docker images
+```
+$ docker images |grep mintlayer
+mintlayer/wallet-cli           0.1.1     57dcc4898a30   2 minutes ago   125MB
+mintlayer/node-gui             0.1.1     a2ed3937e081   2 minutes ago   290MB
+mintlayer/node-daemon          0.1.1     ad830bf576e3   3 minutes ago   119MB
 ```

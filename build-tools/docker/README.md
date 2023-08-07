@@ -27,8 +27,8 @@ docker run -d -p 3030:3030 -p 13031:13031 --network=mintlayer-net --name mintlay
 ```
 
 The `-v` option is used to mount a local directory (in this case `~/.mintlayer`) as a volume in the Docker container.
-The `--user` option is used to specify the user that will write the `~/.mintlayer` directory. 
-NOTE: this wont work on windows hosts. 
+The `--user` option is used to specify the user that will write to the `~/.mintlayer` directory. 
+NOTE: this won't work on windows hosts. 
 
 If you want to display logs you can pass the `-e RUST_LOG=info` argument, such as:
 
@@ -61,4 +61,3 @@ docker run -it --network=mintlayer-net -v ~/.mintlayer:/root/.mintlayer mintlaye
 replace `<NETWORK>` with `mainnet` or `testnet` depending on what network you're running and `<IP_ADDRESS>` with the result of the command above.
 
 This command mounts the same `~/.mintlayer` directory as a volume in the `wallet-cli` container and uses the `--rpc-cookie-file` option to specify the path to the cookie file.
-

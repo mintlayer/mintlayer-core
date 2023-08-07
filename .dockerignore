@@ -1,9 +1,2 @@
-**/target/
-**/*.rs.bk
-**/Dockerfile
-**/.dockerignore
-**/.git
-**/.gitignore
-**/tmp
-**/Cargo.lock
-.docker/
+target
+.git
