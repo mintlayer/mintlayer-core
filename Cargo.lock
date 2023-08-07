@@ -3894,6 +3894,7 @@ dependencies = [
  "logging",
  "node-lib",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -6979,6 +6980,7 @@ version = "0.1.1"
 dependencies = [
  "clap",
  "tokio",
+ "utils",
  "wallet-cli-lib",
 ]
 
