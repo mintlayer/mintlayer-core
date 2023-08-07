@@ -24,7 +24,7 @@ pub trait LocalBlockchainState {
     type Error: std::error::Error;
 
     /// Returns the current best known block (may be genesis)
-    fn best_block(&self) -> (Id<GenBlock>, BlockHeight);
+    fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error>;
 
     /// Scan new blocks:
     /// 1. Reset local blocks to the common block height

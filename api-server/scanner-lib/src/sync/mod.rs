@@ -36,6 +36,8 @@ pub enum SyncError {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
     #[error("Attempted to sync the API server to a height that doesn't exist")]
     NotEnoughBlockHeight,
+    #[error("Best block retrieval error")]
+    BestBlockRetrievalError(String),
 }
 
 struct NextBlockInfo {
@@ -61,7 +63,9 @@ pub async fn sync_once(
             .await
             .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
 
-        let (best_block_id, best_block_height) = local_node.best_block();
+        let (best_block_height, best_block_id) = local_node
+            .best_block()
+            .map_err(|e| SyncError::BestBlockRetrievalError(e.to_string()))?;
 
         if chain_info.best_block_id == best_block_id {
             return Ok(());

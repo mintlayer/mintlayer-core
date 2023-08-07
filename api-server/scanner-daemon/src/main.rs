@@ -21,6 +21,7 @@ use config::ApiServerScannerArgs;
 use node_comm::{make_rpc_client, rpc_client::NodeRpcClient};
 use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
+mod blockchain_state;
 mod config;
 
 #[allow(clippy::unused_async)]
