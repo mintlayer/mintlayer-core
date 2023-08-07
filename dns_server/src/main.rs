@@ -139,6 +139,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
 
 #[tokio::main]
 async fn main() {
+    utils::rust_backtrace::enable();
+
     logging::init_logging::<std::path::PathBuf>(None);
 
     let config = Arc::new(DnsServerConfig::parse());

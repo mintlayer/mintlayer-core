@@ -30,6 +30,8 @@ use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub fn main() -> iced::Result {
+    utils::rust_backtrace::enable();
+
     MintlayerNodeGUI::run(Settings {
         id: Some("mintlayer-gui".to_owned()),
         antialiasing: true,
