@@ -30,7 +30,7 @@ pub struct ApiInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
-    transaction_table: BTreeMap<Id<Transaction>, SignedTransaction>,
+    transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: Option<u32>,
 }
@@ -64,7 +64,7 @@ impl ApiInMemoryStorage {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ApiStorageError> {
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError> {
         let transaction_result = self.transaction_table.get(&transaction_id);
         let tx = match transaction_result {
             Some(tx) => tx,
@@ -124,9 +124,11 @@ impl ApiInMemoryStorage {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        owning_block: Id<Block>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiStorageError> {
-        self.transaction_table.insert(transaction_id, transaction.clone());
+        self.transaction_table
+            .insert(transaction_id, (owning_block, transaction.clone()));
         Ok(())
     }
 
