@@ -38,5 +38,5 @@ pub use pos::{
     create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
     get_initial_randomness, initial_difficulty, DelegationId, PoSChainConfig, PoolId,
 };
-pub use pow::PoWChainConfig;
+pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

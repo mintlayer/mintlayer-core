@@ -21,7 +21,7 @@ use std::time::Duration;
 /// Chain Parameters for Proof of Work.
 ///
 /// See in Bitcoin's [chainparams.cpp](https://github.com/bitcoin/bitcoin/blob/eca694a4e78d54ce4e29b388b3e81b06e55c2293/src/chainparams.cpp)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PoWChainConfig {
     no_retargeting: bool,
     /// Checks whether minimum difficulty can be used for the block
@@ -71,6 +71,7 @@ impl PoWChainConfig {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct PoWChainConfigBuilder {
     chain_type: ChainType,
     no_retargeting: Option<bool>,
