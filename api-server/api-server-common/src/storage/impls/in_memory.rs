@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -35,7 +35,7 @@ pub struct ApiInMemoryStorage {
     block_table: Arc<RwLock<BTreeMap<Id<Block>, Block>>>,
     block_aux_data_table: Arc<RwLock<BTreeMap<Id<Block>, BlockAuxData>>>,
     main_chain_blocks_table: Arc<RwLock<BTreeMap<BlockHeight, Id<Block>>>>,
-    transaction_table: Arc<RwLock<BTreeMap<Id<Transaction>, Transaction>>>,
+    transaction_table: Arc<RwLock<BTreeMap<Id<Transaction>, SignedTransaction>>>,
     best_block: Arc<RwLock<(BlockHeight, Id<GenBlock>)>>,
     storage_version: Arc<RwLock<Option<u32>>>,
 }
@@ -75,7 +75,7 @@ impl ApiStorageRead for ApiInMemoryStorage {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<Transaction>, ApiStorageError> {
+    ) -> Result<Option<SignedTransaction>, ApiStorageError> {
         let _lock = self.mutex.read().expect("Poisoned mutex");
         let transaction_table_handle = self.transaction_table.read().expect("Poisoned table mutex");
         let transaction_result = transaction_table_handle.get(&transaction_id);
@@ -142,22 +142,22 @@ impl ApiStorageWrite for ApiInMemoryStorage {
         Ok(())
     }
 
-    fn set_block(&mut self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError> {
+    fn set_block(&mut self, block_id: Id<Block>, block: &Block) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut block_table_handle = self.block_table.write().expect("Poisoned table mutex");
-        block_table_handle.insert(block_id, block);
+        block_table_handle.insert(block_id, block.clone());
         Ok(())
     }
 
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        transaction: Transaction,
+        transaction: &SignedTransaction,
     ) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut transaction_table_handle =
             self.transaction_table.write().expect("Poisoned table mutex");
-        transaction_table_handle.insert(transaction_id, transaction);
+        transaction_table_handle.insert(transaction_id, transaction.clone());
         Ok(())
     }
 

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, ChainConfig, GenBlock, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -54,7 +54,7 @@ pub trait ApiStorageRead {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<Transaction>, ApiStorageError>;
+    ) -> Result<Option<SignedTransaction>, ApiStorageError>;
 }
 
 pub trait ApiStorageWrite: ApiStorageRead {
@@ -68,12 +68,12 @@ pub trait ApiStorageWrite: ApiStorageRead {
         block_id: Id<GenBlock>,
     ) -> Result<(), ApiStorageError>;
 
-    fn set_block(&mut self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError>;
+    fn set_block(&mut self, block_id: Id<Block>, block: &Block) -> Result<(), ApiStorageError>;
 
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        transaction: Transaction,
+        transaction: &SignedTransaction,
     ) -> Result<(), ApiStorageError>;
 
     fn set_block_aux_data(
@@ -115,4 +115,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, ApiStorageError>;
 }
 
-pub trait ApiStorage: ApiStorageWrite + for<'tx> Transactional<'tx> + Send {}
+pub trait ApiStorage: for<'tx> Transactional<'tx> + Send {}
