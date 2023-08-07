@@ -27,7 +27,6 @@ use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
 
-#[allow(clippy::unused_async)]
 pub async fn run<B: ApiStorage>(
     chain_config: &Arc<ChainConfig>,
     storage: B,
