@@ -112,7 +112,7 @@ pub trait Transactional<'t> {
     fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiStorageError>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, ApiStorageError>;
+    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiStorageError>;
 }
 
 pub trait ApiStorage: for<'tx> Transactional<'tx> + Send {}
