@@ -30,6 +30,8 @@ pub trait LocalBlockchainState {
     /// 1. Reset local blocks to the common block height
     /// (it will be lower than the current block height in case of reorg).
     /// 2. Append new blocks.
+    ///
+    /// The height of the blocks must be contiguous, starting from the common_block_height + 1.
     fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,

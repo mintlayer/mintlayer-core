@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_common::storage::storage_api::{ApiStorage, ApiStorageError};
+use api_server_common::storage::storage_api::{
+    ApiStorage, ApiStorageError, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
+};
 use blockchain_scanner_lib::sync::local_state::LocalBlockchainState;
 use common::{
     chain::{Block, GenBlock},
-    primitives::{BlockHeight, Id},
+    primitives::{id::WithId, BlockHeight, Id, Idable},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -34,15 +36,37 @@ impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
     type Error = BlockchainStateError;
 
     fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let best_block = self.storage.get_best_block()?;
+        let db_tx = self.storage.transaction_ro()?;
+        let best_block = db_tx.get_best_block()?;
         Ok(best_block)
     }
 
     fn scan_blocks(
         &mut self,
-        _common_block_height: BlockHeight,
-        _blocks: Vec<Block>,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        unimplemented!()
+        let mut db_tx = self.storage.transaction_rw()?;
+
+        // Disconnect blocks from main-chain
+        while db_tx.get_best_block()?.0 > common_block_height {
+            db_tx.del_main_chain_block_id(db_tx.get_best_block()?.0)?;
+        }
+
+        for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
+            let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+
+            db_tx.set_main_chain_block_id(block_height, block.get_id())?;
+
+            for tx in block.transactions() {
+                db_tx.set_transaction(tx.transaction().get_id(), tx)?;
+            }
+
+            db_tx.set_block(block.get_id(), &block)?;
+        }
+
+        db_tx.commit()?;
+
+        Ok(())
     }
 }
