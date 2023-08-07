@@ -28,7 +28,7 @@ pub enum BlockchainStateError {
     StorageError(#[from] ApiStorageError),
 }
 
-pub struct BlockchainState<B: ApiStorage> {
+pub struct BlockchainState<B> {
     storage: B,
 }
 
