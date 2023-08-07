@@ -56,8 +56,8 @@ impl MockLocalState {
 impl LocalBlockchainState for MockLocalState {
     type Error = Infallible;
 
-    fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
-        (self.get_best_block_id(), self.get_block_height())
+    fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
+        Ok((self.get_block_height(), self.get_best_block_id()))
     }
 
     fn scan_blocks(
