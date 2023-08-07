@@ -15,6 +15,10 @@
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
+use api_server_common::storage::{
+    impls::in_memory::transactional::ThreadSafeApiInMemoryStorage, storage_api::ApiStorage,
+};
+use blockchain_scanner_lib::blockchain_state::BlockchainState;
 use clap::Parser;
 use common::chain::{config::ChainType, ChainConfig};
 use config::ApiServerScannerArgs;
@@ -24,15 +28,29 @@ use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chai
 mod config;
 
 #[allow(clippy::unused_async)]
-pub async fn run(
-    _chain_config: &Arc<ChainConfig>,
-    _rpc_client: &NodeRpcClient,
+pub async fn run<B: ApiStorage>(
+    chain_config: &Arc<ChainConfig>,
+    storage: B,
+    rpc_client: &NodeRpcClient,
 ) -> Result<(), ApiServerScannerError> {
-    // loop {
-    //     blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, local_node)
-    // }
+    let mut local_block = BlockchainState::new(storage);
+    loop {
+        let sync_result =
+            blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, &mut local_block)
+                .await;
 
-    Ok(())
+        match sync_result {
+            Ok(_) => (),
+            Err(err) => logging::log::error!("Scanner sync error: {}", err),
+        }
+    }
+}
+
+pub fn make_storage(
+    chain_config: &ChainConfig,
+) -> Result<ThreadSafeApiInMemoryStorage, ApiServerScannerError> {
+    let storage = ThreadSafeApiInMemoryStorage::new(chain_config);
+    Ok(storage)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -87,7 +105,10 @@ async fn main() -> Result<(), ApiServerScannerError> {
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 
-    run(&chain_config, &rpc_client).await?;
-
+    {
+        let storage = make_storage(&chain_config)
+            .unwrap_or_else(|e| panic!("Scanner make_storage error: {}", e));
+        run(&chain_config, storage, &rpc_client).await?;
+    }
     Ok(())
 }

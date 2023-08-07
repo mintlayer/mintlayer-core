@@ -32,6 +32,12 @@ pub struct BlockchainState<B> {
     storage: B,
 }
 
+impl<B: ApiStorage> BlockchainState<B> {
+    pub fn new(storage: B) -> Self {
+        Self { storage }
+    }
+}
+
 impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
     type Error = BlockchainStateError;
 
