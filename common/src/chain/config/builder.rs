@@ -23,6 +23,7 @@ use crate::{
             EmissionScheduleTabular,
         },
         pos::get_initial_randomness,
+        pow::PoWChainConfigBuilder,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
         UpgradeVersion,
     },
@@ -125,6 +126,7 @@ pub struct Builder {
     max_block_size_with_smart_contracts: usize,
     max_no_signature_data_size: usize,
     max_depth_for_reorg: BlockDistance,
+    pow_chain_config_builder: PoWChainConfigBuilder,
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
@@ -162,6 +164,7 @@ impl Builder {
             max_no_signature_data_size: super::MAX_TX_NO_SIG_WITNESS_SIZE,
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             max_depth_for_reorg: super::DEFAULT_MAX_DEPTH_FOR_REORG,
+            pow_chain_config_builder: PoWChainConfigBuilder::new(chain_type),
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
             initial_randomness: get_initial_randomness(chain_type),
@@ -206,6 +209,7 @@ impl Builder {
             max_future_block_time_offset,
             max_no_signature_data_size,
             max_depth_for_reorg,
+            pow_chain_config_builder,
             epoch_length,
             sealed_epoch_distance_from_tip,
             initial_randomness,
@@ -249,6 +253,27 @@ impl Builder {
             .collect::<BTreeMap<BlockHeight, Id<GenBlock>>>()
             .into();
 
+        let pow_chain_config = {
+            let (_, genesis_upgrade_version) = net_upgrades
+                .version_at_height(BlockHeight::new(0))
+                .expect("Genesis must have an upgrade version");
+
+            let limit = match genesis_upgrade_version {
+                UpgradeVersion::SomeUpgrade => None,
+                UpgradeVersion::ConsensusUpgrade(consensus_upgrade) => match consensus_upgrade {
+                    ConsensusUpgrade::IgnoreConsensus | ConsensusUpgrade::PoS { .. } => None,
+                    ConsensusUpgrade::PoW { initial_difficulty } => {
+                        let limit = (*initial_difficulty)
+                            .try_into()
+                            .expect("Genesis initial difficulty to be valid");
+                        Some(limit)
+                    }
+                },
+            };
+
+            pow_chain_config_builder.limit(limit).build()
+        };
+
         ChainConfig {
             chain_type,
             bip44_coin_type,
@@ -263,6 +288,7 @@ impl Builder {
             max_future_block_time_offset,
             max_no_signature_data_size,
             max_depth_for_reorg,
+            pow_chain_config,
             epoch_length,
             sealed_epoch_distance_from_tip,
             initial_randomness,
