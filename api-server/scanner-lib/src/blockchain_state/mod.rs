@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     ApiStorage, ApiStorageError, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
 };
-use blockchain_scanner_lib::sync::local_state::LocalBlockchainState;
 use common::{
     chain::{Block, GenBlock},
     primitives::{id::WithId, BlockHeight, Id, Idable},
