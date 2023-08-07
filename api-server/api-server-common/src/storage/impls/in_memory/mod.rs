@@ -27,7 +27,6 @@ use common::{
 use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiStorageError};
 
 pub struct ApiInMemoryStorage {
-    // Synchronization for all tables together
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
