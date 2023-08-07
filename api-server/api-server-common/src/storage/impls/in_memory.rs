@@ -22,7 +22,6 @@ use common::{
     chain::{Block, ChainConfig, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
-use serialization::{DecodeAll, Encode};
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiStorageError, ApiStorageRead, ApiStorageWrite,
@@ -30,16 +29,13 @@ use crate::storage::storage_api::{
 
 pub const CURRENT_STORAGE_VERSION: u32 = 1;
 
-pub type RowIndex = Vec<u8>;
-pub type Data = Vec<u8>;
-
 pub struct ApiInMemoryStorage {
     // Synchronization for all tables together
     mutex: RwLock<()>,
-    block_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
+    block_table: Arc<RwLock<BTreeMap<Id<Block>, Block>>>,
     block_aux_data_table: Arc<RwLock<BTreeMap<Id<Block>, BlockAuxData>>>,
     main_chain_blocks_table: Arc<RwLock<BTreeMap<BlockHeight, Id<Block>>>>,
-    transaction_table: Arc<RwLock<BTreeMap<RowIndex, Data>>>,
+    transaction_table: Arc<RwLock<BTreeMap<Id<Transaction>, Transaction>>>,
     best_block: Arc<RwLock<(BlockHeight, Id<GenBlock>)>>,
     storage_version: Arc<RwLock<Option<u32>>>,
 }
@@ -68,14 +64,12 @@ impl ApiStorageRead for ApiInMemoryStorage {
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError> {
         let _lock = self.mutex.read().expect("Poisoned mutex");
         let block_table_handle = self.block_table.read().expect("Poisoned table mutex");
-        let block_result = block_table_handle.get(&block_id.encode());
-        let block_data = match block_result {
+        let block_result = block_table_handle.get(&block_id);
+        let block = match block_result {
             Some(blk) => blk,
             None => return Ok(None),
         };
-        let block = Block::decode_all(&mut &block_data[..])
-            .map_err(|e| ApiStorageError::DeserializationError(e.to_string()))?;
-        Ok(Some(block))
+        Ok(Some(block.clone()))
     }
 
     fn get_transaction(
@@ -84,14 +78,12 @@ impl ApiStorageRead for ApiInMemoryStorage {
     ) -> Result<Option<Transaction>, ApiStorageError> {
         let _lock = self.mutex.read().expect("Poisoned mutex");
         let transaction_table_handle = self.transaction_table.read().expect("Poisoned table mutex");
-        let transaction_result = transaction_table_handle.get(&transaction_id.encode());
-        let transaction_data = match transaction_result {
+        let transaction_result = transaction_table_handle.get(&transaction_id);
+        let tx = match transaction_result {
             Some(tx) => tx,
             None => return Ok(None),
         };
-        let tx = Transaction::decode_all(&mut &transaction_data[..])
-            .map_err(|e| ApiStorageError::DeserializationError(e.to_string()))?;
-        Ok(Some(tx))
+        Ok(Some(tx.clone()))
     }
 
     fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError> {
@@ -153,7 +145,7 @@ impl ApiStorageWrite for ApiInMemoryStorage {
     fn set_block(&mut self, block_id: Id<Block>, block: Block) -> Result<(), ApiStorageError> {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut block_table_handle = self.block_table.write().expect("Poisoned table mutex");
-        block_table_handle.insert(block_id.encode(), block.encode());
+        block_table_handle.insert(block_id, block);
         Ok(())
     }
 
@@ -165,7 +157,7 @@ impl ApiStorageWrite for ApiInMemoryStorage {
         let _lock = self.mutex.write().expect("Poisoned mutex");
         let mut transaction_table_handle =
             self.transaction_table.write().expect("Poisoned table mutex");
-        transaction_table_handle.insert(transaction_id.encode(), transaction.encode());
+        transaction_table_handle.insert(transaction_id, transaction);
         Ok(())
     }
 
