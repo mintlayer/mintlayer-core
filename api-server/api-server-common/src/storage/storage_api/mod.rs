@@ -18,6 +18,9 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
+use self::block_aux_data::BlockAuxData;
+pub mod block_aux_data;
+
 #[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum ApiStorageError {
@@ -37,6 +40,16 @@ pub trait ApiStorageRead {
     fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiStorageError>;
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError>;
+
+    fn get_block_aux_data(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockAuxData>, ApiStorageError>;
+
+    fn get_main_chain_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<Block>>, ApiStorageError>;
 
     fn get_transaction(
         &self,
@@ -62,6 +75,21 @@ pub trait ApiStorageWrite: ApiStorageRead {
         transaction_id: Id<Transaction>,
         transaction: Transaction,
     ) -> Result<(), ApiStorageError>;
+
+    fn set_block_aux_data(
+        &mut self,
+        block_id: Id<Block>,
+        block_aux_data: BlockAuxData,
+    ) -> Result<(), ApiStorageError>;
+
+    fn set_main_chain_block_id(
+        &mut self,
+        block_height: BlockHeight,
+        block_id: Id<Block>,
+    ) -> Result<(), ApiStorageError>;
+
+    fn del_main_chain_block_id(&mut self, block_height: BlockHeight)
+        -> Result<(), ApiStorageError>;
 }
 
 pub trait ApiTransactionRw: ApiStorageWrite + ApiStorageRead {
