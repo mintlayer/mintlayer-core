@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::socket_address::SocketAddress;
 
 use crate::{
     config::NodeType,
     message::AnnounceAddrRequest,
     net::{
         default_backend::{
-            transport::{MpscChannelTransport, TcpTransportSocket, TransportAddress},
+            transport::{MpscChannelTransport, TcpTransportSocket},
             types::{Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
@@ -33,20 +34,19 @@ use crate::{
     peer_manager::{tests::make_peer_manager_custom, PeerManager, MAX_OUTBOUND_CONNECTIONS},
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
-        TestTransportChannel, TestTransportMaker,
+        peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
+        TestTransportMaker,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
 
-async fn test_address_rate_limiter<A, T, B>()
+async fn test_address_rate_limiter<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    B: RandomAddressMaker<Address = T::Address>,
 {
     let addr = A::make_address();
     let config = Arc::new(config::create_mainnet());
@@ -61,7 +61,7 @@ where
     )
     .await;
 
-    let address = B::new();
+    let address = TestAddressMaker::new_random_address();
     let peer_id = PeerId::new();
     let peer_info = PeerInfo {
         peer_id,
@@ -75,8 +75,8 @@ where
     assert_eq!(pm.peers.len(), 1);
 
     let get_new_public_address = || loop {
-        let address = B::new().as_peer_address();
-        if T::Address::from_peer_address(&address, false).is_some() {
+        let address = TestAddressMaker::new_random_address().as_peer_address();
+        if SocketAddress::from_peer_address(&address, false).is_some() {
             return address;
         }
     };
@@ -90,7 +90,10 @@ where
     for _ in 0..120 {
         time_getter.advance_time(Duration::from_secs(1));
         for _ in 0..100 {
-            pm.handle_announce_addr_request(peer_id, B::new().as_peer_address());
+            pm.handle_announce_addr_request(
+                peer_id,
+                TestAddressMaker::new_random_address().as_peer_address(),
+            );
         }
     }
     let accepted_count = pm.peerdb.known_addresses().count();
@@ -107,7 +110,6 @@ async fn test_address_rate_limiter_channels() {
     test_address_rate_limiter::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-        TestTcpAddressMaker,
     >()
     .await;
 }
@@ -122,11 +124,8 @@ fn test_addr_list_handling_inbound() {
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
-        vec![],
-        cmd_tx,
-        conn_rx,
-    );
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
@@ -147,7 +146,12 @@ fn test_addr_list_handling_inbound() {
         user_agent: mintlayer_core_user_agent(),
         services: NodeType::Full.into(),
     };
-    pm.accept_connection(TestTcpAddressMaker::new(), Role::Inbound, peer_info, None);
+    pm.accept_connection(
+        TestAddressMaker::new_random_address(),
+        Role::Inbound,
+        peer_info,
+        None,
+    );
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
@@ -190,7 +194,7 @@ fn test_addr_list_handling_inbound() {
     // Check that the peer is scored if it tries to send an unexpected address list response
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
+        vec![TestAddressMaker::new_random_address().as_peer_address()],
     );
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
@@ -205,11 +209,8 @@ fn test_addr_list_handling_outbound() {
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
-        vec![],
-        cmd_tx,
-        conn_rx,
-    );
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
 
     let mut pm = PeerManager::<TestNetworkingService, _>::new(
         Arc::clone(&chain_config),
@@ -222,7 +223,7 @@ fn test_addr_list_handling_outbound() {
     .unwrap();
 
     let peer_id_1 = PeerId::new();
-    let peer_address = TestTcpAddressMaker::new();
+    let peer_address = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
         protocol: NETWORK_PROTOCOL_CURRENT,
@@ -266,7 +267,7 @@ fn test_addr_list_handling_outbound() {
     // Check that the address list response is processed normally and that the peer is not scored
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
+        vec![TestAddressMaker::new_random_address().as_peer_address()],
     );
     assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 
@@ -279,7 +280,7 @@ fn test_addr_list_handling_outbound() {
     // Check that the peer is scored if it tries to send an unexpected address list response
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestTcpAddressMaker::new().as_peer_address()],
+        vec![TestAddressMaker::new_random_address().as_peer_address()],
     );
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
@@ -290,7 +291,7 @@ async fn resend_own_addresses() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     // The addresses on which the node is listening
-    let listening_addresses: Vec<std::net::SocketAddr> =
+    let listening_addresses: Vec<SocketAddress> =
         vec!["1.2.3.4:3031".parse().unwrap(), "[2001:bc8:1600::1]:3031".parse().unwrap()];
 
     // Outbound connections normally use random ports
@@ -303,7 +304,7 @@ async fn resend_own_addresses() {
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
         listening_addresses.clone(),
         cmd_tx,
         conn_rx,
@@ -321,7 +322,7 @@ async fn resend_own_addresses() {
 
     for peer_index in 0..MAX_OUTBOUND_CONNECTIONS {
         let new_peer_id = PeerId::new();
-        let peer_address = TestTcpAddressMaker::new();
+        let peer_address = TestAddressMaker::new_random_address();
         let peer_info = PeerInfo {
             peer_id: new_peer_id,
             protocol: NETWORK_PROTOCOL_CURRENT,
@@ -368,8 +369,7 @@ async fn resend_own_addresses() {
             message: Message::AnnounceAddrRequest(AnnounceAddrRequest { address }),
         } = event
         {
-            let announced_addr: SocketAddr =
-                TransportAddress::from_peer_address(&address, false).unwrap();
+            let announced_addr = SocketAddress::from_peer_address(&address, false).unwrap();
             listening_addresses.remove(&announced_addr);
         }
     }

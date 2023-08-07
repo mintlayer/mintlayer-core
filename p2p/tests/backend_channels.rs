@@ -15,13 +15,12 @@
 
 use p2p::{
     net::default_backend::{transport::MpscChannelTransport, DefaultNetworkingService},
-    testing_utils::{TestChannelAddressMaker, TestTransportChannel},
+    testing_utils::TestTransportChannel,
 };
 
 fn main() {
     p2p_backend_test_suite::run::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-        TestChannelAddressMaker,
     >();
 }

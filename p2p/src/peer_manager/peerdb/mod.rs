@@ -31,7 +31,6 @@ mod storage_load;
 
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -40,13 +39,9 @@ use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
 use itertools::Itertools;
 use logging::log;
-use p2p_types::bannable_address::BannableAddress;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
-use crate::{
-    config,
-    error::P2pError,
-    net::{default_backend::transport::TransportAddress, AsBannableAddress},
-};
+use crate::{config, error::P2pError};
 
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
@@ -58,17 +53,17 @@ use super::{
     address_groups::AddressGroup, ip_or_socket_address_to_peer_address, MAX_OUTBOUND_CONNECTIONS,
 };
 
-pub struct PeerDb<A, S> {
+pub struct PeerDb<S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
     /// Map of all outbound peer addresses
-    addresses: BTreeMap<A, AddressData>,
+    addresses: BTreeMap<SocketAddress, AddressData>,
 
     /// Set of addresses that have the `reserved` flag set.
     /// Used as an optimization to not iterate over the entire `addresses` map.
     /// Every listed address must exist in the `addresses` map.
-    reserved_nodes: BTreeSet<A>,
+    reserved_nodes: BTreeSet<SocketAddress>,
 
     /// Banned addresses along with the duration of the ban.
     ///
@@ -81,11 +76,7 @@ pub struct PeerDb<A, S> {
     storage: S,
 }
 
-impl<A, S> PeerDb<A, S>
-where
-    A: Ord + FromStr + ToString + Clone + TransportAddress + AsBannableAddress,
-    S: PeerDbStorage,
-{
+impl<S: PeerDbStorage> PeerDb<S> {
     pub fn new(
         chain_config: &ChainConfig,
         p2p_config: Arc<config::P2pConfig>,
@@ -93,7 +84,7 @@ where
         storage: S,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
-        let loaded_storage = LoadedStorage::<A>::load_storage(&storage)?;
+        let loaded_storage = LoadedStorage::load_storage(&storage)?;
 
         let boot_nodes = p2p_config
             .boot_nodes
@@ -114,7 +105,7 @@ where
             .chain(reserved_nodes.iter())
             .map(|addr| {
                 (
-                    addr.clone(),
+                    *addr,
                     AddressData::new(
                         loaded_storage.known_addresses.contains(addr),
                         reserved_nodes.contains(addr),
@@ -137,13 +128,16 @@ where
     /// Iterator of all known addresses.
     ///
     /// Result could be shared with remote peers over network.
-    pub fn known_addresses(&self) -> impl Iterator<Item = &A> {
+    pub fn known_addresses(&self) -> impl Iterator<Item = &SocketAddress> {
         self.addresses.keys()
     }
 
     /// Selects peer addresses for outbound connections (except reserved).
     /// Only one outbound connection is allowed per address group.
-    pub fn select_new_outbound_addresses(&self, all_normal_outbound: &BTreeSet<A>) -> Vec<A> {
+    pub fn select_new_outbound_addresses(
+        &self,
+        all_normal_outbound: &BTreeSet<SocketAddress>,
+    ) -> Vec<SocketAddress> {
         let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(all_normal_outbound.len());
         if count == 0 {
             return Vec::new();
@@ -167,7 +161,7 @@ where
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
-                    Some(addr.clone())
+                    Some(*addr)
                 } else {
                     None
                 }
@@ -185,8 +179,8 @@ where
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(
         &self,
-        all_reserved_outbound: &BTreeSet<A>,
-    ) -> Vec<A> {
+        all_reserved_outbound: &BTreeSet<SocketAddress>,
+    ) -> Vec<SocketAddress> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
             .iter()
@@ -196,7 +190,7 @@ where
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
                 if address_data.connect_now(now) && !all_reserved_outbound.contains(addr) {
-                    Some(addr.clone())
+                    Some(*addr)
                 } else {
                     None
                 }
@@ -225,8 +219,8 @@ where
     }
 
     /// Add new peer addresses
-    pub fn peer_discovered(&mut self, address: A) {
-        if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
+    pub fn peer_discovered(&mut self, address: SocketAddress) {
+        if let Entry::Vacant(entry) = self.addresses.entry(address) {
             log::debug!("new address discovered: {}", address.to_string());
             entry.insert(AddressData::new(false, false, self.time_getter.get_time()));
         }
@@ -236,7 +230,7 @@ where
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, address: A, _error: &P2pError) {
+    pub fn report_outbound_failure(&mut self, address: SocketAddress, _error: &P2pError) {
         self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
     }
 
@@ -244,27 +238,31 @@ where
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn outbound_peer_connected(&mut self, address: A) {
+    pub fn outbound_peer_connected(&mut self, address: SocketAddress) {
         self.change_address_state(address, AddressStateTransitionTo::Connected);
     }
 
     /// Handle peer disconnect event with unspecified reason
-    pub fn outbound_peer_disconnected(&mut self, address: A) {
+    pub fn outbound_peer_disconnected(&mut self, address: SocketAddress) {
         self.change_address_state(address, AddressStateTransitionTo::Disconnected);
     }
 
-    pub fn remove_outbound_address(&mut self, address: &A) {
+    pub fn remove_outbound_address(&mut self, address: &SocketAddress) {
         self.addresses.remove(address);
     }
 
-    pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
+    pub fn change_address_state(
+        &mut self,
+        address: SocketAddress,
+        transition: AddressStateTransitionTo,
+    ) {
         let now = self.time_getter.get_time();
 
         // Make sure the address always exists.
         // It's needed because unknown addresses may be reported after RPC connect requests.
         let address_data = self
             .addresses
-            .entry(address.clone())
+            .entry(address)
             .or_insert_with(|| AddressData::new(false, false, now));
 
         let is_persistent_old = address_data.is_persistent();
@@ -296,17 +294,17 @@ where
         }
     }
 
-    pub fn is_reserved_node(&self, address: &A) -> bool {
+    pub fn is_reserved_node(&self, address: &SocketAddress) -> bool {
         self.reserved_nodes.contains(address)
     }
 
-    pub fn add_reserved_node(&mut self, address: A) {
-        self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
+    pub fn add_reserved_node(&mut self, address: SocketAddress) {
+        self.change_address_state(address, AddressStateTransitionTo::SetReserved);
         self.reserved_nodes.insert(address);
     }
 
-    pub fn remove_reserved_node(&mut self, address: A) {
-        self.change_address_state(address.clone(), AddressStateTransitionTo::UnsetReserved);
+    pub fn remove_reserved_node(&mut self, address: SocketAddress) {
+        self.change_address_state(address, AddressStateTransitionTo::UnsetReserved);
         self.reserved_nodes.remove(&address);
     }
 

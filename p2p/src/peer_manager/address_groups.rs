@@ -64,12 +64,13 @@ impl AddressGroup {
 mod tests {
     use std::net::SocketAddr;
 
-    use crate::net::default_backend::transport::TransportAddress;
+    use p2p_types::socket_address::SocketAddress;
 
     use super::*;
 
     fn check_group(ip: &str, expected: AddressGroup) {
-        let addr = SocketAddr::new(ip.parse().unwrap(), 12345).as_peer_address();
+        let addr =
+            SocketAddress::new(SocketAddr::new(ip.parse().unwrap(), 12345)).as_peer_address();
         let group = AddressGroup::from_peer_address(&addr);
         assert_eq!(group, expected, "check failed for {ip}");
     }

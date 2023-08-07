@@ -30,9 +30,9 @@ use utils::atomics::SeqCstAtomicBool;
 tests![connect, connect_address_in_use, connect_accept,];
 
 #[allow(clippy::extra_unused_type_parameters)]
-async fn connect<T, N, A>()
+async fn connect<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,
@@ -63,9 +63,9 @@ where
 
 // Check that connecting twice to the same address isn't possible.
 #[allow(clippy::extra_unused_type_parameters)]
-async fn connect_address_in_use<T, N, A>()
+async fn connect_address_in_use<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
     N::MessagingHandle: MessagingService + Debug,
@@ -120,9 +120,9 @@ where
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
 // trying to connect to `service1`.
 #[allow(clippy::extra_unused_type_parameters)]
-async fn connect_accept<T, N, A>()
+async fn connect_accept<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,
@@ -163,7 +163,7 @@ where
     .unwrap();
 
     let conn_addr = service1.local_addresses().to_vec();
-    service2.connect(conn_addr[0].clone()).unwrap();
+    service2.connect(conn_addr[0]).unwrap();
     service1.poll_next().await.unwrap();
 
     shutdown.store(true);

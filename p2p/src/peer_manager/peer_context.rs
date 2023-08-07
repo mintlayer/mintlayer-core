@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use p2p_types::socket_address::SocketAddress;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::SetFlag};
 
 use crate::{
@@ -28,12 +29,12 @@ pub struct SentPing {
     pub timestamp: Duration,
 }
 
-pub struct PeerContext<A> {
+pub struct PeerContext {
     /// Peer information
     pub info: types::PeerInfo,
 
     /// Peer's address
-    pub address: A,
+    pub address: SocketAddress,
 
     /// Peer's role (inbound or outbound)
     pub role: Role,
@@ -58,11 +59,11 @@ pub struct PeerContext<A> {
 
     /// All addresses that were announced to or from this peer.
     /// Used to prevent infinity loops while broadcasting addresses.
-    pub announced_addresses: RollingBloomFilter<A>,
+    pub announced_addresses: RollingBloomFilter<SocketAddress>,
 
     pub address_rate_limiter: RateLimiter,
 
     /// Expected listening address of this node (publicly routable IP + local listening port).
     /// Can be set for outbound connections only.
-    pub discovered_own_address: Option<A>,
+    pub discovered_own_address: Option<SocketAddress>,
 }

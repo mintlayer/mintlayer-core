@@ -20,6 +20,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -52,7 +53,6 @@ use crate::{
 
 use super::{
     peer::PeerRole,
-    transport::TransportAddress,
     types::{HandshakeNonce, P2pTimestamp},
 };
 
@@ -62,7 +62,7 @@ use super::{
 const SYNC_CHAN_BUF_SIZE: usize = 20;
 
 /// Active peer data
-struct PeerContext<A> {
+struct PeerContext {
     handle: tokio::task::JoinHandle<()>,
 
     /// Channel used to send messages to the peer's event loop.
@@ -71,7 +71,7 @@ struct PeerContext<A> {
     /// True if the peer was accepted by PeerManager and SyncManager was notified
     was_accepted: SetFlag,
 
-    address: A,
+    address: SocketAddress,
 
     inbound: bool,
 
@@ -83,10 +83,10 @@ struct PeerContext<A> {
 }
 
 /// Pending peer data (until handshake message is received)
-struct PendingPeerContext<A> {
+struct PendingPeerContext {
     handle: tokio::task::JoinHandle<()>,
 
-    address: A,
+    address: SocketAddress,
 
     peer_role: PeerRole,
 
@@ -109,13 +109,13 @@ pub struct Backend<T: TransportSocket> {
     time_getter: TimeGetter,
 
     /// RX channel for receiving commands from the frontend
-    cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
+    cmd_rx: mpsc::UnboundedReceiver<Command>,
 
     /// Active peers
-    peers: HashMap<PeerId, PeerContext<T::Address>>,
+    peers: HashMap<PeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<PeerId, PendingPeerContext<T::Address>>,
+    pending: HashMap<PeerId, PendingPeerContext>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -125,7 +125,7 @@ pub struct Backend<T: TransportSocket> {
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
+    conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
 
     /// TX channel for sending syncing events
     sync_tx: mpsc::UnboundedSender<SyncingEvent>,
@@ -152,8 +152,8 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         time_getter: TimeGetter,
-        cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
-        conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
+        cmd_rx: mpsc::UnboundedReceiver<Command>,
+        conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
@@ -182,7 +182,7 @@ where
     /// Handle connection result to a remote peer
     fn handle_connect_res(
         &mut self,
-        address: T::Address,
+        address: SocketAddress,
         connection_res: crate::Result<T::Stream>,
     ) -> crate::Result<()> {
         match connection_res {
@@ -317,7 +317,7 @@ where
         socket: T::Stream,
         remote_peer_id: PeerId,
         peer_role: PeerRole,
-        address: T::Address,
+        address: SocketAddress,
     ) -> crate::Result<()> {
         let (peer_tx, peer_rx) = mpsc::unbounded_channel();
 
@@ -396,14 +396,14 @@ where
         match peer_role {
             PeerRole::Outbound { handshake_nonce: _ } => {
                 self.conn_tx.send(ConnectivityEvent::OutboundAccepted {
-                    address: address.clone(),
+                    address,
                     peer_info,
                     receiver_address,
                 })?;
             }
             PeerRole::Inbound => {
                 self.conn_tx.send(ConnectivityEvent::InboundAccepted {
-                    address: address.clone(),
+                    address,
                     peer_info,
                     receiver_address,
                 })?;
@@ -563,7 +563,7 @@ where
         Ok(())
     }
 
-    fn handle_command(&mut self, command: Command<T::Address>) {
+    fn handle_command(&mut self, command: Command) {
         // All handlings can be separated to two parts:
         // - Async (can't take mutable reference to self because they are run concurrently).
         // - Sync (take mutable reference to self because they are run sequentially).
@@ -573,7 +573,7 @@ where
             Command::Connect { address } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
-                    self.transport.connect(address.clone()),
+                    self.transport.connect(address),
                 );
 
                 let backend_task: BackendTask<T> = async move {

@@ -15,7 +15,9 @@
 
 mod mock_manager;
 
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
+
+use p2p::types::socket_address::SocketAddress;
 
 use crate::{
     crawler_p2p::crawler_manager::{
@@ -27,7 +29,7 @@ use crate::{
 
 #[tokio::test]
 async fn basic() {
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
     // Node goes online, DNS record added
@@ -35,7 +37,7 @@ async fn basic() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 
     // Node goes offline, DNS record removed
@@ -43,13 +45,13 @@ async fn basic() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::DelAddress(node1.ip())
+        DnsServerCommand::DelAddress(node1.socket_addr().ip())
     );
 }
 
 #[tokio::test]
 async fn long_offline() {
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
     // Two weeks passed
@@ -66,15 +68,15 @@ async fn long_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 }
 
 #[tokio::test]
 async fn announced_online() {
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddr = "1.2.3.5:3031".parse().unwrap();
-    let node3: SocketAddr = "[2a00::1]:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node2: SocketAddress = "1.2.3.5:3031".parse().unwrap();
+    let node3: SocketAddress = "[2a00::1]:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
     state.node_online(node1);
@@ -84,21 +86,21 @@ async fn announced_online() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
 
     state.announce_address(node2, node3);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node3.ip())
+        DnsServerCommand::AddAddress(node3.socket_addr().ip())
     );
 
     let addresses = crawler.storage.transaction_ro().unwrap().get_addresses().unwrap();
@@ -110,8 +112,8 @@ async fn announced_online() {
 
 #[tokio::test]
 async fn announced_offline() {
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
-    let node2: SocketAddr = "1.2.3.5:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
+    let node2: SocketAddress = "1.2.3.5:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
     state.node_online(node1);
@@ -119,7 +121,7 @@ async fn announced_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 1);
 
@@ -134,19 +136,19 @@ async fn announced_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
 }
 
 #[tokio::test]
 async fn private_ip() {
-    let node1: SocketAddr = "1.0.0.1:3031".parse().unwrap();
-    let node2: SocketAddr = "[2a00::1]:3031".parse().unwrap();
-    let node3: SocketAddr = "192.168.0.1:3031".parse().unwrap();
-    let node4: SocketAddr = "[fe80::1]:3031".parse().unwrap();
-    let node5: SocketAddr = "1.0.0.2:12345".parse().unwrap();
-    let node6: SocketAddr = "[2a00::2]:12345".parse().unwrap();
+    let node1: SocketAddress = "1.0.0.1:3031".parse().unwrap();
+    let node2: SocketAddress = "[2a00::1]:3031".parse().unwrap();
+    let node3: SocketAddress = "192.168.0.1:3031".parse().unwrap();
+    let node4: SocketAddress = "[fe80::1]:3031".parse().unwrap();
+    let node5: SocketAddress = "1.0.0.2:12345".parse().unwrap();
+    let node6: SocketAddress = "[2a00::2]:12345".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) =
         test_crawler(vec![node1, node2, node3, node4, node5, node6]);
 
@@ -162,11 +164,11 @@ async fn private_ip() {
     // Check that only nodes with public addresses and on the default port are added to DNS
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        DnsServerCommand::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
     assert!(command_rx.try_recv().is_err());
 

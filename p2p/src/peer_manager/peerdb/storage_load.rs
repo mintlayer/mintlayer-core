@@ -15,11 +15,10 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    str::FromStr,
     time::Duration,
 };
 
-use p2p_types::bannable_address::BannableAddress;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
 use crate::error::P2pError;
 
@@ -29,13 +28,13 @@ use super::storage::{
 
 const STORAGE_VERSION: u32 = 1;
 
-pub struct LoadedStorage<A> {
-    pub known_addresses: BTreeSet<A>,
+pub struct LoadedStorage {
+    pub known_addresses: BTreeSet<SocketAddress>,
     pub banned_addresses: BTreeMap<BannableAddress, Duration>,
 }
 
-impl<A: Ord + FromStr> LoadedStorage<A> {
-    pub fn load_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
+impl LoadedStorage {
+    pub fn load_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
@@ -49,7 +48,7 @@ impl<A: Ord + FromStr> LoadedStorage<A> {
         }
     }
 
-    fn init_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
+    fn init_storage<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
         let mut tx = storage.transaction_rw()?;
         tx.set_version(STORAGE_VERSION)?;
         tx.commit()?;
@@ -59,7 +58,7 @@ impl<A: Ord + FromStr> LoadedStorage<A> {
         })
     }
 
-    fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A>> {
+    fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage> {
         let tx = storage.transaction_ro()?;
 
         // TODO: Is there a concern that the number of addresses will be so huge that it'll cause a hiccup?
@@ -67,7 +66,7 @@ impl<A: Ord + FromStr> LoadedStorage<A> {
             .get_known_addresses()?
             .iter()
             .map(|addr| {
-                addr.parse::<A>().map_err(|_err| {
+                addr.parse::<SocketAddress>().map_err(|_err| {
                     P2pError::InvalidStorageState(format!(
                         "Invalid address in PeerDb storage: {addr}"
                     ))

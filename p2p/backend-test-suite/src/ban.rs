@@ -42,9 +42,9 @@ tests![invalid_pubsub_block,];
 // invalid block from the first service and verify that the `SyncManager` of the first service
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
 #[allow(clippy::extra_unused_type_parameters)]
-async fn invalid_pubsub_block<T, N, A>()
+async fn invalid_pubsub_block<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,

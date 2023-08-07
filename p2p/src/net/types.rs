@@ -21,6 +21,7 @@ use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
+use p2p_types::socket_address::SocketAddress;
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
@@ -89,7 +90,7 @@ impl Display for PeerInfo {
 
 /// Connectivity-related events received from the network
 #[derive(Debug)]
-pub enum ConnectivityEvent<A> {
+pub enum ConnectivityEvent {
     Message {
         peer: PeerId,
         message: PeerManagerMessage,
@@ -97,7 +98,7 @@ pub enum ConnectivityEvent<A> {
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
-        address: A,
+        address: SocketAddress,
 
         /// Peer information
         peer_info: PeerInfo,
@@ -109,7 +110,7 @@ pub enum ConnectivityEvent<A> {
     /// Inbound connection received
     InboundAccepted {
         /// Peer address
-        address: A,
+        address: SocketAddress,
 
         /// Peer information
         peer_info: PeerInfo,
@@ -121,7 +122,7 @@ pub enum ConnectivityEvent<A> {
     /// Outbound connection failed
     ConnectionError {
         /// Address that was dialed
-        address: A,
+        address: SocketAddress,
 
         /// Error that occurred
         error: P2pError,

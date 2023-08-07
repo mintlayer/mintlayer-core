@@ -15,13 +15,9 @@
 
 use p2p::{
     net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
-    testing_utils::{TestTcpAddressMaker, TestTransportTcp},
+    testing_utils::TestTransportTcp,
 };
 
 fn main() {
-    p2p_backend_test_suite::run::<
-        TestTransportTcp,
-        DefaultNetworkingService<TcpTransportSocket>,
-        TestTcpAddressMaker,
-    >();
+    p2p_backend_test_suite::run::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>();
 }
