@@ -59,13 +59,14 @@ impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
             db_tx.del_main_chain_block_id(db_tx.get_best_block()?.0)?;
         }
 
+        // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
             db_tx.set_main_chain_block_id(block_height, block.get_id())?;
 
             for tx in block.transactions() {
-                db_tx.set_transaction(tx.transaction().get_id(), tx)?;
+                db_tx.set_transaction(tx.transaction().get_id(), block.get_id(), tx)?;
             }
 
             db_tx.set_block(block.get_id(), &block)?;

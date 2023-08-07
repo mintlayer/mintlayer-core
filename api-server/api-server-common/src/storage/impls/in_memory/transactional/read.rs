@@ -34,7 +34,7 @@ impl<'t> ApiStorageRead for ApiInMemoryStorageTransactionalRo<'t> {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ApiStorageError> {
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 

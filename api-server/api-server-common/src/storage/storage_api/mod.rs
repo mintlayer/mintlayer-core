@@ -54,7 +54,7 @@ pub trait ApiStorageRead {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ApiStorageError>;
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError>;
 }
 
 pub trait ApiStorageWrite: ApiStorageRead {
@@ -73,6 +73,7 @@ pub trait ApiStorageWrite: ApiStorageRead {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        owning_block: Id<Block>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiStorageError>;
 

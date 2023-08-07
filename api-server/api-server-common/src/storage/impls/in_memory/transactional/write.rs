@@ -36,9 +36,10 @@ impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
+        owning_block: Id<Block>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiStorageError> {
-        self.transaction.set_transaction(transaction_id, transaction)
+        self.transaction.set_transaction(transaction_id, owning_block, transaction)
     }
 
     fn set_storage_version(&mut self, version: u32) -> Result<(), ApiStorageError> {
@@ -111,7 +112,7 @@ impl<'t> ApiStorageRead for ApiInMemoryStorageTransactionalRw<'t> {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<SignedTransaction>, ApiStorageError> {
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 }
