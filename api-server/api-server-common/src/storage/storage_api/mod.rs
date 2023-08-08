@@ -25,7 +25,7 @@ pub mod block_aux_data;
 #[derive(Debug, thiserror::Error)]
 pub enum ApiStorageError {
     #[error("Low level storage error: {0}")]
-    StorageError(String),
+    LowLevelStorageError(String),
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
     #[error("Storage initialization failed: {0}")]

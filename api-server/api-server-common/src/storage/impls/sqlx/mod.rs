@@ -48,7 +48,7 @@ where
         )
         .execute(&self.db_pool)
         .await
-        .unwrap();
+        .map_err(|e| ApiStorageError::LowLevelStorageError(e.to_string()))?;
         Ok(())
     }
 }
