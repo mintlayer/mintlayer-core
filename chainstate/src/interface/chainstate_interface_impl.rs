@@ -167,7 +167,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
         locator: Locator,
         header_count_limit: usize,
@@ -175,11 +175,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers(locator, header_count_limit)
+            .get_mainchain_headers_by_locator(locator, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers_since_latest_fork_point(
+    fn get_mainchain_headers_since_latest_fork_point(
         &self,
         block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
@@ -187,7 +187,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers_since_latest_fork_point(block_ids, header_count_limit)
+            .get_mainchain_headers_since_latest_fork_point(block_ids, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

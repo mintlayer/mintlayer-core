@@ -189,7 +189,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block_height_in_main_chain(id)
     }
 
-    fn get_headers_above(
+    fn get_mainchain_headers_higher_than(
         &self,
         height: BlockHeight,
         header_count_limit: usize,
@@ -216,7 +216,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub fn get_headers(
+    pub fn get_mainchain_headers_by_locator(
         &self,
         locator: Locator,
         header_count_limit: usize,
@@ -233,10 +233,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
-        self.get_headers_above(best_height, header_count_limit)
+        self.get_mainchain_headers_higher_than(best_height, header_count_limit)
     }
 
-    pub fn get_headers_since_latest_fork_point(
+    pub fn get_mainchain_headers_since_latest_fork_point(
         &self,
         block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
@@ -262,7 +262,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             best_height
         };
 
-        self.get_headers_above(latest_fork_point_height, header_count_limit)
+        self.get_mainchain_headers_higher_than(latest_fork_point_height, header_count_limit)
     }
 
     pub fn find_first_non_existing_block(
