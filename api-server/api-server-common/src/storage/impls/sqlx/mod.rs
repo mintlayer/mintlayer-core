@@ -31,6 +31,7 @@ impl SqlxStorage {
 
 #[cfg(test)]
 mod tests {
+
     #[tokio::test]
     async fn basic_sqlx_sqlite_inmemory() {
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
@@ -38,8 +39,6 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-
-        // let table_name = "students";
 
         sqlx::query(
             "CREATE TABLE students (
