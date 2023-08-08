@@ -23,7 +23,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::StorageBackendConfig;
 use paste::paste;
@@ -331,6 +331,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
     };
 
     let ChainConfigOptions {
+        chain_magic_bytes,
         chain_max_future_block_time_offset,
         chain_version,
         chain_target_block_spacing,
@@ -365,6 +366,15 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         };
     }
 
+    let magic_bytes_from_string = |magic_string: String| -> Result<[u8; 4]> {
+        ensure!(magic_string.len() == 4, "Invalid size of magic_bytes");
+        let mut result: [u8; 4] = [0; 4];
+        for (i, byte) in magic_string.bytes().enumerate() {
+            result[i] = byte;
+        }
+        Ok(result)
+    };
+    update_builder!(magic_bytes, magic_bytes_from_string, map_err);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
