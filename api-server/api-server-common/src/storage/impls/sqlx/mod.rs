@@ -28,3 +28,55 @@ impl SqlxStorage {
         self.db_pool.backend_name()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn basic_sqlx_sqlite_inmemory() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        // let table_name = "students";
+
+        sqlx::query(
+            "CREATE TABLE students (
+            id INTEGER AUTO_INCREMENT PRIMARY KEY,
+            first_name VARCHAR(255) NOT NULL,
+            last_name TEXT NOT NULL,
+            age INTEGER NOT NULL
+          );
+          ",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as count_pet FROM students;")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        // No rows
+        assert_eq!(rows.0, 0);
+
+        // Insert row to the table
+        sqlx::query("INSERT INTO students (first_name, last_name, age) VALUES (?, ?, ?)")
+            .bind("Richard")
+            .bind("Roe")
+            .bind(55)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as count_pet FROM students;")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        // After insertion, there's one row
+        assert_eq!(rows.0, 1);
+    }
+}
