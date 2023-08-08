@@ -265,37 +265,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_headers_above(latest_fork_point_height, header_count_limit)
     }
 
-    // FIXME: this function assumes that the headers form a chain, so it stops once the first
-    // non-existing block is found. So it should either be moved to p2p (where this behavior
-    // is expected) or given a more specific name.
-    // FIXME: remove the function
-    pub fn filter_already_existing_blocks(
-        &self,
-        headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
-        // FIXME: remove the error
-        let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
-        let config = &self.chainstate_ref.chain_config();
-        // verify that the first block attaches to our chain
-        // FIXME: why does this function check this? this should be the responsibility of the caller.
-        if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
-            utils::ensure!(
-                self.get_block_index(&id)?.is_some(),
-                PropertyQueryError::BlockNotFound(id)
-            );
-        }
-
-        let res = headers
-            .into_iter()
-            .skip_while(|header| {
-                // FIXME: don't expect, return an error
-                self.get_block_index(&header.get_id()).expect("Database failure").is_some()
-            })
-            .collect::<Vec<_>>();
-
-        Ok(res)
-    }
-
     pub fn find_first_non_existing_block(
         &self,
         headers: &[SignedBlockHeader],

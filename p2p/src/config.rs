@@ -115,8 +115,6 @@ pub struct P2pConfig {
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
     /// A maximum number of unconnected headers (block announcements) that a peer can send before
     /// it will be considered malicious.
-    // FIXME: remove this, it's no longer used.
-    pub max_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
 }

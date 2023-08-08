@@ -157,7 +157,6 @@ async fn no_transaction_service(#[case] seed: Seed) {
         user_agent: "test".try_into().unwrap(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
@@ -221,7 +220,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
         user_agent: "test".try_into().unwrap(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: 0.into(),
-        max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()

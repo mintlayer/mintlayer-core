@@ -221,7 +221,6 @@ async fn disconnect() {
         user_agent: "test".try_into().unwrap(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Duration::from_millis(100).into(),
     });
     let mut handle = SyncManagerHandle::builder()
