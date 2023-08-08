@@ -323,7 +323,6 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
-            ConsensusPoWError::GenesisCannotHaveOngoingDifficulty => 100,
             ConsensusPoWError::InvalidBlockRewardMaturityDistance(_) => 0,
         }
     }

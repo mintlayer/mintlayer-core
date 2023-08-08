@@ -883,21 +883,15 @@ mod produce_block {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancel_received(#[case] seed: Seed) {
         let override_chain_config = {
-            let net_upgrades = NetUpgrades::initialize(vec![
-                (
-                    BlockHeight::new(0),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-                ),
-                (
-                    BlockHeight::new(1),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                        // Make difficulty impossible so the cancel from
-                        // the mock job manager is always seen before
-                        // solving the block
-                        initial_difficulty: Uint256::ZERO.into(),
-                    }),
-                ),
-            ])
+            let net_upgrades = NetUpgrades::initialize(vec![(
+                BlockHeight::new(0),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                    // Make difficulty impossible so the cancel from
+                    // the mock job manager is always seen before
+                    // solving the block
+                    initial_difficulty: Uint256::ZERO.into(),
+                }),
+            )])
             .expect("Net upgrade is valid");
 
             Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
@@ -1014,18 +1008,12 @@ mod produce_block {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn solved_pow_consensus() {
         let override_chain_config = {
-            let net_upgrades = NetUpgrades::initialize(vec![
-                (
-                    BlockHeight::new(0),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-                ),
-                (
-                    BlockHeight::new(1),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                        initial_difficulty: Uint256::MAX.into(),
-                    }),
-                ),
-            ])
+            let net_upgrades = NetUpgrades::initialize(vec![(
+                BlockHeight::new(0),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                    initial_difficulty: Uint256::MAX.into(),
+                }),
+            )])
             .expect("Net upgrade is valid");
 
             Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()

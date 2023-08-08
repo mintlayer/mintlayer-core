@@ -21,7 +21,7 @@ use std::time::Duration;
 /// Chain Parameters for Proof of Work.
 ///
 /// See in Bitcoin's [chainparams.cpp](https://github.com/bitcoin/bitcoin/blob/eca694a4e78d54ce4e29b388b3e81b06e55c2293/src/chainparams.cpp)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PoWChainConfig {
     no_retargeting: bool,
     /// Checks whether minimum difficulty can be used for the block
@@ -33,14 +33,8 @@ pub struct PoWChainConfig {
 }
 
 impl PoWChainConfig {
-    pub(crate) const fn new(chain_type: ChainType) -> Self {
-        PoWChainConfig {
-            no_retargeting: no_retargeting(chain_type),
-            allow_min_difficulty_blocks: allow_min_difficulty_blocks(chain_type),
-            limit: limit(chain_type),
-            // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
-            reward_maturity_distance: BlockDistance::new(500),
-        }
+    pub(crate) fn new(chain_type: ChainType) -> Self {
+        PoWChainConfigBuilder::new(chain_type).build()
     }
 
     pub const fn no_retargeting(&self) -> bool {
@@ -74,6 +68,49 @@ impl PoWChainConfig {
     /// See Bitcoin's [Target](https://en.bitcoin.it/wiki/Target) article.
     pub const fn max_retarget_factor(&self) -> u64 {
         4
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct PoWChainConfigBuilder {
+    chain_type: ChainType,
+    no_retargeting: Option<bool>,
+    allow_min_difficulty_blocks: Option<bool>,
+    limit: Option<Uint256>,
+    reward_maturity_distance: Option<BlockDistance>,
+}
+
+impl PoWChainConfigBuilder {
+    pub fn new(chain_type: ChainType) -> Self {
+        Self {
+            chain_type,
+            no_retargeting: None,
+            allow_min_difficulty_blocks: None,
+            limit: None,
+            reward_maturity_distance: None,
+        }
+    }
+
+    pub fn limit(mut self, value: Option<Uint256>) -> Self {
+        self.limit = value;
+        self
+    }
+
+    pub fn build(self) -> PoWChainConfig {
+        PoWChainConfig {
+            no_retargeting: self.no_retargeting.unwrap_or_else(|| no_retargeting(self.chain_type)),
+            allow_min_difficulty_blocks: self
+                .allow_min_difficulty_blocks
+                .unwrap_or_else(|| allow_min_difficulty_blocks(self.chain_type)),
+            limit: self.limit.unwrap_or_else(|| limit(self.chain_type)),
+
+            // If block time is 2 minutes (which is my goal
+            // eventually), then 500 is equivalent to 100 in bitcoin's
+            // 10 minutes.
+            reward_maturity_distance: self
+                .reward_maturity_distance
+                .unwrap_or_else(|| BlockDistance::new(500)),
+        }
     }
 }
 

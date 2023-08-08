@@ -162,6 +162,7 @@ pub struct ChainConfig {
     max_block_size_with_smart_contracts: usize,
     max_no_signature_data_size: usize,
     max_depth_for_reorg: BlockDistance,
+    pow_chain_config: PoWChainConfig,
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
@@ -456,8 +457,8 @@ impl ChainConfig {
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     #[must_use]
-    pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
-        PoWChainConfig::new(self.chain_type)
+    pub fn get_proof_of_work_config(&self) -> &PoWChainConfig {
+        &self.pow_chain_config
     }
 
     /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
