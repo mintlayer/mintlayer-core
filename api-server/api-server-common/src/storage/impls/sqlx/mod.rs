@@ -30,12 +30,11 @@ where
         Ok(Self { db_pool })
     }
 
-    pub async fn create_tables<'q, 'e, 'c: 'e, E>(&'e self) -> Result<(), ApiStorageError>
+    pub async fn create_tables<'e, E>(&'e self) -> Result<(), ApiStorageError>
     where
-        'q: 'e,
         E: Executor<'e, Database = D>,
-        <D as HasArguments<'q>>::Arguments: IntoArguments<'q, D>,
-        &'c mut <D as Database>::Connection: for<'b> Executor<'b>,
+        <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        &'e mut <D as Database>::Connection: Executor<'e>,
         &'e Pool<D>: Executor<'e, Database = D>,
     {
         sqlx::query(
