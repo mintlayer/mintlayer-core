@@ -164,7 +164,11 @@ impl MempoolInterface for Mempool {
     }
 
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
-        self.get_fee_rate(in_top_x_mb).map_err(Error::Policy)
+        Ok(self.get_fee_rate(in_top_x_mb)?)
+    }
+
+    fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
+        self.on_peer_disconnected(peer_id)
     }
 }
 

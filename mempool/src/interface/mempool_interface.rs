@@ -72,6 +72,9 @@ pub trait MempoolInterface: Send + Sync {
     /// Get the fee rate such that it would put the new transaction in the top X MB of the mempool
     /// making it less likely to get rejected or trimmed in the case the mempool is full
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error>;
+
+    /// Notify mempool given peer has disconnected
+    fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);
 }
 
 #[async_trait::async_trait]

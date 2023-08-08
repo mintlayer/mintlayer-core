@@ -119,8 +119,8 @@ async fn initialize(
     let p2p = p2p::make_p2p(
         Arc::clone(&chain_config),
         Arc::new(node_config.p2p.unwrap_or_default().into()),
-        chainstate.clone(),
-        mempool.clone(),
+        subsystem::Handle::clone(&chainstate),
+        subsystem::Handle::clone(&mempool),
         Default::default(),
         peerdb_storage,
     )?;
@@ -134,9 +134,9 @@ async fn initialize(
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
             Arc::new(node_config.blockprod.unwrap_or_default().into()),
-            chainstate.clone(),
-            mempool.clone(),
-            p2p.clone(),
+            subsystem::Handle::clone(&chainstate),
+            subsystem::Handle::clone(&mempool),
+            subsystem::Handle::clone(&p2p),
             Default::default(),
         )?,
     );

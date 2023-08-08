@@ -156,7 +156,7 @@ where
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
-                    self.handle_peer_event(event?);
+                    self.handle_peer_event(event?).await;
                 },
             }
         }
@@ -276,15 +276,27 @@ where
     }
 
     /// Sends an event to the corresponding peer.
-    fn handle_peer_event(&mut self, event: SyncingEvent) {
+    async fn handle_peer_event(&mut self, event: SyncingEvent) {
         match event {
             SyncingEvent::Connected {
                 peer_id,
                 services,
                 sync_rx,
             } => self.register_peer(peer_id, services, sync_rx),
-            SyncingEvent::Disconnected { peer_id } => self.unregister_peer(peer_id),
+            SyncingEvent::Disconnected { peer_id } => {
+                Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
+                self.unregister_peer(peer_id);
+            }
         }
+    }
+
+    async fn notify_mempool_peer_disconnected(mempool_handle: &MempoolHandle, peer_id: PeerId) {
+        mempool_handle
+            .call_mut(move |mempool| mempool.notify_peer_disconnected(peer_id))
+            .await
+            .unwrap_or_else(|err| {
+                log::error!("Mempool dead upon peer {peer_id} disconnect: {err}");
+            })
     }
 }
 

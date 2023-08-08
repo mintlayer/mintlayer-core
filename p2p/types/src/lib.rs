@@ -24,3 +24,4 @@ pub mod services;
 pub mod socket_address;
 
 pub use global_ip::IsGlobalIp;
+pub use peer_id::PeerId;

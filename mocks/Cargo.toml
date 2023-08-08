@@ -16,6 +16,7 @@ pos_accounting = { path = '../pos_accounting/' }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 utxo = { path = "../utxo/" }
+p2p-types = { path = "../p2p/types" } # TODO(PR) remove
 
 async-trait.workspace = true
 mockall.workspace = true

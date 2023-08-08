@@ -142,6 +142,10 @@ impl MempoolInterface for MempoolInterfaceMock {
     fn get_fee_rate(&self, _in_top_x_mb: usize) -> Result<FeeRate, Error> {
         Ok(FeeRate::new(Amount::ZERO))
     }
+
+    fn notify_peer_disconnected(&mut self, _peer_id: p2p_types::PeerId) {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]
