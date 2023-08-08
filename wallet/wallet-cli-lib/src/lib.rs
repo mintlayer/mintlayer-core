@@ -22,7 +22,7 @@ mod repl;
 
 type CliController = wallet_controller::RpcController<wallet::wallet_events::WalletEventsNoOp>;
 
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use cli_event_loop::Event;
 use commands::WalletCommand;
@@ -80,7 +80,7 @@ pub async fn run(
         .unwrap_or_else(|| Arc::new(common::chain::config::Builder::new(chain_type).build()));
 
     // TODO: Use the constant with the node
-    let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
+    let default_http_rpc_addr = || "127.0.0.1:3030".to_owned();
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 
     let rpc_auth = match (rpc_cookie_file, rpc_username, rpc_password) {

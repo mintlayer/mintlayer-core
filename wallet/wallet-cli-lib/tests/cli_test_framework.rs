@@ -310,7 +310,7 @@ impl CliTestFramework {
             network: Network::Regtest,
             wallet_file: None,
             start_staking: false,
-            rpc_address: Some(self.rpc_address),
+            rpc_address: Some(self.rpc_address.to_string()),
             rpc_cookie_file: None,
             rpc_username: Some(RPC_USERNAME.to_owned()),
             rpc_password: Some(RPC_PASSWORD.to_owned()),
