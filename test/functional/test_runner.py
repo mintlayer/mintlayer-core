@@ -114,6 +114,7 @@ BASE_SCRIPTS = [
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',
+    'mempool_orphan_peer_disconnected.py',
     'mempool_submit_orphan.py',
     'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
