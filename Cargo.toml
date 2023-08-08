@@ -62,6 +62,8 @@ members = [
 ]
 
 default-members = [
+  "api-server/scanner-daemon",
+  "api-server/web-server",
   "chainstate",
   "common",
   "crypto",

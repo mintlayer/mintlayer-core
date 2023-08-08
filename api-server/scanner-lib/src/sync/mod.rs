@@ -55,7 +55,7 @@ struct FetchedBlocks {
 pub async fn sync_once(
     chain_config: &ChainConfig,
     rpc_client: &impl RemoteNode,
-    local_node: &mut impl LocalBlockchainState,
+    local_state: &mut impl LocalBlockchainState,
 ) -> Result<(), SyncError> {
     loop {
         let chain_info = rpc_client
@@ -63,7 +63,7 @@ pub async fn sync_once(
             .await
             .map_err(|e| SyncError::RemoteNode(e.to_string()))?;
 
-        let (best_block_height, best_block_id) = local_node
+        let (best_block_height, best_block_id) = local_state
             .best_block()
             .map_err(|e| SyncError::BestBlockRetrievalError(e.to_string()))?;
 
@@ -71,13 +71,19 @@ pub async fn sync_once(
             return Ok(());
         }
 
+        logging::log::info!(
+            "Found a new best block in node: ({}, {})",
+            best_block_height,
+            best_block_id
+        );
+
         fetch_and_sync(
             chain_info.clone(),
             best_block_id,
             best_block_height,
             chain_config,
             rpc_client,
-            local_node,
+            local_state,
         )
         .await?;
     }

@@ -62,11 +62,16 @@ pub enum ApiServerScannerError {
 
 #[tokio::main]
 async fn main() -> Result<(), ApiServerScannerError> {
+    utils::rust_backtrace::enable();
+
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
 
     let args = ApiServerScannerArgs::parse();
+
+    logging::init_logging::<&std::path::Path>(None);
+    logging::log::info!("Command line options: {args:?}");
 
     let ApiServerScannerArgs {
         network,
