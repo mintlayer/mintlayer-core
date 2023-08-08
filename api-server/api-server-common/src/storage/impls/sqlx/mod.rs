@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sqlx::{Database, Pool};
+
 use crate::storage::storage_api::ApiStorageError;
 
-pub struct SqlxStorage {
-    db_pool: sqlx::AnyConnection,
+pub struct SqlxStorage<D: Database> {
+    #[allow(dead_code)]
+    db_pool: Pool<D>,
 }
 
-impl SqlxStorage {
-    pub fn new(db_pool: sqlx::AnyConnection) -> Result<Self, ApiStorageError> {
+impl<D: Database> SqlxStorage<D> {
+    pub fn new(db_pool: Pool<D>) -> Result<Self, ApiStorageError> {
         Ok(Self { db_pool })
-    }
-
-    pub fn backend_name(&self) -> &str {
-        self.db_pool.backend_name()
     }
 }
 
