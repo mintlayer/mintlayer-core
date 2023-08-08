@@ -67,6 +67,12 @@ impl From<NodeType> for Services {
 }
 
 /// The p2p subsystem configuration.
+// TODO: some of these "configuration options" should never be changed in production code,
+// because their values are a part of the protocol, e.g. this includes msg_header_count_limit and
+// max_request_blocks_count. Some other, like msg_max_locator_count, are never changed even
+// in tests. It might be better to separate these "settings" off into a separate struct and/or
+// make some of them constants (and the constant corresponding to msg_max_locator_count may
+// even be moved to chainstate, where locators are actually produced).
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.

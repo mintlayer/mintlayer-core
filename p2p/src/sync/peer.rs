@@ -94,8 +94,9 @@ pub struct Peer<T: NetworkingService> {
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
-    // FIXME: why not remove this atomic and ask chainstate instead? Or alternatively receive a non-atomic bool
-    // during construction and with every "new tip" event?
+    // TODO: this is an optimization to avoid extra subsystem calls. But there is no need for it
+    // to be an atomic; instead, we can receive it as a non-atomic bool during construction and
+    // update it on every "new tip" event.
     is_initial_block_download: Arc<AcqRelAtomicBool>,
     time_getter: TimeGetter,
 
@@ -209,7 +210,6 @@ where
 
         loop {
             tokio::select! {
-                // FIXME: Sam: these 2 must be inside a struct/module (some kind of blackbox...)?
                 message = self.sync_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
@@ -267,12 +267,12 @@ where
                     .call(move |c| {
                         let best_block_id = c.get_best_block_id()?;
                         if best_block_id != new_tip_id {
-                            // FIXME: should we ignore this event in such a case?
+                            // TODO: should we ignore this event in such a case?
                             log::warn!("Got new tip event with block id {}, but the tip has changed since then to {}",
                                 new_tip_id, best_block_id);
                         }
 
-                        c.get_headers_since_latest_fork_point(&block_ids, limit)
+                        c.get_mainchain_headers_since_latest_fork_point(&block_ids, limit)
                     })
                     .await??;
 
@@ -363,9 +363,11 @@ where
             return Ok(());
         }
 
-        // FIXME: this limit should be a constant.
         let limit = *self.p2p_config.msg_header_count_limit;
-        let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
+        let headers = self
+            .chainstate_handle
+            .call(move |c| c.get_mainchain_headers_by_locator(locator, limit))
+            .await??;
         debug_assert!(headers.len() <= limit);
 
         // Sending a below-the-max amount of headers is a signal to the peer that we've sent
@@ -402,7 +404,7 @@ where
             // Note: currently this is not a normal situation, because a node in IBD wouldn't
             // send block headers to the peer in the first place, which means that the peer won't
             // be able to ask it for blocks.
-            // FIXME: return an error with a non-zero ban score instead?
+            // TODO: return an error with a non-zero ban score instead?
             log::warn!(
                 "The node is in initial block download, but the peer {} is asking us for blocks",
                 self.id()
@@ -429,24 +431,28 @@ where
         self.chainstate_handle
             .call(move |c| {
                 for id in ids {
+                    // TODO: As it is mentioned in send_block, in the future it may be possible
+                    // for previously existing blocks and block indices to get removed due to
+                    // invalidation. P2p will need to handle this situation correctly. See issue
+                    // #1033 for more details.
                     let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
                         ProtocolError::UnknownBlockRequested(id),
                     ))?;
 
                     if let Some(ref best_sent_block) = best_sent_block {
                         if index.block_height() <= best_sent_block.block_height() {
-                            // This can be normal in case of reorg, check if the block id is the same.
-                            let known_block_id = c
-                                .get_block_id_from_height(&best_sent_block.block_height())?
-                                // This should never fail because we have a block for this height.
-                                // FIXME: actually, after block invalidation gets merged in, it will
-                                // be possible for the mainchain to become shorter, so this "expect"
-                                // may fail in the future.
-                                .expect("Unable to get block id from height");
-                            if &known_block_id == best_sent_block.block_id() {
-                                return Err(P2pError::ProtocolError(
-                                    ProtocolError::DuplicatedBlockRequest(id),
-                                ));
+                            // This can be normal in case of reorg, ensure that the mainchain block
+                            // at best_sent_block's height has different id.
+                            // Note that mainchain could have become shorter due to blocks
+                            // invalidation, so no block at that height may be present at all.
+                            if let Some(mainchain_block_id_at_height) =
+                                c.get_block_id_from_height(&best_sent_block.block_height())?
+                            {
+                                if &mainchain_block_id_at_height == best_sent_block.block_id() {
+                                    return Err(P2pError::ProtocolError(
+                                        ProtocolError::DuplicatedBlockRequest(id),
+                                    ));
+                                }
                             }
                         }
                     }
@@ -561,8 +567,8 @@ where
             || first_header_is_connected_to_known_headers
             || first_header_is_connected_to_requested_blocks)
         {
-            // FIXME: technically, we may have failed to send a block request on the previous
-            // iteration due to some local or network issues; in that case, the corresponding
+            // TODO: technically, we may have failed to send a block request on the previous
+            // iteration, due to some local or network issues; in that case, the corresponding
             // headers won't be present in known_headers anymore, but they
             // won't be in requested_blocks or the chainstate either.
             // Alternatively, we may have successfully received a block but then failed
@@ -575,6 +581,7 @@ where
             // what we've sent to the peer. The alternatives are:
             // 1) try to recover from this state by explicitly sending a header request to the peer.
             // 2) keep a header in known_headers until the block is received.
+            // Such situation will be quite rare though.
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
@@ -893,17 +900,17 @@ where
         let (block, index) = self
             .chainstate_handle
             .call(move |c| {
-                // TODO: in the future, when block invalidation gets merged in and/if we implement
-                // bad blocks purging, a block that once existed may not exist anymore.
-                // Moreover, its block index may no longer exist (e.g. there was a suggestion
-                // to delete block indices of missing blocks when resetting their failure flags).
-                // P2p should handle such situations correctly.
                 let index = c.get_block_index(&id);
                 let block = c.get_block(id);
                 (block, index)
             })
             .await?;
         // All requested blocks are already checked while processing `BlockListRequest`.
+        // TODO: in the future, when block invalidation gets merged in and/if we implement
+        // bad blocks purging, a block that once existed may not exist anymore.
+        // Moreover, its block index may no longer exist (e.g. there was a suggestion
+        // to delete block indices of missing blocks when resetting their failure flags).
+        // P2p should handle such situations correctly (see issue #1033 for more details).
         let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
         self.best_sent_block = index?;
 

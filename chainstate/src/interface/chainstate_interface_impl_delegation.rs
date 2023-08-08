@@ -122,20 +122,21 @@ where
         self.deref().get_locator_from_height(height)
     }
 
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
         locator: Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().get_headers(locator, header_count_limit)
+        self.deref().get_mainchain_headers_by_locator(locator, header_count_limit)
     }
 
-    fn get_headers_since_latest_fork_point(
+    fn get_mainchain_headers_since_latest_fork_point(
         &self,
         block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().get_headers_since_latest_fork_point(block_ids, header_count_limit)
+        self.deref()
+            .get_mainchain_headers_since_latest_fork_point(block_ids, header_count_limit)
     }
 
     fn split_off_leading_known_headers(

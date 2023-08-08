@@ -83,7 +83,7 @@ pub trait ChainstateInterface: Send {
     /// is in the main chain (or genesis, if there is no such block).
     ///
     /// The number of returned headers is limited by `header_count_limit`.
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
         locator: Locator,
         header_count_limit: usize,
@@ -92,7 +92,7 @@ pub trait ChainstateInterface: Send {
     /// For each block id in the list, find its latest ancestor that is still on the main chain
     /// (the fork point); among the obtained fork points choose the one with the biggest height;
     /// return headers of all main chain blocks above that height.
-    fn get_headers_since_latest_fork_point(
+    fn get_mainchain_headers_since_latest_fork_point(
         &self,
         block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
