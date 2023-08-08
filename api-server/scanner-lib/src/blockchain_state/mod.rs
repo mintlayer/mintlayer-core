@@ -56,7 +56,9 @@ impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
 
         // Disconnect blocks from main-chain
         while db_tx.get_best_block()?.0 > common_block_height {
-            db_tx.del_main_chain_block_id(db_tx.get_best_block()?.0)?;
+            let current_best = db_tx.get_best_block()?;
+            logging::log::info!("Disconnecting block: {:?}", current_best);
+            db_tx.del_main_chain_block_id(current_best.0)?;
         }
 
         // Connect the new blocks in the new chain
@@ -64,15 +66,19 @@ impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
             db_tx.set_main_chain_block_id(block_height, block.get_id())?;
+            logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
             for tx in block.transactions() {
                 db_tx.set_transaction(tx.transaction().get_id(), block.get_id(), tx)?;
             }
 
             db_tx.set_block(block.get_id(), &block)?;
+            db_tx.set_best_block(block_height, block.get_id().into())?;
         }
 
         db_tx.commit()?;
+
+        logging::log::info!("Database commit completed successfully");
 
         Ok(())
     }
