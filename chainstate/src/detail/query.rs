@@ -236,28 +236,44 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_headers_above(best_height, header_count_limit)
     }
 
-    pub fn get_headers_since_fork_point(
+    pub fn get_headers_since_latest_fork_point(
         &self,
-        block_id: &Id<GenBlock>,
+        block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
-        let block_index = self
-            .chainstate_ref
-            .get_gen_block_index(block_id)?
-            .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))?;
-        let last_common_ancestor =
-            self.chainstate_ref.last_common_ancestor_in_main_chain(&block_index)?;
+        if block_ids.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        self.get_headers_above(last_common_ancestor.block_height(), header_count_limit)
+        let latest_fork_point_height = {
+            let mut best_height = BlockHeight::zero();
+
+            for block_id in block_ids {
+                let block_index = self
+                    .chainstate_ref
+                    .get_gen_block_index(block_id)?
+                    .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))?;
+                let fork_point_block_index =
+                    self.chainstate_ref.last_common_ancestor_in_main_chain(&block_index)?;
+
+                best_height = std::cmp::max(best_height, fork_point_block_index.block_height());
+            }
+
+            best_height
+        };
+
+        self.get_headers_above(latest_fork_point_height, header_count_limit)
     }
 
     // FIXME: this function assumes that the headers form a chain, so it stops once the first
     // non-existing block is found. So it should either be moved to p2p (where this behavior
     // is expected) or given a more specific name.
+    // FIXME: remove the function
     pub fn filter_already_existing_blocks(
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
+        // FIXME: remove the error
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
         let config = &self.chainstate_ref.chain_config();
         // verify that the first block attaches to our chain
@@ -278,6 +294,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .collect::<Vec<_>>();
 
         Ok(res)
+    }
+
+    pub fn find_first_non_existing_block(
+        &self,
+        headers: &[SignedBlockHeader],
+    ) -> Result<Option<usize>, PropertyQueryError> {
+        for (idx, header) in headers.iter().enumerate() {
+            if !self.get_block_index(&header.get_id())?.is_some() {
+                return Ok(Some(idx));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn get_mainchain_tx_index(

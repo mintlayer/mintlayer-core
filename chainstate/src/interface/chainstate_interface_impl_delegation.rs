@@ -130,12 +130,12 @@ where
         self.deref().get_headers(locator, header_count_limit)
     }
 
-    fn get_headers_since_fork_point(
+    fn get_headers_since_latest_fork_point(
         &self,
-        block_id: &Id<GenBlock>,
+        block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().get_headers_since_fork_point(block_id, header_count_limit)
+        self.deref().get_headers_since_latest_fork_point(block_ids, header_count_limit)
     }
 
     fn filter_already_existing_blocks(
@@ -143,6 +143,14 @@ where
         headers: Vec<SignedBlockHeader>,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.deref().filter_already_existing_blocks(headers)
+    }
+
+    // FIXME: docs, better name
+    fn split_off_already_existing_blocks(
+        &self,
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
+        self.deref().split_off_already_existing_blocks(headers)
     }
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {

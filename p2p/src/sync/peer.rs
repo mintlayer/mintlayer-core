@@ -113,6 +113,8 @@ pub struct Peer<T: NetworkingService> {
     best_sent_block: Option<BlockIndex>,
     /// The id of the best block header that we've sent to the peer.
     best_sent_block_header: Option<Id<GenBlock>>,
+    /// The id of the best block header that we've received from the peer.
+    peers_best_block_that_we_have: Option<Id<GenBlock>>,
     /// A rolling filter of all known transactions (sent to us or sent by us)
     known_transactions: RollingBloomFilter<TxIdWrapper>,
     // TODO: Add a timer to remove entries.
@@ -173,6 +175,7 @@ where
             blocks_queue: VecDeque::new(),
             best_sent_block: None,
             best_sent_block_header: None,
+            peers_best_block_that_we_have: None,
             known_transactions,
             announced_transactions: BTreeSet::new(),
             peer_activity: PeerActivity::new(),
@@ -200,14 +203,13 @@ where
         // the first tick.
         stalling_interval.tick().await;
 
-        // FIXME: This doesn't play nicely with send_tip_updates
         if self.common_services.has_service(Service::Blocks) {
             self.request_headers().await?;
         }
 
         loop {
             tokio::select! {
-                // Sam: these 2 must be inside a struct/module (some kind of blackbox...)?
+                // FIXME: Sam: these 2 must be inside a struct/module (some kind of blackbox...)?
                 message = self.sync_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
@@ -245,13 +247,20 @@ where
         // This function is not supposed to be called when in IBD.
         debug_assert!(!self.is_initial_block_download.load());
 
-        if self.send_tip_updates && self.common_services.has_service(Service::Blocks) {
-            // FIXME: we must also consider the best block that the peer is known to have
-            // (i.e. the best block that we've downloaded from it OR ignored because we already
-            // had the block),
-            if let Some(best_sent_header_id) = self.best_sent_block_header {
+        if self.send_tip_updates {
+            debug_assert!(self.common_services.has_service(Service::Blocks));
+
+            if self.best_sent_block_header.is_some() || self.peers_best_block_that_we_have.is_some()
+            {
                 let limit = *self.p2p_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
+
+                let block_ids: Vec<_> = self
+                    .best_sent_block_header
+                    .iter()
+                    .chain(self.peers_best_block_that_we_have.iter())
+                    .copied()
+                    .collect();
 
                 let headers = self
                     .chainstate_handle
@@ -263,7 +272,7 @@ where
                                 new_tip_id, best_block_id);
                         }
 
-                        c.get_headers_since_fork_point(&best_sent_header_id, limit)
+                        c.get_headers_since_latest_fork_point(&block_ids, limit)
                     })
                     .await??;
 
@@ -333,30 +342,32 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        let limit = *self.p2p_config.msg_header_count_limit;
-        let is_initial_block_download = self.is_initial_block_download.load();
-        let headers = if !is_initial_block_download {
-            self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??
-        } else {
-            // We don't send any headers if we're in IBD. But we still want to respond
-            // to the peer indicating that we're alive.
-            
-            // TODO: in the protocol v2 we should not send empty headers list; instead, we
-            // should communicate our best block (id/height/header?) from the start, so that
-            // the peer just knows that we don't have better blocks and doesn't ask us.
-
+        if self.is_initial_block_download.load() {
             // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
             // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
             // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
             // does something like that.
-            Vec::new()
-        };
 
-        // Once an empty list has been sent, the peer won't ask us for headers anymore, so we can
-        // start sending tip updates.
-        self.send_tip_updates = headers.is_empty();
+            // TODO: in the protocol v2 we should not silently ignore header requests; instead,
+            // we should communicate our best block (id/height/header?) from the start, so that
+            // the peer just knows that we don't have better blocks and doesn't ask us in the
+            // first place.
+            log::debug!("Ignoring headers request because the node is in initial block download");
+            return Ok(());
+        }
 
-        self.send_headers(HeaderList::new(headers))?;
+        // FIXME: this limit should be a constant.
+        let limit = *self.p2p_config.msg_header_count_limit;
+        let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
+        debug_assert!(headers.len() <= limit);
+
+        // Sending a below-the-max amount of headers is a signal to the peer that we've sent
+        // all headers that were available at the moment; after this, the peer may not ask us
+        // for headers anymore, so we should start sending tip updates.
+        self.send_tip_updates = headers.len() < limit;
+
+        self.messaging_handle
+            .send_message(self.id(), SyncMessage::HeaderList(HeaderList::new(headers)))?;
 
         Ok(())
     }
@@ -375,6 +386,10 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
+
+        // A peer is allowed to ignore header requests if it's in IBD.
+        // Assume this is the case if it asks us for blocks.
+        self.peer_activity.set_expecting_headers_since(None);
 
         if self.is_initial_block_download.load() {
             // Note: currently this is not a normal situation, because a node in IBD wouldn't
@@ -471,8 +486,7 @@ where
         self.peer_activity.set_expecting_headers_since(None);
 
         if headers.is_empty() {
-            // The peer can send an empty list when it has got a header request but it's either in
-            // initial block download or has no new blocks.
+            // The peer can send an empty list when it has got a header request but it has no new blocks.
             return Ok(());
         }
 
@@ -480,7 +494,6 @@ where
         self.wait_for_clock_diff(last_header.timestamp().as_duration_since_epoch())
             .await;
 
-        // FIXME: probably, nodes should communicate own limits to each other?
         if headers.len() > *self.p2p_config.msg_header_count_limit {
             return Err(P2pError::ProtocolError(
                 ProtocolError::HeadersLimitExceeded(
@@ -500,26 +513,26 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
-        // The first header must be connected to a known block (it can be either in
-        // the chainstate or in known_headers).
+        // The first header must be connected to a known block (it can be in
+        // the chainstate, known_headers or requested_blocks).
         let first_header_prev_id = *headers
             .first()
             // This is OK because of the `headers.is_empty()` check above.
             .expect("Headers shouldn't be empty")
             .prev_block_id();
 
-        let first_header_parent_is_in_chainstate = self
+        let first_header_is_connected_to_chainstate = self
             .chainstate_handle
             .call(move |c| c.get_gen_block_index(&first_header_prev_id))
             .await??
             .is_some();
 
-        if !self.known_headers.is_empty() {
-            // If known_headers is non-empty, we're in the process of downloading blocks.
-            // In that case we should append the new headers to known_headers and bail out.
-
-            // If the peer reorged, the new header list may not start where the previous one ended;
-            // if so, we should drop all the stale headers first.
+        let first_header_is_connected_to_known_headers = if self.known_headers.is_empty() {
+            false
+        } else {
+            // If the peer reorged, the new header list may not start where the previous one ended.
+            // If so, the non-connecting old headers are now considered stale by the peer, so
+            // we should remove them from known_headers.
             while let Some(known_header) = self.known_headers.last() {
                 if known_header.get_id() == first_header_prev_id {
                     break;
@@ -528,38 +541,84 @@ where
                 self.known_headers.pop();
             }
 
-            if !self.known_headers.is_empty() || first_header_parent_is_in_chainstate {
-                self.known_headers.extend(headers.into_iter());
-                return Ok(());
-            }
-        }
+            !self.known_headers.is_empty()
+        };
 
-        // Now we know that the first header isn't connected to anything in known_headers.
-        if !first_header_parent_is_in_chainstate {
+        let first_header_is_connected_to_requested_blocks = first_header_prev_id
+            .classify(&self.chain_config)
+            .chain_block_id()
+            .and_then(|id| self.requested_blocks.get(&id))
+            .is_some();
+
+        if !(first_header_is_connected_to_chainstate
+            || first_header_is_connected_to_known_headers
+            || first_header_is_connected_to_requested_blocks)
+        {
+            // FIXME: technically, we may have failed to send a block request on the previous
+            // iteration due to some local or network issues; in that case, the corresponding
+            // headers won't be present in known_headers anymore, but they
+            // won't be in requested_blocks or the chainstate either.
+            // Alternatively, we may have successfully received a block but then failed
+            // to add it to chainstate due to a local issue, with the same result.
+            // In all such cases, when the peer sends us its remaining blocks, they may appear
+            // disconnected even if the peer was behaving correctly.
+            // But this is a general problem of a code failure that leaves the object in an
+            // intermediate state. Perhaps, when sending tip updates we should calculate the
+            // fork point based on tip updates that the peer has already sent us and not on
+            // what we've sent to the peer. The alternatives are:
+            // 1) try to recover from this state by explicitly sending a header request to the peer.
+            // 2) keep a header in known_headers until the block is received.
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
-        let headers = self
-            .chainstate_handle
-            .call(|c| c.filter_already_existing_blocks(headers))
-            .await??;
-        if headers.is_empty() {
-            // Since 'headers' weren't originally empty, we assume that the peer has more.
-            self.request_headers().await?;
+        let already_downloading_blocks = if !self.requested_blocks.is_empty() {
+            true
+        } else if !self.known_headers.is_empty() {
+            log::warn!("self.requested_blocks is empty, but self.known_headers is not");
+            true
+        } else {
+            false
+        };
+
+        if already_downloading_blocks {
+            self.known_headers.extend(headers.into_iter());
             return Ok(());
         }
 
-        // Only the first header can be checked with the `preliminary_header_check` function.
-        let first_header = headers
-            .first()
-            // This is OK because of the `headers.is_empty()` check above.
-            .expect("Headers shouldn't be empty")
-            .clone();
-        self.chainstate_handle
-            .call(|c| c.preliminary_header_check(first_header))
+        let peer_may_have_more_headers = headers.len() == *self.p2p_config.msg_header_count_limit;
+        let (existing_block_headers, new_block_headers) = self
+            .chainstate_handle
+            .call(|c| c.split_off_already_existing_blocks(headers))
             .await??;
 
-        self.request_blocks(headers)
+        if let Some(last_existing_block) = existing_block_headers.last() {
+            self.peers_best_block_that_we_have = Some(last_existing_block.get_id().into());
+        }
+
+        if new_block_headers.is_empty() {
+            if peer_may_have_more_headers {
+                self.request_headers().await?;
+            }
+            return Ok(());
+        }
+
+        // Now use preliminary_header_check; this can only be done for the first header,
+        // which is now known to be connected to the chainstate.
+        // Note: if the first header in the original "headers" vector was connected, the first
+        // header in "new_block_headers" will be connected as well.
+        debug_assert!(first_header_is_connected_to_chainstate);
+        if first_header_is_connected_to_chainstate {
+            let first_header = new_block_headers
+                .first()
+                // This is OK because of the `headers.is_empty()` check above.
+                .expect("Headers shouldn't be empty")
+                .clone();
+            self.chainstate_handle
+                .call(|c| c.preliminary_header_check(first_header))
+                .await??;
+        }
+
+        self.request_blocks(new_block_headers)
     }
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
@@ -572,6 +631,7 @@ where
         }
 
         let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
+        let block_id = block.get_id();
         let peer_id = self.id();
         self.chainstate_handle
             .call_mut(move |c| {
@@ -584,18 +644,20 @@ where
                         peer_id,
                         block.get_id()
                     );
+                    // FIXME: don't return the index; it's unused.
                     return Ok(Some(block_index));
                 }
                 c.process_block(block, BlockSource::Peer)
             })
             .await??;
 
+        self.peers_best_block_that_we_have = Some(block_id.into());
+
         if self.requested_blocks.is_empty() {
             let headers = mem::take(&mut self.known_headers);
             // Note: we could have received some of these blocks from another peer in the meantime,
             // so filter out any existing blocks from headers first.
             // TODO: we can still request the same block from multiple peers, which is sub-optimal.
-            // FIXME: how does bitcoin-core do it?
             let headers = if headers.is_empty() {
                 headers
             } else {
@@ -785,10 +847,11 @@ where
 
     /// Sends a block list request.
     ///
-    /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
+    /// The number of blocks requested equals to `P2pConfig::requested_blocks_limit`, the remaining
     /// headers are stored in the peer context.
     fn request_blocks(&mut self, mut headers: Vec<SignedBlockHeader>) -> Result<()> {
         debug_assert!(self.known_headers.is_empty());
+        debug_assert!(self.requested_blocks.is_empty());
 
         // Remove already requested blocks.
         headers.retain(|h| !self.requested_blocks.contains(&h.get_id()));
