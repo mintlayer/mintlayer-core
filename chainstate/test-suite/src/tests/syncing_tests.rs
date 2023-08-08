@@ -311,7 +311,10 @@ fn get_headers_since_latest_fork_point_for_stale_chain_blocks(#[case] seed: Seed
         // Use ids from both stale chains
         let headers = tf
             .chainstate
-            .get_headers_since_latest_fork_point(&[sc1_ids[10], sc1_ids[20], sc2_ids[10], sc2_ids[20]], 1_000_000)
+            .get_headers_since_latest_fork_point(
+                &[sc1_ids[10], sc1_ids[20], sc2_ids[10], sc2_ids[20]],
+                1_000_000,
+            )
             .unwrap();
         // The earliest fork point should be selected
         let expected_headers = get_headers_for_ids(&tf, &mc_ids[31..]);
@@ -320,7 +323,10 @@ fn get_headers_since_latest_fork_point_for_stale_chain_blocks(#[case] seed: Seed
         // Rearrange the ids in the slice, the result should stay the same.
         let headers = tf
             .chainstate
-            .get_headers_since_latest_fork_point(&[sc2_ids[20], sc2_ids[10], sc1_ids[20], sc1_ids[10]], 1_000_000)
+            .get_headers_since_latest_fork_point(
+                &[sc2_ids[20], sc2_ids[10], sc1_ids[20], sc1_ids[10]],
+                1_000_000,
+            )
             .unwrap();
         assert_eq!(&headers, &expected_headers);
     });
@@ -343,7 +349,10 @@ fn get_headers_since_latest_fork_point_for_stale_chain_blocks_with_limit(#[case]
         // Use ids from both stale chains
         let headers = tf
             .chainstate
-            .get_headers_since_latest_fork_point(&[sc1_ids[10], sc1_ids[20], sc2_ids[10], sc2_ids[20]], 20)
+            .get_headers_since_latest_fork_point(
+                &[sc1_ids[10], sc1_ids[20], sc2_ids[10], sc2_ids[20]],
+                20,
+            )
             .unwrap();
         // The earliest fork point should be selected
         let expected_headers = get_headers_for_ids(&tf, &mc_ids[31..51]);
@@ -352,7 +361,10 @@ fn get_headers_since_latest_fork_point_for_stale_chain_blocks_with_limit(#[case]
         // Rearrange the ids in the slice, the result should stay the same.
         let headers = tf
             .chainstate
-            .get_headers_since_latest_fork_point(&[sc2_ids[20], sc2_ids[10], sc1_ids[20], sc1_ids[10]], 20)
+            .get_headers_since_latest_fork_point(
+                &[sc2_ids[20], sc2_ids[10], sc1_ids[20], sc1_ids[10]],
+                20,
+            )
             .unwrap();
         assert_eq!(&headers, &expected_headers);
     });
@@ -503,112 +515,82 @@ fn get_headers_different_chains(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn filter_already_existing_blocks(#[case] seed: Seed) {
+fn split_off_leading_known_headers(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut tf1 = TestFramework::builder(&mut rng).build();
         let mut tf2 = TestFramework::builder(&mut rng).build();
 
-        let mut prev1_id = tf1.genesis().get_id().into();
-        for _ in 0..rng.gen_range(8..16) {
-            let block = tf1
-                .make_block_builder()
-                .with_parent(prev1_id)
-                .add_test_transaction_from_best_block(&mut rng)
-                .build();
-            prev1_id = block.get_id().into();
-            tf1.process_block(block.clone(), BlockSource::Local).unwrap();
-            tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            assert_eq!(tf1.best_block_id(), tf2.best_block_id());
-        }
-
-        let limit = rng.gen_range(32..256);
-        let mut prev2_id = prev1_id;
-        let mut headers1 = vec![];
-        let mut headers2 = vec![];
-
-        // Add random blocks to both chains.
-        for i in 0..(limit * 2) {
-            if i <= limit {
+        // Create 10 blocks and add them to both chains.
+        let common_blocks_headers = {
+            let mut prev1_id = tf1.genesis().get_id().into();
+            let mut common_blocks_headers = Vec::new();
+            for _ in 0..10 {
                 let block = tf1
                     .make_block_builder()
                     .with_parent(prev1_id)
-                    .add_test_transaction_with_parent(prev1_id, &mut rng)
+                    .add_test_transaction_from_best_block(&mut rng)
                     .build();
                 prev1_id = block.get_id().into();
-                headers1.push(block.header().clone());
-                tf1.process_block(block, BlockSource::Local).unwrap();
+                tf1.process_block(block.clone(), BlockSource::Local).unwrap();
+                tf2.process_block(block.clone(), BlockSource::Local).unwrap();
+                assert_eq!(tf1.best_block_id(), tf2.best_block_id());
+                common_blocks_headers.push(block.header().clone());
             }
 
-            let block = tf2
-                .make_block_builder()
-                .with_parent(prev2_id)
-                .add_test_transaction_with_parent(prev2_id, &mut rng)
-                .build();
-            prev2_id = block.get_id().into();
-            headers2.push(block.header().clone());
-            tf2.process_block(block, BlockSource::Local).unwrap();
-        }
+            common_blocks_headers
+        };
+        let last_common_block_id = common_blocks_headers.last().unwrap().block_id();
 
-        // Check that filter_already_existing_blocks retains only unique to other chain blocks.
-        let locator = tf1.chainstate.get_locator().unwrap();
-        let header_count_limit = rng.gen_range(1000..3000);
-        let headers = tf2.chainstate.get_headers(locator, header_count_limit).unwrap();
-        assert!(headers.len() >= headers2.len());
-        let headers = tf1.chainstate.filter_already_existing_blocks(headers).unwrap();
-        assert_eq!(headers, headers2);
+        // Create some blocks on tf1 specifically.
+        let chain1_specific_block_ids =
+            tf1.create_chain_return_ids(&last_common_block_id.into(), 10, &mut rng).unwrap();
+        let chain1_specific_block_headers = get_headers_for_ids(&tf1, &chain1_specific_block_ids);
 
-        let locator = tf2.chainstate.get_locator().unwrap();
-        let headers = tf1.chainstate.get_headers(locator, header_count_limit).unwrap();
-        assert!(headers.len() >= headers1.len());
-        let headers = tf2.chainstate.filter_already_existing_blocks(headers).unwrap();
-        assert_eq!(headers, headers1);
-    });
-}
+        // Create some blocks on tf2; they will serve as "unknown" blocks for tf1.
+        // FIXME: technically, this may produce the first block which is the same.
+        let chain2_specific_block_ids =
+            tf2.create_chain_return_ids(&last_common_block_id.into(), 10, &mut rng).unwrap();
+        let chain2_specific_block_headers = get_headers_for_ids(&tf2, &chain2_specific_block_ids);
 
-// Try to use headers that aren't attached to the chain.
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
+        // All headers are known.
+        let input_headers =
+            [&common_blocks_headers[1..3], &chain1_specific_block_headers[1..3]].concat();
+        let (known_headers, unknown_headers) =
+            tf1.chainstate.split_off_leading_known_headers(input_headers.clone()).unwrap();
+        assert_eq!(known_headers, input_headers);
+        assert_eq!(unknown_headers, Vec::new());
 
-        let mut tf1 = TestFramework::builder(&mut rng).build();
-        let mut tf2 = TestFramework::builder(&mut rng).build();
+        // Some headers are known.
+        let input_headers =
+            [&common_blocks_headers[1..3], &chain2_specific_block_headers[1..3]].concat();
+        let (known_headers, unknown_headers) =
+            tf1.chainstate.split_off_leading_known_headers(input_headers).unwrap();
+        assert_eq!(known_headers, common_blocks_headers[1..3]);
+        assert_eq!(unknown_headers, chain2_specific_block_headers[1..3]);
 
-        let mut prev_id = tf1.genesis().get_id().into();
-        for _ in 0..rng.gen_range(8..16) {
-            let block = tf1
-                .make_block_builder()
-                .with_parent(prev_id)
-                .add_test_transaction_from_best_block(&mut rng)
-                .build();
-            prev_id = block.get_id().into();
-            tf1.process_block(block.clone(), BlockSource::Local).unwrap();
-            tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            assert_eq!(tf1.best_block_id(), tf2.best_block_id());
-        }
+        // All headers are unknown.
+        let input_headers = [&chain2_specific_block_headers[1..3]].concat();
+        let (known_headers, unknown_headers) =
+            tf1.chainstate.split_off_leading_known_headers(input_headers).unwrap();
+        assert_eq!(known_headers, Vec::new());
+        assert_eq!(unknown_headers, chain2_specific_block_headers[1..3]);
 
-        let mut headers = Vec::new();
-        for _ in 0..rng.gen_range(3..10) {
-            let block = tf2
-                .make_block_builder()
-                .with_parent(prev_id)
-                .add_test_transaction_with_parent(prev_id, &mut rng)
-                .build();
-            prev_id = block.get_id().into();
-            headers.push(block.header().clone());
-            tf2.process_block(block, BlockSource::Local).unwrap();
-        }
-
-        let filtered_headers = tf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
+        // Some known blocks come after the unknown ones - only the leading known ones
+        // are split off.
+        let input_headers = [
+            &common_blocks_headers[1..3],
+            &chain2_specific_block_headers[1..3],
+            &common_blocks_headers[1..3],
+        ]
+        .concat();
+        let (known_headers, unknown_headers) =
+            tf1.chainstate.split_off_leading_known_headers(input_headers).unwrap();
+        assert_eq!(known_headers, common_blocks_headers[1..3]);
         assert_eq!(
-            filtered_headers,
-            Err(ChainstateError::FailedToReadProperty(
-                PropertyQueryError::BlockNotFound(Id::new(headers[1].prev_block_id().get()))
-            ))
+            unknown_headers,
+            [&chain2_specific_block_headers[1..3], &common_blocks_headers[1..3]].concat()
         );
     });
 }

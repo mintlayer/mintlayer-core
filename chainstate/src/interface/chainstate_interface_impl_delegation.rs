@@ -138,19 +138,11 @@ where
         self.deref().get_headers_since_latest_fork_point(block_ids, header_count_limit)
     }
 
-    fn filter_already_existing_blocks(
-        &self,
-        headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().filter_already_existing_blocks(headers)
-    }
-
-    // FIXME: docs, better name
-    fn split_off_already_existing_blocks(
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
-        self.deref().split_off_already_existing_blocks(headers)
+        self.deref().split_off_leading_known_headers(headers)
     }
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {

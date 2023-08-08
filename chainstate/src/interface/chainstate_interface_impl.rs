@@ -191,24 +191,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn filter_already_existing_blocks(
-        &self,
-        headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.chainstate
-            .query()
-            .map_err(ChainstateError::from)?
-            .filter_already_existing_blocks(headers)
-            .map_err(ChainstateError::FailedToReadProperty)
-    }
-
-    fn split_off_already_existing_blocks(
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
-        let first_non_existing_block_idx = self.chainstate
+        let first_non_existing_block_idx = self
+            .chainstate
             .query()?
-            .find_first_non_existing_block(&headers)?.unwrap_or(headers.len());
+            .find_first_non_existing_block(&headers)?
+            .unwrap_or(headers.len());
         assert!(first_non_existing_block_idx <= headers.len());
         let mut headers = headers;
         let non_existing_block_headers = headers.split_off(first_non_existing_block_idx);

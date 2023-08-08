@@ -33,7 +33,6 @@ use p2p::{
 };
 use utils::atomics::SeqCstAtomicBool;
 
-// FIXME: do these tests actually make any sense?
 tests![block_announcement, block_announcement_no_subscription,];
 
 #[allow(clippy::extra_unused_type_parameters)]
@@ -186,7 +185,6 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));

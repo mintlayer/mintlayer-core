@@ -40,8 +40,6 @@ pub enum PropertyQueryError {
     BlockIndexAtHeightNotFound(BlockHeight),
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
-    #[error("Provided an empty list")]
-    InvalidInputEmpty,
     #[error("Genesis block has no header")]
     GetAncestorError(#[from] GetAncestorError),
     #[error("Outpoint not found")]

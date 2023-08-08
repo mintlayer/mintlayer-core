@@ -76,11 +76,7 @@ mockall::mock! {
             block_ids: &[Id<GenBlock>],
             header_count_limit: usize,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-        fn filter_already_existing_blocks(
-            &self,
-            headers: Vec<SignedBlockHeader>,
-        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-        fn split_off_already_existing_blocks(
+        fn split_off_leading_known_headers(
             &self,
             headers: Vec<SignedBlockHeader>,
         ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;

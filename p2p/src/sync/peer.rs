@@ -301,9 +301,16 @@ where
 
     async fn request_headers(&mut self) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        // FIXME: why assert? It's part of p2p_config, so it can be arbitrarily small in theory.
-        // Should it be a constant instead? (e.g. equal to the number of bits in block height).
-        debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
+        if locator.len() > *self.p2p_config.msg_max_locator_count {
+            // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
+            // so we should never get here in production code. Moreover, currently it's not
+            // modified even in tests. TODO: make it a constant.
+            log::warn!(
+                "Sending locator of the length {}, which exceeds the maximum length {:?}",
+                locator.len(),
+                self.p2p_config.msg_max_locator_count
+            );
+        }
 
         log::trace!("Sending header list request to {} peer", self.id());
         self.messaging_handle.send_message(
@@ -588,7 +595,7 @@ where
         let peer_may_have_more_headers = headers.len() == *self.p2p_config.msg_header_count_limit;
         let (existing_block_headers, new_block_headers) = self
             .chainstate_handle
-            .call(|c| c.split_off_already_existing_blocks(headers))
+            .call(|c| c.split_off_leading_known_headers(headers))
             .await??;
 
         if let Some(last_existing_block) = existing_block_headers.last() {
@@ -634,20 +641,19 @@ where
         let block_id = block.get_id();
         let peer_id = self.id();
         self.chainstate_handle
-            .call_mut(move |c| {
-                // If the block already exists in the block tree, return the existing block index.
-                // It's used to prevent chainstate from printing "Block already exists" errors
-                // and avoid explicitly handling BlockError::BlockAlreadyExists afterwards.
-                if let Some(block_index) = c.get_block_index(&block.get_id())? {
+            .call_mut(move |c| -> Result<()> {
+                // If the block already exists in the block tree, skip it.
+                if let Some(_) = c.get_block_index(&block.get_id())? {
                     log::debug!(
                         "Peer {} sent a block that already exists ({})",
                         peer_id,
                         block.get_id()
                     );
-                    // FIXME: don't return the index; it's unused.
-                    return Ok(Some(block_index));
+                } else {
+                    c.process_block(block, BlockSource::Peer)?;
                 }
-                c.process_block(block, BlockSource::Peer)
+
+                Ok(())
             })
             .await??;
 
@@ -662,8 +668,9 @@ where
                 headers
             } else {
                 self.chainstate_handle
-                    .call(|c| c.filter_already_existing_blocks(headers))
+                    .call(|c| c.split_off_leading_known_headers(headers))
                     .await??
+                    .1
             };
 
             if headers.is_empty() {

@@ -98,14 +98,9 @@ pub trait ChainstateInterface: Send {
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
-    /// Removes all headers that are already known to the chain from the given vector.
-    fn filter_already_existing_blocks(
-        &self,
-        headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-
-    /// 
-    fn split_off_already_existing_blocks(
+    /// Find the first header in the passed vector for which the block is not in the chainstate;
+    /// split the vector into two parts - first, all headers up to the found one, second, the rest.
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;

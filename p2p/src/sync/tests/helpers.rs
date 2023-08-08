@@ -197,7 +197,7 @@ impl SyncManagerHandle {
     }
 
     /// Receives a message from the sync manager.
-    // FIXME: rename to get_message or something similar.
+    // TODO: rename to get_message or something similar.
     // Same for other message receiving functions below - try_message, adjust_peer_score_event
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
