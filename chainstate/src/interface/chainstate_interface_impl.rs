@@ -179,15 +179,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers_since_fork_point(
+    fn get_headers_since_latest_fork_point(
         &self,
-        block_id: &Id<GenBlock>,
+        block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers_since_fork_point(block_id, header_count_limit)
+            .get_headers_since_latest_fork_point(block_ids, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -200,6 +200,19 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::from)?
             .filter_already_existing_blocks(headers)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn split_off_already_existing_blocks(
+        &self,
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
+        let first_non_existing_block_idx = self.chainstate
+            .query()?
+            .find_first_non_existing_block(&headers)?.unwrap_or(headers.len());
+        assert!(first_non_existing_block_idx <= headers.len());
+        let mut headers = headers;
+        let non_existing_block_headers = headers.split_off(first_non_existing_block_idx);
+        Ok((headers, non_existing_block_headers))
     }
 
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {

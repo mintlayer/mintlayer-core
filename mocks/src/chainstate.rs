@@ -71,15 +71,19 @@ mockall::mock! {
             locator: Locator,
             header_count_limit: usize,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-        fn get_headers_since_fork_point(
+        fn get_headers_since_latest_fork_point(
             &self,
-            block_id: &Id<GenBlock>,
+            block_ids: &[Id<GenBlock>],
             header_count_limit: usize,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
         fn filter_already_existing_blocks(
             &self,
             headers: Vec<SignedBlockHeader>,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+        fn split_off_already_existing_blocks(
+            &self,
+            headers: Vec<SignedBlockHeader>,
+        ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
         fn get_block_index(
             &self,
             id: &Id<Block>

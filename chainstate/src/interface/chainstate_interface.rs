@@ -89,12 +89,12 @@ pub trait ChainstateInterface: Send {
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
-    /// Given a (potentially stale) block id, find a point where the corresponding branch diverged
-    /// from the main chain and return headers of all main chain blocks above it (but not more than
-    /// `header_count_limit`).
-    fn get_headers_since_fork_point(
+    /// For each block id in the list, find its latest ancestor that is still on the main chain
+    /// (the fork point); among the obtained fork points choose the one with the biggest height;
+    /// return headers of all main chain blocks above that height.
+    fn get_headers_since_latest_fork_point(
         &self,
-        block_id: &Id<GenBlock>,
+        block_ids: &[Id<GenBlock>],
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
@@ -103,6 +103,12 @@ pub trait ChainstateInterface: Send {
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+
+    /// 
+    fn split_off_already_existing_blocks(
+        &self,
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
     fn get_gen_block_index(
