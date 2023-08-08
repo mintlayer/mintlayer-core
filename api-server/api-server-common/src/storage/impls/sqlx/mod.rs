@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sqlx::{Database, Pool};
+use sqlx::{database::HasArguments, Database, Executor, IntoArguments, Pool};
 
 use crate::storage::storage_api::ApiStorageError;
 
@@ -22,9 +22,35 @@ pub struct SqlxStorage<D: Database> {
     db_pool: Pool<D>,
 }
 
-impl<D: Database> SqlxStorage<D> {
+impl<D> SqlxStorage<D>
+where
+    D: Database,
+{
     pub fn new(db_pool: Pool<D>) -> Result<Self, ApiStorageError> {
         Ok(Self { db_pool })
+    }
+
+    pub async fn create_tables<'q, 'e, 'c: 'e, E>(&'e self) -> Result<(), ApiStorageError>
+    where
+        'q: 'e,
+        E: Executor<'e, Database = D>,
+        <D as HasArguments<'q>>::Arguments: IntoArguments<'q, D>,
+        &'c mut <D as Database>::Connection: for<'b> Executor<'b>,
+        &'e Pool<D>: Executor<'e, Database = D>,
+    {
+        sqlx::query(
+            "CREATE TABLE students (
+            id INTEGER AUTO_INCREMENT PRIMARY KEY,
+            first_name VARCHAR(255) NOT NULL,
+            last_name TEXT NOT NULL,
+            age INTEGER NOT NULL
+          );
+          ",
+        )
+        .execute(&self.db_pool)
+        .await
+        .unwrap();
+        Ok(())
     }
 }
 
