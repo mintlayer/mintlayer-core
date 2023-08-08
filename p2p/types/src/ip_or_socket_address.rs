@@ -46,6 +46,14 @@ impl Display for IpOrSocketAddress {
 }
 
 impl IpOrSocketAddress {
+    pub fn new_socket_address(addr: SocketAddr) -> Self {
+        Self::Socket(addr)
+    }
+
+    pub fn new_ip(ip: IpAddr) -> Self {
+        Self::Ip(ip)
+    }
+
     pub fn to_socket_address(&self, default_port: u16) -> SocketAddr {
         match self {
             IpOrSocketAddress::Ip(ip) => SocketAddr::new(*ip, default_port),

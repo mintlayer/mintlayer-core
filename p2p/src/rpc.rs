@@ -15,7 +15,10 @@
 
 use common::chain::SignedTransaction;
 use mempool::TxStatus;
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
@@ -47,7 +50,7 @@ trait P2pRpc {
 
     /// Get bind address of the local node
     #[method(name = "get_bind_addresses")]
-    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>>;
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>>;
 
     /// Get details of connected peers
     #[method(name = "get_connected_peers")]
@@ -100,7 +103,7 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>> {
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>> {
         let res = self.call_async(|this| this.get_bind_addresses()).await;
         rpc::handle_result(res)
     }

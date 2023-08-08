@@ -15,14 +15,13 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    net::SocketAddr,
     sync::Arc,
     time::Duration,
 };
 
 use common::chain::ChainConfig;
 use crypto::random::Rng;
-use p2p::types::peer_id::PeerId;
+use p2p::types::{peer_id::PeerId, socket_address::SocketAddress};
 
 use crate::crawler_p2p::crawler::{
     address_data::AddressState, Crawler, CrawlerCommand, CrawlerEvent,
@@ -30,34 +29,34 @@ use crate::crawler_p2p::crawler::{
 
 /// Mock crawler
 pub struct MockCrawler {
-    pub crawler: Crawler<SocketAddr>,
+    pub crawler: Crawler,
     pub chain_config: Arc<ChainConfig>,
     pub address_updates: Vec<AddressUpdate>,
-    pub connect_requests: Vec<SocketAddr>,
-    pub reachable: BTreeSet<SocketAddr>,
-    pub persistent: BTreeSet<SocketAddr>,
-    pub pending_connects: BTreeSet<SocketAddr>,
+    pub connect_requests: Vec<SocketAddress>,
+    pub reachable: BTreeSet<SocketAddress>,
+    pub persistent: BTreeSet<SocketAddress>,
+    pub pending_connects: BTreeSet<SocketAddress>,
     pub pending_disconnects: BTreeSet<PeerId>,
     pub peers: BTreeMap<PeerId, MockPeer>,
-    pub peer_addresses: BTreeMap<SocketAddr, PeerId>,
+    pub peer_addresses: BTreeMap<SocketAddress, PeerId>,
 }
 
 #[derive(Debug)]
 pub struct MockPeer {
-    address: SocketAddr,
+    address: SocketAddress,
     is_compatible: bool,
 }
 
 #[derive(Debug)]
 pub struct AddressUpdate {
-    pub address: SocketAddr,
+    pub address: SocketAddress,
     pub old_state: AddressState,
     pub new_state: AddressState,
 }
 
 pub fn test_crawler(
-    loaded_addresses: BTreeSet<SocketAddr>,
-    added_addresses: BTreeSet<SocketAddr>,
+    loaded_addresses: BTreeSet<SocketAddress>,
+    added_addresses: BTreeSet<SocketAddress>,
 ) -> MockCrawler {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
@@ -86,7 +85,7 @@ impl MockCrawler {
         self.step(CrawlerEvent::Timer { period }, rng);
     }
 
-    pub fn step(&mut self, event: CrawlerEvent<SocketAddr>, rng: &mut impl Rng) {
+    pub fn step(&mut self, event: CrawlerEvent, rng: &mut impl Rng) {
         match &event {
             CrawlerEvent::Timer { period: _ } => {}
             CrawlerEvent::NewAddress {

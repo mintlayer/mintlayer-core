@@ -19,7 +19,6 @@ pub mod storage_impl;
 use std::{
     collections::BTreeSet,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -31,14 +30,13 @@ use logging::log;
 use p2p::{
     message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     peer_manager::ip_or_socket_address_to_peer_address,
     types::{
         ip_or_socket_address::IpOrSocketAddress, peer_address::PeerAddress, peer_id::PeerId,
-        IsGlobalIp,
+        socket_address::SocketAddress, IsGlobalIp,
     },
 };
 use tokio::sync::mpsc;
@@ -75,7 +73,7 @@ pub struct CrawlerManager<N: NetworkingService, S> {
     last_crawler_timer: Duration,
 
     /// Crawler
-    crawler: Crawler<N::Address>,
+    crawler: Crawler,
 
     /// Config
     config: CrawlerManagerConfig,
@@ -97,7 +95,6 @@ impl<N: NetworkingService, S: DnsServerStorage> CrawlerManager<N, S>
 where
     N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
-    DnsServerError: From<<<N as NetworkingService>::Address as FromStr>::Err>,
 {
     pub fn new(
         time_getter: TimeGetter,
@@ -111,14 +108,14 @@ where
         let last_crawler_timer = time_getter.get_time();
 
         // Addresses that are stored in the DB as reachable
-        let loaded_addresses: BTreeSet<N::Address> = Self::load_storage(&storage)?;
+        let loaded_addresses: BTreeSet<SocketAddress> = Self::load_storage(&storage)?;
 
         // Addresses listed as reachable from the command line
-        let reserved_addresses: BTreeSet<N::Address> = config
+        let reserved_addresses: BTreeSet<SocketAddress> = config
             .reserved_nodes
             .iter()
             .map(|addr| ip_or_socket_address_to_peer_address(addr, &chain_config))
-            .collect::<Result<BTreeSet<N::Address>, _>>()?;
+            .collect::<Result<BTreeSet<SocketAddress>, _>>()?;
 
         assert!(conn.local_addresses().is_empty());
 
@@ -136,7 +133,7 @@ where
         })
     }
 
-    fn load_storage(storage: &S) -> Result<BTreeSet<N::Address>, DnsServerError> {
+    fn load_storage(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
@@ -148,14 +145,14 @@ where
         }
     }
 
-    fn init_storage(storage: &S) -> Result<BTreeSet<N::Address>, DnsServerError> {
+    fn init_storage(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
         let mut tx = storage.transaction_rw()?;
         tx.set_version(STORAGE_VERSION)?;
         tx.commit()?;
         Ok(BTreeSet::new())
     }
 
-    fn load_storage_v1(storage: &S) -> Result<BTreeSet<N::Address>, DnsServerError> {
+    fn load_storage_v1(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
         let tx = storage.transaction_ro()?;
         let addresses =
             tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()).collect();
@@ -173,7 +170,7 @@ where
                     peer_id,
                     address.to_string()
                 );
-                if let Some(address) = TransportAddress::from_peer_address(&address, false) {
+                if let Some(address) = SocketAddress::from_peer_address(&address, false) {
                     self.send_crawler_event(CrawlerEvent::NewAddress {
                         address,
                         sender: peer_id,
@@ -193,7 +190,7 @@ where
         }
     }
 
-    fn handle_conn_event(&mut self, event: ConnectivityEvent<N::Address>) {
+    fn handle_conn_event(&mut self, event: ConnectivityEvent) {
         match event {
             ConnectivityEvent::Message { peer, message } => {
                 self.handle_conn_message(peer, message);
@@ -243,7 +240,7 @@ where
         self.send_crawler_event(CrawlerEvent::Timer { period });
     }
 
-    fn get_dns_ip(address: &N::Address, default_p2p_port: u16) -> Option<IpAddr> {
+    fn get_dns_ip(address: &SocketAddress, default_p2p_port: u16) -> Option<IpAddr> {
         // Only add nodes listening on the default port to DNS
         match address.as_peer_address() {
             PeerAddress::Ip4(addr)
@@ -263,7 +260,7 @@ where
     }
 
     fn handle_crawler_cmd(
-        cmd: CrawlerCommand<N::Address>,
+        cmd: CrawlerCommand,
         config: &CrawlerManagerConfig,
         conn: &mut N::ConnectivityHandle,
         dns_server_cmd_tx: &mpsc::UnboundedSender<DnsServerCommand>,
@@ -314,7 +311,7 @@ where
         }
     }
 
-    fn send_crawler_event(&mut self, event: CrawlerEvent<N::Address>) {
+    fn send_crawler_event(&mut self, event: CrawlerEvent) {
         self.crawler.step(
             event,
             &mut |cmd| {

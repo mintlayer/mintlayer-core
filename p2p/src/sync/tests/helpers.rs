@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, net::SocketAddr, panic, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
 use itertools::Itertools;
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -462,14 +463,13 @@ struct NetworkingServiceStub {}
 #[async_trait]
 impl NetworkingService for NetworkingServiceStub {
     type Transport = TcpTransportSocket;
-    type Address = SocketAddr;
     type ConnectivityHandle = ();
     type MessagingHandle = MessagingHandleMock;
     type SyncingEventReceiver = SyncingEventReceiverMock;
 
     async fn start(
         _: Self::Transport,
-        _: Vec<Self::Address>,
+        _: Vec<SocketAddress>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
         _: TimeGetter,

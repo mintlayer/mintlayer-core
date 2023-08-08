@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use p2p_types::socket_address::SocketAddress;
 
 use crate::Result;
 
@@ -21,11 +22,10 @@ use crate::Result;
 #[async_trait]
 pub trait TransportListener: Send {
     type Stream;
-    type Address;
 
     /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Self::Stream, Self::Address)>;
+    async fn accept(&mut self) -> Result<(Self::Stream, SocketAddress)>;
 
     /// Returns the local address of the listener.
-    fn local_addresses(&self) -> Result<Vec<Self::Address>>;
+    fn local_addresses(&self) -> Result<Vec<SocketAddress>>;
 }

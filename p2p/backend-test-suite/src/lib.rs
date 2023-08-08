@@ -30,39 +30,37 @@ use libtest_mimic::{Arguments, Trial};
 
 use p2p::{
     net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
-    testing_utils::{RandomAddressMaker, TestTransportMaker},
+    testing_utils::TestTransportMaker,
 };
 
 /// Runs all tests.
-pub fn run<T, N, A>()
+pub fn run<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
     N::MessagingHandle: MessagingService + Debug,
     N::SyncingEventReceiver: SyncingEventReceiver + Debug,
-    A: RandomAddressMaker<Address = N::Address>,
 {
     rlimit::increase_nofile_limit(10 * 1024).unwrap();
     logging::init_logging::<&str>(None);
     let args = Arguments::from_args();
-    libtest_mimic::run(&args, tests::<T, N, A>()).exit();
+    libtest_mimic::run(&args, tests::<T, N>()).exit();
 }
 
 /// Collects all backend agnostic tests.
-fn tests<T, N, A>() -> Vec<Trial>
+fn tests<T, N>() -> Vec<Trial>
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
     N::MessagingHandle: MessagingService + Debug,
     N::SyncingEventReceiver: SyncingEventReceiver + Debug,
-    A: RandomAddressMaker<Address = N::Address>,
 {
     std::iter::empty()
-        .chain(connect::tests::<T, N, A>())
-        .chain(block_announcement::tests::<T, N, A>())
-        .chain(ban::tests::<T, N, A>())
-        .chain(events::tests::<T, N, A>())
+        .chain(connect::tests::<T, N>())
+        .chain(block_announcement::tests::<T, N>())
+        .chain(ban::tests::<T, N>())
+        .chain(events::tests::<T, N>())
         .collect()
 }

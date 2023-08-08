@@ -17,10 +17,7 @@ use std::{collections::BTreeMap, hash::Hasher};
 
 use crypto::random::Rng;
 
-use crate::{
-    net::{default_backend::transport::TransportAddress, types::Role},
-    types::peer_id::PeerId,
-};
+use crate::{net::types::Role, types::peer_id::PeerId};
 
 use super::{address_groups::AddressGroup, peer_context::PeerContext};
 
@@ -65,7 +62,7 @@ impl RandomState {
 }
 
 impl EvictionCandidate {
-    pub fn new<A: TransportAddress>(peer: &PeerContext<A>, random_state: &RandomState) -> Self {
+    pub fn new(peer: &PeerContext, random_state: &RandomState) -> Self {
         EvictionCandidate {
             peer_id: peer.info.peer_id,
             net_group_keyed: NetGroupKeyed(random_state.get_hash(

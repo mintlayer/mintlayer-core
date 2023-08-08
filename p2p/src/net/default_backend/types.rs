@@ -19,6 +19,7 @@ use common::{
     chain::Transaction,
     primitives::{semver::SemVer, user_agent::UserAgent, Id},
 };
+use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
 use tokio::sync::mpsc::Sender;
 
@@ -34,8 +35,8 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum Command<A> {
-    Connect { address: A },
+pub enum Command {
+    Connect { address: SocketAddress },
     Accept { peer_id: PeerId },
     Disconnect { peer_id: PeerId },
     SendMessage { peer: PeerId, message: Message },

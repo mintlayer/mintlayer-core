@@ -19,7 +19,10 @@ use std::{
 };
 
 use common::chain::SignedTransaction;
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 
@@ -51,7 +54,7 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().get_peer_count().await
     }
 
-    async fn get_bind_addresses(&self) -> crate::Result<Vec<String>> {
+    async fn get_bind_addresses(&self) -> crate::Result<Vec<SocketAddress>> {
         self.deref().get_bind_addresses().await
     }
 

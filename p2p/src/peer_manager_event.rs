@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, utils::oneshot_nofail};
 
@@ -43,7 +46,7 @@ pub enum PeerManagerEvent {
     GetPeerCount(oneshot_nofail::Sender<usize>),
 
     /// Get the bind address of the local node
-    GetBindAddresses(oneshot_nofail::Sender<Vec<String>>),
+    GetBindAddresses(oneshot_nofail::Sender<Vec<SocketAddress>>),
 
     /// Get peer IDs and addresses of connected peers
     GetConnectedPeers(oneshot_nofail::Sender<Vec<ConnectedPeer>>),

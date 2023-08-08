@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use std::{
-    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -61,8 +61,8 @@ use crate::{
 // try to connect to an address that no one listening on and verify it fails
 async fn test_peer_manager_connect<T: NetworkingService>(
     transport: T::Transport,
-    bind_addr: T::Address,
-    remote_addr: T::Address,
+    bind_addr: SocketAddress,
+    remote_addr: SocketAddress,
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -86,7 +86,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
 async fn test_peer_manager_connect_tcp() {
     let transport = TestTransportTcp::make_transport();
     let bind_addr = TestTransportTcp::make_address();
-    let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
+    let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<TcpTransportSocket>>(
         transport,
@@ -100,7 +100,7 @@ async fn test_peer_manager_connect_tcp() {
 async fn test_peer_manager_connect_tcp_noise() {
     let transport = TestTransportNoise::make_transport();
     let bind_addr = TestTransportTcp::make_address();
-    let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
+    let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<NoiseTcpTransport>>(
         transport,
@@ -114,7 +114,7 @@ async fn test_peer_manager_connect_tcp_noise() {
 // is below the desired threshold and there are idle peers in the peerdb
 async fn test_auto_connect<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -127,7 +127,7 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let addr = pm2.peer_connectivity_handle.local_addresses()[0].clone();
+    let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
     tokio::spawn(async move {
         loop {
@@ -164,7 +164,7 @@ async fn test_auto_connect_noise() {
 
 async fn connect_outbound_same_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -205,7 +205,7 @@ async fn connect_outbound_same_network_noise() {
 
 async fn connect_outbound_different_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -259,7 +259,7 @@ async fn connect_outbound_different_network_noise() {
 
 async fn connect_inbound_same_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -303,7 +303,7 @@ async fn connect_inbound_same_network_noise() {
 
 async fn connect_inbound_different_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -367,7 +367,7 @@ async fn connect_inbound_different_network_noise() {
 
 async fn remote_closes_connection<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -420,9 +420,9 @@ async fn remote_closes_connection_noise() {
         .await;
 }
 
-async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(T::Address, PeerInfo)>)
+async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(SocketAddress, PeerInfo)>)
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -536,7 +536,7 @@ async fn inbound_connection_too_many_peers_noise() {
     .await;
 }
 
-async fn connection_timeout<T>(transport: T::Transport, addr1: T::Address, addr2: T::Address)
+async fn connection_timeout<T>(transport: T::Transport, addr1: SocketAddress, addr2: SocketAddress)
 where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -608,8 +608,8 @@ async fn connection_timeout_noise() {
 // try to establish a new connection through RPC and verify that it is notified of the timeout
 async fn connection_timeout_rpc_notified<T>(
     transport: T::Transport,
-    addr1: T::Address,
-    addr2: T::Address,
+    addr1: SocketAddress,
+    addr2: SocketAddress,
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -721,7 +721,7 @@ async fn connection_timeout_rpc_notified_noise() {
 // verify that peer connection is made when valid reserved_node parameter is used
 async fn connection_reserved_node<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -767,7 +767,10 @@ where
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
     let bind_addresses = timeout(Duration::from_secs(20), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
-    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
 
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -844,7 +847,7 @@ async fn connection_reserved_node_channel() {
 // All listening addresses are discovered and multiple connections are made.
 async fn discovered_node<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -892,7 +895,10 @@ where
 
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
-    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -928,7 +934,10 @@ where
     )
     .await;
 
-    let reserved_nodes = bind_addresses.iter().map(|s| s.parse().unwrap()).collect();
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
 
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {

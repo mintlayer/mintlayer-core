@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use common::{
     chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
@@ -23,11 +23,8 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError},
-    net::AsBannableAddress,
     peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
-    testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
-    },
+    testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
 
 use super::PeerDb;
@@ -37,7 +34,7 @@ fn unban_peer() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
-    let mut peerdb = PeerDb::<SocketAddr, _>::new(
+    let mut peerdb = PeerDb::<_>::new(
         &chain_config,
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
@@ -68,7 +65,7 @@ fn unban_peer() {
     )
     .unwrap();
 
-    let address = TestTcpAddressMaker::new();
+    let address = TestAddressMaker::new_random_address();
     peerdb.ban(address.as_bannable());
 
     assert!(peerdb.is_address_banned(&address.as_bannable()));
@@ -99,7 +96,7 @@ fn connected_unreachable() {
     )
     .unwrap();
 
-    let address = TestTcpAddressMaker::new();
+    let address = TestAddressMaker::new_random_address();
     peerdb.peer_discovered(address);
     peerdb.report_outbound_failure(
         address,
@@ -127,7 +124,7 @@ fn connected_unknown() {
     )
     .unwrap();
 
-    let address = TestTcpAddressMaker::new();
+    let address = TestAddressMaker::new_random_address();
 
     // User requests connection to some unknown node via RPC and connection succeeds.
     // PeerDb should process that normally.

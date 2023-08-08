@@ -13,17 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 
 use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use p2p::{
-    net::AsBannableAddress,
     peer_manager::peerdb::PeerDb,
-    testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
-    },
+    testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
 
 pub fn peer_db(c: &mut Criterion) {
@@ -31,18 +28,18 @@ pub fn peer_db(c: &mut Criterion) {
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
     let mut peerdb =
-        PeerDb::<SocketAddr, _>::new(&chain_config, p2p_config, Default::default(), db_store)
-            .unwrap();
+        PeerDb::<_>::new(&chain_config, p2p_config, Default::default(), db_store).unwrap();
 
     for _ in 0..100000 {
-        peerdb.peer_discovered(TestTcpAddressMaker::new());
+        peerdb.peer_discovered(TestAddressMaker::new_random_address());
     }
 
     for _ in 0..1000 {
-        peerdb.ban(TestTcpAddressMaker::new().as_bannable());
+        peerdb.ban(TestAddressMaker::new_random_address().as_bannable());
     }
 
-    let normal_outbound = (0..5).map(|_| TestTcpAddressMaker::new()).collect::<BTreeSet<_>>();
+    let normal_outbound =
+        (0..5).map(|_| TestAddressMaker::new_random_address()).collect::<BTreeSet<_>>();
 
     c.bench_function("PeerDb", |b| {
         b.iter(|| peerdb.select_new_outbound_addresses(&normal_outbound))

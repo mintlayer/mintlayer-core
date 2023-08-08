@@ -19,7 +19,6 @@
 
 use std::{
     collections::BTreeMap,
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -40,12 +39,13 @@ use p2p::{
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
-        default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
-    types::{ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId},
+    types::{
+        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, socket_address::SocketAddress,
+    },
     P2pEventHandler,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -65,14 +65,14 @@ pub struct TestNode {
 #[derive(Clone)]
 pub struct MockStateRef {
     pub crawler_config: CrawlerManagerConfig,
-    pub online: Arc<Mutex<BTreeMap<SocketAddr, TestNode>>>,
-    pub connected: Arc<Mutex<BTreeMap<SocketAddr, PeerId>>>,
-    pub connection_attempts: Arc<Mutex<Vec<SocketAddr>>>,
-    pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent<SocketAddr>>,
+    pub online: Arc<Mutex<BTreeMap<SocketAddress, TestNode>>>,
+    pub connected: Arc<Mutex<BTreeMap<SocketAddress, PeerId>>>,
+    pub connection_attempts: Arc<Mutex<Vec<SocketAddress>>>,
+    pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
 }
 
 impl MockStateRef {
-    pub fn node_online(&self, ip: SocketAddr) {
+    pub fn node_online(&self, ip: SocketAddress) {
         let old = self.online.lock().unwrap().insert(
             ip,
             TestNode {
@@ -82,7 +82,7 @@ impl MockStateRef {
         assert!(old.is_none());
     }
 
-    pub fn node_offline(&self, ip: SocketAddr) {
+    pub fn node_offline(&self, ip: SocketAddress) {
         let old = self.online.lock().unwrap().remove(&ip);
         assert!(old.is_some());
         if let Some(peer_id) = self.connected.lock().unwrap().remove(&ip) {
@@ -90,7 +90,7 @@ impl MockStateRef {
         }
     }
 
-    pub fn announce_address(&self, from: SocketAddr, announced_ip: SocketAddr) {
+    pub fn announce_address(&self, from: SocketAddress, announced_ip: SocketAddress) {
         let peer = *self.connected.lock().unwrap().get(&from).unwrap();
         self.conn_tx
             .send(ConnectivityEvent::Message {
@@ -108,7 +108,7 @@ pub struct MockNetworkingService {}
 
 pub struct MockConnectivityHandle {
     pub state: MockStateRef,
-    pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<SocketAddr>>,
+    pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent>,
 }
 
 pub struct MockSyncingEventReceiver {}
@@ -116,14 +116,13 @@ pub struct MockSyncingEventReceiver {}
 #[async_trait]
 impl NetworkingService for MockNetworkingService {
     type Transport = ();
-    type Address = SocketAddr;
     type ConnectivityHandle = MockConnectivityHandle;
     type MessagingHandle = ();
     type SyncingEventReceiver = MockSyncingEventReceiver;
 
     async fn start(
         _transport: Self::Transport,
-        _bind_addresses: Vec<Self::Address>,
+        _bind_addresses: Vec<SocketAddress>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
         _time_getter: TimeGetter,
@@ -142,7 +141,7 @@ impl NetworkingService for MockNetworkingService {
 
 #[async_trait]
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
-    fn connect(&mut self, address: SocketAddr) -> p2p::Result<()> {
+    fn connect(&mut self, address: SocketAddress) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
         if let Some(node) = self.state.online.lock().unwrap().get(&address) {
             let peer_id = PeerId::new();
@@ -198,11 +197,11 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         unreachable!()
     }
 
-    fn local_addresses(&self) -> &[SocketAddr] {
+    fn local_addresses(&self) -> &[SocketAddress] {
         &[]
     }
 
-    async fn poll_next(&mut self) -> p2p::Result<ConnectivityEvent<SocketAddr>> {
+    async fn poll_next(&mut self) -> p2p::Result<ConnectivityEvent> {
         Ok(self.conn_rx.recv().await.unwrap())
     }
 }
@@ -215,7 +214,7 @@ impl SyncingEventReceiver for MockSyncingEventReceiver {
 }
 
 pub fn test_crawler(
-    reserved_nodes: Vec<SocketAddr>,
+    reserved_nodes: Vec<SocketAddress>,
 ) -> (
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
@@ -223,7 +222,10 @@ pub fn test_crawler(
     P2pBasicTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
-    let reserved_nodes = reserved_nodes.into_iter().map(IpOrSocketAddress::Socket).collect();
+    let reserved_nodes = reserved_nodes
+        .into_iter()
+        .map(|addr| IpOrSocketAddress::new_socket_address(addr.socket_addr()))
+        .collect();
     let crawler_config = CrawlerManagerConfig {
         reserved_nodes,
         default_p2p_port: 3031,

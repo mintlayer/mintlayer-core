@@ -28,6 +28,7 @@ pub mod utils;
 mod peer_manager_event;
 
 pub use p2p_types as types;
+use types::socket_address::SocketAddress;
 
 pub use crate::{
     peer_manager_event::PeerManagerEvent,
@@ -110,7 +111,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
-        bind_addresses: Vec<T::Address>,
+        bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -260,26 +261,23 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
     bind_addresses: &[S],
     p2p_port: u16,
     proxy_used: bool,
-) -> Result<Vec<SocketAddr>> {
+) -> Result<Vec<SocketAddress>> {
     if !bind_addresses.is_empty() {
         bind_addresses
             .iter()
             .map(|address| {
-                address
-                    .as_ref()
-                    .parse::<<P2pNetworkingService as NetworkingService>::Address>()
-                    .map_err(|_| {
-                        P2pError::ConversionError(ConversionError::InvalidAddress(
-                            address.as_ref().to_owned(),
-                        ))
-                    })
+                address.as_ref().parse::<SocketAddress>().map_err(|_| {
+                    P2pError::ConversionError(ConversionError::InvalidAddress(
+                        address.as_ref().to_owned(),
+                    ))
+                })
             })
             .collect::<Result<Vec<_>>>()
     } else if !proxy_used {
         // Bind to default addresses if none are specified by the user
         Ok(vec![
-            SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port),
-            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port),
+            SocketAddress::new(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port)),
+            SocketAddress::new(SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port)),
         ])
     } else {
         Ok(Vec::new())
@@ -295,7 +293,7 @@ pub struct P2pInit<S: PeerDbStorage + 'static> {
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
-    bind_addresses: Vec<SocketAddr>,
+    bind_addresses: Vec<SocketAddress>,
 }
 
 impl<S: PeerDbStorage + 'static> P2pInit<S> {
@@ -367,7 +365,7 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
-    bind_addresses: Vec<SocketAddr>,
+    bind_addresses: Vec<SocketAddress>,
     call: CallRequest<dyn P2pInterface>,
     shutdown: ShutdownRequest,
 ) -> Result<()> {

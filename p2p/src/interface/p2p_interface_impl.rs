@@ -17,7 +17,10 @@ use std::sync::Arc;
 
 use common::chain::SignedTransaction;
 use mempool::TxOrigin;
-use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 
 use crate::{
     error::P2pError,
@@ -84,7 +87,7 @@ where
         Ok(rx.await?)
     }
 
-    async fn get_bind_addresses(&self) -> crate::Result<Vec<String>> {
+    async fn get_bind_addresses(&self) -> crate::Result<Vec<SocketAddress>> {
         let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager.send(PeerManagerEvent::GetBindAddresses(tx))?;
         Ok(rx.await?)
