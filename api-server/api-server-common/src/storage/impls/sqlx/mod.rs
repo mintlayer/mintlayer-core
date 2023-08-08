@@ -13,13 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sqlx::{database::HasArguments, Database, Executor, IntoArguments, Pool};
+use sqlx::{database::HasArguments, Database, Executor, IntoArguments, Pool, Sqlite};
 
 use crate::storage::storage_api::ApiStorageError;
 
 pub struct SqlxStorage<D: Database> {
     #[allow(dead_code)]
     db_pool: Pool<D>,
+}
+
+impl SqlxStorage<Sqlite> {
+    pub async fn from_sqlite_inmemory(max_connections: u32) -> Result<Self, ApiStorageError> {
+        let db_pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(max_connections)
+            .connect("sqlite::memory:")
+            .await
+            .map_err(|e| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(Self { db_pool })
+    }
 }
 
 impl<D> SqlxStorage<D>
@@ -49,6 +61,7 @@ where
         .execute(&self.db_pool)
         .await
         .map_err(|e| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 }
