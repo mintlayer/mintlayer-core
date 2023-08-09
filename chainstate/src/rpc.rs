@@ -54,6 +54,11 @@ trait ChainstateRpc {
         id: Id<Transaction>,
     ) -> RpcResult<Option<HexEncoded<SignedTransaction>>>;
 
+    /// returns a json-encoded transaction, assuming it's in the mainchain.
+    /// Note: The transaction index must be enabled in the node.
+    #[method(name = "get_transaction_json")]
+    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>>;
+
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
     async fn get_mainchain_blocks(
@@ -142,6 +147,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let tx: Option<SignedTransaction> =
             rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
         Ok(tx.map(HexEncoded::new))
+    }
+
+    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>> {
+        let tx: Option<SignedTransaction> =
+            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
+        Ok(tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
     }
 
     async fn get_mainchain_blocks(
