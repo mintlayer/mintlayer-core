@@ -665,7 +665,7 @@ where
         self.chainstate_handle
             .call_mut(move |c| -> Result<()> {
                 // If the block already exists in the block tree, skip it.
-                if let Some(_) = c.get_block_index(&block.get_id())? {
+                if c.get_block_index(&block.get_id())?.is_some() {
                     log::debug!(
                         "Peer {} sent a block that already exists ({})",
                         peer_id,

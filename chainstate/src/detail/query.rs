@@ -270,7 +270,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         headers: &[SignedBlockHeader],
     ) -> Result<Option<usize>, PropertyQueryError> {
         for (idx, header) in headers.iter().enumerate() {
-            if !self.get_block_index(&header.get_id())?.is_some() {
+            if self.get_block_index(&header.get_id())?.is_none() {
                 return Ok(Some(idx));
             }
         }
