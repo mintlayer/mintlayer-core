@@ -19,7 +19,7 @@ use crate::{
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -28,7 +28,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -40,6 +40,12 @@ pub enum Destination {
     ScriptHash(Id<Script>),
     #[codec(index = 4)]
     ClassicMultisig(PublicKeyHash),
+}
+
+impl serde::Serialize for Destination {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("0x{}", self.hex_encode()))
+    }
 }
 
 impl Addressable for Destination {
