@@ -77,11 +77,11 @@ impl ThreadSafeApiInMemoryStorage {
         }
     }
 
-    pub fn tx_ro(&self) -> RwLockReadGuard<'_, ApiInMemoryStorage> {
+    fn tx_ro(&self) -> RwLockReadGuard<'_, ApiInMemoryStorage> {
         self.storage.read().expect("Poisoned mutex")
     }
 
-    pub fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiInMemoryStorage> {
+    fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiInMemoryStorage> {
         self.storage.write().expect("Poisoned mutex")
     }
 }
