@@ -109,6 +109,7 @@ BASE_SCRIPTS = [
     'p2p_submit_orphan.py',
     'p2p_syncing_test.py',
     'p2p_relay_transactions.py',
+    'feature_db_reinit.py',
     'feature_lmdb_backend_test.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
