@@ -241,9 +241,7 @@ where
             }
 
             // Run on each loop iteration, so it's easier to test
-            if let Some(time) = self.peer_activity.earliest_expected_activity_time() {
-                self.handle_stalling_interval(time).await;
-            }
+            self.handle_stalling_interval().await;
         }
     }
 
@@ -388,10 +386,7 @@ where
         // for headers anymore, so we should start sending tip updates.
         self.send_tip_updates = headers.len() < limit;
 
-        self.messaging_handle
-            .send_message(self.id(), SyncMessage::HeaderList(HeaderList::new(headers)))?;
-
-        Ok(())
+        self.send_headers(HeaderList::new(headers))
     }
 
     /// Processes the blocks request.
@@ -654,6 +649,10 @@ where
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
         log::debug!("Block ({}) from peer {}", block.get_id(), self.id());
 
+        // Clear the block expectation time, because we've received a block.
+        // The code below will set it again if needed.
+        self.peer_activity.set_expecting_blocks_since(None);
+
         if self.incoming.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "block response".to_owned(),
@@ -685,7 +684,7 @@ where
         if self.incoming.requested_blocks.is_empty() {
             let headers = mem::take(&mut self.incoming.pending_headers);
             // Note: we could have received some of these blocks from another peer in the meantime,
-            // so filter out any existing blocks from headers first.
+            // so filter out any existing blocks from 'headers' first.
             // TODO: we can still request the same block from multiple peers, which is sub-optimal.
             let headers = if headers.is_empty() {
                 headers
@@ -704,8 +703,7 @@ where
                 self.request_blocks(headers)?;
             }
         } else {
-            // We expect additional blocks from the peer. Update the timestamp we received the
-            // current one.
+            // We expect additional blocks from the peer, update the timestamp.
             self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
@@ -938,15 +936,23 @@ where
         )
     }
 
-    async fn disconnect_if_stalling(&mut self, last_activity: Duration) -> Result<()> {
-        if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
+    async fn disconnect_if_stalling(&mut self) -> Result<()> {
+        let cur_time = self.time_getter.get_time();
+        let is_stalling = |activity_time: Option<Duration>| {
+            cur_time >= activity_time.unwrap_or(cur_time) + *self.p2p_config.sync_stalling_timeout
+        };
+        let headers_req_stalling = is_stalling(self.peer_activity.expecting_headers_since());
+        let blocks_req_stalling = is_stalling(self.peer_activity.expecting_blocks_since());
+
+        if !(headers_req_stalling || blocks_req_stalling) {
             return Ok(());
         }
 
         // Nodes can disconnect each other if all of them are in the initial block download state,
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
-        log::warn!("Disconnecting peer {} for ignoring requests", self.id());
+        log::warn!("Disconnecting peer {} for ignoring requests, headers_req_stalling = {}, blocks_req_stalling = {}",
+            self.id(), headers_req_stalling, blocks_req_stalling);
         self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
             self.id(),
             PeerDisconnectionDbAction::Keep,
@@ -958,8 +964,8 @@ where
         })
     }
 
-    async fn handle_stalling_interval(&mut self, last_activity: Duration) {
-        let result = self.disconnect_if_stalling(last_activity).await;
+    async fn handle_stalling_interval(&mut self) {
+        let result = self.disconnect_if_stalling().await;
         if let Err(err) = result {
             log::warn!("Disconnecting peer failed: {}", err);
         }

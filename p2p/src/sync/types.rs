@@ -30,6 +30,14 @@ impl PeerActivity {
         }
     }
 
+    pub fn expecting_headers_since(&mut self) -> Option<Duration> {
+        self.expecting_headers_since
+    }
+
+    pub fn expecting_blocks_since(&mut self) -> Option<Duration> {
+        self.expecting_blocks_since
+    }
+
     pub fn set_expecting_headers_since(&mut self, time: Option<Duration>) {
         self.expecting_headers_since = time;
     }
