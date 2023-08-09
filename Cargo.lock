@@ -232,6 +232,7 @@ name = "api-server-common"
 version = "0.1.1"
 dependencies = [
  "common",
+ "logging",
  "parity-scale-codec",
  "serialization",
  "sqlx",

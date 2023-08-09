@@ -15,8 +15,6 @@
 
 pub mod transactional;
 
-pub const CURRENT_STORAGE_VERSION: u32 = 1;
-
 use std::collections::BTreeMap;
 
 use common::{
@@ -25,6 +23,8 @@ use common::{
 };
 
 use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiStorageError};
+
+use super::CURRENT_STORAGE_VERSION;
 
 pub struct ApiInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
