@@ -55,11 +55,10 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
-        let rows: (i64,) = sqlx::query_as::<_, _>("SELECT COUNT(*) as table_count FROM misc_data;")
+        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as table_count FROM misc_data;")
             .fetch_one(&self.db_pool)
             .await
-            .map_err(|e: sqlx::Error| e.to_string())
-            .unwrap();
+            .map_err(|e: sqlx::Error| ApiStorageError::LowLevelStorageError(e.to_string()))?;
 
         if rows.0 == 0 {
             return Ok(false);
