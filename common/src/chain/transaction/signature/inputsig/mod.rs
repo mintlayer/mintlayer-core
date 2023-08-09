@@ -18,14 +18,20 @@ pub mod authorize_pubkeyhash_spend;
 pub mod classical_multisig;
 pub mod standard_signature;
 
-use serialization::{Decode, Encode};
+use serialization::{hex::HexEncode, Decode, Encode};
 
 use standard_signature::StandardInputSignature;
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum InputWitness {
     #[codec(index = 0)]
     NoSignature(Option<Vec<u8>>),
     #[codec(index = 1)]
     Standard(StandardInputSignature),
+}
+
+impl serde::Serialize for InputWitness {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.hex_encode())
+    }
 }
