@@ -31,7 +31,7 @@ pub struct ApiInMemoryStorageTransactionalRo<'t> {
 }
 
 impl<'t> ApiInMemoryStorageTransactionalRo<'t> {
-    pub fn new(storage: &'t ThreadSafeApiInMemoryStorage) -> Self {
+    fn new(storage: &'t ThreadSafeApiInMemoryStorage) -> Self {
         Self {
             transaction: storage.tx_ro(),
         }
@@ -49,7 +49,7 @@ pub struct ApiInMemoryStorageTransactionalRw<'t> {
 }
 
 impl<'t> ApiInMemoryStorageTransactionalRw<'t> {
-    pub fn new(storage: &'t mut ThreadSafeApiInMemoryStorage) -> Self {
+    fn new(storage: &'t mut ThreadSafeApiInMemoryStorage) -> Self {
         Self {
             transaction: storage.tx_rw(),
         }
