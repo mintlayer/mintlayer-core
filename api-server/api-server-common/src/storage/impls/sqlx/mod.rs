@@ -21,7 +21,6 @@ use crate::storage::storage_api::ApiStorageError;
 use super::CURRENT_STORAGE_VERSION;
 
 pub struct SqlxStorage<D: Database> {
-    #[allow(dead_code)]
     db_pool: Pool<D>,
 }
 
