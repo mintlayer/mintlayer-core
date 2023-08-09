@@ -28,6 +28,8 @@ parity-scale-codec.workspace = true
 rand.workspace = true
 ripemd.workspace = true
 schnorrkel.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 sha-1.workspace = true
 sha2.workspace = true
 sha3.workspace = true

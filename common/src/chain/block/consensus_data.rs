@@ -24,7 +24,7 @@ use serialization::{Decode, Encode};
 
 use super::timestamp::BlockTimestamp;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum ConsensusData {
     #[codec(index = 0)]
     None,
@@ -59,7 +59,7 @@ impl ConsensusData {
 }
 
 /// Data required to validate a block according to the PoS consensus rules.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub struct PoSData {
     /// Inputs for block reward
     kernel_inputs: Vec<TxInput>,
@@ -117,7 +117,7 @@ impl PoSData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode, serde::Serialize)]
 pub struct PoWData {
     bits: Compact,
     nonce: u128,

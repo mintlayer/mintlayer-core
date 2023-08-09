@@ -56,6 +56,12 @@ pub struct PublicKey {
     pub_key: PublicKeyHolder,
 }
 
+impl serde::Serialize for PublicKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.encode())
+    }
+}
+
 impl PrivateKey {
     pub fn new_from_entropy(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         Self::new_from_rng(&mut make_true_rng(), key_kind)

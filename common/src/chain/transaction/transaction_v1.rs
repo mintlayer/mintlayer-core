@@ -22,7 +22,7 @@ use serialization::{Decode, Encode, Tagged};
 
 use super::Transaction;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged, serde::Serialize)]
 pub struct TransactionV1 {
     version: VersionTag<1>,
     #[codec(compact)]

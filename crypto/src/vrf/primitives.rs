@@ -18,7 +18,7 @@ use serialization::{Decode, Encode};
 use super::schnorrkel::data::SchnorrkelVRFReturn;
 
 #[must_use]
-#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode, serde::Serialize)]
 pub enum VRFReturn {
     Schnorrkel(SchnorrkelVRFReturn),
 }

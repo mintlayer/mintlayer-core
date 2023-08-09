@@ -17,7 +17,7 @@ use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
 use crate::primitives::Id;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd, serde::Serialize)]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(Id<Transaction>),
@@ -58,7 +58,7 @@ impl OutPointSourceId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd, serde::Serialize)]
 pub struct UtxoOutPoint {
     id: OutPointSourceId,
     index: u32,

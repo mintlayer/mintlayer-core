@@ -70,6 +70,12 @@ pub struct VRFPublicKey {
     pub_key: VRFPublicKeyHolder,
 }
 
+impl serde::Serialize for VRFPublicKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.encode())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum VRFPublicKeyHolder {
     #[codec(index = 0)]

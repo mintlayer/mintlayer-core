@@ -28,7 +28,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -62,7 +62,7 @@ impl Addressable for Destination {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TxOutput {
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),

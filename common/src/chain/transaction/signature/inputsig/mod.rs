@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 
 use standard_signature::StandardInputSignature;
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize)]
 pub enum InputWitness {
     #[codec(index = 0)]
     NoSignature(Option<Vec<u8>>),

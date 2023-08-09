@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
 
-use crate::hex::{HexDecode, HexEncode, HexError};
-
-/// Wrapper that serializes objects as hex encoded string for `serde`
+/// Wrapper that serializes objects as json encoded string for `serde`
 #[derive(Debug, Clone)]
-pub struct HexEncoded<T>(T);
+pub struct JsonEncoded<T>(T);
 
-impl<T> HexEncoded<T> {
+impl<T> JsonEncoded<T> {
     pub fn new(value: T) -> Self {
         Self(value)
     }
@@ -31,43 +29,34 @@ impl<T> HexEncoded<T> {
     }
 }
 
-impl<T> AsRef<T> for HexEncoded<T> {
+impl<T> AsRef<T> for JsonEncoded<T> {
     fn as_ref(&self) -> &T {
         &self.0
     }
 }
 
-impl<T> From<T> for HexEncoded<T> {
+impl<T> From<T> for JsonEncoded<T> {
     fn from(value: T) -> Self {
         Self(value)
     }
 }
 
-impl<T: serialization_core::Encode> serde::Serialize for HexEncoded<T> {
+impl<T: serde::Serialize> serde::Serialize for JsonEncoded<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let hex = self.0.hex_encode();
-        serializer.serialize_str(&hex)
+        self.0.serialize(serializer)
     }
 }
 
-impl<'de, T: serialization_core::Decode> serde::Deserialize<'de> for HexEncoded<T> {
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for JsonEncoded<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let hex = String::deserialize(deserializer)?;
-        let value = T::hex_decode_all(hex).map_err(serde::de::Error::custom)?;
-        Ok(HexEncoded(value))
+        T::deserialize(deserializer).map(Self)
     }
 }
 
-impl<T: serialization_core::Decode> FromStr for HexEncoded<T> {
-    type Err = HexError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <T as HexDecode>::hex_decode_all(s).map(Self)
-    }
-}
-
-impl<T: serialization_core::Encode> Display for HexEncoded<T> {
+impl<T: serde::Serialize> Display for JsonEncoded<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0.hex_encode())
+        f.write_str(
+            &serde_json::to_string(&self.0).unwrap_or("<Json serialization error>".to_string()),
+        )
     }
 }

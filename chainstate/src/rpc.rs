@@ -26,7 +26,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
-use serialization::hex_encoded::HexEncoded;
+use serialization::{hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -41,6 +41,10 @@ trait ChainstateRpc {
     /// Returns a hex-encoded serialized block with the given id.
     #[method(name = "get_block")]
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
+
+    /// Returns a hex-encoded serialized block with the given id.
+    #[method(name = "get_block_json")]
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>>;
 
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
@@ -115,6 +119,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block: Option<Block> =
             rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(HexEncoded::new))
+    }
+
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>> {
+        let block: Option<Block> =
+            rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
+        Ok(block.map(JsonEncoded::new).map(|blk| blk.to_string()))
     }
 
     async fn get_mainchain_blocks(

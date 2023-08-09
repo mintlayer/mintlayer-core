@@ -19,7 +19,7 @@ use crate::chain::AccountNonce;
 
 use super::{AccountOutPoint, AccountSpending, OutPointSourceId, UtxoOutPoint};
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub enum TxInput {
     Utxo(UtxoOutPoint),
     Account(AccountOutPoint),

@@ -43,7 +43,7 @@ use super::{
     },
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize)]
 pub struct StandardInputSignature {
     sighash_type: SigHashType,
     raw_signature: Vec<u8>,

@@ -39,6 +39,12 @@ pub struct SchnorrkelVRFReturn {
     proof: VRFProof,
 }
 
+impl serde::Serialize for SchnorrkelVRFReturn {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.encode())
+    }
+}
+
 impl Encode for SchnorrkelVRFReturn {
     fn size_hint(&self) -> usize {
         SCHNORKEL_RETURN_SIZE

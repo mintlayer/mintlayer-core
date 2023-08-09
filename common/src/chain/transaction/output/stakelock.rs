@@ -20,7 +20,7 @@ use crate::primitives::{per_thousand::PerThousand, Amount};
 
 use super::Destination;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub struct StakePoolData {
     value: Amount,
     staker: Destination,

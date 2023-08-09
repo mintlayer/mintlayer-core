@@ -18,7 +18,7 @@ use serialization::{Decode, Encode, Error, Input};
 
 use super::Amount;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug, serde::Serialize)]
 pub struct PerThousand(u16);
 
 impl PerThousand {
