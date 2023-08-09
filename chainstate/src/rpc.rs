@@ -21,7 +21,7 @@ use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId,
+        PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -45,6 +45,14 @@ trait ChainstateRpc {
     /// Returns a json-encoded serialized block with the given id.
     #[method(name = "get_block_json")]
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>>;
+
+    /// returns a hex-encoded transaction, assuming it's in the mainchain.
+    /// Note: The transaction index must be enabled in the node.
+    #[method(name = "get_transaction")]
+    async fn get_transaction(
+        &self,
+        id: Id<Transaction>,
+    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>>;
 
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
@@ -125,6 +133,15 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block: Option<Block> =
             rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(JsonEncoded::new).map(|blk| blk.to_string()))
+    }
+
+    async fn get_transaction(
+        &self,
+        id: Id<Transaction>,
+    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>> {
+        let tx: Option<SignedTransaction> =
+            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
+        Ok(tx.map(HexEncoded::new))
     }
 
     async fn get_mainchain_blocks(

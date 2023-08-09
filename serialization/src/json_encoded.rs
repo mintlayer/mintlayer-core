@@ -31,7 +31,7 @@ impl<T> JsonEncoded<T> {
 
 impl<'de, T: serde::Deserialize<'de>> JsonEncoded<T> {
     // We cannot use FromStr because of the lifetime limitation
-    pub fn from_str(s: &'de str) -> Result<Self, serde_json::Error> {
+    pub fn from_string(s: &'de str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(s)
     }
 }

@@ -34,7 +34,7 @@ use common::{
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
-        Transaction, TxOutput, UtxoOutPoint,
+        SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -162,6 +162,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.time_getter.get_time()
     }
 
+    pub fn get_is_transaction_index_enabled(&self) -> Result<bool, PropertyQueryError> {
+        Ok(self
+            .db_tx
+            .get_is_mainchain_tx_index_enabled()
+            .map_err(PropertyQueryError::from)?
+            .expect("Must be set on node initialization"))
+    }
+
     pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.db_tx
             .get_best_block_id()
@@ -188,9 +196,34 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,
-    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
+    ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
         log::trace!("Loading transaction index of id: {:?}", tx_id);
         self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_transaction_in_block(
+        &self,
+        id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, PropertyQueryError> {
+        log::trace!("Loading whether tx index is enabled: {}", id);
+        let is_tx_index_enabled = self.get_is_transaction_index_enabled()?;
+        if !is_tx_index_enabled {
+            return Err(PropertyQueryError::TransactionIndexDisabled);
+        }
+        log::trace!("Loading transaction index with id: {}", id);
+        let tx_index = self.db_tx.get_mainchain_tx_index(&OutPointSourceId::Transaction(id))?;
+        let tx_index = match tx_index {
+            Some(tx_index) => tx_index,
+            None => return Ok(None),
+        };
+        log::trace!("Loading transaction with id: {}", id);
+        let position = match tx_index.position() {
+            common::chain::SpendablePosition::Transaction(pos) => pos,
+            common::chain::SpendablePosition::BlockReward(_) => {
+                panic!("In get_transaction(), a tx id led to a block reward")
+            }
+        };
+        Ok(self.db_tx.get_mainchain_tx_by_position(position)?)
     }
 
     pub fn get_block_id_by_height(

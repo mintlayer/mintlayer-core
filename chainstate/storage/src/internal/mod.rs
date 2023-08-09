@@ -23,7 +23,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
-        PoolId, UtxoOutPoint,
+        PoolId, SignedTransaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -245,7 +245,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
+        ) -> crate::Result<Option<SignedTransaction>>;
 
         fn get_block_id_by_height(
             &self,

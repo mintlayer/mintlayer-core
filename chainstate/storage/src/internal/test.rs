@@ -52,8 +52,10 @@ fn test_storage_manipulation() {
     // Prepare some test data
     let tx0 = Transaction::new(0xaabbccdd, vec![], vec![]).unwrap();
     let tx1 = Transaction::new(0xbbccddee, vec![], vec![]).unwrap();
+    let signed_tx0 = SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count");
+    let signed_tx1 = SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count");
     let block0 = Block::new(
-        vec![SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count")],
+        vec![signed_tx0.clone()],
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
@@ -61,7 +63,7 @@ fn test_storage_manipulation() {
     )
     .unwrap();
     let block1 = Block::new(
-        vec![SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count")],
+        vec![signed_tx1],
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
@@ -114,7 +116,7 @@ fn test_storage_manipulation() {
     let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
     assert_eq!(
         &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
-        &tx0
+        &signed_tx0
     );
 
     // Test setting and retrieving best chain id
@@ -144,7 +146,7 @@ fn test_storage_manipulation() {
     );
     if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
         if let SpendablePosition::Transaction(ref p) = index.position() {
-            assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
+            assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(signed_tx0)));
         } else {
             unreachable!();
         };
