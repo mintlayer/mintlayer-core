@@ -30,6 +30,8 @@ pub enum ApiStorageError {
     DeserializationError(String),
     #[error("Storage initialization failed: {0}")]
     InitializationError(String),
+    #[error("Invalid initialized state")]
+    InvalidInitializedState(String),
 }
 
 pub trait ApiStorageRead {

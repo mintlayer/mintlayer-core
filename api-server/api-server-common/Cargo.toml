@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 common = { path = '../../common' }
+logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
 parity-scale-codec.workspace = true
