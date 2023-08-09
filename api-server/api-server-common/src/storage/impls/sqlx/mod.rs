@@ -114,11 +114,11 @@ where
         Ok(Some(version))
     }
 
-    async fn create_tables<'e>(&'e self) -> Result<(), ApiStorageError>
+    async fn create_tables(&self) -> Result<(), ApiStorageError>
     where
-        <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        &'e mut <D as Database>::Connection: Executor<'e>,
-        &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
     {
         sqlx::query(
             "CREATE TABLE misc_data (
