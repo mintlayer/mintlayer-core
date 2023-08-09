@@ -18,7 +18,7 @@ pub mod authorize_pubkeyhash_spend;
 pub mod classical_multisig;
 pub mod standard_signature;
 
-use serialization::{hex::HexEncode, Decode, Encode};
+use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use standard_signature::StandardInputSignature;
 
@@ -32,6 +32,6 @@ pub enum InputWitness {
 
 impl serde::Serialize for InputWitness {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.hex_encode())
+        HexEncoded::new(self).serialize(serializer)
     }
 }

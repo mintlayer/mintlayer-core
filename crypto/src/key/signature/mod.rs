@@ -17,7 +17,7 @@ use secp256k1;
 use std::io::BufWriter;
 
 use num_derive::FromPrimitive;
-use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
+use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll, Encode};
 
 #[derive(FromPrimitive)]
 pub enum SignatureKind {
@@ -31,7 +31,7 @@ pub enum Signature {
 
 impl serde::Serialize for Signature {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.hex_encode())
+        HexEncoded::new(self).serialize(serializer)
     }
 }
 
