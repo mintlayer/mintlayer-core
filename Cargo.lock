@@ -1511,7 +1511,6 @@ dependencies = [
  "schnorrkel",
  "secp256k1",
  "serde",
- "serde_json",
  "serialization",
  "sha-1 0.10.1",
  "sha2 0.10.7",
