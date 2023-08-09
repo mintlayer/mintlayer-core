@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 /// Wrapper that serializes objects as json encoded string for `serde`
 #[derive(Debug, Clone)]
@@ -51,6 +51,14 @@ impl<T> From<T> for JsonEncoded<T> {
 impl<T: serde::Serialize> serde::Serialize for JsonEncoded<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
+    }
+}
+
+impl<T: for<'de> serde::Deserialize<'de>> FromStr for JsonEncoded<T> {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s).map(Self)
     }
 }
 
