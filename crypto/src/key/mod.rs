@@ -19,6 +19,7 @@ mod key_holder;
 pub mod secp256k1;
 pub mod signature;
 
+use serialization::hex::HexEncode;
 use serialization::{Decode, Encode};
 
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
@@ -58,7 +59,7 @@ pub struct PublicKey {
 
 impl serde::Serialize for PublicKey {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(&self.encode())
+        serializer.serialize_str(&self.hex_encode())
     }
 }
 

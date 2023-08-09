@@ -15,7 +15,7 @@
 
 use hmac::{Hmac, Mac};
 use merlin::Transcript;
-use serialization::{Decode, Encode};
+use serialization::{hex::HexEncode, Decode, Encode};
 use sha2::Sha512;
 
 use crate::{
@@ -72,7 +72,7 @@ pub struct VRFPublicKey {
 
 impl serde::Serialize for VRFPublicKey {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(&self.encode())
+        serializer.serialize_str(&self.hex_encode())
     }
 }
 
