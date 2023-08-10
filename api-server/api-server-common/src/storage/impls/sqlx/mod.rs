@@ -173,6 +173,16 @@ where
         .await
         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
+        sqlx::query(
+            "CREATE TABLE blocks (
+                  block_id BLOB PRIMARY KEY,
+                  block BLOB NOT NULL
+            );",
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -264,11 +274,7 @@ where
     {
         let height = Self::block_height_to_sqlx_friendly(block_height);
 
-        logging::log::debug!(
-            "Setting block id: {:?} for height: {}",
-            block_id.get().as_bytes().to_vec(),
-            height
-        );
+        logging::log::debug!("Inserting block id: {:?} for height: {}", block_id, height);
 
         sqlx::query(
             "INSERT INTO main_chain_blocks (block_height, block_id) VALUES ($1, $2)
@@ -309,10 +315,77 @@ where
 
         Ok(())
     }
+
+    pub async fn get_block(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("SELECT block FROM blocks WHERE block_id = ?;")
+                .bind(block_id.encode())
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
+
+        let data = match row {
+            Some(d) => d.0,
+            None => return Ok(None),
+        };
+
+        let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Block deserialization failed: {}",
+                e
+            ))
+        })?;
+
+        Ok(Some(block))
+    }
+
+    pub async fn set_block(
+        &mut self,
+        block_id: Id<Block>,
+        block: &Block,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+    {
+        logging::log::debug!("Inserting block with id: {:?}", block_id);
+
+        sqlx::query(
+            "INSERT INTO blocks (block_id, block) VALUES ($1, $2)
+                ON CONFLICT (block_id) DO UPDATE
+                SET block = $2;",
+        )
+        .bind(block_id.encode())
+        .bind(block.encode())
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use chainstate_test_framework::TestFramework;
     use common::primitives::H256;
 
     use super::*;
@@ -400,6 +473,35 @@ mod tests {
             // Delete again, as deleting non-existing data is OK
             storage.del_main_chain_block_id(height).await.unwrap();
             storage.del_main_chain_block_id(height).await.unwrap();
+        }
+
+        // Test setting/getting blocks
+        {
+            {
+                let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
+                let block_id = storage.get_block(random_block_id).await.unwrap();
+                assert!(block_id.is_none());
+            }
+            // Create a test framework and blocks
+
+            let mut test_framework = TestFramework::builder(&mut rng).build();
+            let chain_config = test_framework.chain_config().clone();
+            let genesis_id = chain_config.genesis_block_id();
+            test_framework.create_chain(&genesis_id, 10, &mut rng).unwrap();
+
+            let block_id1 =
+                test_framework.block_id(1).classify(&chain_config).chain_block_id().unwrap();
+            let block1 = test_framework.block(block_id1);
+
+            {
+                let block_id = storage.get_block(block_id1).await.unwrap();
+                assert!(block_id.is_none());
+
+                storage.set_block(block_id1, &block1).await.unwrap();
+
+                let block = storage.get_block(block_id1).await.unwrap();
+                assert_eq!(block, Some(block1));
+            }
         }
     }
 

@@ -231,6 +231,7 @@ dependencies = [
 name = "api-server-common"
 version = "0.1.1"
 dependencies = [
+ "chainstate-test-framework",
  "common",
  "crypto",
  "logging",
