@@ -17,7 +17,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction,
+        Block, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -55,7 +55,9 @@ pub trait NodeInterface {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
     async fn submit_transaction(

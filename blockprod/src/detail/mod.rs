@@ -30,9 +30,9 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, SignedTransaction,
+        Block, ChainConfig, GenBlock, SignedTransaction, Transaction,
     },
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use consensus::{
@@ -180,19 +180,51 @@ impl BlockProduction {
         &self,
         current_tip: Id<GenBlock>,
         min_block_timestamp: BlockTimestamp,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
-        let max_block_size = self.chain_config.max_block_size_from_std_scripts();
+        let mut accumulator: Box<dyn TransactionAccumulator + Send> =
+            Box::new(DefaultTxAccumulator::new(
+                self.chain_config.max_block_size_from_std_scripts(),
+                current_tip,
+                min_block_timestamp,
+            ));
+
+        for transaction in transactions.into_iter() {
+            let transaction_id = transaction.transaction().get_id();
+            // TODO: fees
+            accumulator
+                .add_tx(transaction, Amount::ZERO.into())
+                .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
+        }
+
         let returned_accumulator = self
             .mempool_handle
-            .call(move |mempool| {
-                mempool.collect_txs(Box::new(DefaultTxAccumulator::new(
-                    max_block_size,
-                    current_tip,
-                    min_block_timestamp,
-                )))
+            .call({
+                move |this| -> Result<_, BlockProductionError> {
+                    for transaction_id in transaction_ids.iter() {
+                        if let Some(transaction) = this.transaction(transaction_id) {
+                            // TODO: fees
+                            accumulator.add_tx(transaction, Amount::ZERO.into()).map_err(|err| {
+                                BlockProductionError::FailedToAddTransaction(*transaction_id, err)
+                            })?
+                        } else {
+                            // TODO: shoud this error out rather than ignore missing transactions?
+                        }
+                    }
+
+                    if include_mempool {
+                        return this
+                            .collect_txs(accumulator)
+                            .map_err(|_| BlockProductionError::MempoolChannelClosed);
+                    }
+
+                    Ok(Some(accumulator))
+                }
             })
-            .await?
-            .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
+            .await??;
+
         Ok(returned_accumulator)
     }
 
@@ -311,15 +343,26 @@ impl BlockProduction {
     pub async fn produce_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions_source: TransactionsSource,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(input_data, transactions_source, None).await
+        self.produce_block_with_custom_id(
+            input_data,
+            transactions,
+            transaction_ids,
+            include_mempool,
+            None,
+        )
+        .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
         input_data: GenerateBlockInputData,
-        transactions_source: TransactionsSource,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
         custom_id_maybe: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let current_peer_count = self
@@ -424,36 +467,36 @@ impl BlockProduction {
                 ));
             }
 
-            // TODO: see if we can simplify this
-            let transactions = match transactions_source.clone() {
-                TransactionsSource::Mempool => {
-                    // We conservatively use the minimum timestamp here in order to figure out
-                    // which transactions are valid for the block.
-                    // TODO: Alternatively, we can construct the transaction sequence from the
-                    // scratch every time a different timestamp is attempted. That is more costly
-                    // in terms of computational resources but will allow the node to include more
-                    // transactions since the passing time may release some time locks.
-                    let accumulator = self
-                        .collect_transactions(
-                            current_tip_index.block_id(),
-                            min_constructed_block_timestamp,
-                        )
-                        .await?;
-                    match accumulator {
-                        Some(acc) => acc.transactions().clone(),
-                        None => {
-                            // If the mempool rejects the accumulator (due to tip mismatch, or otherwise), we should start over and try again
-                            log::info!(
-                                "Mempool rejected the transaction accumulator. Restarting the block production attempt."
-                            );
-                            continue;
-                        }
+            // We conservatively use the minimum timestamp here in order to figure out
+            // which transactions are valid for the block.
+            // TODO: Alternatively, we can construct the transaction sequence from the
+            // scratch every time a different timestamp is attempted. That is more costly
+            // in terms of computational resources but will allow the node to include more
+            // transactions since the passing time may release some time locks.
+            let collected_transactions = {
+                let accumulator = self
+                    .collect_transactions(
+                        current_tip_index.block_id(),
+                        min_constructed_block_timestamp,
+                        transactions.clone(),
+                        transaction_ids.clone(),
+                        include_mempool,
+                    )
+                    .await?;
+
+                match accumulator {
+                    Some(acc) => acc.transactions().clone(),
+                    None => {
+                        // If the mempool rejects the accumulator (due
+                        // to tip mismatch, or otherwise), we should
+                        // start over and try again
+                        log::info!("Mempool rejected the transaction accumulator. Trying again.");
+                        continue;
                     }
                 }
-                TransactionsSource::Provided(txs) => txs,
             };
 
-            let block_body = BlockBody::new(block_reward, transactions);
+            let block_body = BlockBody::new(block_reward, collected_transactions);
 
             // A synchronous channel that sends only when the mining/staking is done
             let (ended_sender, ended_receiver) = mpsc::channel::<()>();

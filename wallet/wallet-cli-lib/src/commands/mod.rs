@@ -103,7 +103,7 @@ pub enum WalletCommand {
     /// reward destination. If transactions are None, the block will be
     /// generated with available transactions in the mempool
     GenerateBlock {
-        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
     },
 
     GenerateBlocks {
@@ -658,14 +658,15 @@ impl CommandHandler {
             }
 
             WalletCommand::GenerateBlock { transactions } => {
-                let transactions_opt =
-                    transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
+                let transactions = transactions.into_iter().map(HexEncoded::take).collect();
                 let block = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .generate_block(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        transactions_opt,
+                        transactions,
+                        vec![],
+                        false,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

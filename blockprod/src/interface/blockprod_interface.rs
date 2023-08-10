@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{Block, SignedTransaction};
+use common::{
+    chain::{Block, SignedTransaction, Transaction},
+    primitives::Id,
+};
 use consensus::GenerateBlockInputData;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
@@ -35,6 +38,8 @@ pub trait BlockProductionInterface: Send {
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
     ) -> Result<Block, BlockProductionError>;
 }

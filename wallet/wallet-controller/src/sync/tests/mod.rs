@@ -23,7 +23,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId, SignedTransaction,
+        PoolId, SignedTransaction, Transaction,
     },
     primitives::Amount,
 };
@@ -195,7 +195,9 @@ impl NodeInterface for MockNode {
     async fn generate_block(
         &self,
         _input_data: GenerateBlockInputData,
-        _transactions_hex: Option<Vec<SignedTransaction>>,
+        _transactions_hex: Vec<SignedTransaction>,
+        _transaction_ids: Vec<Id<Transaction>>,
+        _include_mempool: bool,
     ) -> Result<Block, Self::Error> {
         unreachable!()
     }

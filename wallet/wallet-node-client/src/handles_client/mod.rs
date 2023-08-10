@@ -18,7 +18,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction,
+        Block, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -176,11 +176,15 @@ impl NodeInterface for WalletHandlesClient {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        include_mempool: bool,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| this.generate_block(input_data, transactions))
+            .call_async_mut(move |this| {
+                this.generate_block(input_data, transactions, transaction_ids, include_mempool)
+            })
             .await??;
 
         Ok(block)
