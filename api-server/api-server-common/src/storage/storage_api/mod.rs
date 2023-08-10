@@ -109,13 +109,13 @@ pub trait ApiTransactionRw: ApiStorageWrite + ApiStorageRead {
     fn rollback(self) -> Result<(), ApiServerStorageError>;
 }
 
-pub trait ApiTransactionRo: ApiStorageRead {
+pub trait ApiServerTransactionRo: ApiStorageRead {
     fn close(self) -> Result<(), ApiServerStorageError>;
 }
 
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: ApiTransactionRo + 't;
+    type TransactionRo: ApiServerTransactionRo + 't;
 
     /// Associated read-write transaction type.
     type TransactionRw: ApiTransactionRw + 't;
@@ -127,4 +127,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError>;
 }
 
-pub trait ApiStorage: for<'tx> Transactional<'tx> + Send {}
+pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send {}

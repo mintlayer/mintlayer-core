@@ -16,7 +16,8 @@
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use api_server_common::storage::{
-    impls::in_memory::transactional::ThreadSafeApiInMemoryStorage, storage_api::ApiStorage,
+    impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+    storage_api::ApiServerStorage,
 };
 use blockchain_scanner_lib::blockchain_state::BlockchainState;
 use clap::Parser;
@@ -27,7 +28,7 @@ use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
 
-pub async fn run<B: ApiStorage>(
+pub async fn run<B: ApiServerStorage>(
     chain_config: &Arc<ChainConfig>,
     storage: B,
     rpc_client: &NodeRpcClient,
@@ -47,8 +48,8 @@ pub async fn run<B: ApiStorage>(
 
 pub fn make_storage(
     chain_config: &ChainConfig,
-) -> Result<ThreadSafeApiInMemoryStorage, ApiServerScannerError> {
-    let storage = ThreadSafeApiInMemoryStorage::new(chain_config);
+) -> Result<TransactionalApiServerInMemoryStorage, ApiServerScannerError> {
+    let storage = TransactionalApiServerInMemoryStorage::new(chain_config);
     Ok(storage)
 }
 

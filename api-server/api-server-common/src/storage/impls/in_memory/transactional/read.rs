@@ -22,9 +22,9 @@ use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiStorageRead,
 };
 
-use super::ApiInMemoryStorageTransactionalRo;
+use super::ApiServerInMemoryStorageTransactionalRo;
 
-impl<'t> ApiStorageRead for ApiInMemoryStorageTransactionalRo<'t> {
+impl<'t> ApiStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
     }
