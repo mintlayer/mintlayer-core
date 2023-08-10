@@ -25,7 +25,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
 import scalecodec
 
-class MempoolOrphanFromDIsconnectedPeerTest(BitcoinTestFramework):
+class MempoolOrphanFromDisconnectedPeerTest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -68,4 +68,4 @@ class MempoolOrphanFromDIsconnectedPeerTest(BitcoinTestFramework):
 
 
 if __name__ == '__main__':
-    MempoolOrphanFromDIsconnectedPeerTest().main()
+    MempoolOrphanFromDisconnectedPeerTest().main()
