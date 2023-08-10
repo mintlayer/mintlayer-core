@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import toml
+import itertools
 
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
@@ -39,6 +40,16 @@ def rs_sources(exclude = []):
             if os.path.splitext(file)[1].lower() == '.rs':
                 yield os.path.join(top, file)
 
+# List Cargo config files
+def cargo_config_files(exclude = []):
+    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
+    is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
+
+    for top, dirs, files in os.walk('.', topdown=True):
+        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
+        for file in files:
+            if os.path.splitext(file)[1].lower() == '.toml':
+                yield os.path.join(top, file)
 
 # Cargo.toml files
 def cargo_toml_files(exclude = []):
@@ -242,7 +253,7 @@ def check_todos():
     ]
 
     ok = True
-    for path in rs_sources():
+    for path in itertools.chain(rs_sources(), cargo_config_files()):
         if any(os.path.samefile(path, exempted) for exempted in exempted_files):
             continue
 
