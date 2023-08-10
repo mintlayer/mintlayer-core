@@ -41,6 +41,10 @@ impl PeerId {
         let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
         Self(id)
     }
+
+    pub fn from_u64(n: u64) -> Self {
+        Self(n)
+    }
 }
 
 impl std::fmt::Display for PeerId {
