@@ -20,6 +20,7 @@ sqlx = { version = "0.7", features = [ "runtime-tokio", "macros", "sqlite", "pos
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+chainstate-test-framework = { path = '../../chainstate/test-framework' }
 test-utils = {path = '../../test-utils'}
 
 rstest.workspace = true
