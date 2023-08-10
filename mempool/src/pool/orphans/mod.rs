@@ -20,7 +20,7 @@ use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
 use utils::{const_value::ConstValue, ensure};
 
-use super::{OrphanPoolError, Time, TxDependency, TxEntry};
+use super::{OrphanPoolError, Time, TxDependency, TxEntry, TxOrigin};
 use crate::config;
 pub use detect::OrphanType;
 
@@ -64,6 +64,9 @@ struct TxOrphanPoolMaps {
 
     /// Transactions indexed by their dependencies
     by_deps: BTreeSet<(TxDependency, InternalId)>,
+
+    /// Transactions indexed by the origin
+    by_origin: BTreeSet<(TxOrigin, InternalId)>,
 }
 
 impl TxOrphanPoolMaps {
@@ -72,6 +75,7 @@ impl TxOrphanPoolMaps {
             by_tx_id: BTreeMap::new(),
             by_insertion_time: BTreeSet::new(),
             by_deps: BTreeSet::new(),
+            by_origin: BTreeSet::new(),
         }
     }
 
@@ -82,6 +86,9 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_insertion_time.insert((entry.creation_time(), iid));
         assert!(inserted, "Tx entry already in insertion time map");
 
+        let inserted = self.by_origin.insert((entry.origin(), iid));
+        assert!(inserted, "Tx entry already in the origin map");
+
         self.by_deps.extend(entry.requires().map(|dep| (dep, iid)));
     }
 
@@ -90,6 +97,9 @@ impl TxOrphanPoolMaps {
 
         let removed = self.by_insertion_time.remove(&(entry.creation_time(), iid));
         assert!(removed, "Tx entry not present in the insertion time map");
+
+        let removed = self.by_origin.remove(&(entry.origin(), iid));
+        assert!(removed, "Tx entry not present in the origin map");
 
         entry.requires().for_each(|dep| {
             self.by_deps.remove(&(dep, iid));
@@ -262,6 +272,27 @@ impl TxOrphanPool {
         }
 
         n_evicted
+    }
+
+    /// Remove orphans for given originator
+    pub fn remove_by_origin(&mut self, origin: TxOrigin) -> usize {
+        let mut n_removed = 0;
+
+        while let Some(iid) = self.pick_by_origin(origin) {
+            let _ = self.remove_at(iid);
+            n_removed += 1;
+        }
+
+        n_removed
+    }
+
+    /// Pick one orphan from given origin
+    fn pick_by_origin(&self, origin: TxOrigin) -> Option<InternalId> {
+        self.maps
+            .by_origin
+            .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))
+            .map(|(_origin, iid)| *iid)
+            .next()
     }
 }
 
