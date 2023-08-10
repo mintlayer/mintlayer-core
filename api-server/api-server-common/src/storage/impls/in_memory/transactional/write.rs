@@ -19,17 +19,24 @@ use common::{
 };
 
 use crate::storage::storage_api::{
-    block_aux_data::BlockAuxData, ApiStorageError, ApiStorageRead, ApiStorageWrite,
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiStorageRead, ApiStorageWrite,
 };
 
 use super::ApiInMemoryStorageTransactionalRw;
 
 impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
-    fn initialize_storage(&mut self, chain_config: &ChainConfig) -> Result<(), ApiStorageError> {
+    fn initialize_storage(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.initialize_storage(chain_config)
     }
 
-    fn set_block(&mut self, block_id: Id<Block>, block: &Block) -> Result<(), ApiStorageError> {
+    fn set_block(
+        &mut self,
+        block_id: Id<Block>,
+        block: &Block,
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_block(block_id, block)
     }
 
@@ -38,11 +45,11 @@ impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
         transaction_id: Id<Transaction>,
         owning_block: Id<Block>,
         transaction: &SignedTransaction,
-    ) -> Result<(), ApiStorageError> {
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_transaction(transaction_id, owning_block, transaction)
     }
 
-    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiStorageError> {
+    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiServerStorageError> {
         self.transaction.set_storage_version(version)
     }
 
@@ -50,7 +57,7 @@ impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
         &mut self,
         block_height: BlockHeight,
         block_id: Id<GenBlock>,
-    ) -> Result<(), ApiStorageError> {
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_best_block(block_height, block_id)
     }
 
@@ -58,7 +65,7 @@ impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
         &mut self,
         block_id: Id<Block>,
         block_aux_data: BlockAuxData,
-    ) -> Result<(), ApiStorageError> {
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_block_aux_data(block_id, block_aux_data)
     }
 
@@ -66,53 +73,53 @@ impl<'t> ApiStorageWrite for ApiInMemoryStorageTransactionalRw<'t> {
         &mut self,
         block_height: BlockHeight,
         block_id: Id<Block>,
-    ) -> Result<(), ApiStorageError> {
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_main_chain_block_id(block_height, block_id)
     }
 
     fn del_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
-    ) -> Result<(), ApiStorageError> {
+    ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_main_chain_block_id(block_height)
     }
 }
 
 impl<'t> ApiStorageRead for ApiInMemoryStorageTransactionalRw<'t> {
-    fn is_initialized(&self) -> Result<bool, ApiStorageError> {
+    fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
     }
 
-    fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError> {
+    fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         self.transaction.get_storage_version()
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiStorageError> {
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         self.transaction.get_best_block()
     }
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError> {
+    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
         self.transaction.get_block(block_id)
     }
 
     fn get_block_aux_data(
         &self,
         block_id: Id<Block>,
-    ) -> Result<Option<BlockAuxData>, ApiStorageError> {
+    ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
         self.transaction.get_block_aux_data(block_id)
     }
 
     fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
-    ) -> Result<Option<Id<Block>>, ApiStorageError> {
+    ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)
     }
 
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError> {
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 }

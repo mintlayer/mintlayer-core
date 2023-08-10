@@ -18,7 +18,7 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use common::chain::ChainConfig;
 
 use crate::storage::storage_api::{
-    ApiStorage, ApiStorageError, ApiTransactionRo, ApiTransactionRw, Transactional,
+    ApiServerStorageError, ApiStorage, ApiTransactionRo, ApiTransactionRw, Transactional,
 };
 
 use super::ApiInMemoryStorage;
@@ -39,7 +39,7 @@ impl<'t> ApiInMemoryStorageTransactionalRo<'t> {
 }
 
 impl<'t> ApiTransactionRo for ApiInMemoryStorageTransactionalRo<'t> {
-    fn close(self) -> Result<(), crate::storage::storage_api::ApiStorageError> {
+    fn close(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 }
@@ -57,11 +57,11 @@ impl<'t> ApiInMemoryStorageTransactionalRw<'t> {
 }
 
 impl<'t> ApiTransactionRw for ApiInMemoryStorageTransactionalRw<'t> {
-    fn commit(self) -> Result<(), crate::storage::storage_api::ApiStorageError> {
+    fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 
-    fn rollback(self) -> Result<(), crate::storage::storage_api::ApiStorageError> {
+    fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 }
@@ -91,11 +91,11 @@ impl<'t> Transactional<'t> for ThreadSafeApiInMemoryStorage {
 
     type TransactionRw = ApiInMemoryStorageTransactionalRw<'t>;
 
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiStorageError> {
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError> {
         Ok(ApiInMemoryStorageTransactionalRo::new(self))
     }
 
-    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiStorageError> {
+    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError> {
         Ok(ApiInMemoryStorageTransactionalRw::new(self))
     }
 }

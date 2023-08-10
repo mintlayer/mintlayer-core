@@ -18,45 +18,47 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
-use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiStorageError, ApiStorageRead};
+use crate::storage::storage_api::{
+    block_aux_data::BlockAuxData, ApiServerStorageError, ApiStorageRead,
+};
 
 use super::ApiInMemoryStorageTransactionalRo;
 
 impl<'t> ApiStorageRead for ApiInMemoryStorageTransactionalRo<'t> {
-    fn is_initialized(&self) -> Result<bool, ApiStorageError> {
+    fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
     }
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiStorageError> {
+    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
         self.transaction.get_block(block_id)
     }
 
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiStorageError> {
+    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 
-    fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError> {
+    fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         self.transaction.get_storage_version()
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiStorageError> {
+    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         self.transaction.get_best_block()
     }
 
     fn get_block_aux_data(
         &self,
         block_id: Id<Block>,
-    ) -> Result<Option<BlockAuxData>, ApiStorageError> {
+    ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
         self.transaction.get_block_aux_data(block_id)
     }
 
     fn get_main_chain_block_id(
         &self,
         block_height: BlockHeight,
-    ) -> Result<Option<Id<Block>>, ApiStorageError> {
+    ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)
     }
 }
