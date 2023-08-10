@@ -21,7 +21,7 @@ use serialization::Encode;
 
 use crate::pool::fee::Fee;
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum TxAccumulatorError {
     #[error("Fee overflow: {0:?} + {1:?} failed")]
     FeeAccumulationError(Fee, Fee),

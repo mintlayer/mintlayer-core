@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, GenBlock},
+    chain::{block::BlockCreationError, ChainConfig, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -33,7 +33,7 @@ use detail::{
     BlockProduction,
 };
 use interface::blockprod_interface::BlockProductionInterface;
-use mempool::MempoolHandle;
+use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
 use p2p::P2pHandle;
 use subsystem::subsystem::CallError;
 
@@ -45,6 +45,8 @@ pub enum BlockProductionError {
     ChainstateChannelClosed,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
+    #[error("Failed to add transaction {0}: {1}")]
+    FailedToAddTransaction(Id<Transaction>, TxAccumulatorError),
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
