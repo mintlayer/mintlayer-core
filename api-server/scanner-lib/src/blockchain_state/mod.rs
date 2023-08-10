@@ -15,7 +15,7 @@
 
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
-    ApiServerStorageError, ApiStorage, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
+    ApiServerStorage, ApiServerStorageError, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
 };
 use common::{
     chain::{Block, GenBlock},
@@ -32,13 +32,13 @@ pub struct BlockchainState<B> {
     storage: B,
 }
 
-impl<B: ApiStorage> BlockchainState<B> {
+impl<B: ApiServerStorage> BlockchainState<B> {
     pub fn new(storage: B) -> Self {
         Self { storage }
     }
 }
 
-impl<B: ApiStorage> LocalBlockchainState for BlockchainState<B> {
+impl<B: ApiServerStorage> LocalBlockchainState for BlockchainState<B> {
     type Error = BlockchainStateError;
 
     fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {

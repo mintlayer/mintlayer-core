@@ -26,7 +26,7 @@ use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorage
 
 use super::CURRENT_STORAGE_VERSION;
 
-pub struct ApiInMemoryStorage {
+struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
@@ -35,7 +35,7 @@ pub struct ApiInMemoryStorage {
     storage_version: Option<u32>,
 }
 
-impl ApiInMemoryStorage {
+impl ApiServerInMemoryStorage {
     pub fn new(chain_config: &ChainConfig) -> Self {
         Self {
             block_table: BTreeMap::new(),
@@ -108,7 +108,7 @@ impl ApiInMemoryStorage {
     }
 }
 
-impl ApiInMemoryStorage {
+impl ApiServerInMemoryStorage {
     fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,

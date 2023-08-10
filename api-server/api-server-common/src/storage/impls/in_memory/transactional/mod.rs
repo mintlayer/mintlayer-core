@@ -18,45 +18,46 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use common::chain::ChainConfig;
 
 use crate::storage::storage_api::{
-    ApiServerStorageError, ApiStorage, ApiTransactionRo, ApiTransactionRw, Transactional,
+    ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo, ApiTransactionRw,
+    Transactional,
 };
 
-use super::ApiInMemoryStorage;
+use super::ApiServerInMemoryStorage;
 
 pub mod read;
 pub mod write;
 
-pub struct ApiInMemoryStorageTransactionalRo<'t> {
-    transaction: RwLockReadGuard<'t, ApiInMemoryStorage>,
+pub struct ApiServerInMemoryStorageTransactionalRo<'t> {
+    transaction: RwLockReadGuard<'t, ApiServerInMemoryStorage>,
 }
 
-impl<'t> ApiInMemoryStorageTransactionalRo<'t> {
-    fn new(storage: &'t ThreadSafeApiInMemoryStorage) -> Self {
+impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
+    fn new(storage: &'t TransactionalApiServerInMemoryStorage) -> Self {
         Self {
             transaction: storage.tx_ro(),
         }
     }
 }
 
-impl<'t> ApiTransactionRo for ApiInMemoryStorageTransactionalRo<'t> {
+impl<'t> ApiServerTransactionRo for ApiServerInMemoryStorageTransactionalRo<'t> {
     fn close(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 }
 
-pub struct ApiInMemoryStorageTransactionalRw<'t> {
-    transaction: RwLockWriteGuard<'t, ApiInMemoryStorage>,
+pub struct ApiServerInMemoryStorageTransactionalRw<'t> {
+    transaction: RwLockWriteGuard<'t, ApiServerInMemoryStorage>,
 }
 
-impl<'t> ApiInMemoryStorageTransactionalRw<'t> {
-    fn new(storage: &'t mut ThreadSafeApiInMemoryStorage) -> Self {
+impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
+    fn new(storage: &'t mut TransactionalApiServerInMemoryStorage) -> Self {
         Self {
             transaction: storage.tx_rw(),
         }
     }
 }
 
-impl<'t> ApiTransactionRw for ApiInMemoryStorageTransactionalRw<'t> {
+impl<'t> ApiTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
     fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
@@ -66,38 +67,38 @@ impl<'t> ApiTransactionRw for ApiInMemoryStorageTransactionalRw<'t> {
     }
 }
 
-pub struct ThreadSafeApiInMemoryStorage {
-    storage: RwLock<ApiInMemoryStorage>,
+pub struct TransactionalApiServerInMemoryStorage {
+    storage: RwLock<ApiServerInMemoryStorage>,
 }
 
-impl ThreadSafeApiInMemoryStorage {
+impl TransactionalApiServerInMemoryStorage {
     pub fn new(chain_config: &ChainConfig) -> Self {
         Self {
-            storage: RwLock::new(ApiInMemoryStorage::new(chain_config)),
+            storage: RwLock::new(ApiServerInMemoryStorage::new(chain_config)),
         }
     }
 
-    fn tx_ro(&self) -> RwLockReadGuard<'_, ApiInMemoryStorage> {
+    fn tx_ro(&self) -> RwLockReadGuard<'_, ApiServerInMemoryStorage> {
         self.storage.read().expect("Poisoned mutex")
     }
 
-    fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiInMemoryStorage> {
+    fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiServerInMemoryStorage> {
         self.storage.write().expect("Poisoned mutex")
     }
 }
 
-impl<'t> Transactional<'t> for ThreadSafeApiInMemoryStorage {
-    type TransactionRo = ApiInMemoryStorageTransactionalRo<'t>;
+impl<'t> Transactional<'t> for TransactionalApiServerInMemoryStorage {
+    type TransactionRo = ApiServerInMemoryStorageTransactionalRo<'t>;
 
-    type TransactionRw = ApiInMemoryStorageTransactionalRw<'t>;
+    type TransactionRw = ApiServerInMemoryStorageTransactionalRw<'t>;
 
     fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError> {
-        Ok(ApiInMemoryStorageTransactionalRo::new(self))
+        Ok(ApiServerInMemoryStorageTransactionalRo::new(self))
     }
 
     fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError> {
-        Ok(ApiInMemoryStorageTransactionalRw::new(self))
+        Ok(ApiServerInMemoryStorageTransactionalRw::new(self))
     }
 }
 
-impl ApiStorage for ThreadSafeApiInMemoryStorage {}
+impl ApiServerStorage for TransactionalApiServerInMemoryStorage {}
