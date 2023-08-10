@@ -13,8 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::{
+    chain::Block,
+    primitives::{BlockHeight, Id},
+};
 use serialization::{DecodeAll, Encode};
-use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool, Sqlite};
+use sqlx::{
+    database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool, Postgres, Sqlite,
+};
 
 use crate::storage::storage_api::ApiServerStorageError;
 
@@ -34,6 +40,38 @@ impl SqlxStorage<Sqlite> {
 
         Ok(Self { db_pool })
     }
+
+    fn get_table_exists_query(table_name: &str) -> String {
+        format!(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{}'",
+            table_name
+        )
+    }
+
+    pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
+        let query_str = Self::get_table_exists_query("misc_data");
+        let is_initialized = self.is_initialized_internal(&query_str).await?;
+        Ok(is_initialized)
+    }
+}
+
+impl SqlxStorage<Postgres> {
+    fn get_table_exists_query(table_name: &str) -> String {
+        format!(
+            "SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_name = '{}'
+        ) THEN 1 ELSE 0 END AS count;",
+            table_name
+        )
+    }
+
+    pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
+        let query_str = Self::get_table_exists_query("misc_data");
+        let is_initialized = self.is_initialized_internal(&query_str).await?;
+        Ok(is_initialized)
+    }
 }
 
 impl<D> SqlxStorage<D>
@@ -44,7 +82,7 @@ where
         Ok(Self { db_pool })
     }
 
-    pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>
+    async fn is_initialized_internal(&self, query_str: &str) -> Result<bool, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
@@ -55,7 +93,7 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
-        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as table_count FROM misc_data;")
+        let rows: (i64,) = sqlx::query_as(query_str)
             .fetch_one(&self.db_pool)
             .await
             .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -64,20 +102,12 @@ where
             return Ok(false);
         }
 
-        let data: (Vec<u8>,) =
-            sqlx::query_as::<_, _>("SELECT value FROM misc_data WHERE name = 'version';")
-                .fetch_one(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let version = self.get_storage_version().await?;
 
-        let version = u32::decode_all(&mut data.0.as_slice()).map_err(|e| {
-            ApiServerStorageError::InvalidInitializedState(format!(
-                "Version deserialization failed: {}",
-                e
-            ))
-        })?;
+        let version = match version {
+            Some(v) => v,
+            None => return Ok(false),
+        };
 
         logging::log::info!("Found database version: {version}");
 
@@ -124,10 +154,20 @@ where
     {
         sqlx::query(
             "CREATE TABLE misc_data (
-            id INTEGER AUTO_INCREMENT PRIMARY KEY,
-            name TEXT NOT NULL,
-            value BLOB NOT NULL
-        );",
+                  id INTEGER AUTO_INCREMENT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  value BLOB NOT NULL
+            );",
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        sqlx::query(
+            "CREATE TABLE main_chain_blocks (
+                  block_height bigint PRIMARY KEY,
+                  block_id BLOB NOT NULL
+            );",
         )
         .execute(&self.db_pool)
         .await
@@ -159,12 +199,209 @@ where
 
         Ok(())
     }
+
+    fn block_height_to_sqlx_friendly(block_height: BlockHeight) -> i64 {
+        // sqlx doesn't like u64, so we have to convert it to i64, and given BlockDistance limitations, it's OK.
+        block_height
+            .into_int()
+            .try_into()
+            .unwrap_or_else(|e| panic!("Invalid block height: {e}"))
+    }
+
+    pub async fn get_main_chain_block_id(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<Block>>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> i64: sqlx::Encode<'e, D>,
+        i64: sqlx::Type<D>,
+    {
+        let height = Self::block_height_to_sqlx_friendly(block_height);
+
+        let row: Option<(Vec<u8>,)> = sqlx::query_as::<_, _>(
+            "SELECT block_id FROM main_chain_blocks WHERE block_height = ?;",
+        )
+        .bind(height)
+        .fetch_optional(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let data = match row {
+            Some(d) => d.0,
+            None => return Ok(None),
+        };
+
+        let block_id = Id::<Block>::decode_all(&mut data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Block id deserialization failed: {}",
+                e
+            ))
+        })?;
+
+        Ok(Some(block_id))
+    }
+
+    pub async fn set_main_chain_block_id(
+        &mut self,
+        block_height: BlockHeight,
+        block_id: Id<Block>,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> i64: sqlx::Encode<'e, D>,
+        i64: sqlx::Type<D>,
+    {
+        let height = Self::block_height_to_sqlx_friendly(block_height);
+
+        logging::log::debug!(
+            "Setting block id: {:?} for height: {}",
+            block_id.get().as_bytes().to_vec(),
+            height
+        );
+
+        sqlx::query(
+            "INSERT INTO main_chain_blocks (block_height, block_id) VALUES ($1, $2)
+                ON CONFLICT (block_height) DO UPDATE
+                SET block_id = $2;",
+        )
+        .bind(height)
+        .bind(block_id.encode())
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_main_chain_block_id(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> i64: sqlx::Encode<'e, D>,
+        i64: sqlx::Type<D>,
+    {
+        let height = Self::block_height_to_sqlx_friendly(block_height);
+
+        sqlx::query(
+            "DELETE FROM main_chain_blocks
+            WHERE block_height = $1;",
+        )
+        .bind(height)
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use common::primitives::H256;
 
     use super::*;
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    #[tokio::test]
+    async fn initialization() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        let storage = SqlxStorage::new(pool).unwrap();
+
+        storage.get_storage_version().await.unwrap_err();
+
+        let is_initialized = storage.is_initialized().await.unwrap();
+        assert!(!is_initialized);
+
+        storage.initialize_database().await.unwrap();
+
+        let is_initialized = storage.is_initialized().await.unwrap();
+        assert!(is_initialized);
+
+        let version_option = storage.get_storage_version().await.unwrap();
+        assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn set_get(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        let mut storage = SqlxStorage::new(pool).unwrap();
+
+        storage.get_storage_version().await.unwrap_err();
+
+        let is_initialized = storage.is_initialized().await.unwrap();
+        assert!(!is_initialized);
+
+        storage.initialize_database().await.unwrap();
+
+        let is_initialized = storage.is_initialized().await.unwrap();
+        assert!(is_initialized);
+
+        let version_option = storage.get_storage_version().await.unwrap();
+        assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
+
+        // Test setting mainchain block id and getting it back
+        {
+            let height_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+            let height = height_u64.into();
+
+            let block_id = storage.get_main_chain_block_id(height).await.unwrap();
+            assert!(block_id.is_none());
+
+            let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
+            storage.set_main_chain_block_id(height, random_block_id1).await.unwrap();
+
+            let block_id = storage.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, Some(random_block_id1));
+
+            let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
+            storage.set_main_chain_block_id(height, random_block_id2).await.unwrap();
+
+            let block_id = storage.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, Some(random_block_id2));
+
+            // Now delete the block id, then get it, and it won't be there
+            storage.del_main_chain_block_id(height).await.unwrap();
+            let block_id = storage.get_main_chain_block_id(height).await.unwrap();
+            assert!(block_id.is_none());
+
+            // Delete again, as deleting non-existing data is OK
+            storage.del_main_chain_block_id(height).await.unwrap();
+            storage.del_main_chain_block_id(height).await.unwrap();
+        }
+    }
 
     #[tokio::test]
     async fn basic_sqlx_sqlite_inmemory() {
@@ -232,27 +469,5 @@ mod tests {
         let is_initialized = storage.is_initialized().await.unwrap();
 
         assert!(!is_initialized);
-    }
-
-    #[tokio::test]
-    async fn initialization() {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .max_connections(5)
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-
-        let storage = SqlxStorage::new(pool).unwrap();
-
-        storage.get_storage_version().await.unwrap_err();
-
-        storage.initialize_database().await.unwrap();
-
-        let is_initialized = storage.is_initialized().await.unwrap();
-
-        assert!(is_initialized);
-
-        let version_option = storage.get_storage_version().await.unwrap();
-        assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
     }
 }
