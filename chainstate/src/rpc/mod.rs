@@ -15,9 +15,12 @@
 
 //! Chainstate subsystem RPC handler
 
+mod types;
+
 use std::io::{Read, Write};
 
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
+use chainstate_types::BlockIndex;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
@@ -27,6 +30,8 @@ use common::{
 };
 use rpc::Result as RpcResult;
 use serialization::{hex_encoded::HexEncoded, json_encoded::JsonEncoded};
+
+use self::types::{block::RpcBlock, signed_transaction::RpcSignedTransaction};
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -135,9 +140,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>> {
-        let block: Option<Block> =
-            rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
-        Ok(block.map(JsonEncoded::new).map(|blk| blk.to_string()))
+        let both: Option<(Block, BlockIndex)> = rpc::handle_result(
+            self.call(move |this| {
+                let block = this.get_block(id);
+                let block_index = this.get_block_index(&id);
+                match (block, block_index) {
+                    (Ok(block), Ok(block_index)) => Ok(block.zip(block_index)),
+                    (Err(e), _) => Err(e),
+                    (_, Err(e)) => Err(e),
+                }
+            })
+            .await,
+        )?;
+        let rpc_blk = both.map(|(block, block_index)| RpcBlock::new(block, block_index));
+        Ok(rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string()))
     }
 
     async fn get_transaction(
@@ -152,7 +168,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>> {
         let tx: Option<SignedTransaction> =
             rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
-        Ok(tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
+        let rpc_tx = tx.map(RpcSignedTransaction::new);
+        Ok(rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
     }
 
     async fn get_mainchain_blocks(
