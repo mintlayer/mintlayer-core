@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-#  Copyright (c) 2017-2021 The Bitcoin Core developers
 #  Copyright (c) 2023 RBB S.r.l
+#  Copyright (c) 2017-2021 The Bitcoin Core developers
 #  opensource@mintlayer.org
 #  SPDX-License-Identifier: MIT
 #  Licensed under the MIT License;
