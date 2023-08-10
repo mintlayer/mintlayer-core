@@ -15,7 +15,7 @@
 
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
-    ApiStorage, ApiStorageError, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
+    ApiServerStorageError, ApiStorage, ApiStorageRead, ApiStorageWrite, ApiTransactionRw,
 };
 use common::{
     chain::{Block, GenBlock},
@@ -25,7 +25,7 @@ use common::{
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
     #[error("Unexpected storage error: {0}")]
-    StorageError(#[from] ApiStorageError),
+    StorageError(#[from] ApiServerStorageError),
 }
 
 pub struct BlockchainState<B> {

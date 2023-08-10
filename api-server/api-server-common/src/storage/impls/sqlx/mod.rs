@@ -16,7 +16,7 @@
 use serialization::{DecodeAll, Encode};
 use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool, Sqlite};
 
-use crate::storage::storage_api::ApiStorageError;
+use crate::storage::storage_api::ApiServerStorageError;
 
 use super::CURRENT_STORAGE_VERSION;
 
@@ -25,12 +25,12 @@ pub struct SqlxStorage<D: Database> {
 }
 
 impl SqlxStorage<Sqlite> {
-    pub async fn from_sqlite_inmemory(max_connections: u32) -> Result<Self, ApiStorageError> {
+    pub async fn from_sqlite_inmemory(max_connections: u32) -> Result<Self, ApiServerStorageError> {
         let db_pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(max_connections)
             .connect("sqlite::memory:")
             .await
-            .map_err(|e| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(Self { db_pool })
     }
@@ -40,11 +40,11 @@ impl<D> SqlxStorage<D>
 where
     D: Database,
 {
-    pub fn new(db_pool: Pool<D>) -> Result<Self, ApiStorageError> {
+    pub fn new(db_pool: Pool<D>) -> Result<Self, ApiServerStorageError> {
         Ok(Self { db_pool })
     }
 
-    pub async fn is_initialized(&self) -> Result<bool, ApiStorageError>
+    pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
@@ -58,7 +58,7 @@ where
         let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as table_count FROM misc_data;")
             .fetch_one(&self.db_pool)
             .await
-            .map_err(|e: sqlx::Error| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+            .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         if rows.0 == 0 {
             return Ok(false);
@@ -68,10 +68,12 @@ where
             sqlx::query_as::<_, _>("SELECT value FROM misc_data WHERE name = 'version';")
                 .fetch_one(&self.db_pool)
                 .await
-                .map_err(|e: sqlx::Error| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
 
         let version = u32::decode_all(&mut data.0.as_slice()).map_err(|e| {
-            ApiStorageError::InvalidInitializedState(format!(
+            ApiServerStorageError::InvalidInitializedState(format!(
                 "Version deserialization failed: {}",
                 e
             ))
@@ -82,7 +84,7 @@ where
         Ok(true)
     }
 
-    pub async fn get_storage_version(&self) -> Result<Option<u32>, ApiStorageError>
+    pub async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
@@ -95,7 +97,9 @@ where
             sqlx::query_as::<_, _>("SELECT value FROM misc_data WHERE name = 'version';")
                 .fetch_optional(&self.db_pool)
                 .await
-                .map_err(|e: sqlx::Error| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
 
         let data = match data {
             Some(d) => d,
@@ -103,7 +107,7 @@ where
         };
 
         let version = u32::decode_all(&mut data.0.as_slice()).map_err(|e| {
-            ApiStorageError::InvalidInitializedState(format!(
+            ApiServerStorageError::InvalidInitializedState(format!(
                 "Version deserialization failed: {}",
                 e
             ))
@@ -112,7 +116,7 @@ where
         Ok(Some(version))
     }
 
-    async fn create_tables(&self) -> Result<(), ApiStorageError>
+    async fn create_tables(&self) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as Database>::Connection: Executor<'e>,
@@ -127,12 +131,12 @@ where
         )
         .execute(&self.db_pool)
         .await
-        .map_err(|e| ApiStorageError::LowLevelStorageError(e.to_string()))?;
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         Ok(())
     }
 
-    pub async fn initialize_database(&self) -> Result<(), ApiStorageError>
+    pub async fn initialize_database(&self) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
@@ -151,7 +155,7 @@ where
             .bind(CURRENT_STORAGE_VERSION.encode())
             .execute(&self.db_pool)
             .await
-            .map_err(|e| ApiStorageError::InitializationError(e.to_string()))?;
+            .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
 
         Ok(())
     }
