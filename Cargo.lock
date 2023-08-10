@@ -1510,6 +1510,7 @@ dependencies = [
  "rstest",
  "schnorrkel",
  "secp256k1",
+ "serde",
  "serialization",
  "sha-1 0.10.1",
  "sha2 0.10.7",
@@ -5624,6 +5625,7 @@ version = "0.1.1"
 dependencies = [
  "hex",
  "serde",
+ "serde_json",
  "serialization-core",
  "serialization-tagged",
  "thiserror",

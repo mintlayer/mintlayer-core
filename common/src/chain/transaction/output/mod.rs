@@ -19,7 +19,7 @@ use crate::{
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -42,6 +42,12 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
+impl serde::Serialize for Destination {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("0x{}", self.hex_encode()))
+    }
+}
+
 impl Addressable for Destination {
     type Error = AddressError;
 
@@ -62,7 +68,7 @@ impl Addressable for Destination {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TxOutput {
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),

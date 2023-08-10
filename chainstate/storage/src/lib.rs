@@ -31,7 +31,9 @@ use common::chain::block::BlockReward;
 use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{AccountNonce, AccountType, Block, GenBlock, OutPointSourceId};
+use common::chain::{
+    AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, SignedTransaction,
+};
 use common::primitives::{BlockHeight, Id};
 use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
@@ -93,7 +95,7 @@ pub trait BlockchainStorageRead:
     fn get_mainchain_tx_by_position(
         &self,
         tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<Transaction>>;
+    ) -> crate::Result<Option<SignedTransaction>>;
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;

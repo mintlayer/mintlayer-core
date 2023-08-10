@@ -21,12 +21,12 @@ use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId,
+        PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
-use serialization::hex_encoded::HexEncoded;
+use serialization::{hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -41,6 +41,23 @@ trait ChainstateRpc {
     /// Returns a hex-encoded serialized block with the given id.
     #[method(name = "get_block")]
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
+
+    /// Returns a json-encoded serialized block with the given id.
+    #[method(name = "get_block_json")]
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>>;
+
+    /// returns a hex-encoded transaction, assuming it's in the mainchain.
+    /// Note: The transaction index must be enabled in the node.
+    #[method(name = "get_transaction")]
+    async fn get_transaction(
+        &self,
+        id: Id<Transaction>,
+    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>>;
+
+    /// returns a json-encoded transaction, assuming it's in the mainchain.
+    /// Note: The transaction index must be enabled in the node.
+    #[method(name = "get_transaction_json")]
+    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>>;
 
     /// Returns a hex-encoded serialized blocks from the mainchain starting from a given block height.
     #[method(name = "get_mainchain_blocks")]
@@ -115,6 +132,27 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block: Option<Block> =
             rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(HexEncoded::new))
+    }
+
+    async fn get_block_json(&self, id: Id<Block>) -> RpcResult<Option<String>> {
+        let block: Option<Block> =
+            rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
+        Ok(block.map(JsonEncoded::new).map(|blk| blk.to_string()))
+    }
+
+    async fn get_transaction(
+        &self,
+        id: Id<Transaction>,
+    ) -> RpcResult<Option<HexEncoded<SignedTransaction>>> {
+        let tx: Option<SignedTransaction> =
+            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
+        Ok(tx.map(HexEncoded::new))
+    }
+
+    async fn get_transaction_json(&self, id: Id<Transaction>) -> RpcResult<Option<String>> {
+        let tx: Option<SignedTransaction> =
+            rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
+        Ok(tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
     }
 
     async fn get_mainchain_blocks(

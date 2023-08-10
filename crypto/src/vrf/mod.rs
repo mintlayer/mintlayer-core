@@ -15,7 +15,7 @@
 
 use hmac::{Hmac, Mac};
 use merlin::Transcript;
-use serialization::{Decode, Encode};
+use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 use sha2::Sha512;
 
 use crate::{
@@ -68,6 +68,12 @@ pub(crate) enum VRFPrivateKeyHolder {
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct VRFPublicKey {
     pub_key: VRFPublicKeyHolder,
+}
+
+impl serde::Serialize for VRFPublicKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexEncoded::new(self).serialize(serializer)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]

@@ -26,8 +26,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId, TxInput,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -166,6 +166,11 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, ChainstateError>;
+        fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError>;
+        fn get_transaction(
+            &self,
+            tx_id: &Id<Transaction>,
+        ) -> Result<Option<SignedTransaction>, ChainstateError>;
     }
 }
 

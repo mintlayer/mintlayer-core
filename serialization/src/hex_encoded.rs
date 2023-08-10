@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use crate::hex::{HexDecode, HexEncode, HexError};
 
@@ -63,5 +63,11 @@ impl<T: serialization_core::Decode> FromStr for HexEncoded<T> {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         <T as HexDecode>::hex_decode_all(s).map(Self)
+    }
+}
+
+impl<T: serialization_core::Encode> Display for HexEncoded<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.hex_encode())
     }
 }

@@ -22,7 +22,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        UtxoOutPoint,
+        SignedTransaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
@@ -143,7 +143,7 @@ macro_rules! impl_read_ops {
             fn get_mainchain_tx_by_position(
                 &self,
                 tx_index: &TxMainChainPosition,
-            ) -> crate::Result<Option<Transaction>> {
+            ) -> crate::Result<Option<SignedTransaction>> {
                 let block_id = tx_index.block_id();
                 match self.0.get::<db::DBBlock, _>().get(block_id) {
                     Err(e) => Err(e.into()),
@@ -153,7 +153,7 @@ macro_rules! impl_read_ops {
                         let begin = tx_index.byte_offset_in_block() as usize;
                         let encoded_tx =
                             block.get(begin..).expect("Transaction outside of block range");
-                        let tx = Transaction::decode(&mut &*encoded_tx)
+                        let tx = SignedTransaction::decode(&mut &*encoded_tx)
                             .expect("Invalid tx encoding in DB");
                         Ok(Some(tx))
                     }

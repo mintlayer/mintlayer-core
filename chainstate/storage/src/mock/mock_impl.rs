@@ -25,7 +25,8 @@ use common::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, SignedTransaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -64,7 +65,7 @@ mockall::mock! {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
+        ) -> crate::Result<Option<SignedTransaction>>;
 
         fn get_block_id_by_height(
             &self,
@@ -320,7 +321,7 @@ mockall::mock! {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
+        ) -> crate::Result<Option<SignedTransaction>>;
 
         fn get_block_id_by_height(
             &self,
@@ -435,7 +436,7 @@ mockall::mock! {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
+        ) -> crate::Result<Option<SignedTransaction>>;
 
         fn get_block_id_by_height(
             &self,

@@ -54,7 +54,7 @@ pub enum TransactionSize {
     SmartContractTransaction(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName, serde::Serialize)]
 pub enum Transaction {
     V1(TransactionV1),
 }

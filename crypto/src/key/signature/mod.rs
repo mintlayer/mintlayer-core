@@ -17,17 +17,22 @@ use secp256k1;
 use std::io::BufWriter;
 
 use num_derive::FromPrimitive;
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll, Encode};
 
 #[derive(FromPrimitive)]
 pub enum SignatureKind {
     Secp256k1Schnorr = 0,
 }
 
-// #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Signature {
     Secp256k1Schnorr(secp256k1::schnorr::Signature),
+}
+
+impl serde::Serialize for Signature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexEncoded::new(self).serialize(serializer)
+    }
 }
 
 impl Encode for Signature {

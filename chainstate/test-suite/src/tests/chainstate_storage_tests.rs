@@ -87,7 +87,12 @@ fn store_coin(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
+                db_tx
+                    .get_mainchain_tx_by_position(tx_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .transaction()
+                    .get_id(),
                 tx_id
             );
         }
@@ -178,7 +183,12 @@ fn store_token(#[case] seed: Seed) {
                 SpendablePosition::BlockReward(_) => unreachable!(),
             };
             assert_eq!(
-                db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
+                db_tx
+                    .get_mainchain_tx_by_position(tx_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .transaction()
+                    .get_id(),
                 tx_id
             );
         }
@@ -306,6 +316,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
                     .get_mainchain_tx_by_position(tx_2_pos)
                     .expect("ok")
                     .expect("some")
+                    .transaction()
                     .get_id(),
                 tx_2_id
             );
@@ -323,6 +334,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
                     .get_mainchain_tx_by_position(tx_3_pos)
                     .expect("ok")
                     .expect("some")
+                    .transaction()
                     .get_id(),
                 tx_3_id
             );
@@ -503,6 +515,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                     .get_mainchain_tx_by_position(tx_2_pos)
                     .expect("ok")
                     .expect("some")
+                    .transaction()
                     .get_id(),
                 tx_2_id
             );
@@ -520,6 +533,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                     .get_mainchain_tx_by_position(tx_3_pos)
                     .expect("ok")
                     .expect("some")
+                    .transaction()
                     .get_id(),
                 tx_3_id
             );
