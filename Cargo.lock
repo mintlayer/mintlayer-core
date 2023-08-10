@@ -232,10 +232,13 @@ name = "api-server-common"
 version = "0.1.1"
 dependencies = [
  "common",
+ "crypto",
  "logging",
  "parity-scale-codec",
+ "rstest",
  "serialization",
  "sqlx",
+ "test-utils",
  "thiserror",
  "tokio",
 ]

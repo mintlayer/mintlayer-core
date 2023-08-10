@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 common = { path = '../../common' }
+crypto = { path = '../../crypto/' }
 logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
@@ -17,3 +18,8 @@ thiserror.workspace = true
 
 sqlx = { version = "0.7", features = [ "runtime-tokio", "macros", "sqlite", "postgres" ] }
 tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+test-utils = {path = '../../test-utils'}
+
+rstest.workspace = true
