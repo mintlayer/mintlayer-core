@@ -90,7 +90,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
-        block_aux_data: BlockAuxData,
+        block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError>;
 
     fn set_main_chain_block_id(

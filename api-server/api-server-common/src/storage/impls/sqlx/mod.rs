@@ -22,7 +22,7 @@ use sqlx::{
     database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool, Postgres, Sqlite,
 };
 
-use crate::storage::storage_api::ApiServerStorageError;
+use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
 
 use super::CURRENT_STORAGE_VERSION;
 
@@ -154,9 +154,9 @@ where
     {
         sqlx::query(
             "CREATE TABLE misc_data (
-                  id INTEGER AUTO_INCREMENT PRIMARY KEY,
-                  name TEXT NOT NULL,
-                  value BLOB NOT NULL
+                id INTEGER AUTO_INCREMENT PRIMARY KEY,
+                name TEXT NOT NULL,
+                value BLOB NOT NULL
             );",
         )
         .execute(&self.db_pool)
@@ -165,8 +165,8 @@ where
 
         sqlx::query(
             "CREATE TABLE main_chain_blocks (
-                  block_height bigint PRIMARY KEY,
-                  block_id BLOB NOT NULL
+                block_height bigint PRIMARY KEY,
+                block_id BLOB NOT NULL
             );",
         )
         .execute(&self.db_pool)
@@ -175,8 +175,8 @@ where
 
         sqlx::query(
             "CREATE TABLE blocks (
-                  block_id BLOB PRIMARY KEY,
-                  block_data BLOB NOT NULL
+                block_id BLOB PRIMARY KEY,
+                block_data BLOB NOT NULL
             );",
         )
         .execute(&self.db_pool)
@@ -185,10 +185,20 @@ where
 
         sqlx::query(
             "CREATE TABLE transactions (
-                  transaction_id BLOB PRIMARY KEY,
-                  owning_block_id BLOB,
-                  transaction_data BLOB NOT NULL
+                transaction_id BLOB PRIMARY KEY,
+                owning_block_id BLOB,
+                transaction_data BLOB NOT NULL
             );", // block_id can be null if the transaction is not in the main chain
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        sqlx::query(
+            "CREATE TABLE block_aux_data (
+                block_id BLOB PRIMARY KEY,
+                aux_data BLOB NOT NULL
+            );",
         )
         .execute(&self.db_pool)
         .await
@@ -476,6 +486,73 @@ where
 
         Ok(())
     }
+
+    pub async fn get_block_aux_data(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("SELECT aux_data FROM block_aux_data WHERE block_id = ?;")
+                .bind(block_id.encode())
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
+
+        let serialized_data = match row {
+            Some(d) => d.0,
+            None => return Ok(None),
+        };
+
+        let block_aux_data =
+            BlockAuxData::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Block aux data of block id {} deserialization failed: {}",
+                    block_id, e
+                ))
+            })?;
+
+        Ok(Some(block_aux_data))
+    }
+
+    pub async fn set_block_aux_data(
+        &mut self,
+        block_id: Id<Block>,
+        block_aux_data: &BlockAuxData,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+    {
+        logging::log::debug!("Inserting block aux data with block_id {}", block_id);
+
+        sqlx::query(
+            "INSERT INTO block_aux_data (block_id, aux_data) VALUES ($1, $2)
+                ON CONFLICT (block_id) DO UPDATE
+                SET aux_data = $2;",
+        )
+        .bind(block_id.encode())
+        .bind(block_aux_data.encode())
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -611,59 +688,81 @@ mod tests {
 
         // Test setting/getting transactions
         {
+            let random_tx_id: Id<Transaction> =
+                Id::<Transaction>::new(H256::random_using(&mut rng));
+            let tx = storage.get_transaction(random_tx_id).await.unwrap();
+            assert!(tx.is_none());
+
+            let owning_block1 = Id::<Block>::new(H256::random_using(&mut rng));
+            let tx1: SignedTransaction = TransactionBuilder::new()
+                .add_input(
+                    TxInput::Utxo(UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(
+                            &mut rng,
+                        ))),
+                        0,
+                    )),
+                    empty_witness(&mut rng),
+                )
+                .build();
+
+            // before storage
+            let tx_and_block_id =
+                storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
+            assert!(tx_and_block_id.is_none());
+
+            // Set without owning block
             {
-                let random_tx_id: Id<Transaction> =
-                    Id::<Transaction>::new(H256::random_using(&mut rng));
-                let tx = storage.get_transaction(random_tx_id).await.unwrap();
-                assert!(tx.is_none());
+                storage.set_transaction(tx1.transaction().get_id(), None, &tx1).await.unwrap();
 
-                let owning_block1 = Id::<Block>::new(H256::random_using(&mut rng));
-                let tx1: SignedTransaction = TransactionBuilder::new()
-                    .add_input(
-                        TxInput::Utxo(UtxoOutPoint::new(
-                            OutPointSourceId::Transaction(Id::<Transaction>::new(
-                                H256::random_using(&mut rng),
-                            )),
-                            0,
-                        )),
-                        empty_witness(&mut rng),
-                    )
-                    .build();
-
-                // before storage
                 let tx_and_block_id =
                     storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
-                assert!(tx_and_block_id.is_none());
+                assert!(tx_and_block_id.is_some());
 
-                // Set without owning block
-                {
-                    storage.set_transaction(tx1.transaction().get_id(), None, &tx1).await.unwrap();
-
-                    let tx_and_block_id =
-                        storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
-                    assert!(tx_and_block_id.is_some());
-
-                    let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
-                    assert!(owning_block.is_none());
-                    assert_eq!(tx_retrieved, tx1);
-                }
-
-                // Set with owning block
-                {
-                    storage
-                        .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx1)
-                        .await
-                        .unwrap();
-
-                    let tx_and_block_id =
-                        storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
-                    assert!(tx_and_block_id.is_some());
-
-                    let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
-                    assert_eq!(owning_block, Some(owning_block1));
-                    assert_eq!(tx_retrieved, tx1);
-                }
+                let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
+                assert!(owning_block.is_none());
+                assert_eq!(tx_retrieved, tx1);
             }
+
+            // Set with owning block
+            {
+                storage
+                    .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx1)
+                    .await
+                    .unwrap();
+
+                let tx_and_block_id =
+                    storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
+                assert!(tx_and_block_id.is_some());
+
+                let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
+                assert_eq!(owning_block, Some(owning_block1));
+                assert_eq!(tx_retrieved, tx1);
+            }
+        }
+
+        // Test setting/getting block aux data
+        {
+            let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
+            let block = storage.get_block_aux_data(random_block_id).await.unwrap();
+            assert!(block.is_none());
+
+            let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+            let height1 = height1_u64.into();
+            let aux_data1 = BlockAuxData::new(random_block_id, height1);
+            storage.set_block_aux_data(random_block_id, &aux_data1).await.unwrap();
+
+            let retrieved_aux_data = storage.get_block_aux_data(random_block_id).await.unwrap();
+            assert_eq!(retrieved_aux_data, Some(aux_data1));
+
+            // Test overwrite
+            let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+            let height2 = height2_u64.into();
+            let aux_data2 = BlockAuxData::new(random_block_id, height2);
+            storage.set_block_aux_data(random_block_id, &aux_data2).await.unwrap();
+
+            let retrieved_aux_data = storage.get_block_aux_data(random_block_id).await.unwrap();
+            assert_eq!(retrieved_aux_data, Some(aux_data2));
         }
     }
 
