@@ -763,9 +763,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let expired_ids: Vec<_> = self
             .store
             .txs_by_creation_time
-            .values()
-            .flat_map(Deref::deref)
-            .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
+            .iter()
+            .map(|(_time, id)| self.store.txs_by_id.get(id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
                 let expired = now.saturating_sub(entry.creation_time()) > self.max_tx_age;
@@ -794,9 +793,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let removed_id = self
                 .store
                 .txs_by_descendant_score
-                .values()
-                .flat_map(Deref::deref)
-                .copied()
+                .iter()
+                .map(|(_score, entry)| *entry.deref())
                 .next()
                 .expect("pool not empty");
             let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
@@ -930,9 +928,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
             .txs_by_descendant_score
-            .values()
-            .flat_map(Deref::deref)
-            .map(|id| self.store.get_entry(id).expect("entry").transaction().clone())
+            .iter()
+            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
     }
 
@@ -972,7 +969,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
         let block_timestamp = tx_accumulator.block_timestamp();
-        let tx_id_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
+        let tx_id_iter = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
         let mut tx_iter = tx_id_iter
             .filter_map(|tx_id| {
                 let tx = self.store.txs_by_id.get(tx_id)?.deref();
@@ -1118,11 +1115,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .txs_by_descendant_score
             .iter()
             .rev()
-            .find(|(_score, txs)| {
-                total_size += txs
-                    .iter()
-                    .map(|tx_id| self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size()))
-                    .sum::<usize>();
+            .find(|(_score, tx_id)| {
+                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size());
                 (total_size / 1_000_000) >= in_top_x_mb
             })
             .map_or_else(

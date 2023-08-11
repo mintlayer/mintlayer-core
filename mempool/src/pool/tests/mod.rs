@@ -1335,7 +1335,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_b.fees_with_ancestors(),
         (entry_b.fee() + entry_tx.fee()).unwrap()
     );
-    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_b_fee.into()));
     log::debug!(
         "BEFORE REMOVAL raw txs_by_ancestor_score {:?}",
         mempool.store.txs_by_ancestor_score
@@ -1364,8 +1363,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_c.ancestor_score()
     );
 
-    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_c_fee.into()));
-
     check_txs_sorted_by_ancestor_score(&mempool);
     mempool.store.assert_valid();
 
@@ -1376,8 +1373,8 @@ fn check_txs_sorted_by_ancestor_score<E>(mempool: &Mempool<E>) {
     let txs_by_ancestor_score = mempool
         .store
         .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
+        .iter()
+        .map(|(_score, id)| id)
         .collect::<Vec<_>>();
     for i in 0..(txs_by_ancestor_score.len() - 1) {
         log::debug!("i =  {}", i);
@@ -1477,7 +1474,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_b.fees_with_descendants(),
         (entry_b.fee() + entry_c.fee()).unwrap()
     );
-    assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_b_fee.into()));
     log::debug!(
         "raw_txs_by_descendant_score {:?}",
         mempool.store.txs_by_descendant_score
@@ -1485,7 +1481,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     check_txs_sorted_by_descendant_sore(&mempool);
 
     mempool.store.remove_tx(entry_c.tx_id(), MempoolRemovalReason::Block);
-    assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
 
@@ -1499,8 +1494,8 @@ fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
     let txs_by_descendant_score = mempool
         .store
         .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
+        .iter()
+        .map(|(_score, id)| id)
         .collect::<Vec<_>>();
     for i in 0..(txs_by_descendant_score.len() - 1) {
         log::debug!("i =  {}", i);
