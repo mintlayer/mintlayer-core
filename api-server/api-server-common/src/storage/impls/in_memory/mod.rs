@@ -157,9 +157,9 @@ impl ApiServerInMemoryStorage {
     fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
-        block_aux_data: BlockAuxData,
+        block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
-        self.block_aux_data_table.insert(block_id, block_aux_data);
+        self.block_aux_data_table.insert(block_id, block_aux_data.clone());
         Ok(())
     }
 

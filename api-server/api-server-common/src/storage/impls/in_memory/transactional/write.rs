@@ -65,7 +65,7 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
-        block_aux_data: BlockAuxData,
+        block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_block_aux_data(block_id, block_aux_data)
     }

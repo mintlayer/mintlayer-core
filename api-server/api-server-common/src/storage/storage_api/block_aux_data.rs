@@ -14,13 +14,30 @@
 // limitations under the License.
 
 use common::{
-    chain::GenBlock,
+    chain::Block,
     primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct BlockAuxData {
-    block_id: Id<GenBlock>,
+    block_id: Id<Block>,
     block_height: BlockHeight,
+}
+
+impl BlockAuxData {
+    pub fn new(block_id: Id<Block>, block_height: BlockHeight) -> Self {
+        Self {
+            block_id,
+            block_height,
+        }
+    }
+
+    pub fn block_id(&self) -> Id<Block> {
+        self.block_id
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        self.block_height
+    }
 }
