@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::Block,
+    chain::{Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use serialization::{DecodeAll, Encode};
@@ -176,8 +176,19 @@ where
         sqlx::query(
             "CREATE TABLE blocks (
                   block_id BLOB PRIMARY KEY,
-                  block BLOB NOT NULL
+                  block_data BLOB NOT NULL
             );",
+        )
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        sqlx::query(
+            "CREATE TABLE transactions (
+                  transaction_id BLOB PRIMARY KEY,
+                  owning_block_id BLOB,
+                  transaction_data BLOB NOT NULL
+            );", // block_id can be null if the transaction is not in the main chain
         )
         .execute(&self.db_pool)
         .await
@@ -330,7 +341,7 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT block FROM blocks WHERE block_id = ?;")
+            sqlx::query_as("SELECT block_data FROM blocks WHERE block_id = ?;")
                 .bind(block_id.encode())
                 .fetch_optional(&self.db_pool)
                 .await
@@ -345,8 +356,8 @@ where
 
         let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
             ApiServerStorageError::DeserializationError(format!(
-                "Block deserialization failed: {}",
-                e
+                "Block {} deserialization failed: {}",
+                block_id, e
             ))
         })?;
 
@@ -369,12 +380,96 @@ where
         logging::log::debug!("Inserting block with id: {:?}", block_id);
 
         sqlx::query(
-            "INSERT INTO blocks (block_id, block) VALUES ($1, $2)
+            "INSERT INTO blocks (block_id, block_data) VALUES ($1, $2)
                 ON CONFLICT (block_id) DO UPDATE
-                SET block = $2;",
+                SET block_data = $2;",
         )
         .bind(block_id.encode())
         .bind(block.encode())
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_transaction(
+        &self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let row: Option<(Option<Vec<u8>>, Vec<u8>)> = sqlx::query_as(
+            "SELECT owning_block_id, transaction_data FROM transactions WHERE transaction_id = ?;",
+        )
+        .bind(transaction_id.encode())
+        .fetch_optional(&self.db_pool)
+        .await
+        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let (block_id_data, transaction_data) = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let block_id = {
+            let deserialized_block_id =
+                block_id_data.map(|d| Id::<Block>::decode_all(&mut d.as_slice())).transpose();
+            deserialized_block_id.map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Block deserialization failed: {}",
+                    e
+                ))
+            })?
+        };
+
+        let transaction =
+            SignedTransaction::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Transaction {} deserialization failed: {}",
+                    transaction_id, e
+                ))
+            })?;
+
+        Ok(Some((block_id, transaction)))
+    }
+
+    pub async fn set_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+        owning_block: Option<Id<Block>>,
+        transaction: &SignedTransaction,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
+    {
+        logging::log::debug!(
+            "Inserting transaction with id {}, owned by block {:?}",
+            transaction_id,
+            owning_block
+        );
+
+        sqlx::query(
+            "INSERT INTO transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
+                ON CONFLICT (transaction_id) DO UPDATE
+                SET owning_block_id = $2, transaction_data = $3;",
+        )
+        .bind(transaction_id.encode())
+        .bind(owning_block.map(|v|v.encode()))
+        .bind(transaction.encode())
         .execute(&self.db_pool)
         .await
         .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -385,13 +480,23 @@ where
 
 #[cfg(test)]
 mod tests {
-    use chainstate_test_framework::TestFramework;
-    use common::primitives::H256;
+    use chainstate_test_framework::{TestFramework, TransactionBuilder};
+    use common::{
+        chain::{signature::inputsig::InputWitness, OutPointSourceId, TxInput, UtxoOutPoint},
+        primitives::{Idable, H256},
+    };
 
     use super::*;
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
+
+    pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
+        use crypto::random::SliceRandom;
+        let mut msg: Vec<u8> = (1..100).collect();
+        msg.shuffle(rng);
+        InputWitness::NoSignature(Some(msg))
+    }
 
     #[tokio::test]
     async fn initialization() {
@@ -479,8 +584,8 @@ mod tests {
         {
             {
                 let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
-                let block_id = storage.get_block(random_block_id).await.unwrap();
-                assert!(block_id.is_none());
+                let block = storage.get_block(random_block_id).await.unwrap();
+                assert!(block.is_none());
             }
             // Create a test framework and blocks
 
@@ -501,6 +606,63 @@ mod tests {
 
                 let block = storage.get_block(block_id1).await.unwrap();
                 assert_eq!(block, Some(block1));
+            }
+        }
+
+        // Test setting/getting transactions
+        {
+            {
+                let random_tx_id: Id<Transaction> =
+                    Id::<Transaction>::new(H256::random_using(&mut rng));
+                let tx = storage.get_transaction(random_tx_id).await.unwrap();
+                assert!(tx.is_none());
+
+                let owning_block1 = Id::<Block>::new(H256::random_using(&mut rng));
+                let tx1: SignedTransaction = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(UtxoOutPoint::new(
+                            OutPointSourceId::Transaction(Id::<Transaction>::new(
+                                H256::random_using(&mut rng),
+                            )),
+                            0,
+                        )),
+                        empty_witness(&mut rng),
+                    )
+                    .build();
+
+                // before storage
+                let tx_and_block_id =
+                    storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
+                assert!(tx_and_block_id.is_none());
+
+                // Set without owning block
+                {
+                    storage.set_transaction(tx1.transaction().get_id(), None, &tx1).await.unwrap();
+
+                    let tx_and_block_id =
+                        storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
+                    assert!(tx_and_block_id.is_some());
+
+                    let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
+                    assert!(owning_block.is_none());
+                    assert_eq!(tx_retrieved, tx1);
+                }
+
+                // Set with owning block
+                {
+                    storage
+                        .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx1)
+                        .await
+                        .unwrap();
+
+                    let tx_and_block_id =
+                        storage.get_transaction(tx1.transaction().get_id()).await.unwrap();
+                    assert!(tx_and_block_id.is_some());
+
+                    let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
+                    assert_eq!(owning_block, Some(owning_block1));
+                    assert_eq!(tx_retrieved, tx1);
+                }
             }
         }
     }
