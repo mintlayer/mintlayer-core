@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use serialization::{DecodeAll, Encode};
@@ -154,8 +154,7 @@ where
     {
         sqlx::query(
             "CREATE TABLE ml_misc_data (
-                id INTEGER AUTO_INCREMENT PRIMARY KEY,
-                name TEXT NOT NULL,
+                name TEXT PRIMARY KEY,
                 value BLOB NOT NULL
             );",
         )
@@ -255,13 +254,14 @@ where
     {
         let height = Self::block_height_to_sqlx_friendly(block_height);
 
-        let row: Option<(Vec<u8>,)> = sqlx::query_as::<_, _>(
-            "SELECT block_id FROM ml_main_chain_blocks WHERE block_height = ?;",
-        )
-        .bind(height)
-        .fetch_optional(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("SELECT block_id FROM ml_main_chain_blocks WHERE block_height = ?;")
+                .bind(height)
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
 
         let data = match row {
             Some(d) => d.0,
@@ -553,6 +553,65 @@ where
 
         Ok(())
     }
+
+    pub async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let data: (Vec<u8>,) =
+            sqlx::query_as("SELECT value FROM ml_misc_data WHERE name = 'best_block';")
+                .fetch_one(&self.db_pool)
+                .await
+                .map_err(|e: sqlx::Error| {
+                    ApiServerStorageError::LowLevelStorageError(e.to_string())
+                })?;
+
+        let best =
+            <(BlockHeight, Id<GenBlock>)>::decode_all(&mut data.0.as_slice()).map_err(|e| {
+                ApiServerStorageError::InvalidInitializedState(format!(
+                    "Version deserialization failed: {}",
+                    e
+                ))
+            })?;
+
+        Ok(best)
+    }
+
+    pub async fn set_best_block(
+        &mut self,
+        block_height: BlockHeight,
+        block_id: Id<GenBlock>,
+    ) -> Result<(), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> String: sqlx::Encode<'e, D>,
+        String: sqlx::Type<D>,
+    {
+        logging::log::debug!("Inserting best block with block_id {}", block_id);
+
+        sqlx::query(
+            "INSERT INTO ml_misc_data (name, value) VALUES (?, ?)
+                ON CONFLICT (name) DO UPDATE
+                SET value = $2;",
+        )
+        .bind("best_block".to_string())
+        .bind((block_height, block_id).encode())
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -763,6 +822,39 @@ mod tests {
 
             let retrieved_aux_data = storage.get_block_aux_data(random_block_id).await.unwrap();
             assert_eq!(retrieved_aux_data, Some(aux_data2));
+        }
+
+        // Test setting/getting best block
+        {
+            // Set once then get best block
+            {
+                let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+                let height1 = height1_u64.into();
+                let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
+
+                storage.set_best_block(height1, random_block_id1.into()).await.unwrap();
+
+                let (retrieved_best_height, retrieved_best_id) =
+                    storage.get_best_block().await.unwrap();
+
+                assert_eq!(height1, retrieved_best_height);
+                assert_eq!(random_block_id1, retrieved_best_id);
+            }
+
+            // Set again to test overwrite
+            {
+                let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+                let height2 = height2_u64.into();
+                let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
+
+                storage.set_best_block(height2, random_block_id2.into()).await.unwrap();
+
+                let (retrieved_best_height, retrieved_best_id) =
+                    storage.get_best_block().await.unwrap();
+
+                assert_eq!(height2, retrieved_best_height);
+                assert_eq!(random_block_id2, retrieved_best_id);
+            }
         }
     }
 
