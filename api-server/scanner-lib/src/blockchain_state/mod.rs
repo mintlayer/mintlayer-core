@@ -70,7 +70,7 @@ impl<B: ApiServerStorage> LocalBlockchainState for BlockchainState<B> {
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
             for tx in block.transactions() {
-                db_tx.set_transaction(tx.transaction().get_id(), block.get_id(), tx)?;
+                db_tx.set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)?;
             }
 
             db_tx.set_block(block.get_id(), &block)?;
