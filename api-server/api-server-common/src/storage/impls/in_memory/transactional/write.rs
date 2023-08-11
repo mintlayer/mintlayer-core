@@ -44,7 +44,7 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Id<Block>,
+        owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.set_transaction(transaction_id, owning_block, transaction)
@@ -120,7 +120,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 }

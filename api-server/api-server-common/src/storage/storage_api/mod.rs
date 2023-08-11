@@ -53,10 +53,11 @@ pub trait ApiServerStorageRead {
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
 
+    #[allow(clippy::type_complexity)]
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError>;
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
 }
 
 pub trait ApiServerStorageWrite: ApiServerStorageRead {
@@ -82,7 +83,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Id<Block>,
+        owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError>;
 

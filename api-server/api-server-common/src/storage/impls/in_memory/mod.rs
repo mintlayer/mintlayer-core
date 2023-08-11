@@ -30,7 +30,7 @@ struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
-    transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, SignedTransaction)>,
+    transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
     storage_version: Option<u32>,
 }
@@ -61,10 +61,11 @@ impl ApiServerInMemoryStorage {
         Ok(Some(block.clone()))
     }
 
+    #[allow(clippy::type_complexity)]
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError> {
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         let transaction_result = self.transaction_table.get(&transaction_id);
         let tx = match transaction_result {
             Some(tx) => tx,
@@ -131,7 +132,7 @@ impl ApiServerInMemoryStorage {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Id<Block>,
+        owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction_table
