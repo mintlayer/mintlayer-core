@@ -214,14 +214,14 @@ where
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
-        for<'e> String: sqlx::Encode<'e, D>,
-        String: sqlx::Type<D>,
+        for<'e> &'e str: sqlx::Encode<'e, D>,
+        for<'e> &'e str: sqlx::Type<D>,
     {
         self.create_tables().await?;
 
         // Insert row to the table
         sqlx::query("INSERT INTO ml_misc_data (name, value) VALUES (?, ?)")
-            .bind("version".to_string())
+            .bind("version")
             .bind(CURRENT_STORAGE_VERSION.encode())
             .execute(&self.db_pool)
             .await
@@ -594,8 +594,8 @@ where
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
-        for<'e> String: sqlx::Encode<'e, D>,
-        String: sqlx::Type<D>,
+        for<'e> &'e str: sqlx::Encode<'e, D>,
+        for<'e> &'e str: sqlx::Type<D>,
     {
         logging::log::debug!("Inserting best block with block_id {}", block_id);
 
@@ -604,7 +604,7 @@ where
                 ON CONFLICT (name) DO UPDATE
                 SET value = $2;",
         )
-        .bind("best_block".to_string())
+        .bind("best_block")
         .bind((block_height, block_id).encode())
         .execute(&self.db_pool)
         .await
