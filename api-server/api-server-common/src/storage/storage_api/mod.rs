@@ -34,7 +34,7 @@ pub enum ApiServerStorageError {
     InvalidInitializedState(String),
 }
 
-pub trait ApiStorageRead {
+pub trait ApiServerStorageRead {
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
 
     fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>;
@@ -59,7 +59,7 @@ pub trait ApiStorageRead {
     ) -> Result<Option<(Id<Block>, SignedTransaction)>, ApiServerStorageError>;
 }
 
-pub trait ApiStorageWrite: ApiStorageRead {
+pub trait ApiServerStorageWrite: ApiServerStorageRead {
     fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
@@ -104,12 +104,12 @@ pub trait ApiStorageWrite: ApiStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 }
 
-pub trait ApiTransactionRw: ApiStorageWrite + ApiStorageRead {
+pub trait ApiTransactionRw: ApiServerStorageWrite + ApiServerStorageRead {
     fn commit(self) -> Result<(), ApiServerStorageError>;
     fn rollback(self) -> Result<(), ApiServerStorageError>;
 }
 
-pub trait ApiServerTransactionRo: ApiStorageRead {
+pub trait ApiServerTransactionRo: ApiServerStorageRead {
     fn close(self) -> Result<(), ApiServerStorageError>;
 }
 
