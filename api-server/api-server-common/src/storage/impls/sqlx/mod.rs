@@ -49,7 +49,7 @@ impl SqlxStorage<Sqlite> {
     }
 
     pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
-        let query_str = Self::get_table_exists_query("misc_data");
+        let query_str = Self::get_table_exists_query("ml_misc_data");
         let is_initialized = self.is_initialized_internal(&query_str).await?;
         Ok(is_initialized)
     }
@@ -68,7 +68,7 @@ impl SqlxStorage<Postgres> {
     }
 
     pub async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
-        let query_str = Self::get_table_exists_query("misc_data");
+        let query_str = Self::get_table_exists_query("ml_misc_data");
         let is_initialized = self.is_initialized_internal(&query_str).await?;
         Ok(is_initialized)
     }
@@ -124,7 +124,7 @@ where
         Vec<u8>: sqlx::Type<D>,
     {
         let data: Option<(Vec<u8>,)> =
-            sqlx::query_as::<_, _>("SELECT value FROM misc_data WHERE name = 'version';")
+            sqlx::query_as::<_, _>("SELECT value FROM ml_misc_data WHERE name = 'version';")
                 .fetch_optional(&self.db_pool)
                 .await
                 .map_err(|e: sqlx::Error| {
@@ -153,7 +153,7 @@ where
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
     {
         sqlx::query(
-            "CREATE TABLE misc_data (
+            "CREATE TABLE ml_misc_data (
                 id INTEGER AUTO_INCREMENT PRIMARY KEY,
                 name TEXT NOT NULL,
                 value BLOB NOT NULL
@@ -164,7 +164,7 @@ where
         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         sqlx::query(
-            "CREATE TABLE main_chain_blocks (
+            "CREATE TABLE ml_main_chain_blocks (
                 block_height bigint PRIMARY KEY,
                 block_id BLOB NOT NULL
             );",
@@ -174,7 +174,7 @@ where
         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         sqlx::query(
-            "CREATE TABLE blocks (
+            "CREATE TABLE ml_blocks (
                 block_id BLOB PRIMARY KEY,
                 block_data BLOB NOT NULL
             );",
@@ -184,7 +184,7 @@ where
         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         sqlx::query(
-            "CREATE TABLE transactions (
+            "CREATE TABLE ml_transactions (
                 transaction_id BLOB PRIMARY KEY,
                 owning_block_id BLOB,
                 transaction_data BLOB NOT NULL
@@ -195,7 +195,7 @@ where
         .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
         sqlx::query(
-            "CREATE TABLE block_aux_data (
+            "CREATE TABLE ml_block_aux_data (
                 block_id BLOB PRIMARY KEY,
                 aux_data BLOB NOT NULL
             );",
@@ -221,7 +221,7 @@ where
         self.create_tables().await?;
 
         // Insert row to the table
-        sqlx::query("INSERT INTO misc_data (name, value) VALUES (?, ?)")
+        sqlx::query("INSERT INTO ml_misc_data (name, value) VALUES (?, ?)")
             .bind("version".to_string())
             .bind(CURRENT_STORAGE_VERSION.encode())
             .execute(&self.db_pool)
@@ -256,7 +256,7 @@ where
         let height = Self::block_height_to_sqlx_friendly(block_height);
 
         let row: Option<(Vec<u8>,)> = sqlx::query_as::<_, _>(
-            "SELECT block_id FROM main_chain_blocks WHERE block_height = ?;",
+            "SELECT block_id FROM ml_main_chain_blocks WHERE block_height = ?;",
         )
         .bind(height)
         .fetch_optional(&self.db_pool)
@@ -298,7 +298,7 @@ where
         logging::log::debug!("Inserting block id: {:?} for height: {}", block_id, height);
 
         sqlx::query(
-            "INSERT INTO main_chain_blocks (block_height, block_id) VALUES ($1, $2)
+            "INSERT INTO ml_main_chain_blocks (block_height, block_id) VALUES ($1, $2)
                 ON CONFLICT (block_height) DO UPDATE
                 SET block_id = $2;",
         )
@@ -326,7 +326,7 @@ where
         let height = Self::block_height_to_sqlx_friendly(block_height);
 
         sqlx::query(
-            "DELETE FROM main_chain_blocks
+            "DELETE FROM ml_main_chain_blocks
             WHERE block_height = $1;",
         )
         .bind(height)
@@ -351,7 +351,7 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT block_data FROM blocks WHERE block_id = ?;")
+            sqlx::query_as("SELECT block_data FROM ml_blocks WHERE block_id = ?;")
                 .bind(block_id.encode())
                 .fetch_optional(&self.db_pool)
                 .await
@@ -390,7 +390,7 @@ where
         logging::log::debug!("Inserting block with id: {:?}", block_id);
 
         sqlx::query(
-            "INSERT INTO blocks (block_id, block_data) VALUES ($1, $2)
+            "INSERT INTO ml_blocks (block_id, block_data) VALUES ($1, $2)
                 ON CONFLICT (block_id) DO UPDATE
                 SET block_data = $2;",
         )
@@ -417,7 +417,7 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let row: Option<(Option<Vec<u8>>, Vec<u8>)> = sqlx::query_as(
-            "SELECT owning_block_id, transaction_data FROM transactions WHERE transaction_id = ?;",
+            "SELECT owning_block_id, transaction_data FROM ml_transactions WHERE transaction_id = ?;",
         )
         .bind(transaction_id.encode())
         .fetch_optional(&self.db_pool)
@@ -473,7 +473,7 @@ where
         );
 
         sqlx::query(
-            "INSERT INTO transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
+            "INSERT INTO ml_transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
                 ON CONFLICT (transaction_id) DO UPDATE
                 SET owning_block_id = $2, transaction_data = $3;",
         )
@@ -501,7 +501,7 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT aux_data FROM block_aux_data WHERE block_id = ?;")
+            sqlx::query_as("SELECT aux_data FROM ml_block_aux_data WHERE block_id = ?;")
                 .bind(block_id.encode())
                 .fetch_optional(&self.db_pool)
                 .await
@@ -541,7 +541,7 @@ where
         logging::log::debug!("Inserting block aux data with block_id {}", block_id);
 
         sqlx::query(
-            "INSERT INTO block_aux_data (block_id, aux_data) VALUES ($1, $2)
+            "INSERT INTO ml_block_aux_data (block_id, aux_data) VALUES ($1, $2)
                 ON CONFLICT (block_id) DO UPDATE
                 SET aux_data = $2;",
         )
@@ -775,7 +775,7 @@ mod tests {
             .unwrap();
 
         sqlx::query(
-            "CREATE TABLE misc_data (
+            "CREATE TABLE some_table (
             id INTEGER AUTO_INCREMENT PRIMARY KEY,
             first_name VARCHAR(255) NOT NULL,
             last_name TEXT NOT NULL,
@@ -788,7 +788,7 @@ mod tests {
         .unwrap();
 
         let rows: (i64,) =
-            sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) as count_pet FROM misc_data;")
+            sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) as count_pet FROM some_table;")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
@@ -797,7 +797,7 @@ mod tests {
         assert_eq!(rows.0, 0);
 
         // Insert row to the table
-        sqlx::query("INSERT INTO misc_data (first_name, last_name, age) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO some_table (first_name, last_name, age) VALUES (?, ?, ?)")
             .bind("Richard")
             .bind("Roe")
             .bind(55)
@@ -805,7 +805,7 @@ mod tests {
             .await
             .unwrap();
 
-        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as count_pet FROM misc_data;")
+        let rows: (i64,) = sqlx::query_as("SELECT COUNT(*) as count_pet FROM some_table;")
             .fetch_one(&pool)
             .await
             .unwrap();
