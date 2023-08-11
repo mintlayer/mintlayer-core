@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod transactional;
+
 use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
@@ -78,6 +80,10 @@ impl<D> SqlxStorage<D>
 where
     D: Database,
 {
+    pub fn into_transactional(self) -> transactional::TransactionalSqlxStorage<D> {
+        transactional::TransactionalSqlxStorage::new(self)
+    }
+
     pub fn new(db_pool: Pool<D>) -> Result<Self, ApiServerStorageError> {
         Ok(Self { db_pool })
     }
