@@ -23,7 +23,7 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{HeaderListRequest, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     types::peer_id::PeerId,
     P2pError,
 };
@@ -41,32 +41,31 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let headers = iter::repeat(block.get_id().into()).take(102).collect();
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
+    )
+    .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -87,23 +86,22 @@ async fn valid_request(#[case] seed: Seed) {
         .get_locator_from_height(block_index.block_height().prev_height().unwrap())
         .unwrap();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+    )
+    .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     let headers = match message {
         SyncMessage::HeaderList(l) => l.into_headers(),
@@ -111,7 +109,7 @@ async fn valid_request(#[case] seed: Seed) {
     };
     assert_eq!(headers.len(), 1);
     assert_eq!(&headers[0], block_index.block_header());
-    handle.assert_no_error().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }

@@ -35,7 +35,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{SyncMessage, TransactionResponse},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -56,7 +56,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(test_p2p_config());
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -64,37 +64,35 @@ async fn invalid_transaction(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(
         message,
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
+    )
+    .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::NoInputs)).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
@@ -102,24 +100,20 @@ async fn invalid_transaction(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut node = TestNode::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    handle.assert_no_event().await;
-    handle.assert_no_peer_manager_event().await;
-    handle.assert_no_error().await;
+    node.assert_no_event().await;
+    node.assert_no_peer_manager_event().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -137,12 +131,11 @@ async fn no_transaction_service(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
         node_type: NodeType::BlocksOnly.into(),
         user_agent: "test".try_into().unwrap(),
         ..P2pConfig::default()
     });
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -150,22 +143,21 @@ async fn no_transaction_service(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -188,7 +180,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         max_peer_tx_announcements: 0.into(),
         ..P2pConfig::default()
     });
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -196,22 +188,21 @@ async fn too_many_announcements(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0)).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -229,7 +220,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(test_p2p_config());
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -237,25 +228,23 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(
         message,
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
@@ -264,9 +253,9 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         ))
         .ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -284,7 +273,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(test_p2p_config());
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -292,31 +281,29 @@ async fn valid_transaction(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle
-        .send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
+    node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
         .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(
         message,
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
+    )
+    .await;
 
     // There should be no `NewTransaction` message because the transaction is already known
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -335,7 +322,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(test_p2p_config());
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -343,7 +330,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let mut txs = std::collections::BTreeMap::<Id<Transaction>, _>::new();
 
@@ -370,7 +357,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
     let tx1_id = tx1.transaction().get_id();
     txs.insert(tx1_id, tx1.clone());
 
-    let res = handle
+    let res = node
         .mempool()
         .call_mut(|m| m.add_transaction(tx1, TxOrigin::LocalP2p))
         .await
@@ -379,9 +366,9 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     // The transaction should be held up in the orphan pool for now, so we don't expect it to be
     // propagated at this point
-    assert_eq!(handle.try_message(), None);
+    assert_eq!(node.try_message(), None);
 
-    let res = handle
+    let res = node
         .mempool()
         .call_mut(|m| m.add_transaction(tx0, TxOrigin::LocalP2p))
         .await
@@ -394,7 +381,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     // Now the orphan has been resolved, both transactions should be announced.
     for _ in 0..2 {
-        let (_peer, msg) = handle.message().await;
+        let (_peer, msg) = node.message().await;
         logging::log::error!("Msg new: {msg:?}");
         let tx_id = match msg {
             SyncMessage::NewTransaction(tx_id) => tx_id,
@@ -407,7 +394,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
     // A small sanity check that we have sent all transactions
     assert!(txs.is_empty());
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 /// Creates a simple transaction.

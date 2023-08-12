@@ -70,7 +70,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 /// A wrapper over other ends of the sync manager channels.
 ///
 /// Provides methods for manipulating and observing the sync manager state.
-pub struct SyncManagerHandle {
+pub struct TestNode {
     pub peer_id: PeerId,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
@@ -85,15 +85,15 @@ pub struct SyncManagerHandle {
     connected_peers: BTreeMap<PeerId, Sender<SyncMessage>>,
 }
 
-impl SyncManagerHandle {
+impl TestNode {
     /// Starts the sync manager event loop and returns a handle for manipulating and observing the
     /// manager state.
     pub async fn start() -> Self {
         Self::builder().build().await
     }
 
-    pub fn builder() -> SyncManagerHandleBuilder {
-        SyncManagerHandleBuilder::new()
+    pub fn builder() -> TestNodeBuilder {
+        TestNodeBuilder::new()
     }
 
     pub async fn start_with_params(
@@ -307,41 +307,36 @@ impl SyncManagerHandle {
     }
 }
 
-pub async fn sync_managers_in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
-    let best_blocks = futures::future::join_all(managers.iter().map(|manager| async {
-        manager
-            .chainstate()
-            .call(|this| this.get_best_block_id().unwrap())
-            .await
-            .unwrap()
+pub async fn nodes_in_sync(nodes: &[&mut TestNode]) -> bool {
+    let best_blocks = futures::future::join_all(nodes.iter().map(|node| async {
+        node.chainstate().call(|this| this.get_best_block_id().unwrap()).await.unwrap()
     }))
     .await;
     best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
 }
 
-pub async fn try_sync_managers_once(
+pub async fn try_sync_nodes_once(
     rng: &mut impl Rng,
-    managers: &mut [&mut SyncManagerHandle],
+    nodes: &mut [&mut TestNode],
     message_limit: usize,
 ) -> bool {
-    let peer_ids = managers.iter().map(|mng| mng.peer_id).collect::<Vec<_>>();
-    for manager in managers.iter_mut() {
-        let sender_peer_id = manager.peer_id;
+    let peer_ids = nodes.iter().map(|mng| mng.peer_id).collect::<Vec<_>>();
+    for node in nodes.iter_mut() {
+        let sender_peer_id = node.peer_id;
 
         // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
         let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
         let requested_txid = get_random_hash(rng).into();
-        manager
-            .send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
+        node.send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
             .await;
 
-        if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
+        if let Ok(peer_event) = node.peer_manager_receiver.try_recv() {
             // There should be no peer scoring or disconnections
             panic!("Unexpected message: {peer_event:?}");
         }
 
         for _ in 0..message_limit {
-            let (peer, sync_event) = manager.sync_event_receiver.recv().await.unwrap();
+            let (peer, sync_event) = node.sync_event_receiver.recv().await.unwrap();
 
             // Send sync messages between peers
             match &sync_event {
@@ -352,9 +347,8 @@ pub async fn try_sync_managers_once(
                     _ => {}
                 },
                 message => {
-                    let other_manager = managers.iter_mut().find(|m| m.peer_id == peer).unwrap();
-                    let sync_tx =
-                        other_manager.connected_peers.get(&sender_peer_id).unwrap().clone();
+                    let other_node = nodes.iter_mut().find(|m| m.peer_id == peer).unwrap();
+                    let sync_tx = other_node.connected_peers.get(&sender_peer_id).unwrap().clone();
                     sync_tx.send(message.clone()).await.unwrap();
                     return true;
                 }
@@ -365,19 +359,17 @@ pub async fn try_sync_managers_once(
     false
 }
 
-pub async fn sync_managers(rng: &mut impl Rng, managers: &mut [&mut SyncManagerHandle]) {
-    let sync_managers_helper = async move {
-        while !sync_managers_in_sync(managers).await {
-            while try_sync_managers_once(rng, managers, usize::MAX).await {}
+pub async fn sync_nodes(rng: &mut impl Rng, nodes: &mut [&mut TestNode]) {
+    let nodes_helper = async move {
+        while !nodes_in_sync(nodes).await {
+            while try_sync_nodes_once(rng, nodes, usize::MAX).await {}
         }
     };
 
-    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper)
-        .await
-        .unwrap();
+    tokio::time::timeout(Duration::from_secs(60), nodes_helper).await.unwrap();
 }
 
-pub struct SyncManagerHandleBuilder {
+pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
@@ -385,7 +377,7 @@ pub struct SyncManagerHandleBuilder {
     blocks: Vec<Block>,
 }
 
-impl SyncManagerHandleBuilder {
+impl TestNodeBuilder {
     pub fn new() -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
@@ -421,8 +413,8 @@ impl SyncManagerHandleBuilder {
         self
     }
 
-    pub async fn build(self) -> SyncManagerHandle {
-        let SyncManagerHandleBuilder {
+    pub async fn build(self) -> TestNode {
+        let TestNodeBuilder {
             chain_config,
             p2p_config,
             chainstate,
@@ -460,7 +452,7 @@ impl SyncManagerHandleBuilder {
 
         let manager_handle = manager.main_in_task();
 
-        SyncManagerHandle::start_with_params(
+        TestNode::start_with_params(
             chain_config,
             p2p_config,
             chainstate.clone(),
