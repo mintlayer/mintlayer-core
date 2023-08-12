@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -17,7 +17,6 @@ use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
-use itertools::Itertools;
 use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{
@@ -53,7 +52,7 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config::NodeType,
-    message::{HeaderList, SyncMessage, TransactionResponse},
+    message::{HeaderList, SyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
@@ -61,6 +60,8 @@ use crate::{
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
     Result, SyncingEventReceiver,
 };
+
+pub mod test_node_group;
 
 /// A timeout for blocking calls.
 const LONG_TIMEOUT: Duration = Duration::from_secs(60);
@@ -71,6 +72,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 ///
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct TestNode {
+    // FIXME: accessor
     pub peer_id: PeerId,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
@@ -307,68 +309,6 @@ impl TestNode {
     }
 }
 
-pub async fn nodes_in_sync(nodes: &[&mut TestNode]) -> bool {
-    let best_blocks = futures::future::join_all(nodes.iter().map(|node| async {
-        node.chainstate().call(|this| this.get_best_block_id().unwrap()).await.unwrap()
-    }))
-    .await;
-    best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
-}
-
-pub async fn try_sync_nodes_once(
-    rng: &mut impl Rng,
-    nodes: &mut [&mut TestNode],
-    message_limit: usize,
-) -> bool {
-    let peer_ids = nodes.iter().map(|mng| mng.peer_id).collect::<Vec<_>>();
-    for node in nodes.iter_mut() {
-        let sender_peer_id = node.peer_id;
-
-        // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
-        let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
-        let requested_txid = get_random_hash(rng).into();
-        node.send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
-            .await;
-
-        if let Ok(peer_event) = node.peer_manager_receiver.try_recv() {
-            // There should be no peer scoring or disconnections
-            panic!("Unexpected message: {peer_event:?}");
-        }
-
-        for _ in 0..message_limit {
-            let (peer, sync_event) = node.sync_event_receiver.recv().await.unwrap();
-
-            // Send sync messages between peers
-            match &sync_event {
-                SyncMessage::TransactionResponse(tx_resp) => match tx_resp {
-                    TransactionResponse::NotFound(txid) if *txid == requested_txid => {
-                        break;
-                    }
-                    _ => {}
-                },
-                message => {
-                    let other_node = nodes.iter_mut().find(|m| m.peer_id == peer).unwrap();
-                    let sync_tx = other_node.connected_peers.get(&sender_peer_id).unwrap().clone();
-                    sync_tx.send(message.clone()).await.unwrap();
-                    return true;
-                }
-            }
-        }
-    }
-
-    false
-}
-
-pub async fn sync_nodes(rng: &mut impl Rng, nodes: &mut [&mut TestNode]) {
-    let nodes_helper = async move {
-        while !nodes_in_sync(nodes).await {
-            while try_sync_nodes_once(rng, nodes, usize::MAX).await {}
-        }
-    };
-
-    tokio::time::timeout(Duration::from_secs(60), nodes_helper).await.unwrap();
-}
-
 pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
@@ -567,7 +507,9 @@ pub async fn new_top_blocks(
     random_bytes: Vec<u8>,
     start_distance_from_top: u64,
     count: u32,
-) {
+) -> Id<Block> {
+    assert!(count > 0);
+
     chainstate
         .call_mut(move |this| {
             let start_height = this
@@ -577,7 +519,7 @@ pub async fn new_top_blocks(
                 .saturating_sub(start_distance_from_top);
             let start_block_id =
                 this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
-            let mut start_block = match start_block_id.classify(this.get_chain_config()) {
+            let mut last_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
                 common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
             };
@@ -585,18 +527,19 @@ pub async fn new_top_blocks(
             for _ in 0..count {
                 let new_block = new_block(
                     this.get_chain_config(),
-                    start_block.as_ref(),
+                    last_block.as_ref(),
                     timestamp,
                     random_bytes.clone(),
                 );
 
                 this.process_block(new_block.clone(), BlockSource::Local).unwrap();
-
-                start_block = Some(new_block);
+                last_block = Some(new_block);
             }
+
+            last_block.unwrap().get_id()
         })
         .await
-        .unwrap();
+        .unwrap()
 }
 
 pub fn get_random_hash(rng: &mut impl Rng) -> H256 {
