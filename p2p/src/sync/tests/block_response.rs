@@ -26,7 +26,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };
@@ -44,28 +44,27 @@ async fn unrequested_block(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
+    node.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
         .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -82,21 +81,19 @@ async fn valid_response(#[case] seed: Seed) {
     let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(&mut tf, num_blocks);
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     let ids = blocks.iter().map(|b| b.get_id()).collect();
     assert_eq!(
@@ -105,23 +102,22 @@ async fn valid_response(#[case] seed: Seed) {
     );
 
     for block in blocks.into_iter() {
-        handle
-            .send_message(
-                peer,
-                SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
-            )
-            .await;
+        node.send_message(
+            peer,
+            SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
+        )
+        .await;
     }
 
     // A peer would request headers after the last block.
     assert!(matches!(
-        handle.message().await.1,
+        node.message().await.1,
         SyncMessage::HeaderListRequest(HeaderListRequest { .. })
     ));
 
-    handle.assert_no_error().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -143,7 +139,7 @@ async fn disconnect(#[case] seed: Seed) {
         sync_stalling_timeout: Duration::from_millis(100).into(),
         ..P2pConfig::default()
     });
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -151,16 +147,15 @@ async fn disconnect(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    )
+    .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(
         message,
@@ -168,7 +163,7 @@ async fn disconnect(#[case] seed: Seed) {
     );
 
     tokio::time::sleep(Duration::from_millis(300)).await;
-    handle.assert_disconnect_peer_event(peer).await;
+    node.assert_disconnect_peer_event(peer).await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }

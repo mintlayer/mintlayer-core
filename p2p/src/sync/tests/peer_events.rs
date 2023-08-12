@@ -23,7 +23,7 @@ use test_utils::random::Seed;
 
 use crate::{
     message::{HeaderList, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
 };
@@ -31,49 +31,49 @@ use crate::{
 // Check that the header list request is sent to a newly connected peer.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn connect_peer() {
-    let mut handle = SyncManagerHandle::start().await;
+    let mut node = TestNode::start().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 // Check that the attempt to connect the peer twice results in an error.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Registered duplicated peer"]
 async fn connect_peer_twice() {
-    let mut handle = SyncManagerHandle::start().await;
+    let mut node = TestNode::start().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle.try_connect_peer(peer);
+    node.try_connect_peer(peer);
 
-    handle.resume_panic().await;
+    node.resume_panic().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Unregistering unknown peer:"]
 async fn disconnect_nonexistent_peer() {
-    let mut handle = SyncManagerHandle::start().await;
+    let mut node = TestNode::start().await;
 
     let peer = PeerId::new();
-    handle.disconnect_peer(peer);
+    node.disconnect_peer(peer);
 
-    handle.resume_panic().await;
+    node.resume_panic().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_peer() {
-    let mut handle = SyncManagerHandle::start().await;
+    let mut node = TestNode::start().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
-    handle.disconnect_peer(peer);
-    handle.assert_no_error().await;
+    node.connect_peer(peer).await;
+    node.disconnect_peer(peer);
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -111,7 +111,7 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
         .build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time.get_time_getter())
@@ -121,11 +121,11 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
 
     // Connect peer and assume we requested a header list.
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     // Peer sends us a header list but we already know the containing block.
     let msg = SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
-    handle.send_message(peer, msg).await;
+    node.send_message(peer, msg).await;
 
     // Advance time across the timeout boundary. This would trigger a disconnect in a scenario
     // where we expect additional data from the peer. However, in this case we don't expect
@@ -133,7 +133,7 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
     time.advance_time(*p2p_config.sync_stalling_timeout);
 
     // Ensure the peer does not get disconnected.
-    handle.assert_no_disconnect_peer_event(peer).await;
+    node.assert_no_disconnect_peer_event(peer).await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }

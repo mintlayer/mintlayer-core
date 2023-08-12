@@ -25,7 +25,7 @@ use crate::{
     config::NodeType,
     error::ProtocolError,
     message::{BlockListRequest, HeaderList, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -45,7 +45,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let block = tf.make_block_builder().build();
 
     let p2p_config = Arc::new(test_p2p_config());
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_chainstate(tf.into_chainstate())
@@ -53,24 +53,22 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let headers = iter::repeat(block.header().clone())
         .take(*p2p_config.msg_header_count_limit + 1)
         .collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -92,28 +90,26 @@ async fn unordered_headers(#[case] seed: Seed) {
         .map(|(_, b)| b.header().clone())
         .collect();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -133,28 +129,26 @@ async fn disconnected_headers(#[case] seed: Seed) {
         .map(|b| b.header().clone())
         .collect();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -170,21 +164,19 @@ async fn valid_headers(#[case] seed: Seed) {
         .build();
     let blocks = create_n_blocks(&mut tf, 3);
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle
-        .send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)))
-        .await;
+    node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     assert_eq!(
         message,
@@ -193,9 +185,9 @@ async fn valid_headers(#[case] seed: Seed) {
         ))
     );
 
-    handle.assert_no_error().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -206,16 +198,13 @@ async fn disconnect() {
         sync_stalling_timeout: Duration::from_millis(100).into(),
         ..P2pConfig::default()
     });
-    let mut handle = SyncManagerHandle::builder()
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .build()
-        .await;
+    let mut node = TestNode::builder().with_p2p_config(Arc::clone(&p2p_config)).build().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     tokio::time::sleep(Duration::from_millis(300)).await;
-    handle.assert_disconnect_peer_event(peer).await;
+    node.assert_disconnect_peer_event(peer).await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }

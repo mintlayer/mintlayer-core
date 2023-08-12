@@ -20,11 +20,10 @@ use crypto::random::Rng;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
-use crate::{config::P2pConfig, sync::tests::helpers::SyncManagerHandle};
+use crate::{config::P2pConfig, sync::tests::helpers::TestNode};
 
 use super::helpers::{
-    get_random_bytes, new_block, new_top_blocks, sync_managers, sync_managers_in_sync,
-    try_sync_managers_once,
+    get_random_bytes, new_block, new_top_blocks, nodes_in_sync, sync_nodes, try_sync_nodes_once,
 };
 
 #[rstest::rstest]
@@ -55,8 +54,8 @@ async fn basic(#[case] seed: Seed) {
         blocks.push(block.clone());
     }
 
-    // Start `manager1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
+    let mut node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
@@ -65,32 +64,32 @@ async fn basic(#[case] seed: Seed) {
         .await;
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let mut node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    node1.try_connect_peer(node2.peer_id);
+    node2.try_connect_peer(node1.peer_id);
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
     new_top_blocks(
-        manager1.chainstate(),
+        node1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
         0,
         1,
     )
     .await;
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
     for _ in 0..15 {
         for _ in 0..rng.gen_range(1..2) {
             new_top_blocks(
-                manager1.chainstate(),
+                node1.chainstate(),
                 BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
                 get_random_bytes(&mut rng),
                 0,
@@ -98,14 +97,13 @@ async fn basic(#[case] seed: Seed) {
             )
             .await;
         }
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+        sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
     }
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    node1.join_subsystem_manager().await;
+    node2.join_subsystem_manager().await;
 }
 
-#[ignore = "This test sometimes breaks on CI, disabled until fixed"]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -131,8 +129,8 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
         blocks.push(block.clone());
     }
 
-    // Start `manager1` with up-to-date blockchain
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with up-to-date blockchain
+    let mut node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
@@ -141,26 +139,26 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
         .await;
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let mut node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    node1.try_connect_peer(node2.peer_id);
+    node2.try_connect_peer(node1.peer_id);
 
     // Simulate a normal block sync process.
     // There should be no unexpected disconnects.
-    let mut managers = vec![&mut manager1, &mut manager2];
-    while !sync_managers_in_sync(&managers).await {
-        try_sync_managers_once(&mut rng, &mut managers, 50).await;
+    let mut nodes = vec![&mut node1, &mut node2];
+    while !nodes_in_sync(&nodes).await {
+        try_sync_nodes_once(&mut rng, &mut nodes, 50).await;
         time_getter.advance_time(Duration::from_millis(10));
     }
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    node1.join_subsystem_manager().await;
+    node2.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -188,8 +186,8 @@ async fn reorg(#[case] seed: Seed) {
         blocks.push(block.clone());
     }
 
-    // Start `manager1` with up-to-date blockchain
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with up-to-date blockchain
+    let mut node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
@@ -197,8 +195,8 @@ async fn reorg(#[case] seed: Seed) {
         .build()
         .await;
 
-    // Start `manager2` with up-to-date blockchain
-    let mut manager2 = SyncManagerHandle::builder()
+    // Start `node2` with up-to-date blockchain
+    let mut node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
@@ -206,14 +204,14 @@ async fn reorg(#[case] seed: Seed) {
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    node1.try_connect_peer(node2.peer_id);
+    node2.try_connect_peer(node1.peer_id);
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
     // First blockchain reorg
     new_top_blocks(
-        manager1.chainstate(),
+        node1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
         1,
@@ -221,11 +219,11 @@ async fn reorg(#[case] seed: Seed) {
     )
     .await;
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
     // Second blockchain reorg
     new_top_blocks(
-        manager1.chainstate(),
+        node1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
         1,
@@ -233,10 +231,10 @@ async fn reorg(#[case] seed: Seed) {
     )
     .await;
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    node1.join_subsystem_manager().await;
+    node2.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -267,8 +265,8 @@ async fn block_production(#[case] seed: Seed) {
         blocks.push(block.clone());
     }
 
-    // Start `manager1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
+    let mut node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
@@ -277,30 +275,30 @@ async fn block_production(#[case] seed: Seed) {
         .await;
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let mut node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    let chainstate1 = manager1.chainstate().clone();
+    let chainstate1 = node1.chainstate().clone();
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    node1.try_connect_peer(node2.peer_id);
+    node2.try_connect_peer(node1.peer_id);
 
     let notification = Arc::new(tokio::sync::Notify::new());
     let notification_copy = Arc::clone(&notification);
 
     let sync_task = tokio::spawn(async move {
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+        sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
         notification.notified().await;
 
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+        sync_nodes(&mut rng, vec![&mut node1, &mut node2].as_mut_slice()).await;
 
-        manager1.join_subsystem_manager().await;
-        manager2.join_subsystem_manager().await;
+        node1.join_subsystem_manager().await;
+        node2.join_subsystem_manager().await;
     });
 
     let mut rng = test_utils::random::make_seedable_rng(seed);

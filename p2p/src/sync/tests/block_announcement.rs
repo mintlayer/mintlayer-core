@@ -31,7 +31,7 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, HeaderList, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    sync::tests::helpers::TestNode,
     types::peer_id::PeerId,
     P2pError,
 };
@@ -51,39 +51,35 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle.send_headers(peer, vec![block_2.header().clone()]).await;
+    node.send_headers(peer, vec![block_2.header().clone()]).await;
 
-    handle
-        .assert_peer_score_adjustment(
-            peer,
-            P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
-        )
-        .await;
-    handle.assert_no_event().await;
+    node.assert_peer_score_adjustment(
+        peer,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
+    )
+    .await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_timestamp() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut node = TestNode::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let block = Block::new(
         Vec::new(),
@@ -93,14 +89,13 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    )
+    .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
@@ -112,9 +107,9 @@ async fn invalid_timestamp() {
         ))
         .ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
@@ -126,13 +121,10 @@ async fn invalid_consensus_data() {
             .net_upgrades(NetUpgrades::new(ChainType::Mainnet))
             .build(),
     );
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut node = TestNode::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let block = Block::new(
         Vec::new(),
@@ -142,14 +134,13 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    )
+    .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
@@ -160,10 +151,10 @@ async fn invalid_consensus_data() {
         ))
         .ban_score()
     );
-    handle.assert_no_event().await;
-    handle.assert_no_error().await;
+    node.assert_no_event().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -180,26 +171,25 @@ async fn unconnected_headers(#[case] seed: Seed) {
     let block = tf.make_block_builder().build();
     let orphan_block = tf.make_block_builder().with_parent(block.get_id().into()).build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle.send_headers(peer, vec![orphan_block.header().clone()]).await;
+    node.send_headers(peer, vec![orphan_block.header().clone()]).await;
 
-    handle
-        .assert_peer_score_adjustment(
-            peer,
-            P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
-        )
-        .await;
-    handle.assert_no_event().await;
+    node.assert_peer_score_adjustment(
+        peer,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
+    )
+    .await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -215,29 +205,28 @@ async fn valid_block(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    )
+    .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(sent_to, peer);
     assert_eq!(
         message,
         SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
     );
-    handle.assert_no_error().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
