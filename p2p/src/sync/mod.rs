@@ -52,6 +52,7 @@ use crate::{
     PeerManagerEvent, Result,
 };
 
+#[derive(Debug)]
 pub enum LocalEvent {
     ChainstateNewTip(Id<Block>),
     MempoolNewTx(Id<Transaction>),
