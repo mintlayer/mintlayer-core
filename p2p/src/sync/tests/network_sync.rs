@@ -15,9 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::{
-    chain::block::timestamp::BlockTimestamp, primitives::user_agent::mintlayer_core_user_agent,
-};
+use common::chain::block::timestamp::BlockTimestamp;
 use crypto::random::Rng;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
@@ -43,26 +41,7 @@ async fn basic(#[case] seed: Seed) {
     let p2p_config = Arc::new(P2pConfig {
         msg_header_count_limit: 10.into(),
         max_request_blocks_count: 5.into(),
-
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_max_locator_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
+        ..P2pConfig::default()
     });
 
     let mut blocks = Vec::new();
@@ -138,29 +117,7 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
-    });
+    let p2p_config = Arc::new(P2pConfig::default());
 
     let mut blocks = Vec::new();
     for _ in 0..1000 {
@@ -217,29 +174,7 @@ async fn reorg(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
-    });
+    let p2p_config = Arc::new(P2pConfig::default());
 
     let mut blocks = Vec::new();
     for _ in 0..10 {
@@ -318,26 +253,7 @@ async fn block_production(#[case] seed: Seed) {
     let p2p_config = Arc::new(P2pConfig {
         msg_header_count_limit: 10.into(),
         max_request_blocks_count: 5.into(),
-
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_max_locator_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
+        ..P2pConfig::default()
     });
 
     let mut blocks = Vec::new();

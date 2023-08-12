@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use common::primitives::user_agent::UserAgent;
+use common::primitives::user_agent::{mintlayer_core_user_agent, UserAgent};
 use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use utils::make_config_setting;
 
@@ -121,6 +121,42 @@ pub struct P2pConfig {
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
     /// A maximum number of unconnected headers (block announcements) that a peer can send before
     /// it will be considered malicious.
+    pub max_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
+}
+
+impl P2pConfig {
+    pub fn new() -> Self {
+        P2pConfig {
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            max_inbound_connections: Default::default(),
+            ban_threshold: Default::default(),
+            ban_duration: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            msg_header_count_limit: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_request_blocks_count: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+            max_unconnected_headers: Default::default(),
+            sync_stalling_timeout: Default::default(),
+        }
+    }
+}
+
+impl Default for P2pConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }

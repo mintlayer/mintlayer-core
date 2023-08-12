@@ -19,7 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
-    primitives::{user_agent::mintlayer_core_user_agent, Id, H256},
+    primitives::{Id, H256},
     time_getter::TimeGetter,
 };
 use p2p::{
@@ -167,25 +167,10 @@ where
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
         socks5_proxy: None,
-        disable_noise: Default::default(),
         boot_nodes: Vec::new(),
         reserved_nodes: Vec::new(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
         node_type: NodeType::Inactive.into(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
+        ..P2pConfig::default()
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
