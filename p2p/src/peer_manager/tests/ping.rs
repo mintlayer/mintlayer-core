@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use common::chain::config;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
@@ -43,27 +43,10 @@ async fn ping_timeout() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
         socks5_proxy: None,
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
         ping_check_period: Duration::from_secs(1).into(),
         ping_timeout: Duration::from_secs(5).into(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        sync_stalling_timeout: Default::default(),
+        ..P2pConfig::default()
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
