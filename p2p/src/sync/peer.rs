@@ -479,6 +479,8 @@ where
     /// This is needed to allow the local or remote node to have slightly inaccurate clocks.
     /// Without it, even a 1 second difference can break block synchronization
     /// because one side may see the new block as invalid.
+    // TODO: this must be removed; but at this moment this is not really possible, because
+    // blockprod currently creates new blocks in the future, near the maximally allowed mark.
     async fn wait_for_clock_diff(&self, block_timestamp: Duration) {
         let max_block_timestamp =
             self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();

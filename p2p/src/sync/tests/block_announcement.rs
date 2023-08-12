@@ -36,7 +36,7 @@ use crate::{
     P2pError,
 };
 
-// The peer ban score is increased if if the parent of the announced block is unknown.
+// The peer ban score is increased if the parent of the announced block is unknown.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
