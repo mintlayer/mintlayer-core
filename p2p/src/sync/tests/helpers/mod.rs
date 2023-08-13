@@ -69,13 +69,14 @@ const LONG_TIMEOUT: Duration = Duration::from_secs(60);
 /// A short timeout for events that shouldn't occur.
 const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// A wrapper over other ends of the sync manager channels.
+/// A wrapper over other ends of the sync manager channels that simulates a test node.
 ///
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct TestNode {
-    // FIXME: accessor
-    pub peer_id: PeerId,
+    /// This node's peer id, as seen by other nodes.
+    peer_id: PeerId,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
+    // FIXME: rename to syncing_event_sender
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
@@ -193,6 +194,14 @@ impl TestNode {
         self.connected_peers.remove(&peer);
     }
 
+    // TODO: naming of methods in this struct should be reconsidered.
+    // E.g. message, try_message, adjust_peer_score_event should at least get a prefix like
+    // "get", "receive" etc.
+    // Secondly, send_message and send_headers should be named more specifically, e.g.
+    // "send_message_as_if_from" to indicate that they "send" a message to the current node
+    // and not from it.
+    // Also, methods dealing with SyncMessage's should probably have "sync" in their name.
+
     /// Sends an announcement to the sync manager.
     pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
         let sync_tx = self.connected_peers.get(&peer).unwrap().clone();
@@ -200,8 +209,6 @@ impl TestNode {
     }
 
     /// Receives a message from the sync manager.
-    // TODO: rename to get_message or something similar.
-    // Same for other message receiving functions below - try_message, adjust_peer_score_event
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await

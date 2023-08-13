@@ -206,8 +206,7 @@ impl TestNodeGroup {
         let sentinel_tx_id = get_random_hash(rng).into();
         let sentinel_msg = SyncMessage::TransactionRequest(sentinel_tx_id);
 
-        // FIXME: use debug
-        log::warn!("Using transaction {sentinel_tx_id} as a sentinel");
+        log::debug!("Using transaction {sentinel_tx_id} as a sentinel");
 
         let mut msg_count = 0;
 
@@ -220,7 +219,7 @@ impl TestNodeGroup {
 
             {
                 // Send the sentinel
-                log::warn!("Sending sentinel transaction {sentinel_tx_id} to peer {cur_peer_id}");
+                log::debug!("Sending sentinel transaction {sentinel_tx_id} to peer {cur_peer_id}");
 
                 let tx_sender_peer_id = self
                     .data
@@ -248,7 +247,7 @@ impl TestNodeGroup {
                     SyncMessage::TransactionResponse(TransactionResponse::NotFound(tx_id))
                         if *tx_id == sentinel_tx_id =>
                     {
-                        log::warn!("Sentinel transaction {tx_id} received by peer {cur_peer_id}");
+                        log::debug!("Sentinel transaction {tx_id} received by peer {cur_peer_id}");
                         break;
                     }
                     message => {
