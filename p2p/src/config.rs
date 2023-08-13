@@ -119,9 +119,10 @@ pub struct P2pConfig {
     pub max_message_size: MaxMessageSize,
     /// A maximum number of announcements (hashes) for which we haven't receive transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// A maximum number of unconnected headers (block announcements) that a peer can send before
+    /// A maximum number of singular unconnected headers that a peer can send before
     /// it will be considered malicious.
-    pub max_unconnected_headers: MaxUnconnectedHeaders,
+    // TODO: this is a legacy behavior that should be removed in the protocol v2.
+    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
 }
@@ -149,7 +150,7 @@ impl P2pConfig {
             user_agent: mintlayer_core_user_agent(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
-            max_unconnected_headers: Default::default(),
+            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
         }
     }
