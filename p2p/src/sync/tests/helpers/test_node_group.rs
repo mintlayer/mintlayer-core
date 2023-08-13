@@ -320,7 +320,7 @@ impl TestNodeGroup {
     fn assert_no_peer_manager_events_if_needed(&mut self) {
         if self.prevent_peer_manager_events {
             for data_item in &mut self.data {
-                if let Ok(peer_event) = data_item.node.peer_manager_receiver.try_recv() {
+                if let Ok(peer_event) = data_item.node.peer_manager_event_receiver.try_recv() {
                     panic!("Unexpected peer manager event: {peer_event:?}");
                 }
             }

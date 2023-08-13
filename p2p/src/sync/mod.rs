@@ -73,7 +73,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     p2p_config: Arc<P2pConfig>,
 
     messaging_handle: T::MessagingHandle,
-    sync_event_receiver: T::SyncingEventReceiver,
+    syncing_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -103,7 +103,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::MessagingHandle,
-        sync_event_receiver: T::SyncingEventReceiver,
+        syncing_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -113,7 +113,7 @@ where
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             mempool_handle,
@@ -146,7 +146,7 @@ where
                     self.handle_transaction_processed(&tx_proc)?;
                 },
 
-                event = self.sync_event_receiver.poll_next() => {
+                event = self.syncing_event_receiver.poll_next() => {
                     self.handle_peer_event(event?).await;
                 },
             }
