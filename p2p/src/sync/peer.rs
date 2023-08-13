@@ -605,10 +605,6 @@ where
         }
         log::trace!("[peer id = {}] Received headers: {headers:#?}", self.id());
 
-        // FIXME: allow one disconnected header, because it's currently a part of the protocol -
-        // old peers MAY send them during block announcement.
-        // I.e. bring unconnected_headers back.
-
         // Each header must be connected to the previous one.
         if !headers
             .iter()
