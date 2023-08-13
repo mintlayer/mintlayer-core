@@ -26,16 +26,20 @@ use common::{
     primitives::Idable,
 };
 use consensus::ConsensusVerificationError;
+use logging::log;
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
     config::P2pConfig,
     error::ProtocolError,
-    message::{BlockListRequest, HeaderList, SyncMessage},
+    message::{BlockListRequest, HeaderList, HeaderListRequest, SyncMessage},
     sync::tests::helpers::TestNode,
     types::peer_id::PeerId,
     P2pError,
 };
+
+use super::helpers::{make_new_top_blocks, make_new_top_blocks_return_headers};
 
 // The header list request is sent if the parent of the singular announced block is unknown.
 // However, if max_singular_unconnected_headers is exceeded, the DisconnectedHeaders error
@@ -327,5 +331,138 @@ async fn valid_block(#[case] seed: Seed) {
     );
     node.assert_no_error().await;
 
+    node.join_subsystem_manager().await;
+}
+
+// Check that the best known header (either sent or received) is taken into account
+// when making block announcements.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn best_known_header_is_considered(#[case] seed: Seed) {
+    logging::init_logging::<&std::path::Path>(None);
+
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = Arc::new(create_unit_test_config());
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let mut node = TestNode::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
+
+    // Create some initial blocks.
+    make_new_top_blocks(
+        &node.chainstate(),
+        time_getter.get_time_getter(),
+        &mut rng,
+        0,
+        1,
+    )
+    .await;
+
+    let peer = PeerId::new();
+    node.connect_peer(peer).await;
+
+    // Simulate the initial header exchange; make the peer send the node a locator containing
+    // the node's tip, so that it responds with an empty header list.
+    // I.e. we expect that though the node haven't sent any headers, it has remembered that
+    // the peer already has the tip.
+    {
+        let locator = node
+            .chainstate()
+            .call_mut(move |this| this.get_locator_from_height(1.into()))
+            .await
+            .unwrap()
+            .unwrap();
+
+        node.send_message(
+            peer,
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+        )
+        .await;
+
+        log::debug!("Expecting initial header response");
+        let (sent_to, message) = node.message().await;
+        assert_eq!(sent_to, peer);
+        assert_eq!(
+            message,
+            SyncMessage::HeaderList(HeaderList::new(Vec::new()))
+        );
+    }
+
+    {
+        // Create two blocks. Currently, this will result in generating two "ChainstateNewTip"
+        // local events in rapid succession, But when the first of them gets to the p2p subsystem,
+        // the chainstate should already have both blocks, so a HeaderList containing 2 headers should
+        // be produced. And when the second even is received, no events should be produced because
+        // both headers have already been announced.
+        let headers = make_new_top_blocks_return_headers(
+            &node.chainstate(),
+            time_getter.get_time_getter(),
+            &mut rng,
+            0,
+            2,
+        )
+        .await;
+
+        log::debug!("Expecting first announcement");
+        let (sent_to, message) = node.message().await;
+        assert_eq!(sent_to, peer);
+        assert_eq!(
+            message,
+            SyncMessage::HeaderList(HeaderList::new(headers.clone()))
+        );
+
+        log::debug!("Expecting no further announcements for now");
+        node.assert_no_event().await;
+    }
+
+    {
+        // So exactly the same as in the previous section; the expected result is the same as well.
+        // The purpose of this is to ensure that the node correctly takes into account
+        // headers that it has already sent (as opposed to what headers have been revealed
+        // by the peer, which is checked by the previous section).
+        let headers = make_new_top_blocks_return_headers(
+            &node.chainstate(),
+            time_getter.get_time_getter(),
+            &mut rng,
+            0,
+            2,
+        )
+        .await;
+
+        log::debug!("Expecting second announcement");
+        let (sent_to, message) = node.message().await;
+        assert_eq!(sent_to, peer);
+        assert_eq!(
+            message,
+            SyncMessage::HeaderList(HeaderList::new(headers.clone()))
+        );
+
+        log::debug!("Expecting no further announcements for now");
+        node.assert_no_event().await;
+    }
+
+    {
+        // Create a better branch starting at genesis; it should be announced via a single
+        // HeaderList message.
+        let reorg_headers = make_new_top_blocks_return_headers(
+            &node.chainstate(),
+            time_getter.get_time_getter(),
+            &mut rng,
+            5,
+            6,
+        )
+        .await;
+
+        log::debug!("Expecting third announcement");
+        let (sent_to, message) = node.message().await;
+        assert_eq!(sent_to, peer);
+        assert_eq!(
+            message,
+            SyncMessage::HeaderList(HeaderList::new(reorg_headers))
+        );
+    }
+
+    node.assert_no_error().await;
     node.join_subsystem_manager().await;
 }

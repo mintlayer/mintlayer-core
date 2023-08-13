@@ -18,6 +18,7 @@ use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use crypto::random::Rng;
 use p2p_types::socket_address::SocketAddress;
+use test_utils::random::Seed;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -463,7 +464,7 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
     }
 }
 
-pub fn new_block(
+fn make_new_block_impl(
     chain_config: &ChainConfig,
     prev_block: Option<&Block>,
     timestamp: BlockTimestamp,
@@ -501,17 +502,35 @@ pub fn new_block(
     .unwrap()
 }
 
-pub async fn new_top_blocks(
+pub fn make_new_block(
+    chain_config: &ChainConfig,
+    prev_block: Option<&Block>,
+    time_getter: &TimeGetter,
+    rng: &mut impl Rng,
+) -> Block {
+    make_new_block_impl(
+        chain_config,
+        prev_block,
+        BlockTimestamp::from_duration_since_epoch(time_getter.get_time()),
+        get_random_bytes(rng),
+    )
+}
+
+pub async fn make_new_top_blocks_return_headers(
     chainstate: &ChainstateHandle,
-    timestamp: BlockTimestamp,
-    random_bytes: Vec<u8>,
+    time_getter: TimeGetter,
+    rng: &mut impl Rng,
     start_distance_from_top: u64,
     count: u32,
-) -> Id<Block> {
+) -> Vec<SignedBlockHeader> {
     assert!(count > 0);
+
+    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.gen()));
 
     chainstate
         .call_mut(move |this| {
+            let mut new_rng = new_rng;
+            let mut block_headers = Vec::new();
             let start_height = this
                 .get_best_block_height()
                 .unwrap()
@@ -525,21 +544,40 @@ pub async fn new_top_blocks(
             };
 
             for _ in 0..count {
-                let new_block = new_block(
+                let new_block = make_new_block(
                     this.get_chain_config(),
                     last_block.as_ref(),
-                    timestamp,
-                    random_bytes.clone(),
+                    &time_getter,
+                    &mut new_rng,
                 );
 
+                block_headers.push(new_block.header().clone());
                 this.process_block(new_block.clone(), BlockSource::Local).unwrap();
                 last_block = Some(new_block);
             }
 
-            last_block.unwrap().get_id()
+            block_headers
         })
         .await
         .unwrap()
+}
+
+pub async fn make_new_top_blocks(
+    chainstate: &ChainstateHandle,
+    time_getter: TimeGetter,
+    rng: &mut impl Rng,
+    start_distance_from_top: u64,
+    count: u32,
+) -> Id<Block> {
+    let headers = make_new_top_blocks_return_headers(
+        chainstate,
+        time_getter,
+        rng,
+        start_distance_from_top,
+        count,
+    )
+    .await;
+    headers.last().unwrap().block_id()
 }
 
 pub fn get_random_hash(rng: &mut impl Rng) -> H256 {

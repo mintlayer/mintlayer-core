@@ -136,9 +136,7 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         // should return an empty sequence.
         let locator = tf.chainstate.get_locator().unwrap();
         assert_eq!(
-            tf.chainstate
-                .get_mainchain_headers_by_locator(locator.clone(), header_limit)
-                .unwrap(),
+            tf.chainstate.get_mainchain_headers_by_locator(&locator, header_limit).unwrap(),
             vec![],
         );
 
@@ -157,10 +155,8 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         .take(headers_count)
         .collect();
 
-        let headers = tf
-            .chainstate
-            .get_mainchain_headers_by_locator(locator.clone(), header_limit)
-            .unwrap();
+        let headers =
+            tf.chainstate.get_mainchain_headers_by_locator(&locator, header_limit).unwrap();
         assert_eq!(headers, expected);
         // Because both the locator and chainstate are tracking the same chain, the first header of
         // the locator is always the parent of the first new block.
@@ -170,7 +166,7 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         tf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng)
             .unwrap();
         let headers =
-            tf.chainstate.get_mainchain_headers_by_locator(locator, header_limit).unwrap();
+            tf.chainstate.get_mainchain_headers_by_locator(&locator, header_limit).unwrap();
         assert_eq!(headers.len(), header_limit);
     });
 }
@@ -199,7 +195,7 @@ fn get_headers_genesis(#[case] seed: Seed) {
         let header_count_limit = rng.gen_range(chain_length..chain_length * 2);
         let headers = btf
             .chainstate
-            .get_mainchain_headers_by_locator(locator_1, header_count_limit)
+            .get_mainchain_headers_by_locator(&locator_1, header_count_limit)
             .unwrap();
         assert_eq!(headers[0].prev_block_id(), &genesis_id);
         assert_eq!(headers.len(), chain_length);
@@ -231,7 +227,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let locator = tf.chainstate.get_locator().unwrap();
         tf.create_chain(&common_block_id, rng.gen_range(250..500), &mut rng).unwrap();
 
-        let headers = tf.chainstate.get_mainchain_headers_by_locator(locator, 2000).unwrap();
+        let headers = tf.chainstate.get_mainchain_headers_by_locator(&locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
         assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
     });
@@ -517,7 +513,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let locator = tf1.chainstate.get_locator().unwrap();
         let headers = tf2
             .chainstate
-            .get_mainchain_headers_by_locator(locator, header_count_limit)
+            .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
         tf1.block_index(&id); // This panics if the ID is not found
@@ -525,7 +521,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let locator = tf2.chainstate.get_locator().unwrap();
         let headers = tf1
             .chainstate
-            .get_mainchain_headers_by_locator(locator, header_count_limit)
+            .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
         tf2.block_index(&id); // This panics if the ID is not found
