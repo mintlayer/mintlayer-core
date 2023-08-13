@@ -75,9 +75,8 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 pub struct TestNode {
     /// This node's peer id, as seen by other nodes.
     peer_id: PeerId,
-    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
-    // FIXME: rename to syncing_event_sender
-    sync_event_sender: UnboundedSender<SyncingEvent>,
+    peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
+    syncing_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
@@ -109,26 +108,26 @@ impl TestNode {
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
     ) -> Self {
-        let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
+        let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
         let connected_peers = Default::default();
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
-        let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
+        let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
         };
-        let sync_event_receiver = SyncingEventReceiverMock {
-            events_receiver: messaging_receiver,
+        let syncing_event_receiver_mock = SyncingEventReceiverMock {
+            events_receiver: syncing_event_receiver,
         };
 
         let sync = BlockSyncManager::<NetworkingServiceStub>::new(
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver_mock,
             chainstate_handle.clone(),
             mempool_handle.clone(),
-            peer_manager_sender,
+            peer_manager_event_sender,
             time_getter,
         );
 
@@ -142,8 +141,8 @@ impl TestNode {
 
         Self {
             peer_id: PeerId::new(),
-            peer_manager_receiver,
-            sync_event_sender: handle_sender,
+            peer_manager_event_receiver,
+            syncing_event_sender,
             sync_event_receiver: handle_receiver,
             error_receiver,
             sync_manager_handle,
@@ -167,7 +166,7 @@ impl TestNode {
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
         let (sync_tx, sync_rx) = mpsc::channel(20);
-        self.sync_event_sender
+        self.syncing_event_sender
             .send(SyncingEvent::Connected {
                 peer_id: peer,
                 services: NodeType::Full.into(),
@@ -188,7 +187,7 @@ impl TestNode {
 
     /// Sends the `SyncControlEvent::Disconnected` event.
     pub fn disconnect_peer(&mut self, peer: PeerId) {
-        self.sync_event_sender
+        self.syncing_event_sender
             .send(SyncingEvent::Disconnected { peer_id: peer })
             .unwrap();
         self.connected_peers.remove(&peer);
@@ -237,7 +236,7 @@ impl TestNode {
 
     /// Receives the `AdjustPeerScore` event from the peer manager.
     pub async fn adjust_peer_score_event(&mut self) -> (PeerId, u32) {
-        match self.peer_manager_receiver.recv().await.unwrap() {
+        match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
                 sender.send(Ok(()));
                 (peer, score)
@@ -247,7 +246,7 @@ impl TestNode {
     }
 
     pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
-        match self.peer_manager_receiver.recv().await.unwrap() {
+        match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
                 assert_eq!(id, peer_id);
                 sender.send(Ok(()));
@@ -259,7 +258,7 @@ impl TestNode {
     pub async fn assert_no_disconnect_peer_event(&mut self, id: PeerId) {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
-                match self.peer_manager_receiver.recv().await.unwrap() {
+                match self.peer_manager_event_receiver.recv().await.unwrap() {
                     PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _) if id == peer_id => {
                         break;
                     }
@@ -273,7 +272,7 @@ impl TestNode {
 
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
+        time::timeout(SHORT_TIMEOUT, self.peer_manager_event_receiver.recv())
             .await
             .unwrap_err();
     }
@@ -303,7 +302,7 @@ impl TestNode {
 
     pub async fn join_subsystem_manager(self) {
         // Shutdown sync manager first
-        drop(self.sync_event_sender);
+        drop(self.syncing_event_sender);
         let _ = self.sync_manager_handle.await;
 
         // Shutdown remaining subsystems
@@ -313,7 +312,7 @@ impl TestNode {
         // Finally, when all services are down, receivers could be closed too
         drop(self.sync_event_receiver);
         drop(self.error_receiver);
-        drop(self.peer_manager_receiver);
+        drop(self.peer_manager_event_receiver);
     }
 }
 
@@ -450,15 +449,16 @@ impl NetworkingService for NetworkingServiceStub {
 struct MessagingHandleMock {
     events_sender: UnboundedSender<(PeerId, SyncMessage)>,
 }
-struct SyncingEventReceiverMock {
-    events_receiver: UnboundedReceiver<SyncingEvent>,
-}
 
 impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send((peer, message)).unwrap();
         Ok(())
     }
+}
+
+struct SyncingEventReceiverMock {
+    events_receiver: UnboundedReceiver<SyncingEvent>,
 }
 
 #[async_trait]
