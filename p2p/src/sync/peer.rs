@@ -80,7 +80,7 @@ impl std::hash::Hash for TxIdWrapper {
 }
 
 // TODO: Take into account the chain work when syncing.
-// TODO: rename this struct to PeerState or similar.
+// FIXME: rename this struct to PeerState/PeerManager or similar.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
@@ -125,6 +125,9 @@ struct IncomingDataState {
     requested_blocks: BTreeSet<Id<Block>>,
     /// The id of the best block header that we've received from the peer.
     peers_best_block_that_we_have: Option<Id<GenBlock>>,
+    /// The number of singular unconnected headers received from a peer. This counter is reset
+    /// after receiving a valid header list.
+    singular_unconnected_headers: usize,
 }
 
 struct OutgoingDataState {
@@ -182,6 +185,7 @@ where
                 pending_headers: Vec::new(),
                 requested_blocks: BTreeSet::new(),
                 peers_best_block_that_we_have: None,
+                singular_unconnected_headers: 0,
             },
             outgoing: OutgoingDataState {
                 blocks_queue: VecDeque::new(),
@@ -582,6 +586,25 @@ where
             || first_header_is_connected_to_pending_headers
             || first_header_is_connected_to_requested_blocks)
         {
+            // Note: legacy nodes will send singular unconnected headers during block announcement,
+            // so we have to handle this behavior here.
+            // TODO: this should be removed in the protocol v2.
+            if headers.len() == 1 {
+                self.incoming.singular_unconnected_headers += 1;
+
+                log::debug!(
+                    "Peer {} has sent {} singular unconnected headers",
+                    self.id(),
+                    self.incoming.singular_unconnected_headers
+                );
+                if self.incoming.singular_unconnected_headers
+                    <= *self.p2p_config.max_singular_unconnected_headers
+                {
+                    self.request_headers().await?;
+                    return Ok(());
+                }
+            }
+
             // TODO: technically, we may have failed to send a block request on the previous
             // iteration, due to some local or network issues; in that case, the corresponding
             // headers won't be present in pending_headers anymore, but they
@@ -599,6 +622,9 @@ where
             // Such situation will be quite rare though.
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
+
+        // Now that we've received a properly connected header list, this counter may be reset.
+        self.incoming.singular_unconnected_headers = 0;
 
         let already_downloading_blocks = if !self.incoming.requested_blocks.is_empty() {
             true
