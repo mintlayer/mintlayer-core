@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::{chain::block::timestamp::BlockTimestamp, primitives::Idable};
+use common::primitives::Idable;
 use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -30,7 +30,7 @@ use crate::{
     },
 };
 
-use super::helpers::{get_random_bytes, new_block, new_top_blocks};
+use super::helpers::{make_new_block, make_new_top_blocks};
 
 #[rstest::rstest]
 #[trace]
@@ -51,11 +51,11 @@ async fn basic(#[case] seed: Seed) {
 
     let mut blocks = Vec::new();
     for _ in 0..13 {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         blocks.push(block.clone());
     }
@@ -84,30 +84,16 @@ async fn basic(#[case] seed: Seed) {
 
     nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
-    let top_block_id = new_top_blocks(
-        &chainstate1,
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        0,
-        1,
-    )
-    .await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1).await;
     nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     for _ in 0..15 {
         let mut top_block_id = None;
         for _ in 0..rng.gen_range(1..2) {
             top_block_id = Some(
-                new_top_blocks(
-                    &chainstate1,
-                    BlockTimestamp::from_duration_since_epoch(
-                        time_getter.get_time_getter().get_time(),
-                    ),
-                    get_random_bytes(&mut rng),
-                    0,
-                    1,
-                )
-                .await,
+                make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1)
+                    .await,
             );
         }
         nodes.sync_all(&top_block_id.unwrap().into(), &mut rng).await;
@@ -131,11 +117,11 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
 
     let mut blocks = Vec::new();
     for _ in 0..1000 {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         time_getter.advance_time(Duration::from_secs(600));
         blocks.push(block.clone());
@@ -187,11 +173,11 @@ async fn reorg(#[case] seed: Seed) {
 
     let mut blocks = Vec::new();
     for _ in 0..10 {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         time_getter.advance_time(Duration::from_secs(60));
         blocks.push(block.clone());
@@ -223,26 +209,14 @@ async fn reorg(#[case] seed: Seed) {
     nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     // First blockchain reorg
-    let top_block_id = new_top_blocks(
-        &chainstate1,
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        1,
-        2,
-    )
-    .await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 1, 2).await;
 
     nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     // Second blockchain reorg
-    let top_block_id = new_top_blocks(
-        &chainstate1,
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        1,
-        2,
-    )
-    .await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 1, 2).await;
 
     nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
@@ -292,11 +266,11 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
     let mut initial_blocks = Vec::new();
     for _ in 0..initial_block_count {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             initial_blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         initial_blocks.push(block.clone());
     }
@@ -351,14 +325,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     let mut best_block_id = None;
     for _ in 0..new_block_count {
         best_block_id = Some(
-            new_top_blocks(
-                &chainstate1,
-                BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-                get_random_bytes(&mut rng),
-                0,
-                1,
-            )
-            .await,
+            make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1).await,
         );
     }
 

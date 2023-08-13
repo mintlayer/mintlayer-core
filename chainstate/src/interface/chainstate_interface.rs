@@ -85,7 +85,7 @@ pub trait ChainstateInterface: Send {
     /// The number of returned headers is limited by `header_count_limit`.
     fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 

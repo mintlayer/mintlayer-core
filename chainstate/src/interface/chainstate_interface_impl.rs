@@ -169,7 +169,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
     fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
