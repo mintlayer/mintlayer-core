@@ -100,6 +100,10 @@ pub enum ControllerError<T: NodeInterface> {
     NoStakingPool,
     #[error("More than one pool found, please specify pool id")]
     MoreThanOneStakingPool,
+    #[error("Wallet is locked")]
+    WalletIsLocked,
+    #[error("Cannot lock wallet because staking is running")]
+    StakingRunning,
 }
 
 pub struct Controller<T, W> {
@@ -218,6 +222,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ///
     /// This method returns an error if the wallet is not encrypted.
     pub fn lock_wallet(&mut self) -> Result<(), ControllerError<T>> {
+        utils::ensure!(
+            self.staking_started.is_empty(),
+            ControllerError::StakingRunning
+        );
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
@@ -726,6 +734,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
         let pool_ids =
             self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
