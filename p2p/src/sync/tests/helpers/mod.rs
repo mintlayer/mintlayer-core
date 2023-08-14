@@ -30,7 +30,7 @@ use tokio::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
-    ChainstateHandle, DefaultTransactionVerificationStrategy,
+    ChainstateHandle, DefaultTransactionVerificationStrategy, Locator,
 };
 use common::{
     chain::{
@@ -44,7 +44,7 @@ use common::{
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
         TxOutput,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
@@ -314,6 +314,14 @@ impl TestNode {
         drop(self.error_receiver);
         drop(self.peer_manager_event_receiver);
     }
+
+    pub async fn get_locator_from_height(&self, height: BlockHeight) -> Locator {
+        self.chainstate_handle
+            .call_mut(move |this| this.get_locator_from_height(height))
+            .await
+            .unwrap()
+            .unwrap()
+    }
 }
 
 pub struct TestNodeBuilder {
@@ -523,12 +531,32 @@ pub fn make_new_block(
     )
 }
 
+pub fn make_new_blocks(
+    chain_config: &ChainConfig,
+    prev_block: Option<&Block>,
+    time_getter: &TimeGetter,
+    count: usize,
+    rng: &mut impl Rng,
+) -> Vec<Block> {
+    let mut result = Vec::new();
+    let mut last_block = prev_block;
+
+    for _ in 0..count {
+        let new_block = make_new_block(chain_config, last_block, &time_getter, rng);
+
+        result.push(new_block);
+        last_block = result.last();
+    }
+
+    result
+}
+
 pub async fn make_new_top_blocks_return_headers(
     chainstate: &ChainstateHandle,
     time_getter: TimeGetter,
     rng: &mut impl Rng,
     start_distance_from_top: u64,
-    count: u32,
+    count: usize,
 ) -> Vec<SignedBlockHeader> {
     assert!(count > 0);
 
@@ -574,7 +602,7 @@ pub async fn make_new_top_blocks(
     time_getter: TimeGetter,
     rng: &mut impl Rng,
     start_distance_from_top: u64,
-    count: u32,
+    count: usize,
 ) -> Id<Block> {
     let headers = make_new_top_blocks_return_headers(
         chainstate,

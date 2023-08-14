@@ -367,12 +367,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
     // I.e. we expect that though the node haven't sent any headers, it has remembered that
     // the peer already has the tip.
     {
-        let locator = node
-            .chainstate()
-            .call_mut(move |this| this.get_locator_from_height(1.into()))
-            .await
-            .unwrap()
-            .unwrap();
+        let locator = node.get_locator_from_height(1.into()).await;
 
         node.send_message(
             peer,
@@ -464,5 +459,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
     }
 
     node.assert_no_error().await;
+    node.assert_no_peer_manager_event().await;
+
     node.join_subsystem_manager().await;
 }
