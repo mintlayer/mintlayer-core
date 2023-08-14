@@ -142,3 +142,9 @@ impl CliWithLocked {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliSaveSeedPhrase {
+    Save,
+    DoNotSave,
+}

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::BufWriter;
+
 use crate::keys::KeyPurpose::{Change, ReceiveFunds};
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -128,6 +130,60 @@ pub struct RootKeyConstant;
 pub struct RootKeys {
     pub root_key: ExtendedPrivateKey,
     pub root_vrf_key: ExtendedVRFPrivateKey,
+}
+
+/// Just an empty struct used as key for the DB table
+/// It only represents a single value as there can be only one root key
+#[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct SeedPhraseConstant;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeedPhrase {
+    pub mnemonic: zeroize::Zeroizing<bip39::Mnemonic>,
+}
+
+impl Encode for SeedPhrase {
+    fn encode(&self) -> Vec<u8> {
+        let mut buf = BufWriter::new(Vec::new());
+        self.encode_to(&mut buf);
+        buf.into_inner().expect("Flushing should never fail")
+    }
+
+    fn size_hint(&self) -> usize {
+        // Preallocate enough space for the longest possible word list
+        33
+    }
+
+    fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+        f(self.encode().as_slice())
+    }
+
+    fn encoded_size(&self) -> usize {
+        self.encode().len()
+    }
+
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
+        let entropy = self.mnemonic.to_entropy();
+        dest.write(&entropy.len().to_le_bytes());
+        dest.write(entropy.as_slice());
+    }
+}
+
+impl Decode for SeedPhrase {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        let mut bytes: [u8; std::mem::size_of::<usize>()] = [0; std::mem::size_of::<usize>()];
+        input.read(&mut bytes)?;
+        let len = usize::from_le_bytes(bytes);
+
+        let entropy = (0..len).map(|_| input.read_byte()).collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            mnemonic: zeroize::Zeroizing::new(
+                bip39::Mnemonic::from_entropy(entropy.as_slice())
+                    .map_err(|_| serialization::Error::from("Mnemonic deserialization failed"))?,
+            ),
+        })
+    }
 }
 
 #[cfg(test)]

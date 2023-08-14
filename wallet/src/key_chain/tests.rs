@@ -70,7 +70,7 @@ fn key_chain_creation(
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+        MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None, false).unwrap();
 
     let mut key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -127,7 +127,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None)
+        MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None, false)
             .unwrap();
     let mut key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -205,7 +205,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(Arc::clone(&chain_config), &mut db_tx, MNEMONIC, None)
+        MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None, false)
             .unwrap();
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)

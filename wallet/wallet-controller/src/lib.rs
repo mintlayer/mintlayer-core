@@ -146,6 +146,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         file_path: impl AsRef<Path>,
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
+        save_seed_phrase: bool,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -158,10 +159,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
         let wallet = wallet::Wallet::new_wallet(
-            Arc::clone(&chain_config),
+            chain_config.clone(),
             db,
             &mnemonic.to_string(),
             passphrase,
+            save_seed_phrase,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -186,6 +188,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
+    }
+
+    /// Retrieve the seed phrase if stored in the database
+    pub fn seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
+        self.wallet
+            .seed_phrase()
+            .map(|opt| opt.map(|phrase| phrase.mnemonic.to_string()))
+            .map_err(ControllerError::WalletError)
     }
 
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
