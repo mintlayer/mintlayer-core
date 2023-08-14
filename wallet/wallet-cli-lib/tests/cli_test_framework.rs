@@ -14,12 +14,18 @@
 // limitations under the License.
 
 use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
-use crossbeam_channel::{Receiver, Sender};
 use crypto::{key::PublicKey, random::Rng, vrf::VRFPublicKey};
 use hex::FromHex;
 use tokio::task::JoinHandle;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
+    time::Duration,
+};
 
 use chainstate::{
     make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig,
@@ -299,8 +305,8 @@ impl CliTestFramework {
             vi_mode: false,
         };
 
-        let (output_tx, output_rx) = crossbeam_channel::unbounded::<String>();
-        let (input_tx, input_rx) = crossbeam_channel::unbounded::<String>();
+        let (output_tx, output_rx) = std::sync::mpsc::channel();
+        let (input_tx, input_rx) = std::sync::mpsc::channel();
 
         let input = MockConsoleInput { input_rx };
 
