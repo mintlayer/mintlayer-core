@@ -184,16 +184,15 @@ impl BlockProduction {
         transaction_ids: Vec<Id<Transaction>>,
         include_mempool: bool,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
-        let mut accumulator: Box<dyn TransactionAccumulator + Send> =
-            Box::new(DefaultTxAccumulator::new(
-                self.chain_config.max_block_size_from_std_scripts(),
-                current_tip,
-                min_block_timestamp,
-            ));
+        let mut accumulator = Box::new(DefaultTxAccumulator::new(
+            self.chain_config.max_block_size_from_std_scripts(),
+            current_tip,
+            min_block_timestamp,
+        ));
 
         for transaction in transactions.into_iter() {
             let transaction_id = transaction.transaction().get_id();
-            // TODO: fees
+
             accumulator
                 .add_tx(transaction, Amount::ZERO.into())
                 .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
@@ -201,29 +200,9 @@ impl BlockProduction {
 
         let returned_accumulator = self
             .mempool_handle
-            .call({
-                move |this| -> Result<_, BlockProductionError> {
-                    for transaction_id in transaction_ids.iter() {
-                        if let Some(transaction) = this.transaction(transaction_id) {
-                            // TODO: fees
-                            accumulator.add_tx(transaction, Amount::ZERO.into()).map_err(|err| {
-                                BlockProductionError::FailedToAddTransaction(*transaction_id, err)
-                            })?
-                        } else {
-                            // TODO: shoud this error out rather than ignore missing transactions?
-                        }
-                    }
-
-                    if include_mempool {
-                        return this
-                            .collect_txs(accumulator)
-                            .map_err(|_| BlockProductionError::MempoolChannelClosed);
-                    }
-
-                    Ok(Some(accumulator))
-                }
-            })
-            .await??;
+            .call(move |mempool| mempool.collect_txs(accumulator, transaction_ids, include_mempool))
+            .await?
+            .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
 
         Ok(returned_accumulator)
     }

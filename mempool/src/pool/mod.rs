@@ -968,9 +968,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .expect("best index to exist");
         let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
+        let mut dedupe_txids = BTreeSet::new();
+        let mut ordered_txids = vec![];
+
+        for transaction in tx_accumulator.transactions().iter() {
+            // Use transactions already in the Accumulated for
+            // deduping only i.e don't send them through the verifier
+            dedupe_txids.insert(transaction.transaction().get_id());
+        }
+
+        for transaction_id in transaction_ids {
+            if dedupe_txids.insert(transaction_id) {
+                ordered_txids.push(transaction_id)
+            }
+        }
+
+        if fill_from_mempool {
+            let fill_txids = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
+
+            for transaction_id in fill_txids {
+                if dedupe_txids.insert(*transaction_id) {
+                    ordered_txids.push(*transaction_id)
+                }
+            }
+        }
+
         let block_timestamp = tx_accumulator.block_timestamp();
-        let tx_id_iter = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
-        let mut tx_iter = tx_id_iter
+
+        let mut tx_iter = ordered_txids
+            .iter()
             .filter_map(|tx_id| {
                 let tx = self.store.txs_by_id.get(tx_id)?.deref();
                 chainstate::tx_verifier::timelock_check::check_timelocks(
