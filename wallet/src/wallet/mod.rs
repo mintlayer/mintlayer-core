@@ -651,7 +651,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.scan_new_blocks(db_tx, wallet_events, common_block_height, &blocks)
@@ -664,7 +664,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn scan_mempool(
         &mut self,
         transactions: &[SignedTransaction],
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
@@ -685,7 +685,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn add_unconfirmed_tx(
         &mut self,
         transaction: SignedTransaction,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
