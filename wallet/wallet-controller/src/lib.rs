@@ -663,7 +663,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     pub async fn generate_block(
-        &mut self,
+        &self,
         account_index: U31,
         pool_id: Option<PoolId>,
         transactions_opt: Option<Vec<SignedTransaction>>,
@@ -832,8 +832,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 continue;
             }
 
-            // TODO: Try to remove the `clone` call
-            for account_index in self.staking_started.clone().iter() {
+            for account_index in self.staking_started.iter() {
                 let pools = self.wallet.get_pool_ids(*account_index).expect("Should not fail");
 
                 for (pool_id, _) in pools {
