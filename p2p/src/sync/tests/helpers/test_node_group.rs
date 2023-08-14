@@ -66,7 +66,6 @@ impl TestNodeGroup {
             .collect();
         let mut this = Self {
             data,
-            // FIXME: make true the default?
             prevent_peer_manager_events: false,
         };
         this.init();
@@ -91,6 +90,7 @@ impl TestNodeGroup {
         }
     }
 
+    #[allow(dead_code)]
     pub fn node(&self, idx: usize) -> &TestNode {
         &self.data[idx].node
     }
