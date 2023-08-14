@@ -76,6 +76,8 @@ pub fn start_subsystems_with_chainstate(
     (chainstate, mempool, shutdown_trigger, manager_handle)
 }
 
+// TODO: unify block creation utilities in p2p tests (others are in p2p/src/sync/tests/helpers,
+// may be in some other places too).
 pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
     assert!(n > 0);
 

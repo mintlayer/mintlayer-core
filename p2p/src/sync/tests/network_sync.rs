@@ -30,7 +30,7 @@ use crate::{
     },
 };
 
-use super::helpers::{make_new_block, make_new_top_blocks};
+use super::helpers::{make_new_block, make_new_blocks, make_new_top_blocks};
 
 #[rstest::rstest]
 #[trace]
@@ -49,16 +49,13 @@ async fn basic(#[case] seed: Seed) {
         ..P2pConfig::default()
     });
 
-    let mut blocks = Vec::new();
-    for _ in 0..13 {
-        let block = make_new_block(
-            &chain_config,
-            blocks.last(),
-            &time_getter.get_time_getter(),
-            &mut rng,
-        );
-        blocks.push(block.clone());
-    }
+    let blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        13,
+        &mut rng,
+    );
     let top_block_id = blocks.last().unwrap().get_id();
 
     // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
@@ -264,16 +261,13 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
     let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);
 
-    let mut initial_blocks = Vec::new();
-    for _ in 0..initial_block_count {
-        let block = make_new_block(
-            &chain_config,
-            initial_blocks.last(),
-            &time_getter.get_time_getter(),
-            &mut rng,
-        );
-        initial_blocks.push(block.clone());
-    }
+    let initial_blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        initial_block_count,
+        &mut rng,
+    );
 
     // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
     let node1 = TestNode::builder()

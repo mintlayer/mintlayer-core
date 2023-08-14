@@ -80,7 +80,7 @@ impl std::hash::Hash for TxIdWrapper {
 }
 
 // TODO: Take into account the chain work when syncing.
-// FIXME: rename this struct to PeerState/PeerManager or similar.
+// TODO: rename this struct to PeerState/PeerManager or similar.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
@@ -1111,7 +1111,7 @@ where
 
 /// This function is used to update peers_best_block_that_we_have.
 /// The "better" block is the one that is on the main chain and has bigger height.
-/// In the case of a tie, new_block_id is preferred. 
+/// In the case of a tie, new_block_id is preferred.
 fn choose_peers_best_block(
     chainstate: &dyn ChainstateInterface,
     old_block_id: Option<Id<GenBlock>>,
