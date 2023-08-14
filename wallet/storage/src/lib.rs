@@ -28,8 +28,9 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    keys::{RootKeys, SeedPhrase},
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -92,6 +93,7 @@ pub trait WalletStorageReadLocked {
 /// Queries on persistent wallet data with access to encrypted data
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
     fn get_root_key(&self) -> Result<Option<RootKeys>>;
+    fn get_seed_phrase(&self) -> Result<Option<SeedPhrase>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -139,6 +141,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
+    fn set_seed_phrase(&mut self, seed_phrase: SeedPhrase) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data for encryption
@@ -146,6 +149,7 @@ pub trait WalletStorageEncryptionWrite {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
     fn del_encryption_kdf_challenge(&mut self) -> Result<()>;
     fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
+    fn encrypt_seed_phrase(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

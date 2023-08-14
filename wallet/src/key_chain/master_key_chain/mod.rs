@@ -25,6 +25,7 @@ use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
 };
+use wallet_types::keys::SeedPhrase;
 
 use super::DEFAULT_VRF_KEY_KIND;
 
@@ -37,14 +38,14 @@ impl MasterKeyChain {
     pub fn mnemonic_to_root_key(
         mnemonic_str: &str,
         passphrase: Option<&str>,
-    ) -> KeyChainResult<(ExtendedPrivateKey, ExtendedVRFPrivateKey)> {
+    ) -> KeyChainResult<(ExtendedPrivateKey, ExtendedVRFPrivateKey, SeedPhrase)> {
         let mnemonic = zeroize::Zeroizing::new(
             bip39::Mnemonic::parse(mnemonic_str).map_err(KeyChainError::Bip39)?,
         );
         let seed = zeroize::Zeroizing::new(mnemonic.to_seed(passphrase.unwrap_or("")));
         let root_key = ExtendedPrivateKey::new_master(seed.as_ref(), DEFAULT_KEY_KIND)?;
         let root_vrf_key = ExtendedVRFPrivateKey::new_master(seed.as_ref(), DEFAULT_VRF_KEY_KIND)?;
-        Ok((root_key, root_vrf_key))
+        Ok((root_key, root_vrf_key, SeedPhrase { mnemonic }))
     }
 
     pub fn new_from_mnemonic<B: storage::Backend>(
@@ -52,12 +53,20 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
+        save_seed_phrase: bool,
     ) -> KeyChainResult<Self> {
         // TODO: Do not store the master key here, store only the key relevant to the mintlayer
         // (see make_account_path)
 
-        let (root_key, root_vrf_key) = Self::mnemonic_to_root_key(mnemonic_str, passphrase)?;
-        Self::new_from_root_key(chain_config, db_tx, root_key, root_vrf_key)
+        let (root_key, root_vrf_key, seed_phrase) =
+            Self::mnemonic_to_root_key(mnemonic_str, passphrase)?;
+        Self::new_from_root_key(
+            chain_config,
+            db_tx,
+            root_key,
+            root_vrf_key,
+            save_seed_phrase.then_some(seed_phrase),
+        )
     }
 
     pub fn new_from_root_key<B: storage::Backend>(
@@ -65,6 +74,7 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRwUnlocked<B>,
         root_key: ExtendedPrivateKey,
         root_vrf_key: ExtendedVRFPrivateKey,
+        seed_phrase: Option<SeedPhrase>,
     ) -> KeyChainResult<Self> {
         if !root_key.get_derivation_path().is_root() {
             return Err(KeyChainError::KeyNotRoot);
@@ -76,6 +86,9 @@ impl MasterKeyChain {
         };
 
         db_tx.set_root_key(&key_content)?;
+        if let Some(seed_phrase) = seed_phrase {
+            db_tx.set_seed_phrase(seed_phrase)?;
+        }
 
         Ok(MasterKeyChain { chain_config })
     }

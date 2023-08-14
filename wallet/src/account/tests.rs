@@ -42,7 +42,8 @@ fn account_addresses() {
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
+        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
+            .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -71,7 +72,8 @@ fn account_addresses_lookahead() {
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
+        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
+            .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -112,7 +114,8 @@ fn sign_transaction(#[case] seed: Seed) {
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
+        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
+            .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)

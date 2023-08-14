@@ -54,7 +54,7 @@ async fn wallet_cli_file(#[case] seed: Seed) {
         .to_owned();
 
     // Start the wallet, create it, then close it, then shutdown
-    let output = test.run(&[&format!("createwallet \"{file_name}\""), "closewallet"]).await;
+    let output = test.run(&[&format!("createwallet \"{file_name}\" save"), "closewallet"]).await;
     assert_eq!(output.len(), 2, "Unexpected output: {:?}", output);
     assert!(output[0].starts_with("New wallet created successfully\n"));
     assert_eq!(output[1], "Successfully closed the wallet.");
@@ -87,7 +87,7 @@ async fn produce_blocks(#[case] seed: Seed) {
         .to_owned();
 
     // Create wallet
-    let cmd1 = format!("createwallet \"{}\" \"{}\"", file_name, MNEMONIC);
+    let cmd1 = format!("createwallet \"{}\" save \"{}\"", file_name, MNEMONIC);
     let output = test.run(&[&cmd1, "getbalance", "generateblocks 20"]).await;
     assert_eq!(output.len(), 3, "Unexpected output: {:?}", output);
     assert_eq!(output[0], "New wallet created successfully");

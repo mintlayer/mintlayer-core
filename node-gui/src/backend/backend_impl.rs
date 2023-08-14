@@ -121,11 +121,13 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
+        // TODO: add support for passphrase and saving of seed phrase
         let wallet = GuiController::create_wallet(
             Arc::clone(&self.chain_config),
             file_path.clone(),
             mnemonic,
             None,
+            false,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
