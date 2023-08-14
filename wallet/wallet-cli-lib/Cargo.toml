@@ -25,6 +25,7 @@ wallet-types = { path = "../types" }
 
 clap = { workspace = true, features = ["derive"] }
 crossterm.workspace = true
+crossbeam-channel.workspace = true
 directories.workspace = true
 hex.workspace = true
 reedline = { workspace = true, features = ["external_printer"] }
