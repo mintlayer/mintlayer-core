@@ -434,32 +434,38 @@ where
             return Ok(());
         }
 
-        let limit = *self.p2p_config.msg_header_count_limit;
-        let (headers, id_of_peers_best_block_that_we_have) = self
+        // Obtain headers and also determine the new value for peers_best_block_that_we_have.
+        let header_count_limit = *self.p2p_config.msg_header_count_limit;
+        let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
+        let (headers, peers_best_block_that_we_have) = self
             .chainstate_handle
             .call(move |c| {
-                let headers = c.get_mainchain_headers_by_locator(&locator, limit)?;
-                let id_of_peers_best_block_that_we_have = if let Some(header) = headers.first() {
+                let headers = c.get_mainchain_headers_by_locator(&locator, header_count_limit)?;
+                let peers_best_block_that_we_have = if let Some(header) = headers.first() {
                     // If headers obtained from the locator are non-empty, the parent of
                     // the first one represents the last common block that is shared by this node's
                     // and the peer's main chains.
-                    *header.prev_block_id()
+                    let last_common_block_id = *header.prev_block_id();
+                    choose_peers_best_block(
+                        c,
+                        old_peers_best_block_that_we_have,
+                        Some(last_common_block_id),
+                    )?
                 } else {
                     // If headers are empty, the peer already has our best block.
-                    c.get_best_block_id()?
+                    Some(c.get_best_block_id()?)
                 };
 
-                Result::<_>::Ok((headers, id_of_peers_best_block_that_we_have))
+                Result::<_>::Ok((headers, peers_best_block_that_we_have))
             })
             .await??;
-        debug_assert!(headers.len() <= limit);
-
-        self.incoming.peers_best_block_that_we_have = Some(id_of_peers_best_block_that_we_have);
+        debug_assert!(headers.len() <= header_count_limit);
+        self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
         // Sending a below-the-max amount of headers is a signal to the peer that we've sent
         // all headers that were available at the moment; after this, the peer may not ask us
         // for headers anymore, so we should start sending tip updates.
-        self.send_tip_updates = headers.len() < limit;
+        self.send_tip_updates = headers.len() < header_count_limit;
 
         self.send_headers(HeaderList::new(headers))
     }
@@ -713,15 +719,26 @@ where
         }
 
         let peer_may_have_more_headers = headers.len() == *self.p2p_config.msg_header_count_limit;
-        let (existing_block_headers, new_block_headers) = self
+
+        // Filter out any existing headers from "headers" and determine the new value for
+        // peers_best_block_that_we_have.
+        let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
+        let (new_block_headers, peers_best_block_that_we_have) = self
             .chainstate_handle
-            .call(|c| c.split_off_leading_known_headers(headers))
+            .call(move |c| {
+                let (existing_block_headers, new_block_headers) =
+                    c.split_off_leading_known_headers(headers)?;
+                let peers_best_block_that_we_have = choose_peers_best_block(
+                    c,
+                    old_peers_best_block_that_we_have,
+                    existing_block_headers.last().map(|header| header.get_id().into()),
+                )?;
+
+                Result::<_>::Ok((new_block_headers, peers_best_block_that_we_have))
+            })
             .await??;
 
-        if let Some(last_existing_block) = existing_block_headers.last() {
-            // FIXME: don't overwrite it blindly, choose the best one, which is still on the main chain.
-            self.incoming.peers_best_block_that_we_have = Some(last_existing_block.get_id().into());
-        }
+        self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
         if new_block_headers.is_empty() {
             if peer_may_have_more_headers {
@@ -767,10 +784,14 @@ where
         }
 
         let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
-        let block_id = block.get_id();
+
+        // Process the block and also determine the new value for peers_best_block_that_we_have.
         let peer_id = self.id();
-        self.chainstate_handle
-            .call_mut(move |c| -> Result<()> {
+        let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
+        self.incoming.peers_best_block_that_we_have = self
+            .chainstate_handle
+            .call_mut(move |c| {
+                let block_id = block.get_id();
                 // If the block already exists in the block tree, skip it.
                 if c.get_block_index(&block.get_id())?.is_some() {
                     log::debug!(
@@ -782,11 +803,9 @@ where
                     c.process_block(block, BlockSource::Peer)?;
                 }
 
-                Ok(())
+                choose_peers_best_block(c, old_peers_best_block_that_we_have, Some(block_id.into()))
             })
             .await??;
-
-        self.incoming.peers_best_block_that_we_have = Some(block_id.into());
 
         if self.incoming.requested_blocks.is_empty() {
             let headers = mem::take(&mut self.incoming.pending_headers);
@@ -1086,6 +1105,31 @@ where
                 self.id(),
                 err
             );
+        }
+    }
+}
+
+/// This function is used to update peers_best_block_that_we_have.
+/// The "better" block is the one that is on the main chain and has bigger height.
+/// In the case of a tie, new_block_id is preferred. 
+fn choose_peers_best_block(
+    chainstate: &dyn ChainstateInterface,
+    old_block_id: Option<Id<GenBlock>>,
+    new_block_id: Option<Id<GenBlock>>,
+) -> Result<Option<Id<GenBlock>>> {
+    match (old_block_id, new_block_id) {
+        (None, None) => Ok(None),
+        (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
+        (Some(old_id), Some(new_id)) => {
+            let old_height =
+                chainstate.get_block_height_in_main_chain(&old_id)?.unwrap_or(0.into());
+            let new_height =
+                chainstate.get_block_height_in_main_chain(&new_id)?.unwrap_or(0.into());
+            if new_height >= old_height {
+                Ok(Some(new_id))
+            } else {
+                Ok(Some(old_id))
+            }
         }
     }
 }
