@@ -240,6 +240,10 @@ impl<B: storage::Backend> Wallet<B> {
         self.db.is_encrypted()
     }
 
+    pub fn is_locked(&self) -> bool {
+        self.db.is_locked()
+    }
+
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
         self.db.encrypt_private_keys(password).map_err(WalletError::from)
     }

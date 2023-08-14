@@ -30,6 +30,7 @@ async fn staking_locked_wallet(#[case] seed: Seed) {
 
     test.create_genesis_wallet();
 
+    // It is not possible to start staking when the wallet is locked
     assert_eq!(
         test.exec("encryptprivatekeys Password123"),
         "Successfully encrypted the private keys of the wallet."
@@ -38,7 +39,30 @@ async fn staking_locked_wallet(#[case] seed: Seed) {
         test.exec("lockprivatekeys"),
         "Success. The wallet is now locked."
     );
+    assert_eq!(
+        test.exec("startstaking"),
+        "Controller error: Wallet is locked"
+    );
+
+    // It is possible to start staking after the wallet is unlocked
+    assert_eq!(
+        test.exec("unlockprivatekeys Password123"),
+        "Success. The wallet is now unlocked."
+    );
     assert_eq!(test.exec("startstaking"), "Success");
+
+    // It is not possible to lock the wallet while staking is running
+    assert_eq!(
+        test.exec("lockprivatekeys"),
+        "Controller error: Cannot lock wallet because staking is running"
+    );
+
+    // It is possible to lock the wallet after staking is stopped
+    assert_eq!(test.exec("stopstaking"), "Success");
+    assert_eq!(
+        test.exec("lockprivatekeys"),
+        "Success. The wallet is now locked."
+    );
 
     test.shutdown().await;
 }
