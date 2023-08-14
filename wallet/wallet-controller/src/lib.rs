@@ -415,7 +415,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         match status {
             mempool::TxStatus::InMempool => {
                 self.wallet
-                    .add_unconfirmed_tx(tx, &mut self.wallet_events)
+                    .add_unconfirmed_tx(tx, &self.wallet_events)
                     .map_err(ControllerError::WalletError)?;
             }
             mempool::TxStatus::InOrphanPool => {
@@ -803,7 +803,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &self.chain_config,
             &self.rpc_client,
             &mut self.wallet,
-            &mut self.wallet_events,
+            &self.wallet_events,
         )
         .await?;
         Ok(())

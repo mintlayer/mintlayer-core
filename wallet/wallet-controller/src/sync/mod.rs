@@ -36,7 +36,7 @@ pub trait SyncingWallet {
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()>;
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
@@ -52,7 +52,7 @@ impl SyncingWallet for DefaultWallet {
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_blocks(account, common_block_height, blocks, wallet_events)
     }
@@ -86,7 +86,7 @@ pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &mut impl WalletEvents,
+    wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
     loop {
         let chain_info =

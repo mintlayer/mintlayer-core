@@ -129,7 +129,7 @@ impl Account {
             account_info,
         };
 
-        account.scan_genesis(db_tx, &mut WalletEventsNoOp)?;
+        account.scan_genesis(db_tx, &WalletEventsNoOp)?;
 
         Ok(account)
     }
@@ -796,7 +796,7 @@ impl Account {
     fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
         let revoked_txs = self
@@ -832,7 +832,7 @@ impl Account {
     fn add_wallet_tx_if_relevant(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         tx: WalletTx,
     ) -> WalletResult<bool> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
@@ -857,7 +857,7 @@ impl Account {
     fn scan_genesis(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
@@ -870,7 +870,7 @@ impl Account {
     pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
@@ -922,7 +922,7 @@ impl Account {
     fn add_wallet_tx_if_relevant_and_remove_from_user_txs(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         wallet_tx: WalletTx,
         signed_tx: &SignedTransaction,
     ) -> Result<bool, WalletError> {
@@ -945,7 +945,7 @@ impl Account {
         transactions: &[SignedTransaction],
         tx_state: TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
 
