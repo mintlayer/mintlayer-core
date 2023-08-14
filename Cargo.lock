@@ -6998,7 +6998,6 @@ dependencies = [
  "clap",
  "common",
  "consensus",
- "crossbeam-channel",
  "crossterm",
  "crypto",
  "directories",
