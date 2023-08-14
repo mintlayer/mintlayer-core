@@ -546,6 +546,7 @@ impl Account {
         &self,
         db_tx: &impl WalletStorageReadUnlocked,
         median_time: BlockTimestamp,
+        pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let utxos = self.get_utxos(
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
@@ -553,9 +554,21 @@ impl Account {
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,
         );
-        // TODO: Select by pool_id if there is more than one UTXO
-        let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
-            utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
+        let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) = utxos
+            .into_iter()
+            .find(|(_kernel_input_outpoint, (kernel_input_utxo, _token_id))| {
+                pool_id
+                    == match kernel_input_utxo {
+                        TxOutput::CreateStakePool(pool_id, _) => *pool_id,
+                        TxOutput::ProduceBlockFromStake(_, pool_id) => *pool_id,
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+                    }
+            })
+            .ok_or(WalletError::UnknownPoolId(pool_id))?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
 
         let stake_destination = Self::get_tx_output_destination(kernel_input_utxo)
@@ -566,22 +579,12 @@ impl Account {
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
-        let pool_id = match kernel_input_utxo {
-            TxOutput::CreateStakePool(pool_id, _) => pool_id,
-            TxOutput::ProduceBlockFromStake(_, pool_id) => pool_id,
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
-        };
-
         let (vrf_private_key, _vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let data = PoSGenerateBlockInputData::new(
             stake_private_key,
             vrf_private_key,
-            *pool_id,
+            pool_id,
             vec![kernel_input],
             vec![kernel_input_utxo.clone()],
         );
