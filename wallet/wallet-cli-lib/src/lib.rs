@@ -45,7 +45,8 @@ enum Mode {
 }
 
 pub async fn run(
-    console: impl ConsoleInput + ConsoleOutput,
+    input: impl ConsoleInput,
+    output: impl ConsoleOutput,
     args: config::WalletCliArgs,
     chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
@@ -67,7 +68,7 @@ pub async fn run(
         repl::non_interactive::log::init();
         let file_input = console::FileInput::new(file_path)?;
         Mode::CommandsList { file_input }
-    } else if console.is_tty() {
+    } else if input.is_tty() {
         let logger = repl::interactive::log::InteractiveLogger::init();
         Mode::Interactive { logger }
     } else {
@@ -134,7 +135,7 @@ pub async fn run(
     // Run a blocking loop in a separate thread
     let repl_handle = std::thread::spawn(move || match mode {
         Mode::Interactive { logger } => repl::interactive::run(
-            console,
+            output,
             event_tx,
             exit_on_error.unwrap_or(false),
             logger,
@@ -143,15 +144,15 @@ pub async fn run(
             startup_command_futures,
         ),
         Mode::NonInteractive => repl::non_interactive::run(
-            console.clone(),
-            console,
+            input,
+            output,
             event_tx,
             exit_on_error.unwrap_or(false),
             startup_command_futures,
         ),
         Mode::CommandsList { file_input } => repl::non_interactive::run(
             file_input,
-            console,
+            output,
             event_tx,
             exit_on_error.unwrap_or(true),
             startup_command_futures,

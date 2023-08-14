@@ -49,13 +49,15 @@ use wallet_cli_lib::{
 
 pub const MNEMONIC: &str = "spawn dove notice resist rigid grass load forum tobacco category motor fantasy prison submit rescue pool panic unable enact oven trap lava floor toward";
 
-#[derive(Clone)]
-struct MockConsole {
+struct MockConsoleInput {
     input_rx: Receiver<String>,
+}
+
+struct MockConsoleOutput {
     output_tx: Sender<String>,
 }
 
-impl ConsoleInput for MockConsole {
+impl ConsoleInput for MockConsoleInput {
     fn is_tty(&self) -> bool {
         false
     }
@@ -65,7 +67,7 @@ impl ConsoleInput for MockConsole {
     }
 }
 
-impl ConsoleOutput for MockConsole {
+impl ConsoleOutput for MockConsoleOutput {
     fn print_line(&mut self, line: &str) {
         self.output_tx.send(line.to_owned()).unwrap();
     }
@@ -300,15 +302,14 @@ impl CliTestFramework {
         let (output_tx, output_rx) = crossbeam_channel::unbounded::<String>();
         let (input_tx, input_rx) = crossbeam_channel::unbounded::<String>();
 
-        let console = MockConsole {
-            input_rx,
-            output_tx,
-        };
+        let input = MockConsoleInput { input_rx };
+
+        let output = MockConsoleOutput { output_tx };
 
         let wallet_task = tokio::spawn(async move {
             tokio::time::timeout(
                 Duration::from_secs(120),
-                wallet_cli_lib::run(console, wallet_options, Some(chain_config)),
+                wallet_cli_lib::run(input, output, wallet_options, Some(chain_config)),
             )
             .await
             .unwrap()
