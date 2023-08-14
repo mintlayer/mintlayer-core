@@ -103,10 +103,16 @@ pub enum WalletCommand {
     /// reward destination. If transactions are None, the block will be
     /// generated with available transactions in the mempool
     GenerateBlock {
+        #[clap(long)]
+        pool_id: Option<String>,
+
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     },
 
     GenerateBlocks {
+        #[clap(long)]
+        pool_id: Option<String>,
+
         count: u32,
     },
 
@@ -657,7 +663,13 @@ impl CommandHandler {
                 }
             }
 
-            WalletCommand::GenerateBlock { transactions } => {
+            WalletCommand::GenerateBlock {
+                pool_id,
+                transactions,
+            } => {
+                let pool_id = pool_id
+                    .map(|pool_id| parse_pool_id(chain_config, pool_id.as_str()))
+                    .transpose()?;
                 let transactions_opt =
                     transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
                 let block = controller_opt
@@ -665,6 +677,7 @@ impl CommandHandler {
                     .ok_or(WalletCliError::NoWallet)?
                     .generate_block(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        pool_id,
                         transactions_opt,
                     )
                     .await
@@ -673,12 +686,16 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::GenerateBlocks { count } => {
+            WalletCommand::GenerateBlocks { pool_id, count } => {
+                let pool_id = pool_id
+                    .map(|pool_id| parse_pool_id(chain_config, pool_id.as_str()))
+                    .transpose()?;
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .generate_blocks(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        pool_id,
                         count,
                     )
                     .await

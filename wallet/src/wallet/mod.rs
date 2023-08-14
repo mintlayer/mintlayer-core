@@ -615,10 +615,14 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_pos_gen_block_data(
         &mut self,
         account_index: U31,
+        pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?
-            .get_pos_gen_block_data(&db_tx, self.latest_median_time)
+        self.get_account(account_index)?.get_pos_gen_block_data(
+            &db_tx,
+            self.latest_median_time,
+            pool_id,
+        )
     }
 
     /// Returns the last scanned block hash and height.
