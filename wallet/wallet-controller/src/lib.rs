@@ -823,7 +823,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
         let mut rebroadcast_txs_timer = get_time();
 
-        loop {
+        'outer: loop {
             let sync_res = self.sync_once().await;
 
             if let Err(e) = sync_res {
@@ -851,7 +851,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                             tokio::time::sleep(ERROR_DELAY).await;
                         }
 
-                        continue;
+                        continue 'outer;
                     }
                 }
             }
