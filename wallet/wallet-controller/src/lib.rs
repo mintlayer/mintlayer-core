@@ -792,6 +792,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
         let mut rebroadcast_txs_timer = get_time();
+        let staking_started = self.staking_started.clone();
+
         loop {
             let sync_res = self.sync_once().await;
 
@@ -801,9 +803,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 continue;
             }
 
-            // TODO: Try to remove the `clone` call
-            for account_index in self.staking_started.clone().iter() {
-                let generate_res = self.generate_block(*account_index, None).await;
+            for account_index in staking_started.iter() {
+                let generate_res = self.generate_block(*account_index, vec![], vec![], true).await;
 
                 if let Ok(block) = generate_res {
                     log::info!(
