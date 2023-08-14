@@ -617,7 +617,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_pos_gen_block_data(
-        &mut self,
+        &self,
         account_index: U31,
         pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
