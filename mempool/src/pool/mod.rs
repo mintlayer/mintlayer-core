@@ -35,7 +35,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction,
     },
-    primitives::{amount::Amount, BlockHeight, Id},
+    primitives::{amount::Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -936,6 +936,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
+        transaction_ids: Vec<Id<Transaction>>,
+        fill_from_mempool: bool,
     ) -> Option<Box<dyn TransactionAccumulator>> {
         let mempool_tip = self.best_block_id();
 

@@ -113,6 +113,8 @@ impl MempoolInterface for MempoolInterfaceMock {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
+        _transaction_ids: Vec<Id<Transaction>>,
+        _fill_from_mempool: bool,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
         self.collect_txs_called.store(true);
 

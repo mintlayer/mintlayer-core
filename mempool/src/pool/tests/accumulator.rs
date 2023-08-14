@@ -59,7 +59,7 @@ async fn transaction_order_respects_deps(#[case] seed: Seed) {
         genesis_id.into(),
         DUMMY_TIMESTAMP,
     ));
-    let accumulator = mempool.collect_txs(accumulator).unwrap();
+    let accumulator = mempool.collect_txs(accumulator, vec![], true).unwrap();
     let tx_ids: Vec<_> =
         accumulator.transactions().iter().map(|tx| tx.transaction().get_id()).collect();
 
@@ -94,7 +94,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
         genesis_id.into(),
         DUMMY_TIMESTAMP,
     ));
-    let accumulator = mempool.collect_txs(accumulator).unwrap();
+    let accumulator = mempool.collect_txs(accumulator, vec![], true).unwrap();
     let position_map: BTreeMap<Id<Transaction>, usize> = accumulator
         .transactions()
         .iter()
@@ -124,7 +124,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit: usize = 1_000;
     let tx_accumulator =
         DefaultTxAccumulator::new(size_limit, mempool.best_block_id(), DUMMY_TIMESTAMP);
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator)).unwrap();
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator), vec![], true).unwrap();
     let collected_txs = returned_accumulator.transactions();
     let expected_num_txs_collected: usize = 0;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
@@ -161,7 +161,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit = 1_000;
     let tx_accumulator =
         DefaultTxAccumulator::new(size_limit, mempool.best_block_id(), DUMMY_TIMESTAMP);
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator)).unwrap();
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator), vec![], true).unwrap();
     let collected_txs = returned_accumulator.transactions();
     log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
@@ -170,12 +170,12 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     assert!(total_tx_size <= size_limit);
 
     let tx_accumulator = DefaultTxAccumulator::new(0, mempool.best_block_id(), DUMMY_TIMESTAMP);
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator)).unwrap();
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator), vec![], true).unwrap();
     let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
 
     let tx_accumulator = DefaultTxAccumulator::new(1, mempool.best_block_id(), DUMMY_TIMESTAMP);
-    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator)).unwrap();
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator), vec![], true).unwrap();
     let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
     Ok(())
@@ -277,7 +277,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
         genesis_id.into(),
         block1_time,
     ));
-    let accumulator = mempool.collect_txs(accumulator).unwrap();
+    let accumulator = mempool.collect_txs(accumulator, vec![], true).unwrap();
     let accumulated_ids: BTreeSet<_> =
         accumulator.transactions().iter().map(|tx| tx.transaction().get_id()).collect();
 
@@ -308,7 +308,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
         block1_id.into(),
         block2_time,
     ));
-    let accumulator = mempool.collect_txs(accumulator).unwrap();
+    let accumulator = mempool.collect_txs(accumulator, vec![], true).unwrap();
     let has_tx1 = accumulator.transactions().iter().any(|tx| tx.transaction().get_id() == tx1_id);
 
     assert_eq!(has_tx1, in_accumulator_at1);

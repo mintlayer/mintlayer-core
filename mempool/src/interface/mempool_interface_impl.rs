@@ -143,8 +143,10 @@ impl MempoolInterface for Mempool {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
+        transaction_ids: Vec<Id<Transaction>>,
+        fill_from_mempool: bool,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
-        Ok(self.collect_txs(tx_accumulator))
+        Ok(self.collect_txs(tx_accumulator, transaction_ids, fill_from_mempool))
     }
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
