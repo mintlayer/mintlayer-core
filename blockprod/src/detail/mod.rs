@@ -467,10 +467,9 @@ impl BlockProduction {
                     Some(acc) => acc.transactions().clone(),
                     None => {
                         // If the mempool rejects the accumulator (due
-                        // to tip mismatch, or otherwise), we should
-                        // start over and try again
-                        log::info!("Mempool rejected the transaction accumulator. Trying again.");
-                        continue;
+                        // to tip mismatch, or otherwise), only use
+                        // the provided transactions
+                        transactions.clone()
                     }
                 }
             };
