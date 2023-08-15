@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Mempool reorg test
+#  Copyright (c) 2023 RBB S.r.l
+#  opensource@mintlayer.org
+#  SPDX-License-Identifier: MIT
+#  Licensed under the MIT License;
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
 
-Check that:
-* Transactions are collected into blocks when a new block is issued.
-* Transactions are correctly put back into mempool when the block is reorged out.
-"""
-
+from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import *
 
