@@ -113,7 +113,7 @@ pub struct Peer<T: NetworkingService> {
     /// Current activity with the peer.
     peer_activity: PeerActivity,
     /// If set, send the new tip notification when the tip moves.
-    /// It's set when we know that the peer knows about all of our headers.
+    /// It's set when we know that the peer knows about all of our current mainchain headers.
     send_tip_updates: bool,
 }
 
@@ -138,6 +138,8 @@ struct OutgoingDataState {
     /// The index of the best block that we've sent to the peer.
     best_sent_block: Option<BlockIndex>,
     /// The id of the best block header that we've sent to the peer.
+    // Note: at this moment this field is only informational, i.e. we only print it to the log,
+    // see the comment in handle_new_tip.
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
@@ -263,64 +265,55 @@ where
         // This function is not supposed to be called when in IBD.
         debug_assert!(!self.is_initial_block_download.load());
 
+        let best_sent_block =
+            self.outgoing.best_sent_block.as_ref().map(|index| (*index.block_id()).into());
         log::debug!(
             concat!(
                 "[peer id = {}] In handle_new_tip: send_tip_updates = {}, ",
-                "best_sent_block_header = {:?}, peers_best_block_that_we_have = {:?}"
+                "best_sent_block_header = {:?}, best_sent_block = {:?}, ",
+                "peers_best_block_that_we_have = {:?}"
             ),
             self.id(),
             self.send_tip_updates,
             self.outgoing.best_sent_block_header,
+            best_sent_block,
             self.incoming.peers_best_block_that_we_have
         );
 
         if self.send_tip_updates {
             debug_assert!(self.common_services.has_service(Service::Blocks));
 
-            // FIXME: is it a good idea to use best_sent_block_header in the v1 protocol?
-            // The legacy peers may not maintain their "received pending headers" correctly
-            // in general, so they may see the announced header list as disconnected; but
-            // they can only tolerate disconnected lists of length 1, so they may ban us eventually.
-            if self.outgoing.best_sent_block_header.is_some()
-                || self.incoming.peers_best_block_that_we_have.is_some()
-            {
+            // Note: an intermediate implementation also used to use best_sent_block_header
+            // here when determining the latest fork point. But it doesn't seem to be a good
+            // idea to use it in the v1 protocol, because legacy peers may not maintain their
+            // "received pending headers" correctly. So, they may see the announced header list
+            // as disconnected. But they can only tolerate disconnected lists of length 1,
+            // therefore, they might ban us eventually.
+            if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block.is_some() {
                 let limit = *self.p2p_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
 
                 let block_ids: Vec<_> = self
-                    .outgoing
-                    .best_sent_block_header
+                    .incoming
+                    .peers_best_block_that_we_have
                     .iter()
-                    .chain(self.incoming.peers_best_block_that_we_have.iter())
+                    .chain(best_sent_block.iter())
                     .copied()
                     .collect();
 
                 let peer_id = self.id();
-                let headers = self
+                let (headers, best_block_id) = self
                     .chainstate_handle
                     .call(move |c| {
                         let best_block_id = c.get_best_block_id()?;
-                        if best_block_id != new_tip_id {
-                            log::warn!(
-                                concat!(
-                                    "[peer id = {}] Got new tip event with block id {}, ",
-                                    "but the tip has changed since then to {}"
-                                ),
-                                peer_id,
-                                new_tip_id,
-                                best_block_id
-                            );
-                        }
 
-                        c.get_mainchain_headers_since_latest_fork_point(&block_ids, limit)
+                        let headers =
+                            c.get_mainchain_headers_since_latest_fork_point(&block_ids, limit)?;
+                        Result::<_>::Ok((headers, best_block_id))
                     })
                     .await??;
 
                 if headers.is_empty() {
-                    // Note: this situation is possible if blocks are being generated in
-                    // a rapid succession; in such a case, several block headers may be sent on
-                    // an earlier "new tip" event, and when the later one comes, there is nothing
-                    // new to send.
                     log::warn!(
                         concat!(
                             "[peer id = {}] Got new tip event with block id {}, ",
@@ -328,6 +321,22 @@ where
                         ),
                         peer_id,
                         new_tip_id,
+                    );
+                } else if best_block_id != new_tip_id {
+                    // If we got here, another "new tip" event should be generated soon,
+                    // so we may ignore this one (and it makes sense to ignore it to avoid sending
+                    // the same header list multiple times).
+                    // Note: once we take best_sent_block_header into account when sending headers,
+                    // this special handling won't be needed, because we'll never send the same
+                    // header list twice in that case.
+                    log::warn!(
+                        concat!(
+                            "[peer id = {}] Got new tip event with block id {}, ",
+                            "but the tip has changed since then to {}"
+                        ),
+                        peer_id,
+                        new_tip_id,
+                        best_block_id
                     );
                 } else {
                     log::debug!(
@@ -337,6 +346,14 @@ where
                     );
                     return self.send_headers(HeaderList::new(headers));
                 }
+            } else {
+                // Note: if we got here, then we haven't received a single header request or
+                // response from the peer yet (otherwise peers_best_block_that_we_have would be
+                // set at least to the genesis). There is no point in doing anything specific here.
+                log::warn!(
+                    "[peer id = {}] Ignoring new tip event, because we don't know what to send",
+                    self.id()
+                );
             }
         }
 
@@ -443,8 +460,8 @@ where
                 let headers = c.get_mainchain_headers_by_locator(&locator, header_count_limit)?;
                 let peers_best_block_that_we_have = if let Some(header) = headers.first() {
                     // If headers obtained from the locator are non-empty, the parent of
-                    // the first one represents the last common block that is shared by this node's
-                    // and the peer's main chains.
+                    // the first one represents the locator's latest block that is present in
+                    // this node's main chain.
                     let last_common_block_id = *header.prev_block_id();
                     choose_peers_best_block(
                         c,
