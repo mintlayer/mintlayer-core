@@ -76,6 +76,7 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
+mod work_queue;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
     let fee = u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE)
