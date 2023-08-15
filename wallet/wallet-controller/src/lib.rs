@@ -695,13 +695,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::NodeCallError)
     }
 
+    /// Try to generate the `block_count` number of blocks.
+    /// The function may return an error early if some attempt fails.
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
         pool_id: Option<PoolId>,
-        count: u32,
+        block_count: u32,
     ) -> Result<(), ControllerError<T>> {
-        for _ in 0..count {
+        for _ in 0..block_count {
             self.sync_once().await?;
 
             let block = self.generate_block(account_index, pool_id, None).await?;
