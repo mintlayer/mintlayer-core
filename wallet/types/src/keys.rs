@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::BufWriter;
+use itertools::Itertools;
+use std::str::FromStr;
 
 use crate::keys::KeyPurpose::{Change, ReceiveFunds};
 use crypto::key::extended::ExtendedPrivateKey;
@@ -143,43 +144,24 @@ pub struct SeedPhrase {
 }
 
 impl Encode for SeedPhrase {
-    fn encode(&self) -> Vec<u8> {
-        let mut buf = BufWriter::new(Vec::new());
-        self.encode_to(&mut buf);
-        buf.into_inner().expect("Flushing should never fail")
-    }
-
     fn size_hint(&self) -> usize {
-        // Preallocate enough space for the longest possible word list
-        33
-    }
-
-    fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-        f(self.encode().as_slice())
-    }
-
-    fn encoded_size(&self) -> usize {
-        self.encode().len()
+        Itertools::intersperse(self.mnemonic.word_iter().map(|w| w.len()), 1).sum::<usize>()
+            + std::mem::size_of::<u16>()
     }
 
     fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
-        let entropy = self.mnemonic.to_entropy();
-        dest.write(&entropy.len().to_le_bytes());
-        dest.write(entropy.as_slice());
+        let words: String = self.mnemonic.word_iter().join(" ");
+        words.encode_to(dest);
     }
 }
 
 impl Decode for SeedPhrase {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let mut bytes: [u8; std::mem::size_of::<usize>()] = [0; std::mem::size_of::<usize>()];
-        input.read(&mut bytes)?;
-        let len = usize::from_le_bytes(bytes);
-
-        let entropy = (0..len).map(|_| input.read_byte()).collect::<Result<Vec<_>, _>>()?;
+        let words = String::decode(input)?;
 
         Ok(Self {
             mnemonic: zeroize::Zeroizing::new(
-                bip39::Mnemonic::from_entropy(entropy.as_slice())
+                bip39::Mnemonic::from_str(words.as_str())
                     .map_err(|_| serialization::Error::from("Mnemonic deserialization failed"))?,
             ),
         })
@@ -189,6 +171,17 @@ impl Decode for SeedPhrase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn seed_phrase_size_hint() {
+        let seed_phrase = SeedPhrase {
+            mnemonic: zeroize::Zeroizing::new(bip39::Mnemonic::generate(24).unwrap()),
+        };
+
+        let size_hint = seed_phrase.size_hint();
+        let encoded = seed_phrase.encode();
+        assert_eq!(size_hint, encoded.len());
+    }
 
     #[test]
     fn keychain_usage_state() {

@@ -198,6 +198,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)
     }
 
+    /// Delete the seed phrase if stored in the database
+    pub fn delete_seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
+        self.wallet
+            .delete_seed_phrase()
+            .map(|opt| opt.map(|phrase| phrase.mnemonic.to_string()))
+            .map_err(ControllerError::WalletError)
+    }
+
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
     ///
     /// # Arguments

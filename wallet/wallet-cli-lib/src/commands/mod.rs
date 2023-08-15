@@ -48,7 +48,11 @@ pub enum WalletCommand {
         /// File path
         wallet_path: PathBuf,
 
-        /// If true save the seed phrase to the DB for later retrieval
+        /// If 'save', the seed-phrase will be saved in the wallet file.
+        /// If 'do-no-save', the seed-phrase will only be printed on the screen.
+        /// Not saving the seed-phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// elsewhere if this wallet is compromised.
         save_seed_phrase: CliSaveSeedPhrase,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
@@ -262,6 +266,9 @@ pub enum WalletCommand {
 
     /// Show the seed phrase for the loaded wallet if it has been saved
     ShowSeedPhrase,
+
+    /// Delete the seed phrase from the loaded wallet if it has been saved
+    PurgeSeedPhrase,
 
     /// Node version
     NodeVersion,
@@ -1125,6 +1132,22 @@ impl CommandHandler {
 
                 let msg = if let Some(phrase) = phrase {
                     format!("The saved seed phrase is \"{}\"", phrase)
+                } else {
+                    "No saved seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase saved elsewhere when you created the wallet.".into()
+                };
+
+                Ok(ConsoleCommand::Print(msg))
+            }
+
+            WalletCommand::PurgeSeedPhrase => {
+                let phrase = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .delete_seed_phrase()
+                    .map_err(WalletCliError::Controller)?;
+
+                let msg = if let Some(phrase) = phrase {
+                    format!("The seed phrase has been deleted, you can save it if you haven't do so yet: \"{}\"", phrase)
                 } else {
                     "No saved seed phrase for this wallet.".into()
                 };
