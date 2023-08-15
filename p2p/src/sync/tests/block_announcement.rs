@@ -350,7 +350,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
 
     // Create some initial blocks.
     make_new_top_blocks(
-        &node.chainstate(),
+        node.chainstate(),
         time_getter.get_time_getter(),
         &mut rng,
         0,
@@ -388,7 +388,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         // local events in rapid succession. But the implementation must make sure that only
         // one HeaderList message is produced.
         let headers = make_new_top_blocks_return_headers(
-            &node.chainstate(),
+            node.chainstate(),
             time_getter.get_time_getter(),
             &mut rng,
             0,
@@ -417,7 +417,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         // headers that it has already sent (as opposed to what headers have been revealed
         // by the peer, which is checked by the previous section).
         let headers = make_new_top_blocks_return_headers(
-            &node.chainstate(),
+            node.chainstate(),
             time_getter.get_time_getter(),
             &mut rng,
             0,
@@ -441,7 +441,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         // Create a better branch starting at genesis; it should be announced via a single
         // HeaderList message.
         let reorg_headers = make_new_top_blocks_return_headers(
-            &node.chainstate(),
+            node.chainstate(),
             time_getter.get_time_getter(),
             &mut rng,
             5,

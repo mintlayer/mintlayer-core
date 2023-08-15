@@ -531,7 +531,7 @@ pub fn make_new_blocks(
     let mut last_block = prev_block;
 
     for _ in 0..count {
-        let new_block = make_new_block(chain_config, last_block, &time_getter, rng);
+        let new_block = make_new_block(chain_config, last_block, time_getter, rng);
 
         result.push(new_block);
         last_block = result.last();
