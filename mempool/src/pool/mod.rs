@@ -355,6 +355,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     ) -> Result<VerificationOutcome, TxValidationError> {
         let chainstate_handle = self.blocking_chainstate_handle();
 
+        let is_ibd = chainstate_handle.call(|chainstate| chainstate.is_initial_block_download())?;
+        ensure!(!is_ibd, TxValidationError::AddedDuringIBD);
+
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
@@ -760,9 +763,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let expired_ids: Vec<_> = self
             .store
             .txs_by_creation_time
-            .values()
-            .flat_map(Deref::deref)
-            .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
+            .iter()
+            .map(|(_time, id)| self.store.txs_by_id.get(id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
                 let expired = now.saturating_sub(entry.creation_time()) > self.max_tx_age;
@@ -791,9 +793,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let removed_id = self
                 .store
                 .txs_by_descendant_score
-                .values()
-                .flat_map(Deref::deref)
-                .copied()
+                .iter()
+                .map(|(_score, entry)| *entry.deref())
                 .next()
                 .expect("pool not empty");
             let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
@@ -927,9 +928,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
             .txs_by_descendant_score
-            .values()
-            .flat_map(Deref::deref)
-            .map(|id| self.store.get_entry(id).expect("entry").transaction().clone())
+            .iter()
+            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
     }
 
@@ -950,7 +950,16 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let chainstate = tx_verifier::ChainstateHandle::new(self.chainstate_handle.shallow_clone());
         let chain_config = self.chain_config.deref();
-        let utxo_view = tx_verifier::MempoolUtxoView::new(self, chainstate.clone());
+        let utxo_view = tx_verifier::MempoolUtxoView::new(self, chainstate.shallow_clone());
+
+        // Transaction verifier to detect cases where mempool is not fully up-to-date with
+        // transaction dependencies.
+        let mut tx_verifier = tx_verifier::create(
+            self.chain_config.shallow_clone(),
+            self.chainstate_handle.shallow_clone(),
+        );
+
+        let verifier_time = tx_accumulator.block_timestamp();
 
         let best_index = self
             .blocking_chainstate_handle()
@@ -960,13 +969,13 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
         let block_timestamp = tx_accumulator.block_timestamp();
-        let tx_id_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
+        let tx_id_iter = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
         let mut tx_iter = tx_id_iter
             .filter_map(|tx_id| {
                 let tx = self.store.txs_by_id.get(tx_id)?.deref();
                 chainstate::tx_verifier::timelock_check::check_timelocks(
                     &chainstate,
-                    &chain_config,
+                    chain_config,
                     &utxo_view,
                     tx.transaction(),
                     &tx_source,
@@ -1009,6 +1018,21 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 (None, Some(ready_tx)) => binary_heap::PeekMut::pop(ready_tx).take_entry(),
                 (None, None) => break,
             };
+
+            let verification_result = tx_verifier.connect_transaction(
+                &tx_source,
+                next_tx.transaction(),
+                &verifier_time,
+                None,
+            );
+
+            if let Err(err) = verification_result {
+                log::error!(
+                    "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}. Error: {err}",
+                    next_tx.tx_id()
+                );
+                continue;
+            }
 
             if let Err(err) = tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
                 log::error!(
@@ -1056,20 +1080,33 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         self.events_controller.subscribe_to_events(handler)
     }
 
-    pub fn process_chainstate_event(&mut self, evt: chainstate::ChainstateEvent) {
+    pub fn process_chainstate_event(
+        &mut self,
+        evt: chainstate::ChainstateEvent,
+    ) -> Result<(), reorg::ReorgError> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
             chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.on_new_tip(block_id, block_height);
+                self.on_new_tip(block_id, block_height)?;
             }
         }
+        Ok(())
     }
 
-    pub fn on_new_tip(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn on_new_tip(
+        &mut self,
+        block_id: Id<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), reorg::ReorgError> {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
-        reorg::handle_new_tip(self, block_id);
+        reorg::handle_new_tip(self, block_id)?;
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());
+        Ok(())
+    }
+
+    pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
+        self.orphans.remove_by_origin(TxOrigin::Peer(peer_id));
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
@@ -1078,11 +1115,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .txs_by_descendant_score
             .iter()
             .rev()
-            .find(|(_score, txs)| {
-                total_size += txs
-                    .iter()
-                    .map(|tx_id| self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size()))
-                    .sum::<usize>();
+            .find(|(_score, tx_id)| {
+                total_size += self.store.txs_by_id.get(tx_id).map_or(0, |tx| tx.size());
                 (total_size / 1_000_000) >= in_top_x_mb
             })
             .map_or_else(

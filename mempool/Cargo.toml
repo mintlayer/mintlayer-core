@@ -15,6 +15,7 @@ common = { path = '../common' }
 crypto = { path = '../crypto' }
 logging = { path = '../logging' }
 mempool-types = { path = 'types' }
+p2p-types = { path = '../p2p/types' }
 pos_accounting = { path = '../pos_accounting' }
 rpc = { path = '../rpc' }
 serialization = { path = '../serialization' }

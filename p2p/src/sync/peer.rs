@@ -55,6 +55,7 @@ use crate::{
         types::services::{Service, Services},
         NetworkingService,
     },
+    peer_manager_event::PeerDisconnectionDbAction,
     sync::types::PeerActivity,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -87,7 +88,7 @@ pub struct Peer<T: NetworkingService> {
     common_services: Services,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
-    peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
@@ -133,7 +134,7 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         sync_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
@@ -221,7 +222,7 @@ where
             if let PeerActivity::ExpectingHeaderList { time }
             | PeerActivity::ExpectingBlocks { time } = self.last_activity
             {
-                self.handle_stalling_interval(time).await?;
+                self.handle_stalling_interval(time).await;
             }
         }
     }
@@ -673,7 +674,7 @@ where
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
     pub async fn handle_result(
-        peer_manager_sender: &UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
         peer_id: PeerId,
         result: Result<()>,
     ) -> Result<()> {
@@ -797,7 +798,7 @@ where
         )
     }
 
-    async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
+    async fn try_handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
         if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
             return Ok(());
         }
@@ -806,10 +807,21 @@ where
         // but this should never occur in a normal network and can be worked around in the tests.
         let (sender, receiver) = oneshot_nofail::channel();
         log::warn!("Disconnecting peer {} for ignoring requests", self.id());
-        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(self.id(), sender))?;
+        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(
+            self.id(),
+            PeerDisconnectionDbAction::Keep,
+            sender,
+        ))?;
         receiver.await?.or_else(|e| match e {
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             e => Err(e),
         })
+    }
+
+    async fn handle_stalling_interval(&mut self, last_activity: Duration) {
+        let handle_res = self.try_handle_stalling_interval(last_activity).await;
+        if let Err(err) = handle_res {
+            log::warn!("Disconnecting peer failed: {}", err);
+        }
     }
 }

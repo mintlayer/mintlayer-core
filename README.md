@@ -4,7 +4,7 @@ Welcome to the official Github repository for Mintlayer, an innovative, open-sou
 
 Please note, the code in this repository is currently under active development. Consequently, it should not be deemed production-ready. Nonetheless, you're invited to test the code in our active testnet environment.
 
-## Security 
+## Security
 
 Discovered a potential security issue? We urge you to contact us directly at security@mintlayer.org. When reporting, please encrypt your report using Ben's GPG key which can be found [here](https://www.mintlayer.org/assets/keys/ben).
 
@@ -26,5 +26,19 @@ To compile the code, you will need to install Rust. Instructions for this can be
 
 To join the testnet, you have the option to use pre-built binaries or compile the code yourself. The build instructions are available [here](https://docs.mintlayer.org/testnet/node-setup-cli).
 
-To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`. To launch the GUI wallet, use this command: `cargo run --bin node-gui`.
+To run the node, use the following command: `cargo run --bin node-daemon -- testnet`. To launch the command line wallet, use this command: `cargo run --bin wallet-cli -- --network testnet`. To launch the GUI wallet, use this command: `cargo run --bin node-gui`. You can get testnet coins from [the faucet](https://faucet.mintlayer.org/) in order to use the testnet, alternatively you can email opensource@mintlayer.org .
 
+### Logging
+The logging of mintlayer-core is configured via the `RUST_LOG` environment variable. All log messages are printed to the terminal screen; we prefer simplicity over complicated log machinery. For example, to see all logs of the `info` level and above (the default level for normal operation), you can run the node with `RUST_LOG=info cargo run --bin node-daemon -- testnet`. If you're facing an issue, it's recommended to use `RUST_LOG=debug` instead. We recommend using these commands that not only print the logs on the screen, but also write them to a file in case you face an issue. On Linux, this can be achieved using `tee` as shown below.
+
+Here are the commands as recommended for different scenarios:
+
+For normal operation
+- Node daemon: `RUST_LOG=info cargo run --bin node-daemon -- testnet 2>&1 | tee ../mintlayer.log`
+- CLI Wallet:  `RUST_LOG=info cargo run --bin wallet-cli -- --network testnet 2>&1 | tee ../wallet-cli.log`
+- GUI:         `RUST_LOG=info cargo run --bin node-gui 2>&1 | tee ../node-gui.log`
+
+For heavy debugging operation
+- Node daemon: `RUST_LOG=debug cargo run --bin node-daemon -- testnet 2>&1 | tee ../mintlayer.log`
+- CLI Wallet:  `RUST_LOG=debug cargo run --bin wallet-cli -- --network testnet 2>&1 | tee ../wallet-cli.log`
+- GUI:         `RUST_LOG=debug cargo run --bin node-gui 2>&1 | tee ../node-gui.log`

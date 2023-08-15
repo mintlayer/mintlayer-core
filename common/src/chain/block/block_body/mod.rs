@@ -36,7 +36,7 @@ pub enum BlockMerkleTreeError {
 }
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub struct BlockBody {
     pub(super) reward: BlockReward,
     pub(super) transactions: Vec<SignedTransaction>,
@@ -71,11 +71,11 @@ mod tests {
     use crate::{
         chain::{
             block::BlockReward,
+            output_value::OutputValue,
             signature::{
                 inputsig::{standard_signature::StandardInputSignature, InputWitness},
                 sighash::sighashtype::SigHashType,
             },
-            tokens::OutputValue,
             Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
         },
         primitives::{Amount, Id, H256},

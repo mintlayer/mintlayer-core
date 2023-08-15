@@ -19,7 +19,7 @@ use schnorrkel::{
     vrf::{VRFInOut, VRFPreOut, VRFProof},
     PublicKey,
 };
-use serialization::{Decode, Encode};
+use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
 use crate::vrf::{VRFError, VRFPublicKey};
 
@@ -37,6 +37,12 @@ pub struct SchnorrkelVRFReturn {
     /// form a complete output
     preout: VRFPreOut,
     proof: VRFProof,
+}
+
+impl serde::Serialize for SchnorrkelVRFReturn {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexEncoded::new(self).serialize(serializer)
+    }
 }
 
 impl Encode for SchnorrkelVRFReturn {

@@ -16,10 +16,11 @@
 pub mod default_backend;
 pub mod types;
 
-use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::time_getter::TimeGetter;
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -34,8 +35,6 @@ use crate::{
     P2pEventHandler,
 };
 
-use self::default_backend::transport::TransportAddress;
-
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
@@ -44,32 +43,6 @@ pub trait NetworkingService {
     ///
     /// Can be used to initialize networking transport with authentication keys for example.
     type Transport;
-
-    /// A generic network address.
-    ///
-    /// Although the `Address` allows a fallible conversion to `BannableAddress`, a valid address
-    /// must be able to be successfully converted into a bannable address.
-    ///
-    /// # Examples
-    /// For an implementation built on `TcpListener`, the address format is:
-    ///     `0.0.0.0:8888`
-    type Address: Clone
-        + Debug
-        + Eq
-        + Ord
-        + Hash
-        + Send
-        + Sync
-        + ToString
-        + FromStr
-        + TransportAddress
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
-
-    /// An address type that can be banned.
-    ///
-    /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
-    /// that consists of an IP address and a port we want to ban the IP address.
-    type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -84,7 +57,7 @@ pub trait NetworkingService {
     #[allow(clippy::too_many_arguments)]
     async fn start(
         transport: Self::Transport,
-        bind_addresses: Vec<Self::Address>,
+        bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
         time_getter: TimeGetter,
@@ -114,7 +87,7 @@ where
     ///
     /// # Arguments
     /// `address` - socket address of the peer
-    fn connect(&mut self, address: T::Address) -> crate::Result<()>;
+    fn connect(&mut self, address: SocketAddress) -> crate::Result<()>;
 
     /// Accept the peer as valid and allow reading of network messages
     fn accept(&mut self, peer_id: PeerId) -> crate::Result<()>;
@@ -129,7 +102,7 @@ where
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()>;
 
     /// Return the socket addresses of the network service provider
-    fn local_addresses(&self) -> &[T::Address];
+    fn local_addresses(&self) -> &[SocketAddress];
 
     /// Poll events from the network service provider
     ///
@@ -137,7 +110,7 @@ where
     /// - incoming peer connections
     /// - new discovered peers
     /// - peer expiration events
-    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T::Address>>;
+    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent>;
 }
 
 /// An interface for sending messages and announcements to peers.
@@ -150,16 +123,4 @@ pub trait MessagingService: Clone {
 pub trait SyncingEventReceiver {
     /// Polls syncing-related events from the networking service.
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent>;
-}
-
-/// Extracts a bannable part from an address.
-///
-/// Usually we want to ban only a part of the address instead of the "whole" address. For example,
-/// `SocketAddr` contains a port in addition to an IP address and we want to ban only the latter
-/// one.
-pub trait AsBannableAddress {
-    type BannableAddress;
-
-    /// Returns a bannable part of an address.
-    fn as_bannable(&self) -> Self::BannableAddress;
 }

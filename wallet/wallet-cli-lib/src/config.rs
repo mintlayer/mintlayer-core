@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 use common::chain::config::ChainType;
@@ -29,7 +29,7 @@ pub enum Network {
 #[derive(Parser, Debug)]
 pub struct WalletCliArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    #[arg(long, value_enum, default_value_t = Network::Testnet)]
     pub network: Network,
 
     /// Optional path to the wallet file
@@ -42,7 +42,7 @@ pub struct WalletCliArgs {
 
     /// Optional RPC address
     #[clap(long)]
-    pub rpc_address: Option<SocketAddr>,
+    pub rpc_address: Option<String>,
 
     /// Path to the RPC cookie file. If not set, the value is read from the default cookie file location.
     #[clap(long)]

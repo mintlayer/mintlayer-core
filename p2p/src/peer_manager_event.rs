@@ -13,24 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    interface::types::ConnectedPeer, net::NetworkingService, types::peer_id::PeerId,
-    utils::oneshot_nofail,
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
 };
 
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, utils::oneshot_nofail};
+
 #[derive(Debug)]
-pub enum PeerManagerEvent<T: NetworkingService> {
+pub enum PeerDisconnectionDbAction {
+    /// The address is kept in the PeerDb and there can be automatic reconnects
+    Keep,
+    /// The address will be removed from the PeerDb and there will be no reconnect attempts
+    /// (at least until the peer address is rediscovered).
+    /// It only affects outbound addresses.
+    RemoveIfOutbound,
+}
+
+#[derive(Debug)]
+pub enum PeerManagerEvent {
     /// Try to establish connection with a remote peer
-    Connect(T::Address, oneshot_nofail::Sender<crate::Result<()>>),
+    Connect(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(PeerId, oneshot_nofail::Sender<crate::Result<()>>),
+    Disconnect(
+        PeerId,
+        PeerDisconnectionDbAction,
+        oneshot_nofail::Sender<crate::Result<()>>,
+    ),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot_nofail::Sender<usize>),
 
     /// Get the bind address of the local node
-    GetBindAddresses(oneshot_nofail::Sender<Vec<String>>),
+    GetBindAddresses(oneshot_nofail::Sender<Vec<SocketAddress>>),
 
     /// Get peer IDs and addresses of connected peers
     GetConnectedPeers(oneshot_nofail::Sender<Vec<ConnectedPeer>>),
@@ -40,7 +56,11 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 
-    AddReserved(T::Address),
+    AddReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
-    RemoveReserved(T::Address),
+    RemoveReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
+
+    ListBanned(oneshot_nofail::Sender<Vec<BannableAddress>>),
+    Ban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
+    Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
 }

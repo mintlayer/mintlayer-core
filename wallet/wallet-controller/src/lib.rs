@@ -20,6 +20,10 @@ mod sync;
 
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
+/// In which top N MB should we aim for our transactions to be in the mempool
+/// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+/// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+const IN_TOP_N_MB: usize = 5;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -32,13 +36,19 @@ use mempool_types::TxStatus;
 use utils::tap_error_log::LogError;
 
 use common::{
-    address::Address,
+    address::{Address, AddressError},
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuance},
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::{
+            Metadata,
+            RPCTokenInfo::{FungibleToken, NonFungibleToken},
+            TokenId, TokenIssuance,
+        },
+        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    primitives::{
+        id::WithId, per_thousand::PerThousand, time::get_time, Amount, BlockHeight, Id, Idable,
+    },
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -46,6 +56,7 @@ use crypto::{
         hdkd::{child_number::ChildNumber, u31::U31},
         PublicKey,
     },
+    random::{make_pseudo_rng, Rng},
     vrf::VRFPublicKey,
 };
 use futures::stream::FuturesUnordered;
@@ -58,15 +69,18 @@ pub use node_comm::{
 use wallet::{
     account::transaction_list::TransactionList,
     account::Currency,
-    send_request::{make_address_output, make_address_output_token},
+    send_request::{
+        make_address_output, make_address_output_token, make_create_delegation_output,
+        StakePoolDataArguments,
+    },
     wallet_events::WalletEvents,
-    DefaultWallet,
+    DefaultWallet, WalletError,
 };
-use wallet_types::BlockInfo;
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
+use wallet_types::{with_locked::WithLocked, BlockInfo};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -80,6 +94,8 @@ pub enum ControllerError<T: NodeInterface> {
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),
+    #[error("Encoding error: {0}")]
+    AddressEncodingError(#[from] AddressError),
 }
 
 pub struct Controller<T, W> {
@@ -209,12 +225,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         account_index: U31,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(
                 account_index,
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 utxo_states,
+                with_locked,
             )
             .map_err(ControllerError::WalletError)
     }
@@ -224,9 +242,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(account_index, utxo_types, utxo_states)
+            .get_utxos(account_index, utxo_types, utxo_states, with_locked)
             .map_err(ControllerError::WalletError)
     }
 
@@ -253,7 +272,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn issue_new_token(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         token_ticker: Vec<u8>,
         amount_to_issue: Amount,
         number_of_decimals: u8,
@@ -261,7 +280,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -269,7 +288,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (token_id, tx) = self
             .wallet
             .issue_new_token(
-                &mut self.wallet_events,
                 account_index,
                 address,
                 TokenIssuance {
@@ -282,22 +300,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
-            .map(|status| (token_id, status))
+
+        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
     }
 
     pub async fn issue_new_nft(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         metadata: Metadata,
     ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -305,7 +320,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let (token_id, tx) = self
             .wallet
             .issue_new_nft(
-                &mut self.wallet_events,
                 account_index,
                 address,
                 metadata,
@@ -313,17 +327,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 consolidate_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
-        self.rpc_client
-            .submit_transaction(tx.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)
-            .map(|status| (token_id, status))
+
+        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
     }
 
     pub fn new_address(
         &mut self,
         account_index: U31,
-    ) -> Result<(ChildNumber, Address), ControllerError<T>> {
+    ) -> Result<(ChildNumber, Address<Destination>), ControllerError<T>> {
         self.wallet.get_new_address(account_index).map_err(ControllerError::WalletError)
     }
 
@@ -335,6 +346,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     async fn get_pool_info(
         &self,
+        chain_config: &ChainConfig,
         pool_id: PoolId,
         block_info: BlockInfo,
     ) -> Result<(PoolId, BlockInfo, Amount), ControllerError<T>> {
@@ -345,7 +357,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .and_then(|balance| {
                 balance.ok_or(ControllerError::SyncError(format!(
                     "Pool id {} from wallet not found in node",
-                    pool_id
+                    Address::new(chain_config, &pool_id)?
                 )))
             })
             .map(|balance| (pool_id, block_info, balance))
@@ -354,6 +366,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     pub async fn get_pool_ids(
         &self,
+        chain_config: &ChainConfig,
         account_index: U31,
     ) -> Result<Vec<(PoolId, BlockInfo, Amount)>, ControllerError<T>> {
         let pools =
@@ -361,10 +374,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
-            .map(|(pool_id, block_info)| self.get_pool_info(pool_id, block_info))
+            .map(|(pool_id, block_info)| self.get_pool_info(chain_config, pool_id, block_info))
             .collect();
 
         tasks.try_collect().await
+    }
+
+    pub fn get_delegations(
+        &mut self,
+        account_index: U31,
+    ) -> Result<impl Iterator<Item = (&DelegationId, Amount)>, ControllerError<T>> {
+        self.wallet.get_delegations(account_index).map_err(ControllerError::WalletError)
     }
 
     pub fn get_vrf_public_key(
@@ -376,43 +396,157 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)
     }
 
+    /// Broadcast a singed transaction to the mempool and update the wallets state if the
+    /// transaction has been added to the mempool
+    async fn broadcast_to_mempool(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let status = self
+            .rpc_client
+            .submit_transaction(tx.clone())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        match status {
+            mempool::TxStatus::InMempool => {
+                self.wallet
+                    .add_unconfirmed_tx(tx, &mut self.wallet_events)
+                    .map_err(ControllerError::WalletError)?;
+            }
+            mempool::TxStatus::InOrphanPool => {
+                // Mempool should reject the transaction and not return `InOrphanPool`
+                log::warn!("Newly created Transaction was sent to the orphan pool")
+                // We will not save the Tx in our wallet so that we don't start building other
+                // transactions on top of it
+            }
+        };
+
+        Ok(status)
+    }
+
     pub async fn send_to_address(
         &mut self,
         account_index: U31,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
         let consolidate_fee_rate = current_fee_rate;
 
-        self.wallet
+        let tx = self
+            .wallet
             .create_transaction_to_addresses(
-                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn create_delegation(
+        &mut self,
+        account_index: U31,
+        address: Address<Destination>,
+        pool_id: PoolId,
+    ) -> Result<(DelegationId, TxStatus), ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(IN_TOP_N_MB)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let consolidate_fee_rate = current_fee_rate;
+        let output = make_create_delegation_output(self.chain_config.as_ref(), address, pool_id)
+            .map_err(ControllerError::WalletError)?;
+        let (delegation_id, tx) = self
+            .wallet
+            .create_delegation(
+                account_index,
+                vec![output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await.map(|status| (delegation_id, status))
+    }
+
+    pub async fn delegate_staking(
+        &mut self,
+        account_index: U31,
+        amount: Amount,
+        delegation_id: DelegationId,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let output = TxOutput::DelegateStaking(amount, delegation_id);
+
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(IN_TOP_N_MB)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        let consolidate_fee_rate = current_fee_rate;
+
+        let tx = self
+            .wallet
+            .create_transaction_to_addresses(
+                account_index,
+                vec![output],
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn send_to_address_from_delegation(
+        &mut self,
+        account_index: U31,
+        address: Address<Destination>,
+        amount: Amount,
+        delegation_id: DelegationId,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(IN_TOP_N_MB)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let tx = self
+            .wallet
+            .create_transaction_to_addresses_from_delegation(
+                account_index,
+                address,
+                amount,
+                delegation_id,
+                current_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn send_tokens_to_address(
         &mut self,
         account_index: U31,
         token_id: TokenId,
-        address: Address,
+        address: Address<Destination>,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+    ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -420,41 +554,100 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let output =
             make_address_output_token(self.chain_config.as_ref(), address, amount, token_id)
                 .map_err(ControllerError::WalletError)?;
-        self.wallet
+        let tx = self
+            .wallet
             .create_transaction_to_addresses(
-                &mut self.wallet_events,
                 account_index,
                 [output],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn get_token_number_of_decimals(
+        &mut self,
+        token_id: TokenId,
+    ) -> Result<u8, ControllerError<T>> {
+        let token_info = self
+            .rpc_client
+            .get_token_info(token_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
+                token_id,
+            )))?;
+        let decimals = match token_info {
+            FungibleToken(token_info) => token_info.number_of_decimals,
+            // TODO: for now use 0 so you can transfer NFTs with the same command as tokens
+            // later we can separate it into separate commands
+            NonFungibleToken(_) => 0,
+        };
+        Ok(decimals)
     }
 
     pub async fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
         amount: Amount,
-        decomission_key: Option<PublicKey>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+        decommission_key: Option<PublicKey>,
+        margin_ratio_per_thousand: PerThousand,
+        cost_per_block: Amount,
+    ) -> Result<TxStatus, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(5)
+            .mempool_get_fee_rate(IN_TOP_N_MB)
             .await
             .map_err(ControllerError::NodeCallError)?;
 
         let consolidate_fee_rate = current_fee_rate;
 
-        self.wallet
+        let tx = self
+            .wallet
             .create_stake_pool_tx(
-                &mut self.wallet_events,
                 account_index,
-                amount,
-                decomission_key,
+                decommission_key,
                 current_fee_rate,
                 consolidate_fee_rate,
+                StakePoolDataArguments {
+                    amount,
+                    margin_ratio_per_thousand,
+                    cost_per_block,
+                },
             )
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn decommission_stake_pool(
+        &mut self,
+        account_index: U31,
+        pool_id: PoolId,
+    ) -> Result<TxStatus, ControllerError<T>> {
+        let current_fee_rate = self
+            .rpc_client
+            .mempool_get_fee_rate(IN_TOP_N_MB)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let staker_balance = self
+            .rpc_client
+            .get_stake_pool_pledge(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+                pool_id,
+            )))?;
+
+        let tx = self
+            .wallet
+            .decommission_stake_pool(account_index, pool_id, staker_balance, current_fee_rate)
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
     }
 
     pub async fn generate_block(
@@ -512,11 +705,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        log::info!("Start staking, account_index: {}", account_index);
         self.staking_started.insert(account_index);
         Ok(())
     }
 
     pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        log::info!("Stop staking, account_index: {}", account_index);
         self.staking_started.remove(&account_index);
         Ok(())
     }
@@ -541,6 +736,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 account_index,
                 UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
                 UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
             )
             .map_err(ControllerError::WalletError)?;
         let pool_ids = stake_pool_utxos.values().filter_map(|utxo| match utxo {
@@ -570,7 +766,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn get_all_issued_addresses(
         &self,
         account_index: U31,
-    ) -> Result<BTreeMap<ChildNumber, Address>, ControllerError<T>> {
+    ) -> Result<BTreeMap<ChildNumber, Address<Destination>>, ControllerError<T>> {
         self.wallet
             .get_all_issued_addresses(account_index)
             .map_err(ControllerError::WalletError)
@@ -590,7 +786,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
+        let mut rebroadcast_txs_timer = get_time();
         loop {
             let sync_res = self.sync_once().await;
 
@@ -621,6 +818,31 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
 
             tokio::time::sleep(NORMAL_DELAY).await;
+
+            self.rebroadcast_txs(&mut rebroadcast_txs_timer);
+        }
+    }
+
+    /// Rebroadcast not confirmed transactions
+    fn rebroadcast_txs(&mut self, rebroadcast_txs_timer: &mut Duration) {
+        if get_time() >= *rebroadcast_txs_timer {
+            let _ = self
+                .wallet
+                .get_transactions_to_be_broadcast()
+                .map(|txs| async {
+                    for tx in txs {
+                        let tx_id = tx.transaction().get_id();
+                        let res = self.rpc_client.submit_transaction(tx).await;
+                        if let Err(e) = res {
+                            log::warn!("Rebroadcasting for tx {tx_id} failed: {e}");
+                        }
+                    }
+                })
+                .log_err_pfx("Fetching transactions for rebroadcasting failed:");
+
+            // Reset the timer with a new random interval between 2 and 5 minutes
+            let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
+            *rebroadcast_txs_timer = get_time() + Duration::from_secs(sleep_interval_sec);
         }
     }
 }

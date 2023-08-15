@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use common::chain::tokens::OutputValue;
+use common::chain::output_value::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Block, Destination, TxOutput};
 use common::primitives::{Amount, Idable, H256};
@@ -33,7 +33,7 @@ fn test_storage_get_default_version_in_tx() {
         let store = TestStore::new_empty().unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
-        assert_eq!(vtx, 1, "Default storage version wrong");
+        assert_eq!(vtx, None, "Default storage version wrong");
         assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
     })
 }
@@ -52,8 +52,10 @@ fn test_storage_manipulation() {
     // Prepare some test data
     let tx0 = Transaction::new(0xaabbccdd, vec![], vec![]).unwrap();
     let tx1 = Transaction::new(0xbbccddee, vec![], vec![]).unwrap();
+    let signed_tx0 = SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count");
+    let signed_tx1 = SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count");
     let block0 = Block::new(
-        vec![SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count")],
+        vec![signed_tx0.clone()],
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
@@ -61,7 +63,7 @@ fn test_storage_manipulation() {
     )
     .unwrap();
     let block1 = Block::new(
-        vec![SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count")],
+        vec![signed_tx1],
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
@@ -73,9 +75,15 @@ fn test_storage_manipulation() {
     let mut store = TestStore::new_empty().unwrap();
 
     // Storage version manipulation
-    assert_eq!(store.get_storage_version(), Ok(1));
-    assert_eq!(store.set_storage_version(2), Ok(()));
-    assert_eq!(store.get_storage_version(), Ok(2));
+    assert_eq!(store.get_storage_version(), Ok(None));
+    assert_eq!(
+        store.set_storage_version(ChainstateStorageVersion::new(0)),
+        Ok(())
+    );
+    assert_eq!(
+        store.get_storage_version(),
+        Ok(Some(ChainstateStorageVersion::new(0)))
+    );
 
     // Store is now empty, the block is not there
     assert_eq!(store.get_block(block0.get_id()), Ok(None));
@@ -108,7 +116,7 @@ fn test_storage_manipulation() {
     let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
     assert_eq!(
         &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
-        &tx0
+        &signed_tx0
     );
 
     // Test setting and retrieving best chain id
@@ -138,7 +146,7 @@ fn test_storage_manipulation() {
     );
     if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
         if let SpendablePosition::Transaction(ref p) = index.position() {
-            assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
+            assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(signed_tx0)));
         } else {
             unreachable!();
         };
@@ -150,17 +158,19 @@ fn test_storage_manipulation() {
 #[test]
 fn get_set_transactions() {
     utils::concurrency::model(|| {
-        // Set up the store and initialize the version to 2
+        // Set up the store and initialize the version to 0
         let mut store = TestStore::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+        assert_eq!(
+            store.set_storage_version(ChainstateStorageVersion::new(0)),
+            Ok(())
+        );
 
         // Concurrently bump version and run a transaction that reads the version twice.
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
-                tx.set_storage_version(v + 1).unwrap();
+                tx.set_storage_version(ChainstateStorageVersion::new(1)).unwrap();
                 tx.commit().unwrap();
             })
         };
@@ -168,33 +178,49 @@ fn get_set_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let tx = store.transaction_ro().unwrap();
-                let v1 = tx.get_storage_version().unwrap();
-                let v2 = tx.get_storage_version().unwrap();
-                assert!([2, 3].contains(&v1));
+                let v1 = tx.get_storage_version().unwrap().unwrap();
+                let v2 = tx.get_storage_version().unwrap().unwrap();
+                assert!(
+                    [ChainstateStorageVersion::new(0), ChainstateStorageVersion::new(1)]
+                        .contains(&v1)
+                );
                 assert_eq!(v1, v2, "Version query in a transaction inconsistent");
             })
         };
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(3));
+        assert_eq!(
+            store.get_storage_version(),
+            Ok(Some(ChainstateStorageVersion::new(1)))
+        );
     })
 }
 
-#[test]
-fn test_storage_transactions() {
-    utils::concurrency::model(|| {
-        // Set up the store and initialize the version to 2
-        let mut store = TestStore::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_storage_transactions(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        // Set up the store with empty utxo set
+        let mut rng = make_seedable_rng(seed);
+        let store = TestStore::new_empty().unwrap();
+        assert!(store.read_utxo_set().unwrap().is_empty());
 
-        // Concurrently bump version by 3 and 5 in two separate threads
+        let (utxo1, outpoint1) = create_rand_utxo(&mut rng, 1);
+        let (utxo2, outpoint2) = create_rand_utxo(&mut rng, 1);
+
+        let expected_utxo_set = BTreeMap::from_iter([
+            (outpoint1.clone(), utxo1.clone()),
+            (outpoint2.clone(), utxo2.clone()),
+        ]);
+
+        // Concurrently insert 2 utxo in two separate threads
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
-                tx.set_storage_version(v + 3).unwrap();
+                tx.set_utxo(&outpoint1, utxo1).unwrap();
                 tx.commit().unwrap();
             })
         };
@@ -202,32 +228,41 @@ fn test_storage_transactions() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
-                tx.set_storage_version(v + 5).unwrap();
+                tx.set_utxo(&outpoint2, utxo2).unwrap();
                 tx.commit().unwrap();
             })
         };
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+        assert_eq!(store.read_utxo_set(), Ok(expected_utxo_set));
     })
 }
 
-#[test]
-fn test_storage_transactions_with_result_check() {
-    utils::concurrency::model(|| {
-        // Set up the store and initialize the version to 2
-        let mut store = TestStore::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_storage_transactions_with_result_check(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        // Set up the store with empty utxo set
+        let mut rng = make_seedable_rng(seed);
+        let store = TestStore::new_empty().unwrap();
+        assert!(store.read_utxo_set().unwrap().is_empty());
 
-        // Concurrently bump version by 3 and 5 in two separate threads
+        let (utxo1, outpoint1) = create_rand_utxo(&mut rng, 1);
+        let (utxo2, outpoint2) = create_rand_utxo(&mut rng, 1);
+
+        let expected_utxo_set = BTreeMap::from_iter([
+            (outpoint1.clone(), utxo1.clone()),
+            (outpoint2.clone(), utxo2.clone()),
+        ]);
+
+        // Concurrently insert 2 utxo in two separate threads
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 3).is_ok());
+                assert!(tx.set_utxo(&outpoint1, utxo1).is_ok());
                 assert!(tx.commit().is_ok());
             })
         };
@@ -235,15 +270,14 @@ fn test_storage_transactions_with_result_check() {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw(None).unwrap();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 5).is_ok());
+                assert!(tx.set_utxo(&outpoint2, utxo2).is_ok());
                 assert!(tx.commit().is_ok());
             })
         };
 
         let _ = thr0.join();
         let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+        assert_eq!(store.read_utxo_set(), Ok(expected_utxo_set));
     })
 }
 

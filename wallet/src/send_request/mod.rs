@@ -14,15 +14,17 @@
 // limitations under the License.
 
 use common::address::Address;
+use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
+use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{
-    Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenIssuance, TokenTransfer,
+    Metadata, NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer,
 };
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
-use common::primitives::Amount;
+use common::primitives::{Amount, BlockHeight};
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 
@@ -44,21 +46,21 @@ pub struct SendRequest {
 
 pub fn make_address_output(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     amount: Amount,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
 }
 
 pub fn make_address_output_token(
     chain_config: &ChainConfig,
-    address: Address,
+    address: Address<Destination>,
     amount: Amount,
     token_id: TokenId,
 ) -> WalletResult<TxOutput> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
@@ -70,11 +72,11 @@ pub fn make_address_output_token(
 }
 
 pub fn make_issue_token_outputs(
-    address: Address,
+    address: Address<Destination>,
     token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
 
     chainstate::check_tokens_issuance_data(
         chain_config,
@@ -96,11 +98,11 @@ pub fn make_issue_token_outputs(
 }
 
 pub fn make_issue_nft_outputs(
-    address: Address,
+    address: Address<Destination>,
     nft_metadata: Metadata,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.destination(chain_config)?;
+    let destination = address.decode_object(chain_config)?;
     let nft_issuance = Box::new(NftIssuance {
         metadata: nft_metadata,
     });
@@ -117,25 +119,73 @@ pub fn make_issue_nft_outputs(
     Ok(vec![issuance_output, token_issuance_fee])
 }
 
+pub fn make_create_delegation_output(
+    chain_config: &ChainConfig,
+    address: Address<Destination>,
+    pool_id: PoolId,
+) -> WalletResult<TxOutput> {
+    let destination = address.decode_object(chain_config)?;
+
+    Ok(TxOutput::CreateDelegationId(destination, pool_id))
+}
+
+pub fn make_address_output_from_delegation(
+    chain_config: &ChainConfig,
+    address: Address<Destination>,
+    amount: Amount,
+    current_block_height: BlockHeight,
+) -> WalletResult<TxOutput> {
+    let destination = address.decode_object(chain_config)?;
+    let num_blocks_to_lock: i64 =
+        chain_config.spend_share_maturity_distance(current_block_height).into();
+
+    Ok(TxOutput::LockThenTransfer(
+        OutputValue::Coin(amount),
+        destination,
+        ForBlockCount(num_blocks_to_lock as u64),
+    ))
+}
+
+pub fn make_decomission_stake_pool_output(
+    chain_config: &ChainConfig,
+    destination: Destination,
+    amount: Amount,
+    current_block_height: BlockHeight,
+) -> WalletResult<TxOutput> {
+    let num_blocks_to_lock: i64 =
+        chain_config.decommission_pool_maturity_distance(current_block_height).into();
+
+    Ok(TxOutput::LockThenTransfer(
+        OutputValue::Coin(amount),
+        destination,
+        ForBlockCount(num_blocks_to_lock as u64),
+    ))
+}
+
+/// Helper struct to reduce the number of arguments passed around
+pub struct StakePoolDataArguments {
+    pub amount: Amount,
+    pub margin_ratio_per_thousand: PerThousand,
+    pub cost_per_block: Amount,
+}
+
 pub fn make_stake_output(
     pool_id: PoolId,
-    amount: Amount,
+    arguments: StakePoolDataArguments,
     staker: PublicKey,
     decommission_key: PublicKey,
     vrf_public_key: VRFPublicKey,
-    margin_ratio_per_thousand: PerThousand,
-    cost_per_block: Amount,
 ) -> WalletResult<TxOutput> {
     let staker = Destination::PublicKey(staker);
     let decommission_key = Destination::PublicKey(decommission_key);
 
     let stake_data = StakePoolData::new(
-        amount,
+        arguments.amount,
         staker,
         vrf_public_key,
         decommission_key,
-        margin_ratio_per_thousand,
-        cost_per_block,
+        arguments.margin_ratio_per_thousand,
+        arguments.cost_per_block,
     );
     Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
 }

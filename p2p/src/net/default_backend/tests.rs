@@ -31,7 +31,7 @@ use tokio::time::timeout;
 
 async fn connect_to_remote<A, T>()
 where
-    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
@@ -70,7 +70,7 @@ where
     .unwrap();
 
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    conn1.connect(addr[0]).unwrap();
 
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
@@ -105,7 +105,7 @@ async fn connect_to_remote_noise() {
 
 async fn accept_incoming<A, T>()
 where
-    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    A: TestTransportMaker<Transport = T>,
     T: TransportSocket,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
@@ -144,7 +144,7 @@ where
     .unwrap();
 
     let bind_address = conn2.local_addresses();
-    conn1.connect(bind_address[0].clone()).unwrap();
+    conn1.connect(bind_address[0]).unwrap();
     let res2 = conn2.poll_next().await;
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
@@ -177,7 +177,7 @@ async fn accept_incoming_noise() {
 
 async fn disconnect<A, T>()
 where
-    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    A: TestTransportMaker<Transport = T>,
     T: TransportSocket,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
@@ -215,7 +215,7 @@ where
     .await
     .unwrap();
 
-    conn1.connect(conn2.local_addresses()[0].clone()).unwrap();
+    conn1.connect(conn2.local_addresses()[0]).unwrap();
     let res2 = conn2.poll_next().await;
 
     match res2.unwrap() {
@@ -247,7 +247,7 @@ async fn disconnect_noise() {
 
 async fn self_connect<A, T>()
 where
-    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
@@ -287,7 +287,7 @@ where
 
     // Try connect to self
     let addr = conn1.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    conn1.connect(addr[0]).unwrap();
 
     // ConnectionError should be reported
     if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
@@ -299,7 +299,7 @@ where
 
     // Check that we can still connect normally after
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).unwrap();
+    conn1.connect(addr[0]).unwrap();
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
         peer_info,
@@ -334,7 +334,7 @@ async fn self_connect_noise() {
 
 async fn invalid_outbound_peer_connect<A, T>()
 where
-    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    A: TestTransportMaker<Transport = T>,
     T: TransportSocket + Debug,
 {
     let time_getter = TimeGetter::default();
@@ -365,7 +365,7 @@ where
     .unwrap();
 
     // Try to connect to some broken peer
-    conn.connect(addr[0].clone()).unwrap();
+    conn.connect(addr[0]).unwrap();
     // `ConnectionError` should be reported
     let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
 

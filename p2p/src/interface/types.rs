@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use p2p_types::socket_address::SocketAddress;
 use serde::{Deserialize, Serialize};
 
 use crate::types::peer_id::PeerId;
@@ -24,7 +25,7 @@ use crate::types::peer_id::PeerId;
 pub struct ConnectedPeer {
     pub peer_id: PeerId,
 
-    pub address: String,
+    pub address: SocketAddress,
 
     pub inbound: bool,
 

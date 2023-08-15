@@ -25,6 +25,7 @@ use std::{
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     io::DuplexStream,
     sync::{
@@ -83,12 +84,13 @@ impl MpscChannelTransport {
 
 #[async_trait]
 impl TransportSocket for MpscChannelTransport {
-    type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = ChannelListener;
     type Stream = ChannelStream;
 
-    async fn bind(&self, mut addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
+        let mut addresses: Vec<SocketAddr> =
+            addresses.iter().map(SocketAddress::socket_addr).collect();
+
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         for address in addresses.iter_mut() {
@@ -128,7 +130,8 @@ impl TransportSocket for MpscChannelTransport {
         })
     }
 
-    fn connect(&self, mut address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
+        let mut address = address.socket_addr();
         if address.ip().is_unspecified() {
             address.set_ip(self.local_address);
         }
@@ -164,9 +167,8 @@ pub struct ChannelListener {
 #[async_trait]
 impl TransportListener for ChannelListener {
     type Stream = ChannelStream;
-    type Address = SocketAddr;
 
-    async fn accept(&mut self) -> Result<(ChannelStream, SocketAddr)> {
+    async fn accept(&mut self) -> Result<(ChannelStream, SocketAddress)> {
         let (remote_address, response_sender) =
             self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
@@ -174,11 +176,11 @@ impl TransportListener for ChannelListener {
 
         response_sender.send(client).map_err(|_| P2pError::ChannelClosed)?;
 
-        Ok((server, remote_address))
+        Ok((server, SocketAddress::new(remote_address)))
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
-        Ok(self.addresses.clone())
+    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
+        Ok(self.addresses.iter().cloned().map(SocketAddress::new).collect())
     }
 }
 
@@ -217,7 +219,7 @@ mod tests {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let transport = MpscChannelTransport::new();
-        let address: SocketAddr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
+        let address = SocketAddress::new(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into());
         let mut server = transport.bind(vec![address]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 

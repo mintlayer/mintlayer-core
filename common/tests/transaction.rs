@@ -16,7 +16,7 @@
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signed_transaction::SignedTransaction;
 use common::chain::DelegationId;
-use common::chain::{tokens::OutputValue, transaction::*};
+use common::chain::{output_value::OutputValue, transaction::*};
 use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
 

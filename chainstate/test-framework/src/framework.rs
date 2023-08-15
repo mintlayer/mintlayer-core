@@ -308,7 +308,7 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
     use crate::TransactionBuilder;
     use common::{
         chain::{
-            signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock,
+            output_value::OutputValue, signature::inputsig::InputWitness, Destination, GenBlock,
             OutPointSourceId, TxInput, TxOutput,
         },
         primitives::{Amount, Id, Idable},

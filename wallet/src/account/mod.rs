@@ -19,28 +19,33 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::AccountSpending::Delegation;
 use common::primitives::id::WithId;
+use common::primitives::Idable;
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
 pub use utxo_selector::UtxoSelectorError;
+use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
-use crate::send_request::{make_address_output, make_address_output_token, make_stake_output};
+use crate::send_request::{
+    make_address_output, make_address_output_from_delegation, make_address_output_token,
+    make_decomission_stake_pool_output, make_stake_output, StakePoolDataArguments,
+};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
+use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
+use common::chain::tokens::{TokenData, TokenId, TokenTransfer};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
-    TxOutput, UtxoOutPoint,
+    AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
+    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
-use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
@@ -56,7 +61,10 @@ use wallet_storage::{
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
-use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, BlockInfo, KeyPurpose, WalletTx};
+use wallet_types::{
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
+    WalletTx,
+};
 
 use self::output_cache::OutputCache;
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -83,7 +91,7 @@ impl Account {
             AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let output_cache = OutputCache::new(txs);
+        let output_cache = OutputCache::new(txs)?;
 
         Ok(Account {
             chain_config,
@@ -160,6 +168,7 @@ impl Account {
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
                 median_time,
                 UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
             )
             .into_iter(),
             |(_, (tx_output, _))| tx_output,
@@ -325,7 +334,114 @@ impl Account {
         )?;
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(request, db_tx)?;
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
+        Ok(tx)
+    }
+
+    pub fn decommission_stake_pool(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        pool_id: PoolId,
+        pool_balance: Amount,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let pool_data = self.output_cache.pool_data(pool_id)?;
+        let best_block_height = self.best_block().1;
+        let tx_input = TxInput::Utxo(pool_data.utxo_outpoint.clone());
+
+        let network_fee: Amount = {
+            let output = make_decomission_stake_pool_output(
+                self.chain_config.as_ref(),
+                pool_data.decommission_key.clone(),
+                pool_balance,
+                best_block_height,
+            )?;
+            let outputs = vec![output];
+
+            current_fee_rate
+                .compute_fee(
+                    tx_size_with_outputs(outputs.as_slice())
+                        + input_signature_size(&pool_data.decommission_key)?
+                        + serialization::Encode::encoded_size(&tx_input),
+                )
+                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                .into()
+        };
+
+        let output = make_decomission_stake_pool_output(
+            self.chain_config.as_ref(),
+            pool_data.decommission_key.clone(),
+            (pool_balance - network_fee)
+                .ok_or(WalletError::NotEnoughUtxo(network_fee, pool_balance))?,
+            best_block_height,
+        )?;
+
+        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+
+        let input_utxo = self.output_cache.get_txo(&pool_data.utxo_outpoint);
+        let tx = self.sign_transaction(tx, &[&pool_data.decommission_key], &[input_utxo], db_tx)?;
+        Ok(tx)
+    }
+
+    pub fn spend_from_delegation(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        address: Address<Destination>,
+        amount: Amount,
+        delegation_id: DelegationId,
+        current_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let current_block_height = self.best_block().1;
+        let output = make_address_output_from_delegation(
+            self.chain_config.as_ref(),
+            address,
+            amount,
+            current_block_height,
+        )?;
+        let delegation_data = self.output_cache.delegation_data(delegation_id)?;
+        let nonce = delegation_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::DelegationNonceOverflow(delegation_id))?;
+
+        let outputs = vec![output];
+        let network_fee: Amount = current_fee_rate
+            .compute_fee(
+                tx_size_with_outputs(outputs.as_slice())
+                    + input_signature_size(&delegation_data.destination)?,
+            )
+            .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+            .into();
+
+        let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
+        let mut tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            Delegation(delegation_id, amount_with_fee),
+        ));
+        // as the input size depends on the amount we specify the fee will also change a bit so
+        // loop until it converges.
+        let mut input_size = serialization::Encode::encoded_size(&tx_input);
+        loop {
+            let new_amount_with_fee = (amount_with_fee
+                + current_fee_rate
+                    .compute_fee(input_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                    .into())
+            .ok_or(WalletError::OutputAmountOverflow)?;
+            tx_input = TxInput::Account(AccountOutPoint::new(
+                nonce,
+                Delegation(delegation_id, new_amount_with_fee),
+            ));
+
+            let new_input_size = serialization::Encode::encoded_size(&tx_input);
+            if new_input_size == input_size {
+                break;
+            }
+            input_size = new_input_size;
+        }
+        let tx = Transaction::new(0, vec![tx_input], outputs)?;
+
+        let tx = self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?;
         Ok(tx)
     }
 
@@ -353,10 +469,16 @@ impl Account {
         self.output_cache.pool_ids()
     }
 
+    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, Amount)> {
+        self.output_cache
+            .delegation_ids()
+            .map(|(delegation_id, data)| (delegation_id, data.balance))
+    }
+
     pub fn create_stake_pool_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-        amount: Amount,
+        stake_pool_arguments: StakePoolDataArguments,
         decomission_key: Option<PublicKey>,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
@@ -375,12 +497,10 @@ impl Account {
         let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
         let dummy_stake_output = make_stake_output(
             dummy_pool_id,
-            amount,
+            stake_pool_arguments,
             staker.into_public_key(),
             decommission_key,
             vrf_public_key,
-            PerThousand::new(1000).expect("must not fail"),
-            Amount::ZERO,
         )?;
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
         let mut request = self.select_inputs_for_send_request(
@@ -418,7 +538,7 @@ impl Account {
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
 
-        let tx = self.sign_transaction(request, db_tx)?;
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
         Ok(tx)
     }
 
@@ -431,6 +551,7 @@ impl Account {
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
             median_time,
             UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
         );
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
@@ -468,30 +589,38 @@ impl Account {
         Ok(data)
     }
 
+    fn sign_transaction_from_req(
+        &self,
+        request: SendRequest,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<SignedTransaction> {
+        let (tx, utxos) = request.into_transaction_and_utxos()?;
+        let destinations = utxos
+            .iter()
+            .map(|utxo| {
+                Self::get_tx_output_destination(utxo).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
+                })
+            })
+            .collect::<Result<Vec<_>, WalletError>>()?;
+        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
+
+        self.sign_transaction(tx, destinations.as_slice(), &input_utxos, db_tx)
+    }
+
     // TODO: Use a different type to support partially signed transactions
     fn sign_transaction(
         &self,
-        req: SendRequest,
+        tx: Transaction,
+        destinations: &[&Destination],
+        input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<SignedTransaction> {
-        let (tx, utxos) = req.into_transaction_and_utxos()?;
-        let inputs = tx.inputs();
-        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
-        if utxos.len() != inputs.len() {
-            return Err(
-                TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
-            );
-        }
-
-        let witnesses = utxos
+        let witnesses = destinations
             .iter()
+            .copied()
             .enumerate()
-            .map(|(i, utxo)| {
-                // Get the destination from this utxo
-                let destination = Self::get_tx_output_destination(utxo).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
-                })?;
-
+            .map(|(i, destination)| {
                 if *destination == Destination::AnyoneCanSpend {
                     Ok(InputWitness::NoSignature(None))
                 } else {
@@ -509,7 +638,7 @@ impl Account {
                         sighash_type,
                         destination.clone(),
                         &tx,
-                        &input_utxos,
+                        input_utxos,
                         i,
                     )
                     .map(InputWitness::Standard)
@@ -537,7 +666,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
-    ) -> WalletResult<(ChildNumber, Address)> {
+    ) -> WalletResult<(ChildNumber, Address<Destination>)> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
@@ -550,19 +679,19 @@ impl Account {
         Ok(self.key_chain.issue_key(db_tx, purpose)?.into_public_key())
     }
 
-    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address> {
+    pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.key_chain.get_all_issued_addresses()
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         // TODO: Reuse code from TxVerifier
         match txo {
-            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::CreateDelegationId(d, _)
+            | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-            TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
     }
 
@@ -622,9 +751,10 @@ impl Account {
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         median_time: BlockTimestamp,
+        with_locked: WithLocked,
     ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = group_utxos_for_input(
-            self.get_utxos(utxo_types, median_time, utxo_states).into_iter(),
+            self.get_utxos(utxo_types, median_time, utxo_states, with_locked).into_iter(),
             |(_, (tx_output, _))| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
@@ -641,13 +771,15 @@ impl Account {
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
+        with_locked: WithLocked,
     ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
         let mut all_outputs =
-            self.output_cache.utxos_with_token_ids(current_block_info, utxo_states);
+            self.output_cache
+                .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -686,7 +818,7 @@ impl Account {
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             wallet_events.del_transaction(&tx_id);
-            self.output_cache.remove_tx(&tx_id.into_item_id());
+            self.output_cache.remove_tx(&tx_id.into_item_id())?;
         }
 
         Ok(())
@@ -712,7 +844,7 @@ impl Account {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
             db_tx.set_transaction(&id, &tx)?;
             wallet_events.set_transaction(&id, &tx);
-            self.output_cache.add_tx(id.into_item_id(), tx);
+            self.output_cache.add_tx(id.into_item_id(), tx)?;
             Ok(true)
         } else {
             Ok(false)
@@ -763,7 +895,12 @@ impl Account {
                     signed_tx.transaction().clone().into(),
                     tx_state,
                 ));
-                self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+                self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                    db_tx,
+                    wallet_events,
+                    wallet_tx,
+                    signed_tx,
+                )?;
             }
         }
 
@@ -775,6 +912,29 @@ impl Account {
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
         Ok(())
+    }
+
+    /// Add a new wallet tx if relevant for this account and remove it from the user transactions
+    /// to not be rebroadcast again
+    fn add_wallet_tx_if_relevant_and_remove_from_user_txs(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &mut impl WalletEvents,
+        wallet_tx: WalletTx,
+        signed_tx: &SignedTransaction,
+    ) -> Result<bool, WalletError> {
+        Ok(
+            if self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                let id = AccountWalletCreatedTxId::new(
+                    self.get_account_id(),
+                    signed_tx.transaction().get_id(),
+                );
+                db_tx.del_user_transaction(&id)?;
+                true
+            } else {
+                false
+            },
+        )
     }
 
     pub fn scan_new_unconfirmed_transactions(
@@ -792,7 +952,12 @@ impl Account {
                 tx_state,
             ));
 
-            if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+            if !self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                db_tx,
+                wallet_events,
+                wallet_tx,
+                signed_tx,
+            )? {
                 not_added.push(signed_tx);
             }
         }
@@ -807,7 +972,12 @@ impl Account {
                     tx_state,
                 ));
 
-                if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                if self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                    db_tx,
+                    wallet_events,
+                    wallet_tx,
+                    signed_tx,
+                )? {
                     not_added_next.push(*signed_tx);
                 }
             }
@@ -842,8 +1012,20 @@ impl Account {
         self.output_cache.pending_transactions()
     }
 
-    pub fn abandon_transaction(&mut self, tx_id: Id<Transaction>) -> WalletResult<()> {
-        self.output_cache.abandon_transaction(tx_id)
+    pub fn abandon_transaction(
+        &mut self,
+        tx_id: Id<Transaction>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        let abandoned_txs = self.output_cache.abandon_transaction(tx_id)?;
+        let acc_id = self.get_account_id();
+
+        for tx_id in abandoned_txs {
+            let id = AccountWalletCreatedTxId::new(acc_id.clone(), tx_id);
+            db_tx.del_user_transaction(&id)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -870,9 +1052,9 @@ fn group_outputs<T, Grouped: Clone>(
                 v.clone()
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
-            TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
+            TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
+            TxOutput::CreateDelegationId(_, _) => continue,
+            TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
@@ -1002,7 +1184,7 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id: common::primitives::H256::from_low_u64_ne(0),
+            token_id: TokenId::zero(),
             // TODO: as the  amount is compact there is an edge case where those extra few bytes of
             // size can cause the output fee to be go over the available amount of coins thus not
             // including a change output, and losing money for the user

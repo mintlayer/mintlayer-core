@@ -29,6 +29,7 @@ pub mod maybe_encrypted;
 pub mod newtype;
 pub mod once_destructor;
 pub mod qrcode;
+pub mod rust_backtrace;
 pub mod set_flag;
 pub mod shallow_clone;
 pub mod tap_error_log;

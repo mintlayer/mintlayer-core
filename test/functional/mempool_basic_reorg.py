@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+#  Copyright (c) 2023 RBB S.r.l
+#  opensource@mintlayer.org
+#  SPDX-License-Identifier: MIT
+#  Licensed under the MIT License;
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
 """Mempool reorg test
 
 Check that:
@@ -77,8 +91,8 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # Create two new blocks on top of block1
-        (block2a, block2a_id) = mine_empty_block(block1_id)
-        (block3a, block3a_id) = mine_empty_block(block2a_id)
+        (block2a, block2a_id) = mine_pow_block(block1_id)
+        (block3a, block3a_id) = mine_pow_block(block2a_id)
         self.log.debug("Encoded block2a {}: {}".format(block2a_id, block2a))
         self.log.debug("Encoded block3a {}: {}".format(block3a_id, block3a))
 

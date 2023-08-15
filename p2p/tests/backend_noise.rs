@@ -18,7 +18,7 @@ use p2p::{
         transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
         DefaultNetworkingService,
     },
-    testing_utils::{TestTcpAddressMaker, TestTransportNoise},
+    testing_utils::TestTransportNoise,
 };
 
 fn main() {
@@ -27,6 +27,5 @@ fn main() {
         DefaultNetworkingService<
             WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
         >,
-        TestTcpAddressMaker,
     >();
 }

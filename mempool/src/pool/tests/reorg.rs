@@ -74,7 +74,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 
@@ -89,7 +89,7 @@ async fn basic_reorg(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block2");
-    mempool.on_new_tip(block2_id, BlockHeight::new(2));
+    mempool.on_new_tip(block2_id, BlockHeight::new(2)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -104,7 +104,7 @@ async fn basic_reorg(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.on_new_tip(block4_id, BlockHeight::new(3));
+    mempool.on_new_tip(block4_id, BlockHeight::new(3)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
@@ -160,7 +160,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(!mempool.contains_transaction(&tx2_id));
 
@@ -175,7 +175,68 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
             .unwrap()
             .expect(name);
     }
-    mempool.on_new_tip(block3_id, BlockHeight::new(2));
+    mempool.on_new_tip(block3_id, BlockHeight::new(2)).unwrap();
     assert!(mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reject_txs_during_ibd(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    // Set up chainstate, mempool, and mock time
+    let tf = TestFramework::builder(&mut rng)
+        .with_max_tip_age(Duration::from_secs(10).into())
+        .with_initial_time_since_genesis(200)
+        .build();
+    let genesis_id = tf.genesis().get_id();
+    let mock_time = tf.time_value.unwrap().shallow_clone();
+    let mock_clock = tf.time_getter.clone();
+    let mut mempool = setup_with_chainstate(tf.chainstate).await;
+    mempool.clock = mock_clock;
+    let chainstate = mempool.chainstate_handle().shallow_clone();
+
+    // A test transaction
+    let tx1 = make_tx(&mut rng, &[(genesis_id.into(), 0)], &[1_000_000_000]);
+    let tx1_id = tx1.transaction().get_id();
+
+    // We should not be able to add the transaction yet
+    let res = mempool.add_transaction(tx1.clone(), TxOrigin::TEST);
+    assert_eq!(res, Err(TxValidationError::AddedDuringIBD.into()));
+    assert!(!mempool.contains_transaction(&tx1_id));
+
+    // Submit an "old" block
+    let block1_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(15));
+    let block1 = make_test_block(vec![], genesis_id, block1_time);
+    let block1_id = block1.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block1, BlockSource::Local))
+        .await
+        .unwrap()
+        .expect("block1");
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
+
+    // We should not be able to add the transaction yet
+    let res = mempool.add_transaction(tx1.clone(), TxOrigin::TEST);
+    assert_eq!(res, Err(TxValidationError::AddedDuringIBD.into()));
+    assert!(!mempool.contains_transaction(&tx1_id));
+
+    // Submit a "fresh" block
+    let block2_time = BlockTimestamp::from_int_seconds(mock_time.fetch_add(3));
+    let block2 = make_test_block(vec![], block1_id, block2_time);
+    let block2_id = block2.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block2, BlockSource::Local))
+        .await
+        .unwrap()
+        .expect("block2");
+    mempool.on_new_tip(block2_id, BlockHeight::new(2)).unwrap();
+
+    // We should be able to add the transaction now
+    let res = mempool.add_transaction(tx1, TxOrigin::TEST);
+    assert_eq!(res, Ok(TxStatus::InMempool));
+    assert!(mempool.contains_transaction(&tx1_id));
 }

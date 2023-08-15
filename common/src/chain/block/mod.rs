@@ -60,7 +60,7 @@ pub enum BlockCreationError {
     WitnessMerkleTreeMismatch(H256, H256),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName, serde::Serialize)]
 #[must_use]
 pub enum Block {
     V1(BlockV1),
@@ -224,7 +224,7 @@ impl Eq for WithId<Block> {}
 mod tests {
     use crate::{
         chain::{
-            signature::inputsig::InputWitness, tokens::OutputValue, transaction::Transaction,
+            output_value::OutputValue, signature::inputsig::InputWitness, transaction::Transaction,
             Destination, OutPointSourceId, TxInput, TxOutput,
         },
         primitives::{id, Amount},

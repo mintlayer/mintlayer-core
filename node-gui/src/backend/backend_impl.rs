@@ -16,8 +16,8 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use common::{
-    chain::{ChainConfig, GenBlock, SignedTransaction},
-    primitives::{Amount, BlockHeight, Id},
+    chain::{ChainConfig, GenBlock},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::u31::U31;
 use logging::log;
@@ -31,6 +31,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
+use wallet_types::with_locked::WithLocked;
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -357,13 +358,16 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction = wallet
+        let transaction_status = wallet
             .controller
             .send_to_address(account_id.account_index(), address, amount)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction })
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     async fn stake_amount(
@@ -384,31 +388,23 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction = wallet
+        let transaction_status = wallet
             .controller
-            .create_stake_pool_tx(account_id.account_index(), amount, None)
+            .create_stake_pool_tx(
+                account_id.account_index(),
+                amount,
+                None,
+                // TODO: get value from gui
+                PerThousand::new(1000).expect("Must not fail"),
+                Amount::ZERO,
+            )
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { transaction })
-    }
-
-    async fn broadcast(&mut self, transaction: SignedTransaction) -> Result<(), BackendError> {
-        let tx_status = self
-            .controller
-            .p2p
-            .call_async_mut(|p2p| p2p.submit_transaction(transaction))
-            .await
-            .map_err(|e| BackendError::RpcError(e.to_string()))?
-            .map_err(|e| BackendError::RpcError(e.to_string()))?;
-        match tx_status {
-            mempool::TxStatus::InMempool => Ok(()),
-            mempool::TxStatus::InOrphanPool => {
-                // Mempool should reject the transaction and not return `InOrphanPool`
-                log::warn!("The transaction has been added to the orphan pool.");
-                Ok(())
-            }
-        }
+        Ok(TransactionInfo {
+            wallet_id,
+            transaction_status,
+        })
     }
 
     fn get_account_balance(
@@ -416,7 +412,11 @@ impl Backend {
         account_index: U31,
     ) -> BTreeMap<Currency, Amount> {
         controller
-            .get_balance(account_index, UtxoState::Confirmed.into())
+            .get_balance(
+                account_index,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            )
             .expect("get_balance should not fail normally")
     }
 
@@ -491,10 +491,6 @@ impl Backend {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
             }
-            BackendRequest::Broadcast(transaction) => {
-                let broadcast_res = self.broadcast(transaction).await;
-                Self::send_event(&self.event_tx, BackendEvent::Broadcast(broadcast_res));
-            }
             BackendRequest::TransactionList {
                 wallet_id,
                 account_id,
@@ -513,7 +509,7 @@ impl Backend {
     pub fn send_event(event_tx: &UnboundedSender<BackendEvent>, event: BackendEvent) {
         // The unbounded channel is used to avoid blocking the backend event loop.
         // Iced has a problem when it stops processing messages when the display is turned off.
-        // It has been reproduced on Lunux, and here is a bug reported on Windows: https://github.com/iced-rs/iced/issues/1870.
+        // It has been reproduced on Linux, and here is a bug reported on Windows: https://github.com/iced-rs/iced/issues/1870.
         // As a result, using the bounded channel can break staking, because once the channel is full, the backend event loop is paused.
         _ = event_tx.send(event);
     }

@@ -37,9 +37,9 @@ use utils::atomics::SeqCstAtomicBool;
 tests![peer_events,];
 
 #[allow(clippy::extra_unused_type_parameters)]
-async fn peer_events<T, N, A>()
+async fn peer_events<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,

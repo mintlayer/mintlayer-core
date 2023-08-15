@@ -17,7 +17,14 @@
 from hashlib import blake2b
 from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
-from test_framework.mintlayer import mintlayer_hash
+from test_framework.mintlayer import (
+    base_tx_obj,
+    block_input_data_obj,
+    mintlayer_hash,
+    MLT_COIN,
+    outpoint_obj,
+    signed_tx_obj,
+)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
@@ -34,11 +41,6 @@ GENESIS_VRF_PRIVATE_KEY = (
     "3fcf7b813bec2a293f574b842988895278b396dd72471de2583b242097a59f06"
     "e9f3cd7b78d45750afd17292031373fddb5e7a8090db51221038f5e05f29998e"
 )
-
-block_input_data_obj = RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
-outpoint_obj = RuntimeConfiguration().create_scale_object('OutPoint')
-signed_transaction_obj = RuntimeConfiguration().create_scale_object('SignedTransaction')
-transaction_obj = RuntimeConfiguration().create_scale_object('TransactionV1')
 
 class GeneratePoSBlocksTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -133,9 +135,9 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         return (new_vrf_private_key, new_vrf_public_key)
 
     def pack_transaction(self, transaction):
-        transaction_encoded = signed_transaction_obj.encode(transaction).to_hex()[2:]
+        transaction_encoded = signed_tx_obj.encode(transaction).to_hex()[2:]
         transaction_id = ScaleBytes(
-            mintlayer_hash(transaction_obj.encode(transaction["transaction"]).data)
+            mintlayer_hash(base_tx_obj.encode(transaction["transaction"]).data)
         ).to_hex()[2:]
 
         return (transaction_encoded, transaction_id)
@@ -205,7 +207,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": "4000000000000000",
+                                "value": 40_000*MLT_COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -240,7 +242,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "Transfer": [
                             {
-                                "Coin": "10000000000000000",
+                                "Coin": 100_000*MLT_COIN,
                             },
                             "AnyoneCanSpend",
                         ],
@@ -313,7 +315,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             new_pool_id,
                             {
-                                "value": "10000000000000000",
+                                "value": 100_000*MLT_COIN,
                                 "staker": {
                                     "PublicKey": new_stake_public_key,
                                 },
@@ -351,7 +353,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             "CreateStakePool": [
                 new_pool_id,
                 {
-                    "value": "10000000000000000",
+                    "value": 100_000*MLT_COIN,
                     "staker": {
                         "PublicKey": new_stake_public_key,
                     },

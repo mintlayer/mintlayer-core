@@ -23,6 +23,7 @@ use crate::{
             EmissionScheduleTabular,
         },
         pos::get_initial_randomness,
+        pow::PoWChainConfigBuilder,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
         UpgradeVersion,
     },
@@ -249,6 +250,27 @@ impl Builder {
             .collect::<BTreeMap<BlockHeight, Id<GenBlock>>>()
             .into();
 
+        let pow_chain_config = {
+            let (_, genesis_upgrade_version) = net_upgrades
+                .version_at_height(BlockHeight::new(0))
+                .expect("Genesis must have an upgrade version");
+
+            let limit = match genesis_upgrade_version {
+                UpgradeVersion::SomeUpgrade => None,
+                UpgradeVersion::ConsensusUpgrade(consensus_upgrade) => match consensus_upgrade {
+                    ConsensusUpgrade::IgnoreConsensus | ConsensusUpgrade::PoS { .. } => None,
+                    ConsensusUpgrade::PoW { initial_difficulty } => {
+                        let limit = (*initial_difficulty)
+                            .try_into()
+                            .expect("Genesis initial difficulty to be valid");
+                        Some(limit)
+                    }
+                },
+            };
+
+            PoWChainConfigBuilder::new(chain_type).limit(limit).build()
+        };
+
         ChainConfig {
             chain_type,
             bip44_coin_type,
@@ -263,6 +285,7 @@ impl Builder {
             max_future_block_time_offset,
             max_no_signature_data_size,
             max_depth_for_reorg,
+            pow_chain_config,
             epoch_length,
             sealed_epoch_distance_from_tip,
             initial_randomness,

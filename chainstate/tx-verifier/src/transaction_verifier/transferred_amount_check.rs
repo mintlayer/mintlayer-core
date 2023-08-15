@@ -19,8 +19,9 @@ use common::{
     amount_sum,
     chain::{
         block::{BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, TokenData, TokenId},
         AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
@@ -161,7 +162,11 @@ where
                 }
             };
 
-            amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
+            amount_from_outpoint(
+                outpoint.source_id(),
+                &output_value,
+                &issuance_token_id_getter,
+            )
         }
         TxInput::Account(account_input) => match account_input.account() {
             AccountSpending::Delegation(delegation_id, withdraw_amount) => {

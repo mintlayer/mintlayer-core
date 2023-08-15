@@ -18,13 +18,14 @@ use crate::config::MempoolMaxSize;
 use ::utils::atomics::SeqCstAtomicU64;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
+    MaxTipAge,
 };
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
         config::ChainConfig,
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::OutputValue,
         transaction::{Destination, TxInput, TxOutput},
         OutPointSourceId, Transaction, UtxoOutPoint,
     },
@@ -42,6 +43,9 @@ mod utils;
 use self::utils::*;
 
 const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
+
+/// Max tip age of about 100 years, useful to avoid the IBD state during testing
+const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365 * 24 * 60 * 60));
 
 #[test]
 fn dummy_size() {
@@ -181,15 +185,20 @@ async fn tx_no_inputs() {
     mempool.store.assert_valid();
 }
 
-// TODO this is copy-pasted from libp2p's test utils. This function should be extracted to an
-// external crate to avoid code duplication
+// Starts chainstate with given config. Also sets the max tip age chainstate setting to a huge
+// value to prevent IBD state.
 pub async fn start_chainstate_with_config(
     chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
+    let chainstate_config = {
+        let mut config = ChainstateConfig::new();
+        config.max_tip_age = HUGE_MAX_TIP_AGE;
+        config
+    };
     let chainstate = make_chainstate(
         chain_config,
-        ChainstateConfig::new(),
+        chainstate_config,
         storage,
         DefaultTransactionVerificationStrategy::new(),
         None,
@@ -1060,7 +1069,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
-    mempool.on_new_tip(Id::new(H256::zero()), BlockHeight::new(1));
+    mempool.on_new_tip(Id::new(H256::zero()), BlockHeight::new(1)).unwrap();
 
     assert!(!mempool.contains_transaction(&child_2_high_fee_id));
     assert!(mempool
@@ -1326,7 +1335,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_b.fees_with_ancestors(),
         (entry_b.fee() + entry_tx.fee()).unwrap()
     );
-    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_b_fee.into()));
     log::debug!(
         "BEFORE REMOVAL raw txs_by_ancestor_score {:?}",
         mempool.store.txs_by_ancestor_score
@@ -1355,8 +1363,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_c.ancestor_score()
     );
 
-    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_c_fee.into()));
-
     check_txs_sorted_by_ancestor_score(&mempool);
     mempool.store.assert_valid();
 
@@ -1367,8 +1373,8 @@ fn check_txs_sorted_by_ancestor_score<E>(mempool: &Mempool<E>) {
     let txs_by_ancestor_score = mempool
         .store
         .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
+        .iter()
+        .map(|(_score, id)| id)
         .collect::<Vec<_>>();
     for i in 0..(txs_by_ancestor_score.len() - 1) {
         log::debug!("i =  {}", i);
@@ -1468,7 +1474,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         entry_b.fees_with_descendants(),
         (entry_b.fee() + entry_c.fee()).unwrap()
     );
-    assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_b_fee.into()));
     log::debug!(
         "raw_txs_by_descendant_score {:?}",
         mempool.store.txs_by_descendant_score
@@ -1476,7 +1481,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     check_txs_sorted_by_descendant_sore(&mempool);
 
     mempool.store.remove_tx(entry_c.tx_id(), MempoolRemovalReason::Block);
-    assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
 
@@ -1490,8 +1494,8 @@ fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
     let txs_by_descendant_score = mempool
         .store
         .txs_by_descendant_score
-        .values()
-        .flat_map(Deref::deref)
+        .iter()
+        .map(|(_score, id)| id)
         .collect::<Vec<_>>();
     for i in 0..(txs_by_descendant_score.len() - 1) {
         log::debug!("i =  {}", i);

@@ -16,6 +16,7 @@
 use clap::Args;
 
 use crate::RunOptions;
+use common::chain::config::regtest::GenesisStakingSettings;
 
 #[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
@@ -27,6 +28,10 @@ pub struct RegtestOptions {
 
 #[derive(Args, Clone, Debug)]
 pub struct ChainConfigOptions {
+    /// Magic bytes.
+    #[clap(long)]
+    pub chain_magic_bytes: Option<String>,
+
     /// The maximum future block offset in seconds.
     #[clap(long)]
     pub chain_max_future_block_time_offset: Option<u64>,
@@ -61,4 +66,8 @@ pub struct ChainConfigOptions {
     /// PoS NetUpgrade override after Genesis
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
+
+    /// PoS Genesis staking settings
+    #[clap(long, default_value_t)]
+    pub chain_genesis_staking_settings: GenesisStakingSettings,
 }

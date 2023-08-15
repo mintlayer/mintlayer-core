@@ -205,10 +205,10 @@ mod tests {
     use super::*;
     use common::{
         chain::{
-            config::ChainType, stakelock::StakePoolData, timelock::OutputTimeLock,
-            tokens::OutputValue, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId,
-            Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, TxOutput,
-            UpgradeVersion, UtxoOutPoint,
+            config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
+            timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade,
+            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId,
+            TxOutput, UpgradeVersion, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
         Uint256,

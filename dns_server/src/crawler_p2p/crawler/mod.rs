@@ -41,7 +41,7 @@ use p2p::{
     error::P2pError,
     net::types::PeerInfo,
     peer_manager::{ADDR_RATE_BUCKET_SIZE, ADDR_RATE_INITIAL_SIZE, MAX_ADDR_RATE_PER_SECOND},
-    types::peer_id::PeerId,
+    types::{peer_id::PeerId, socket_address::SocketAddress},
     utils::rate_limiter::RateLimiter,
 };
 
@@ -56,7 +56,7 @@ const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
 /// and based on the results, commands the DNS server to add/remove ip addresses.
 /// The `Crawler` emits events that communicate whether addresses were reached or,
 /// are unreachable anymore.
-pub struct Crawler<A> {
+pub struct Crawler {
     /// Time of some monotonic timer, started from 0
     now: Duration,
 
@@ -67,46 +67,59 @@ pub struct Crawler<A> {
     /// will be periodically tested, and reachable addresses will be handed
     /// to the DNS server to be returned to the user on DNS queries,
     /// and unreachable addresses will be removed from the DNS server
-    addresses: BTreeMap<A, AddressData>,
+    addresses: BTreeMap<SocketAddress, AddressData>,
 
     /// Map of all currently connected outbound peers that we successfully
     /// reached and are still connected to (generally speaking,
     /// we don't have to stay connected to those peers, but this is an implementation detail)
-    outbound_peers: BTreeMap<PeerId, Peer<A>>,
+    outbound_peers: BTreeMap<PeerId, Peer>,
 }
 
-struct Peer<A> {
-    address: A,
+struct Peer {
+    address: SocketAddress,
     address_rate_limiter: RateLimiter,
 }
 
-pub enum CrawlerEvent<A> {
-    Timer { period: Duration },
-    NewAddress { address: A, sender: PeerId },
-    Connected { address: A, peer_info: PeerInfo },
-    Disconnected { peer_id: PeerId },
-    ConnectionError { address: A, error: P2pError },
+pub enum CrawlerEvent {
+    Timer {
+        period: Duration,
+    },
+    NewAddress {
+        address: SocketAddress,
+        sender: PeerId,
+    },
+    Connected {
+        address: SocketAddress,
+        peer_info: PeerInfo,
+    },
+    Disconnected {
+        peer_id: PeerId,
+    },
+    ConnectionError {
+        address: SocketAddress,
+        error: P2pError,
+    },
 }
 
-pub enum CrawlerCommand<A> {
+pub enum CrawlerCommand {
     Connect {
-        address: A,
+        address: SocketAddress,
     },
     Disconnect {
         peer_id: PeerId,
     },
     UpdateAddress {
-        address: A,
+        address: SocketAddress,
         old_state: AddressState,
         new_state: AddressState,
     },
 }
 
-impl<A: Ord + Clone + ToString> Crawler<A> {
+impl Crawler {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        loaded_addresses: BTreeSet<A>,
-        reserved_addresses: BTreeSet<A>,
+        loaded_addresses: BTreeSet<SocketAddress>,
+        reserved_addresses: BTreeSet<SocketAddress>,
     ) -> Self {
         let now = Duration::ZERO;
 
@@ -114,7 +127,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
             .union(&reserved_addresses)
             .map(|addr| {
                 (
-                    addr.clone(),
+                    *addr,
                     AddressData {
                         state: AddressState::Disconnected {
                             fail_count: 0,
@@ -137,9 +150,9 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
 
     fn handle_connected(
         &mut self,
-        address: A,
+        address: SocketAddress,
         peer_info: PeerInfo,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
+        callback: &mut impl FnMut(CrawlerCommand),
     ) {
         log::info!("connected open, peer_id: {}", peer_info.peer_id);
         self.create_outbound_peer(peer_info.peer_id, address, peer_info, callback);
@@ -147,9 +160,9 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
 
     fn handle_connection_error(
         &mut self,
-        address: A,
+        address: SocketAddress,
         error: P2pError,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
+        callback: &mut impl FnMut(CrawlerCommand),
     ) {
         log::debug!("connection to {} failed: {}", address.to_string(), error);
 
@@ -167,16 +180,12 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         );
     }
 
-    fn handle_disconnected(
-        &mut self,
-        peer_id: PeerId,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
-    ) {
+    fn handle_disconnected(&mut self, peer_id: PeerId, callback: &mut impl FnMut(CrawlerCommand)) {
         log::debug!("connection closed, peer_id: {}", peer_id);
         self.remove_outbound_peer(peer_id, callback);
     }
 
-    fn handle_new_address(&mut self, address: A, sender: PeerId) {
+    fn handle_new_address(&mut self, address: SocketAddress, sender: PeerId) {
         let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
         if !peer.address_rate_limiter.accept(self.now) {
             log::debug!(
@@ -186,7 +195,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
             );
             return;
         }
-        if let Entry::Vacant(vacant) = self.addresses.entry(address.clone()) {
+        if let Entry::Vacant(vacant) = self.addresses.entry(address) {
             log::debug!("new address {} added", address.to_string());
             vacant.insert(AddressData {
                 state: AddressState::Disconnected {
@@ -204,10 +213,10 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     /// The only place where the address state can be updated.
     fn change_address_state(
         now: Duration,
-        address: &A,
+        address: &SocketAddress,
         address_data: &mut AddressData,
         transition: AddressStateTransitionTo,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
+        callback: &mut impl FnMut(CrawlerCommand),
     ) {
         log::debug!(
             "change address {} state to {:?}",
@@ -220,7 +229,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         address_data.transition_to(transition, now);
 
         callback(CrawlerCommand::UpdateAddress {
-            address: address.clone(),
+            address: *address,
             old_state,
             new_state: address_data.state.clone(),
         });
@@ -230,9 +239,9 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     fn create_outbound_peer(
         &mut self,
         peer_id: PeerId,
-        address: A,
+        address: SocketAddress,
         peer_info: PeerInfo,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
+        callback: &mut impl FnMut(CrawlerCommand),
     ) {
         let address_rate_limiter = RateLimiter::new(
             self.now,
@@ -242,7 +251,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         );
 
         let peer = Peer {
-            address: address.clone(),
+            address,
             address_rate_limiter,
         };
 
@@ -285,11 +294,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     }
 
     /// Remove existing outbound peer
-    fn remove_outbound_peer(
-        &mut self,
-        peer_id: PeerId,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
-    ) {
+    fn remove_outbound_peer(&mut self, peer_id: PeerId, callback: &mut impl FnMut(CrawlerCommand)) {
         log::debug!("outbound peer removed, peer_id: {}", peer_id);
 
         let peer = self
@@ -314,7 +319,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     /// Peer and address list maintenance.
     ///
     /// Select random addresses to connect to, delete old addresses from memory and DB.
-    fn heartbeat(&mut self, callback: &mut impl FnMut(CrawlerCommand<A>), rng: &mut impl Rng) {
+    fn heartbeat(&mut self, callback: &mut impl FnMut(CrawlerCommand), rng: &mut impl Rng) {
         let connecting_addresses = self
             .addresses
             .iter_mut()
@@ -330,9 +335,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
                 callback,
             );
 
-            callback(CrawlerCommand::Connect {
-                address: address.clone(),
-            });
+            callback(CrawlerCommand::Connect { address: *address });
         }
 
         self.addresses.retain(|_address, address_data| address_data.retain(self.now));
@@ -341,8 +344,8 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     /// Process one input event and receive any number of output commands
     pub fn step(
         &mut self,
-        event: CrawlerEvent<A>,
-        callback: &mut impl FnMut(CrawlerCommand<A>),
+        event: CrawlerEvent,
+        callback: &mut impl FnMut(CrawlerCommand),
         rng: &mut impl Rng,
     ) {
         match event {

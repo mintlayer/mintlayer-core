@@ -141,7 +141,7 @@ mod tests {
 
     use crate::{
         chain::{
-            signature::sighash::sighashtype::SigHashType, tokens::OutputValue, Destination,
+            output_value::OutputValue, signature::sighash::sighashtype::SigHashType, Destination,
             OutPointSourceId,
         },
         primitives::{Amount, Id, H256},

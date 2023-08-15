@@ -19,6 +19,7 @@ use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::ChainType;
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use utils::default_data_dir::default_data_dir_common;
 
 use crate::{
@@ -47,11 +48,15 @@ pub enum Command {
     /// Run the testnet node.
     Testnet(RunOptions),
     /// Run the regtest node.
-    Regtest(RegtestOptions),
+    Regtest(Box<RegtestOptions>),
 }
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
+    /// Clean data dir before starting
+    #[clap(long)]
+    pub clean_data: Option<bool>,
+
     /// Minimum number of connected peers to enable block production.
     #[clap(long)]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
@@ -96,11 +101,11 @@ pub struct RunOptions {
 
     /// Optional list of boot node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_boot_node: Option<Vec<String>>,
+    pub p2p_boot_node: Option<Vec<IpOrSocketAddress>>,
 
     /// Optional list of reserved node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_reserved_node: Option<Vec<String>>,
+    pub p2p_reserved_node: Option<Vec<IpOrSocketAddress>>,
 
     /// Maximum allowed number of inbound connections.
     #[clap(long)]
@@ -136,7 +141,7 @@ pub struct RunOptions {
     ///
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
-    #[clap(long)]
+    #[clap(long, overrides_with("max_tip_age"))]
     pub max_tip_age: Option<u64>,
 
     /// Address to bind http RPC to.

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::tokens::OutputValue;
+use common::chain::output_value::OutputValue;
 use crypto::random::{CryptoRng, Rng};
 
 use super::*;

@@ -16,6 +16,7 @@
 use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
+use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use utils::make_config_setting;
 
 use crate::net::types::services::{Service, Services};
@@ -76,11 +77,11 @@ pub struct P2pConfig {
     pub disable_noise: Option<bool>,
     /// Optional list of initial node addresses.
     /// Boot node addresses are added to PeerDb as regular discovered addresses.
-    pub boot_nodes: Vec<String>,
+    pub boot_nodes: Vec<IpOrSocketAddress>,
     /// Optional list of reserved node addresses.
     /// PeerManager will try to maintain persistent connections to the reserved nodes.
     /// Ban scores are not adjusted for the reserved nodes.
-    pub reserved_nodes: Vec<String>,
+    pub reserved_nodes: Vec<IpOrSocketAddress>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: MaxInboundConnections,
     /// The score threshold after which a peer is banned.

@@ -439,16 +439,56 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::SendAmount(Ok(transaction_info)) => {
-                    backend_sender.send(BackendRequest::Broadcast(transaction_info.transaction));
-                    Command::none()
+                    match transaction_info.transaction_status {
+                        mempool::TxStatus::InMempool => {}
+                        mempool::TxStatus::InOrphanPool => {
+                            // Mempool should reject the transaction and not return `InOrphanPool`
+                            log::warn!("The transaction has been added to the orphan pool.");
+                        }
+                    }
+
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::SendSucceed,
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
                 }
                 BackendEvent::SendAmount(Err(error)) => {
                     self.show_error(error.to_string());
                     Command::none()
                 }
                 BackendEvent::StakeAmount(Ok(transaction_info)) => {
-                    backend_sender.send(BackendRequest::Broadcast(transaction_info.transaction));
-                    Command::none()
+                    match transaction_info.transaction_status {
+                        mempool::TxStatus::InMempool => {}
+                        mempool::TxStatus::InOrphanPool => {
+                            // Mempool should reject the transaction and not return `InOrphanPool`
+                            log::warn!("The transaction has been added to the orphan pool.");
+                        }
+                    }
+
+                    self.show_info(
+                        "Success. Please wait for your transaction to be included in a block."
+                            .to_owned(),
+                    );
+
+                    self.main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                transaction_info.wallet_id,
+                                WalletMessage::CreateStakingPoolSucceed,
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage)
                 }
                 BackendEvent::StakeAmount(Err(error)) => {
                     self.show_error(error.to_string());

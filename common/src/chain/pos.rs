@@ -15,17 +15,20 @@
 
 use std::{num::NonZeroU64, str::FromStr};
 
+use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
+    address::{traits::Addressable, AddressError},
     primitives::{per_thousand::PerThousand, BlockDistance, Id, H256},
     Uint256,
 };
 
-use super::config::ChainType;
+use super::{config::ChainType, ChainConfig};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
+
 pub type PoolId = Id<Pool>;
 
 #[derive(Eq, PartialEq, TypeName)]
@@ -46,6 +49,46 @@ pub struct PoSChainConfig {
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
     difficulty_change_limit: PerThousand,
+}
+
+impl Addressable for PoolId {
+    type Error = AddressError;
+
+    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
+        chain_config.pool_id_address_prefix()
+    }
+
+    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+        self.encode()
+    }
+
+    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::decode_all(&mut address_bytes.as_ref())
+            .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+}
+
+impl Addressable for DelegationId {
+    type Error = AddressError;
+
+    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
+        chain_config.delegation_id_address_prefix()
+    }
+
+    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+        self.encode()
+    }
+
+    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::decode_all(&mut address_bytes.as_ref())
+            .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
 }
 
 impl PoSChainConfig {

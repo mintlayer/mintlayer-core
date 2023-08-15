@@ -18,9 +18,9 @@ use crypto::random::{CryptoRng, Rng};
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::output_value::OutputValue;
 use crate::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use crate::chain::signed_transaction::SignedTransaction;
-use crate::chain::tokens::OutputValue;
 use crate::{
     chain::{
         block::{BlockReward, ConsensusData},

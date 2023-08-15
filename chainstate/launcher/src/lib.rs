@@ -16,8 +16,12 @@
 //! Tools to set up chainstate together with its storage
 
 mod config;
+mod storage_compatibility;
 
 use std::sync::Arc;
+
+use chainstate::InitializationError;
+use storage_lmdb::resize_callback::MapResizeCallback;
 
 // Some useful reexports
 pub use chainstate::{
@@ -26,7 +30,6 @@ pub use chainstate::{
 };
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
-use storage_lmdb::resize_callback::MapResizeCallback;
 
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
@@ -36,8 +39,12 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
 ) -> Result<Box<dyn ChainstateInterface>, Error> {
-    let storage = chainstate_storage::Store::new(storage_backend)
+    let storage = chainstate_storage::Store::new(storage_backend, &chain_config)
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
+
+    storage_compatibility::check_storage_compatibility(&storage, chain_config.as_ref())
+        .map_err(InitializationError::StorageCompatibilityCheckError)?;
+
     let chainstate = chainstate::make_chainstate(
         chain_config,
         chainstate_config,

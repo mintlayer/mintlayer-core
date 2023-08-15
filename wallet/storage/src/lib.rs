@@ -19,14 +19,17 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
-use common::{address::Address, chain::block::timestamp::BlockTimestamp};
+use common::{
+    address::{Address, AddressError},
+    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
+};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
     keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -46,6 +49,8 @@ pub enum Error {
     WalletLockedWithoutAPassword,
     #[error("Wallet file corrupted root keys expected 1 got {0}")]
     WalletSanityErrorInvalidRootKeyCount(usize),
+    #[error("Cannot decode address from DB {0}")]
+    CannotDecodeAddress(#[from] AddressError),
 }
 
 /// Possibly failing result of wallet storage query
@@ -59,13 +64,14 @@ pub trait WalletStorageReadLocked {
     fn get_transactions(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountWalletTxId, WalletTx>>;
+    ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
+    fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
-    fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
+    fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
+    ) -> Result<BTreeMap<AccountDerivationPathId, String>>;
     fn check_root_keys_sanity(&self) -> Result<()>;
     fn get_keychain_usage_state(
         &self,
@@ -100,9 +106,19 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
+    fn set_user_transaction(
+        &mut self,
+        id: &AccountWalletCreatedTxId,
+        tx: &SignedTransaction,
+    ) -> Result<()>;
+    fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
-    fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;
+    fn set_address(
+        &mut self,
+        id: &AccountDerivationPathId,
+        address: &Address<Destination>,
+    ) -> Result<()>;
     fn del_address(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_keychain_usage_state(
         &mut self,

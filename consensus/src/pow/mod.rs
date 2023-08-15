@@ -34,7 +34,7 @@ struct PoW(PoWChainConfig);
 
 impl PoW {
     pub fn new(chain_config: &ChainConfig) -> Self {
-        PoW(chain_config.get_proof_of_work_config())
+        PoW(chain_config.get_proof_of_work_config().clone())
     }
 
     pub fn difficulty_limit(&self) -> Uint256 {

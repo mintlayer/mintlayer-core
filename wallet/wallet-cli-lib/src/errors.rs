@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 
+use common::address::AddressError;
 use crypto::key::hdkd::u31::U31;
 use utils::cookie::LoadCookieError;
 
@@ -48,4 +49,6 @@ pub enum WalletCliError {
     NoSelectedAccount,
     #[error("Account not found for index: {0}")]
     AccountNotFound(U31),
+    #[error("Address encoding error: {0}")]
+    AddressEncodingError(#[from] AddressError),
 }

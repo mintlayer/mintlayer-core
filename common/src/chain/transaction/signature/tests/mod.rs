@@ -23,12 +23,12 @@ use super::{inputsig::InputWitness, sighash::sighashtype::SigHashType};
 use crate::{
     chain::{
         config::create_mainnet,
+        output_value::OutputValue,
         signature::{
             inputsig::standard_signature::StandardInputSignature, verify_signature,
             TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        tokens::OutputValue,
         ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},

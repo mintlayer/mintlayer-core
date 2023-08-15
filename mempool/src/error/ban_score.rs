@@ -84,6 +84,9 @@ impl MempoolBanScore for TxValidationError {
             TxValidationError::ChainstateError(err) => err.mempool_ban_score(),
             TxValidationError::TxValidation(err) => err.mempool_ban_score(),
 
+            // Unsolicited transaction sent during IBD
+            TxValidationError::AddedDuringIBD => 0,
+
             // Internal errors
             TxValidationError::CallError(_) => 0,
             TxValidationError::TipMoved => 0,
@@ -154,7 +157,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 0,
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 0,
             ConnectTransactionError::TxUndoWithDependency(_) => 0,
-            ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
             ConnectTransactionError::PoolOwnerBalanceNotFound(_) => 0,

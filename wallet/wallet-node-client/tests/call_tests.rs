@@ -237,7 +237,8 @@ async fn node_rpc_communication() {
         manager_task_handle,
     ) = start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    let rpc_client = make_rpc_client(rpc_bind_address, RpcAuthData::None).await.unwrap();
+    let rpc_client =
+        make_rpc_client(rpc_bind_address.to_string(), RpcAuthData::None).await.unwrap();
 
     test_wallet_node_communication(chain_config, chainstate, rpc_client).await;
 

@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2021 The Bitcoin Core developers
-# Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+#  Copyright (c) 2022-2023 RBB S.r.l
+#  Copyright (c) 2014-2021 The Bitcoin Core developers
+#  opensource@mintlayer.org
+#  SPDX-License-Identifier: MIT
+#  Licensed under the MIT License;
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
 """Run regression test suite.
 
 This module calls down into individual test cases via subprocess. It will
@@ -101,6 +113,7 @@ BASE_SCRIPTS = [
 
     # vv Tests less than 30s vv
     'blockprod_generate_pos_blocks.py',
+    'blockprod_generate_pos_blocks_rand_genesis_keys.py',
     'blockprod_generate_pos_genesis_blocks.py',
     'blockprod_generate_pow_blocks.py',
     'example_test.py',
@@ -108,11 +121,14 @@ BASE_SCRIPTS = [
     'p2p_submit_orphan.py',
     'p2p_syncing_test.py',
     'p2p_relay_transactions.py',
+    'feature_db_reinit.py',
     'feature_lmdb_backend_test.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
-    'mempool_submit_tx.py',
+    'mempool_ibd.py',
+    'mempool_orphan_peer_disconnected.py',
     'mempool_submit_orphan.py',
+    'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts

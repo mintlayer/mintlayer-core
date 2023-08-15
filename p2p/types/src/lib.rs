@@ -13,11 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod bannable_address;
 pub mod global_ip;
 pub mod ip_address;
+pub mod ip_or_socket_address;
 pub mod p2p_event;
 pub mod peer_address;
 pub mod peer_id;
 pub mod services;
+pub mod socket_address;
 
 pub use global_ip::IsGlobalIp;
+pub use peer_id::PeerId;

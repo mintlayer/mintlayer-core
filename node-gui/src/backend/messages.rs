@@ -22,10 +22,11 @@ use std::{
 use chainstate::ChainInfo;
 use common::{
     address::Address,
-    chain::{GenBlock, PoolId, SignedTransaction},
+    chain::{Destination, GenBlock, PoolId},
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use mempool::TxStatus;
 use p2p::P2pEvent;
 use wallet::account::{transaction_list::TransactionList, Currency};
 
@@ -67,7 +68,7 @@ pub struct WalletInfo {
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
     pub name: Option<String>,
-    pub addresses: BTreeMap<ChildNumber, Address>,
+    pub addresses: BTreeMap<ChildNumber, Address<Destination>>,
     pub staking_enabled: bool,
     pub balance: BTreeMap<Currency, Amount>,
     pub staking_balance: BTreeMap<PoolId, Amount>,
@@ -79,7 +80,7 @@ pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
     pub index: ChildNumber,
-    pub address: Address,
+    pub address: Address<Destination>,
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +100,8 @@ pub struct StakeRequest {
 
 #[derive(Debug, Clone)]
 pub struct TransactionInfo {
-    pub transaction: SignedTransaction,
+    pub wallet_id: WalletId,
+    pub transaction_status: TxStatus,
 }
 
 #[derive(Debug)]
@@ -147,7 +149,6 @@ pub enum BackendRequest {
     ToggleStaking(WalletId, AccountId, bool),
     SendAmount(SendRequest),
     StakeAmount(StakeRequest),
-    Broadcast(SignedTransaction),
 
     TransactionList {
         wallet_id: WalletId,

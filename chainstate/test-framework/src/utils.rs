@@ -21,23 +21,24 @@ use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},
-        config::{Builder as ConfigBuilder, ChainType, EpochIndex},
+        config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
         create_unittest_pos_config,
+        output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
-        tokens::{OutputValue, TokenData, TokenTransfer},
+        tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         OutPointSourceId, PoolId, RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Compact, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
 use crypto::{
-    key::PrivateKey,
+    key::{PrivateKey, PublicKey},
     random::{CryptoRng, Rng},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
@@ -316,6 +317,33 @@ pub fn get_target_block_time(chain_config: &ChainConfig, block_height: BlockHeig
     }
 }
 
+pub fn create_chain_config_with_default_staking_pool(
+    rng: &mut impl Rng,
+    staking_pk: PublicKey,
+    vrf_pk: VRFPublicKey,
+) -> (ConfigBuilder, PoolId) {
+    let stake_amount = create_unit_test_config().min_stake_pool_pledge();
+    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+
+    let genesis_pool_id = PoolId::new(H256::random_using(rng));
+    let genesis_stake_pool_data = StakePoolData::new(
+        stake_amount,
+        Destination::PublicKey(staking_pk.clone()),
+        vrf_pk,
+        Destination::PublicKey(staking_pk),
+        PerThousand::new(1000).unwrap(),
+        Amount::ZERO,
+    );
+
+    let chain_config = create_chain_config_with_staking_pool(
+        mint_amount,
+        genesis_pool_id,
+        genesis_stake_pool_data,
+    );
+
+    (chain_config, genesis_pool_id)
+}
+
 pub fn create_chain_config_with_staking_pool(
     mint_amount: Amount,
     pool_id: PoolId,
@@ -362,7 +390,7 @@ pub fn produce_kernel_signature(
     kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
-    let utxo = &block_outputs.get(&kernel_outpoint.tx_id()).unwrap()
+    let utxo = &block_outputs.get(&kernel_outpoint.source_id()).unwrap()
         [kernel_outpoint.output_index() as usize];
 
     let kernel_inputs = vec![kernel_outpoint.into()];

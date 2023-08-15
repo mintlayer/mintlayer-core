@@ -22,7 +22,7 @@ use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 
 use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::{AccountNonce, AccountType};
+use common::chain::{AccountNonce, AccountType, SignedTransaction};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
@@ -115,6 +115,11 @@ pub trait ChainstateInterface: Send {
         &self,
         starting_block: &Id<GenBlock>,
     ) -> Result<BlockTimestamp, ChainstateError>;
+    fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError>;
+    fn get_transaction(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, ChainstateError>;
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
     fn orphans_count(&self) -> usize;
     fn get_ancestor(
@@ -190,7 +195,7 @@ pub trait ChainstateInterface: Send {
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
 
     /// Returns true if the initial block download isn't finished yet.
-    fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+    fn is_initial_block_download(&self) -> bool;
 
     /// Check whether stake pool with given ID exists.
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;

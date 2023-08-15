@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// Represents a block reward.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub struct BlockReward {
     reward_outputs: Vec<TxOutput>,
 }

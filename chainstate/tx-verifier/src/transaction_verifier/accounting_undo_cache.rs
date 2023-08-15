@@ -60,25 +60,26 @@ impl AccountingBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<&mut AccountingBlockUndo, ConnectTransactionError>
+    ) -> Result<Option<&mut AccountingBlockUndo>, ConnectTransactionError>
     where
         F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         match self.data.entry(*tx_source) {
-            Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
+            Entry::Occupied(entry) => Ok(Some(&mut entry.into_mut().undo)),
             Entry::Vacant(entry) => match tx_source {
                 TransactionSource::Chain(block_id) => {
-                    let block_undo = fetcher_func(*block_id)?
-                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                    Ok(&mut entry
-                        .insert(AccountingBlockUndoEntry {
-                            undo: block_undo,
-                            is_fresh: false,
-                        })
-                        .undo)
+                    let entry = fetcher_func(*block_id)?.map(|block_undo| {
+                        &mut entry
+                            .insert(AccountingBlockUndoEntry {
+                                undo: block_undo,
+                                is_fresh: false,
+                            })
+                            .undo
+                    });
+                    Ok(entry)
                 }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
+                TransactionSource::Mempool => Ok(None),
             },
         }
     }
@@ -88,16 +89,14 @@ impl AccountingBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<AccountingTxUndo, ConnectTransactionError>
+    ) -> Result<Option<AccountingTxUndo>, ConnectTransactionError>
     where
         F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
-
-        block_undo
-            .take_tx_undo(tx_id)
-            .ok_or(ConnectTransactionError::MissingPoSAccountingUndo(*tx_id))
+        Ok(self
+            .fetch_block_undo(tx_source, fetcher_func)?
+            .and_then(|entry| entry.take_tx_undo(tx_id)))
     }
 
     pub fn take_block_reward_undo<F, E>(
@@ -109,7 +108,9 @@ impl AccountingBlockUndoCache {
         F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
-        Ok(self.fetch_block_undo(tx_source, fetcher_func)?.take_reward_undos())
+        Ok(self
+            .fetch_block_undo(tx_source, fetcher_func)?
+            .and_then(|entry| entry.take_reward_undos()))
     }
 
     pub fn get_or_create_block_undo(

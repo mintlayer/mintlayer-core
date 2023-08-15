@@ -16,12 +16,22 @@
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock, PoolId, SignedTransaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use mempool::{FeeRate, MempoolHandle};
-use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
+use p2p::{
+    error::P2pError,
+    interface::types::ConnectedPeer,
+    types::{
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+    },
+    P2pHandle,
+};
 use serialization::hex::HexError;
 
 use crate::node_traits::NodeInterface;
@@ -146,6 +156,23 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_data(pool_id))
+            .await??
+            .map(|data| data.pledge_amount());
+        Ok(result)
+    }
+
+    async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_token_info_for_rpc(token_id))
+            .await??;
+        Ok(result)
+    }
+
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -180,7 +207,7 @@ impl NodeInterface for WalletHandlesClient {
         unimplemented!()
     }
 
-    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.connect(address)).await??;
         Ok(())
     }
@@ -192,15 +219,32 @@ impl NodeInterface for WalletHandlesClient {
         let count = self.p2p.call_async_mut(move |this| this.get_peer_count()).await??;
         Ok(count)
     }
+
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+        let list = self.p2p.call_async_mut(move |this| this.list_banned()).await??;
+        Ok(list)
+    }
+    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.ban(address)).await??;
+        Ok(())
+    }
+    async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.unban(address)).await??;
+        Ok(())
+    }
+
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         let peers = self.p2p.call_async_mut(move |this| this.get_connected_peers()).await??;
         Ok(peers)
     }
-    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.add_reserved_node(address)).await??;
         Ok(())
     }
-    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         self.p2p
             .call_async_mut(move |this| this.remove_reserved_node(address))
             .await??;

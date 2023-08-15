@@ -24,7 +24,7 @@ mod wallet_events;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, Destination};
 use common::primitives::Amount;
 use common::time_getter::TimeGetter;
 use std::fmt::Debug;
@@ -64,7 +64,10 @@ fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Option<Amount> 
     Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
 }
 
-fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, AddressError> {
+fn parse_address(
+    chain_config: &ChainConfig,
+    address: &str,
+) -> Result<Address<Destination>, AddressError> {
     Address::from_str(chain_config, address)
 }
 

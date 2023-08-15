@@ -106,7 +106,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
         let tx = txs_by_id[tx_id].transaction().transaction();
         tx.inputs()
             .iter()
-            .filter_map(|i| i.utxo_outpoint().and_then(|o| o.tx_id().get_tx_id().cloned()))
+            .filter_map(|i| i.utxo_outpoint().and_then(|o| o.source_id().get_tx_id().cloned()))
             .for_each(|parent_tx_id| assert!(position_map[&parent_tx_id] < *tx_pos));
     }
 }
@@ -292,7 +292,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1));
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
 
     let in_mempool = if !in_mempool_at0 {
         mempool.add_transaction(tx1.clone(), TxOrigin::TEST).is_ok()

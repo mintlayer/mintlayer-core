@@ -17,7 +17,7 @@ pub const FILLED_CHAR: char = '█';
 pub const EMPTY_CHAR: char = ' ';
 pub const NEW_LINE: char = '\n';
 
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, PartialOrd, Ord)]
 pub enum QrCodeError {
     #[error("Given data is too long to fit in a QR code: {0}")]
     DataTooLong(usize),

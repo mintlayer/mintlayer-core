@@ -16,20 +16,27 @@
 use std::sync::Arc;
 
 use crate::{
-    net::types::{services::Service, Role},
+    config::NodeType,
+    net::{
+        default_backend::{types::Command, ConnectivityHandle},
+        types::{services::Service, PeerInfo, Role},
+    },
+    peer_manager::PeerManager,
     protocol::{NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN},
     testing_utils::{
-        connect_and_accept_services, connect_services, get_connectivity_event, RandomAddressMaker,
-        TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        connect_and_accept_services, connect_services, get_connectivity_event,
+        peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
+    PeerManagerEvent,
 };
 use common::{
     chain::config,
     primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
 };
+use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     error::{P2pError, PeerError},
@@ -39,7 +46,7 @@ use crate::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             DefaultNetworkingService,
         },
-        AsBannableAddress, ConnectivityService, NetworkingService,
+        ConnectivityService, NetworkingService,
     },
     peer_manager::tests::make_peer_manager,
 };
@@ -47,7 +54,7 @@ use crate::{
 // ban peer whose connected to us
 async fn ban_connected_peer<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -96,7 +103,7 @@ async fn ban_connected_peer_noise() {
 
 async fn banned_peer_attempts_to_connect<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -153,7 +160,7 @@ async fn banned_peer_attempts_to_connect_noise() {
 // attempt to connect to banned peer
 async fn connect_to_banned_peer<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -174,7 +181,7 @@ where
     let peer_id = peer_info1.peer_id;
     pm2.accept_connection(address, Role::Inbound, peer_info1, None);
 
-    let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
+    let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0];
 
     pm2.adjust_peer_score(peer_id, 10);
     assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()));
@@ -217,12 +224,11 @@ async fn connect_to_banned_peer_noise() {
         .await;
 }
 
-async fn validate_invalid_connection<A, S, B>()
+async fn validate_invalid_connection<A, S>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
-    B: RandomAddressMaker<Address = S::Address>,
 {
     for role in [Role::Outbound, Role::Inbound] {
         let config = Arc::new(config::create_mainnet());
@@ -233,7 +239,7 @@ where
         // invalid protocol
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
-            B::new(),
+            TestAddressMaker::new_random_address(),
             role,
             net::types::PeerInfo {
                 peer_id,
@@ -251,7 +257,7 @@ where
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
-            B::new(),
+            TestAddressMaker::new_random_address(),
             role,
             net::types::PeerInfo {
                 peer_id,
@@ -269,10 +275,10 @@ where
         // valid connections
         const NETWORK_PROTOCOL_FUTURE: u32 = u32::MAX; // Some future version of the node is trying to connect to us
         for protocol in [NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN, NETWORK_PROTOCOL_FUTURE] {
-            let address = B::new();
+            let address = TestAddressMaker::new_random_address();
             let peer_id = PeerId::new();
             let res = peer_manager.try_accept_connection(
-                address.clone(),
+                address,
                 role,
                 net::types::PeerInfo {
                     peer_id,
@@ -293,12 +299,8 @@ where
 
 #[tokio::test]
 async fn validate_invalid_connection_tcp() {
-    validate_invalid_connection::<
-        TestTransportTcp,
-        DefaultNetworkingService<TcpTransportSocket>,
-        TestTcpAddressMaker,
-    >()
-    .await;
+    validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
@@ -306,24 +308,20 @@ async fn validate_invalid_connection_channels() {
     validate_invalid_connection::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-        TestChannelAddressMaker,
     >()
     .await;
 }
 
 #[tokio::test]
 async fn validate_invalid_connection_noise() {
-    validate_invalid_connection::<
-        TestTransportNoise,
-        DefaultNetworkingService<NoiseTcpTransport>,
-        TestTcpAddressMaker,
-    >()
+    validate_invalid_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
+    )
     .await;
 }
 
 async fn inbound_connection_invalid_magic<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -386,4 +384,64 @@ async fn inbound_connection_invalid_magic_noise() {
         DefaultNetworkingService<NoiseTcpTransport>,
     >()
     .await;
+}
+
+// Test that manually banned peers are also disconnected
+#[test]
+fn ban_and_disconnect() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle =
+        ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_tx, conn_rx);
+
+    let mut pm = PeerManager::<TestNetworkingService, _>::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_rx,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let peer_id_1 = PeerId::new();
+    let address_1 = TestAddressMaker::new_random_address();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_1,
+        protocol: NETWORK_PROTOCOL_CURRENT,
+        network: *chain_config.magic_bytes(),
+        version: *chain_config.version(),
+        user_agent: mintlayer_core_user_agent(),
+        services: NodeType::Full.into(),
+    };
+    pm.accept_connection(address_1, Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 1);
+
+    // Peer is accepted by the peer manager
+    match cmd_rx.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    let (ban_tx, mut ban_rx) = oneshot_nofail::channel();
+    pm.handle_control_event(PeerManagerEvent::Ban(address_1.as_bannable(), ban_tx));
+    ban_rx.try_recv().unwrap().unwrap();
+
+    // Peer is disconnected by the peer manager
+    match cmd_rx.try_recv() {
+        Ok(Command::Disconnect { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
 }

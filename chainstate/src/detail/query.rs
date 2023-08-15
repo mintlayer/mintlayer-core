@@ -22,7 +22,8 @@ use common::{
             RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo, TokenAuxiliaryData,
             TokenData, TokenId,
         },
-        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
+        Block, GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxMainChainIndex,
+        TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -143,6 +144,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             GenBlockIndex::Block(b) => Ok(b.block_header().clone()),
             GenBlockIndex::Genesis(_) => Err(PropertyQueryError::GenesisHeaderRequested),
         }
+    }
+
+    pub fn is_transaction_index_enabled(&self) -> Result<bool, PropertyQueryError> {
+        self.chainstate_ref.get_is_transaction_index_enabled()
+    }
+
+    pub fn get_transaction_in_block(
+        &self,
+        id: Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, PropertyQueryError> {
+        self.chainstate_ref.get_transaction_in_block(id)
     }
 
     pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {

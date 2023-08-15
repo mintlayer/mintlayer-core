@@ -15,6 +15,7 @@
 
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
+use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use tempfile::TempDir;
 
 use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
@@ -87,8 +88,8 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_socks5_proxy = "socks5_proxy";
     let p2p_disable_noise = false;
-    let p2p_boot_node = "boot_node";
-    let p2p_reserved_node = "reserved_node";
+    let p2p_boot_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
+    let p2p_reserved_node: IpOrSocketAddress = "127.0.0.1".parse().unwrap();
     let p2p_max_inbound_connections = 123;
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
@@ -116,8 +117,8 @@ fn read_config_override_values() {
         p2p_addr: Some(vec![p2p_addr.to_owned()]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
         p2p_disable_noise: Some(p2p_disable_noise),
-        p2p_boot_node: Some(vec![p2p_boot_node.to_owned()]),
-        p2p_reserved_node: Some(vec![p2p_reserved_node.to_owned()]),
+        p2p_boot_node: Some(vec![p2p_boot_node.clone()]),
+        p2p_reserved_node: Some(vec![p2p_reserved_node.clone()]),
         p2p_max_inbound_connections: Some(p2p_max_inbound_connections),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
@@ -133,6 +134,7 @@ fn read_config_override_values() {
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
+        clean_data: Some(false),
     };
     let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
@@ -172,11 +174,11 @@ fn read_config_override_values() {
     );
     assert_eq!(
         config.p2p.clone().unwrap().boot_nodes,
-        Some(vec!(p2p_boot_node.to_owned()))
+        Some(vec!(p2p_boot_node))
     );
     assert_eq!(
         config.p2p.clone().unwrap().reserved_nodes,
-        Some(vec!(p2p_reserved_node.to_owned()))
+        Some(vec!(p2p_reserved_node))
     );
     assert_eq!(
         config.p2p.clone().unwrap().max_inbound_connections,

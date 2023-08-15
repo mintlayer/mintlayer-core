@@ -97,7 +97,11 @@ impl MempoolSubsystemInterface for MempoolInit {
             tokio::select! {
                 () = shut_rq.recv() => break,
                 call = call_rq.recv() => call(&mut mempool).await,
-                Some(evt) = chainstate_events_rx.recv() => mempool.process_chainstate_event(evt),
+                Some(evt) = chainstate_events_rx.recv() => {
+                    let _ = mempool
+                        .process_chainstate_event(evt)
+                        .log_err_pfx("Error while handling a mempool event");
+                }
             }
         }
     }
@@ -160,7 +164,11 @@ impl MempoolInterface for Mempool {
     }
 
     fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error> {
-        self.get_fee_rate(in_top_x_mb).map_err(Error::Policy)
+        Ok(self.get_fee_rate(in_top_x_mb)?)
+    }
+
+    fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
+        self.on_peer_disconnected(peer_id)
     }
 }
 

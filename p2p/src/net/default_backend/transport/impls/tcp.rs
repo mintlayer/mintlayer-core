@@ -13,46 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use p2p_types::socket_address::SocketAddress;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    net::{
-        default_backend::transport::{
-            traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
-        },
-        AsBannableAddress,
-    },
-    types::{peer_address::PeerAddress, IsGlobalIp},
+    net::default_backend::transport::{PeerStream, TransportListener, TransportSocket},
     Result,
 };
-
-impl TransportAddress for SocketAddr {
-    fn as_peer_address(&self) -> PeerAddress {
-        (*self).into()
-    }
-
-    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self> {
-        match &address {
-            PeerAddress::Ip4(socket)
-                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(address.into())
-            }
-            PeerAddress::Ip6(socket)
-                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(address.into())
-            }
-            _ => None,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct TcpTransportSocket;
@@ -65,18 +34,16 @@ impl TcpTransportSocket {
 
 #[async_trait]
 impl TransportSocket for TcpTransportSocket {
-    type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = TcpTransportListener;
     type Stream = TcpTransportStream;
 
-    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
         TcpTransportListener::new(addresses)
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
         Box::pin(async move {
-            let stream = TcpStream::connect(address).await?;
+            let stream = TcpStream::connect(address.socket_addr()).await?;
             Ok(stream)
         })
     }
@@ -87,10 +54,12 @@ pub struct TcpTransportListener {
 }
 
 impl TcpTransportListener {
-    fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
+    fn new(addresses: Vec<SocketAddress>) -> Result<Self> {
         let listeners = addresses
             .into_iter()
             .map(|address| -> Result<TcpListener> {
+                let address = address.socket_addr();
+
                 // Use socket2 crate because we need consistent behavior between platforms.
                 // See https://github.com/tokio-rs/tokio-core/issues/227
                 let socket = socket2::Socket::new(
@@ -132,9 +101,8 @@ impl TcpTransportListener {
 #[async_trait]
 impl TransportListener for TcpTransportListener {
     type Stream = TcpTransportStream;
-    type Address = SocketAddr;
 
-    async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
+    async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddress)> {
         // select_next_some will panic if polled while empty
         if self.listeners.is_empty() {
             return std::future::pending().await;
@@ -142,24 +110,16 @@ impl TransportListener for TcpTransportListener {
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;
-        Ok((stream, address))
+        Ok((stream, SocketAddress::new(address)))
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
         let local_addr = self
             .listeners
             .iter()
-            .map(|listener| listener.local_addr())
+            .map(|listener| listener.local_addr().map(SocketAddress::new))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(local_addr)
-    }
-}
-
-impl AsBannableAddress for SocketAddr {
-    type BannableAddress = IpAddr;
-
-    fn as_bannable(&self) -> Self::BannableAddress {
-        self.ip()
     }
 }
 

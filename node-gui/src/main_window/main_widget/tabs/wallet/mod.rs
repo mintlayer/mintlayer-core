@@ -64,12 +64,15 @@ pub enum WalletMessage {
     SelectAccount(AccountId),
 
     GetNewAddress,
+
     SendAmountEdit(String),
     SendAddressEdit(String),
     Send,
+    SendSucceed,
 
     StakeAmountEdit(String),
     CreateStakingPool,
+    CreateStakingPoolSucceed,
 
     ToggleStaking(bool),
 
@@ -184,6 +187,11 @@ impl WalletTab {
                 backend_sender.send(BackendRequest::SendAmount(request));
                 Command::none()
             }
+            WalletMessage::SendSucceed => {
+                self.account_state.send_address.clear();
+                self.account_state.send_amount.clear();
+                Command::none()
+            }
             WalletMessage::StakeAmountEdit(value) => {
                 self.account_state.stake_amount = value;
                 Command::none()
@@ -195,6 +203,10 @@ impl WalletTab {
                     amount: self.account_state.stake_amount.clone(),
                 };
                 backend_sender.send(BackendRequest::StakeAmount(request));
+                Command::none()
+            }
+            WalletMessage::CreateStakingPoolSucceed => {
+                self.account_state.stake_amount.clear();
                 Command::none()
             }
             WalletMessage::ToggleStaking(enabled) => {

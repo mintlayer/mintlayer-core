@@ -23,13 +23,14 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
+        output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             TransactionSigError,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{OutputValue, TokenData, TokenTransfer},
+        tokens::{TokenData, TokenTransfer},
         Destination, GenBlock, OutPointSourceId, SignedTransaction, TxInput, TxOutput,
         UtxoOutPoint,
     },

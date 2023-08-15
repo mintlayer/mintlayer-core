@@ -32,8 +32,8 @@ use common::{
         BlockHeader, BlockReward, ConsensusData,
     },
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, RequiredConsensus,
-        TxOutput,
+        output_value::OutputValue, timelock::OutputTimeLock, ChainConfig, Destination,
+        RequiredConsensus, TxOutput,
     },
     primitives::BlockHeight,
 };
@@ -203,6 +203,7 @@ pub fn finalize_consensus_data(
                     let stake_private_key = finalize_pos_data.stake_private_key().clone();
 
                     let stake_result = stake(
+                        chain_config,
                         &mut pos_data.clone(),
                         block_header,
                         Arc::clone(&block_timestamp_seconds),

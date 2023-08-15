@@ -16,14 +16,13 @@
 
 from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
+from test_framework.mintlayer import block_input_data_obj
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
 )
 
 import random, scalecodec, time
-
-block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
 
 class GeneratePoWBlocksTest(BitcoinTestFramework):
     def set_test_params(self):

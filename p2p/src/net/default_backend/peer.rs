@@ -368,7 +368,7 @@ mod tests {
 
     async fn handshake_inbound<A, T>()
     where
-        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -442,7 +442,7 @@ mod tests {
 
     async fn handshake_outbound<A, T>()
     where
-        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -520,7 +520,7 @@ mod tests {
 
     async fn handshake_different_network<A, T>()
     where
-        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -580,7 +580,7 @@ mod tests {
 
     async fn invalid_handshake_message<A, T>()
     where
-        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -636,13 +636,13 @@ mod tests {
 
     pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
     where
-        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T>,
         T: TransportSocket,
     {
         let transport = A::make_transport();
         let addr = A::make_address();
         let mut server = transport.bind(vec![addr]).await.unwrap();
-        let peer_fut = transport.connect(server.local_addresses().unwrap()[0].clone());
+        let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
         let (res1, res2) = tokio::join!(server.accept(), peer_fut);
         (res1.unwrap().0, res2.unwrap())

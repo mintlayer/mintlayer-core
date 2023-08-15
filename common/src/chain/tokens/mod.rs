@@ -13,11 +13,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode};
+use crypto::random::{CryptoRng, Rng};
+use serialization::{Decode, DecodeAll, Encode};
+use typename::TypeName;
 
-pub type TokenId = H256;
+#[derive(Eq, PartialEq, TypeName)]
+pub enum Token {}
+
+pub type TokenId = Id<Token>;
 pub type NftDataHash = Vec<u8>;
-use crate::primitives::{Amount, Id, H256};
+use crate::{
+    address::{traits::Addressable, AddressError},
+    primitives::{Amount, Id, H256},
+};
+
+impl TokenId {
+    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        Self::new(H256::random_using(rng))
+    }
+
+    pub const fn zero() -> Self {
+        Self::new(H256::zero())
+    }
+}
+
+impl Addressable for TokenId {
+    type Error = AddressError;
+
+    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
+        chain_config.token_id_address_prefix()
+    }
+
+    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+        self.encode()
+    }
+
+    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::decode_all(&mut address_bytes.as_ref())
+            .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+}
 
 mod nft;
 mod rpc;
@@ -27,7 +65,7 @@ pub use nft::*;
 pub use rpc::*;
 pub use tokens_utils::*;
 
-use super::{Block, Transaction};
+use super::{Block, ChainConfig, Transaction};
 
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
@@ -53,41 +91,13 @@ impl TokenAuxiliaryData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub enum OutputValue {
-    Coin(Amount),
-    Token(Box<TokenData>),
-}
-
-impl OutputValue {
-    pub fn coin_amount(&self) -> Option<Amount> {
-        match self {
-            OutputValue::Coin(v) => Some(*v),
-            OutputValue::Token(_) => None,
-        }
-    }
-
-    pub fn token_data(&self) -> Option<&TokenData> {
-        match self {
-            OutputValue::Coin(_) => None,
-            OutputValue::Token(d) => Some(d),
-        }
-    }
-}
-
-impl From<TokenData> for OutputValue {
-    fn from(d: TokenData) -> Self {
-        Self::Token(Box::new(d))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub struct TokenTransfer {
     pub token_id: TokenId,
     pub amount: Amount,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub struct TokenIssuance {
     pub token_ticker: Vec<u8>,
     pub amount_to_issue: Amount,
@@ -95,7 +105,7 @@ pub struct TokenIssuance {
     pub metadata_uri: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
@@ -124,23 +134,5 @@ impl From<NftIssuance> for TokenData {
 impl From<TokenIssuance> for TokenData {
     fn from(d: TokenIssuance) -> Self {
         Self::TokenIssuance(Box::new(d))
-    }
-}
-
-impl From<TokenTransfer> for OutputValue {
-    fn from(d: TokenTransfer) -> Self {
-        TokenData::TokenTransfer(d).into()
-    }
-}
-
-impl From<NftIssuance> for OutputValue {
-    fn from(d: NftIssuance) -> Self {
-        TokenData::NftIssuance(Box::new(d)).into()
-    }
-}
-
-impl From<TokenIssuance> for OutputValue {
-    fn from(d: TokenIssuance) -> Self {
-        TokenData::TokenIssuance(Box::new(d)).into()
     }
 }

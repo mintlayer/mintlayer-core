@@ -20,6 +20,7 @@ mod ping;
 
 use std::{sync::Arc, time::Duration};
 
+use p2p_types::socket_address::SocketAddress;
 use tokio::sync::{mpsc, oneshot};
 
 use common::time_getter::TimeGetter;
@@ -50,13 +51,13 @@ use super::peerdb::storage::PeerDbStorage;
 
 async fn make_peer_manager_custom<T>(
     transport: T::Transport,
-    addr: T::Address,
+    addr: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
-    UnboundedSender<PeerManagerEvent<T>>,
+    UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
     UnboundedSender<P2pEventHandler>,
 )
@@ -96,7 +97,7 @@ where
 
 async fn make_peer_manager<T>(
     transport: T::Transport,
-    addr: T::Address,
+    addr: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
@@ -121,12 +122,12 @@ where
 
 async fn run_peer_manager<T>(
     transport: T::Transport,
-    addr: T::Address,
+    addr: SocketAddress,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
 ) -> (
-    UnboundedSender<PeerManagerEvent<T>>,
+    UnboundedSender<PeerManagerEvent>,
     oneshot::Sender<()>,
     UnboundedSender<P2pEventHandler>,
 )
@@ -142,20 +143,18 @@ where
     (tx, shutdown_sender, subscribers_sender)
 }
 
-async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
-    tx: &UnboundedSender<PeerManagerEvent<T>>,
-) -> Vec<ConnectedPeer> {
+async fn get_connected_peers(tx: &UnboundedSender<PeerManagerEvent>) -> Vec<ConnectedPeer> {
     let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
     timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
 }
 
 /// Send some message to PeerManager and ensure it's processed
-async fn send_and_sync<T: NetworkingService>(
+async fn send_and_sync(
     peer: PeerId,
     message: PeerManagerMessage,
-    conn_tx: &UnboundedSender<ConnectivityEvent<T::Address>>,
-    cmd_rx: &mut UnboundedReceiver<Command<T::Address>>,
+    conn_tx: &UnboundedSender<ConnectivityEvent>,
+    cmd_rx: &mut UnboundedReceiver<Command>,
 ) {
     conn_tx.send(ConnectivityEvent::Message { peer, message }).unwrap();
 

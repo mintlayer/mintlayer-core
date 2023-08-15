@@ -65,8 +65,6 @@ pub enum ProtocolError {
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PeerError {
-    #[error("Peer disconnected")]
-    PeerDisconnected,
     #[error("Peer doesn't exist")]
     PeerDoesntExist,
     #[error("Peer already exists")]
@@ -199,7 +197,7 @@ impl BanScore for ProtocolError {
     fn ban_score(&self) -> u32 {
         match self {
             ProtocolError::UnsupportedProtocol(_) => 0,
-            ProtocolError::DifferentNetwork(_, _) => 100,
+            ProtocolError::DifferentNetwork(_, _) => 0, // Do not ban peers if after deploying a new testnet
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
             ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,

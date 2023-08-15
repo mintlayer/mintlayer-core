@@ -16,13 +16,14 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
-use serialization::hex::HexEncode;
 use wallet_controller::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, PoolId},
+    address::Address,
+    chain::{block::timestamp::BlockTimestamp, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, BlockHeight},
 };
+use wallet_types::with_locked::WithLocked;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -101,12 +102,43 @@ pub fn format_pool_info(
     balance: Amount,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
+    chain_config: &ChainConfig,
 ) -> String {
     format!(
         "Pool Id: {}, Balance: {}, Creation Block heigh: {}, timestamp: {}",
-        HexEncode::hex_encode(&pool_id),
-        balance.into_atoms(),
+        Address::new(chain_config, &pool_id).expect("Encoding pool id should never fail"),
+        balance.into_fixedpoint_str(chain_config.coin_decimals()),
         block_height,
         block_timestamp
     )
+}
+
+pub fn format_delegation_info(
+    delegation_id: DelegationId,
+    balance: Amount,
+    chain_config: &ChainConfig,
+) -> String {
+    format!(
+        "Delegation Id: {}, Balance: {}",
+        Address::new(chain_config, &delegation_id)
+            .expect("Delegation id address encoding can never fail"),
+        balance.into_fixedpoint_str(chain_config.coin_decimals()),
+    )
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliWithLocked {
+    Any,
+    Unlocked,
+    Locked,
+}
+
+impl CliWithLocked {
+    pub fn to_wallet_type(self) -> WithLocked {
+        match self {
+            CliWithLocked::Any => WithLocked::Any,
+            CliWithLocked::Unlocked => WithLocked::Unlocked,
+            CliWithLocked::Locked => WithLocked::Locked,
+        }
+    }
 }

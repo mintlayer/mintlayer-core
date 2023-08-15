@@ -21,7 +21,10 @@ use std::{
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        PoolId, SignedTransaction,
+    },
     primitives::Amount,
 };
 use consensus::GenerateBlockInputData;
@@ -33,6 +36,7 @@ use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
+use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
@@ -177,6 +181,17 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
+    async fn get_stake_pool_pledge(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_token_info(
+        &self,
+        _token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        unreachable!()
+    }
+
     async fn generate_block(
         &self,
         _input_data: GenerateBlockInputData,
@@ -198,10 +213,19 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
-    async fn p2p_connect(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
     async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_ban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_unban(&self, _address: BannableAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
@@ -210,10 +234,13 @@ impl NodeInterface for MockNode {
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         unreachable!()
     }
-    async fn p2p_add_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, _address: IpOrSocketAddress) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        _address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         unreachable!()
     }
 

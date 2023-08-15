@@ -15,7 +15,10 @@
 
 use std::collections::BTreeMap;
 
-use common::{address::Address, chain::block::timestamp::BlockTimestamp};
+use common::{
+    address::Address,
+    chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
+};
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
@@ -25,7 +28,7 @@ use utils::{
 };
 use wallet_types::{
     keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -151,14 +154,14 @@ macro_rules! impl_read_ops {
                 Ok(self.storage.get::<db::DBAccounts, _>().prefix_iter_decoded(&())?.collect())
             }
 
-            fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>> {
+            fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>> {
                 self.read::<db::DBAddresses, _, _>(id)
             }
 
             fn get_addresses(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>> {
+            ) -> crate::Result<BTreeMap<AccountDerivationPathId, String>> {
                 self.storage
                     .get::<db::DBAddresses, _>()
                     .prefix_iter_decoded(account_id)
@@ -185,12 +188,21 @@ macro_rules! impl_read_ops {
             fn get_transactions(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>> {
+            ) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>> {
                 self.storage
                     .get::<db::DBTxs, _>()
                     .prefix_iter_decoded(account_id)
                     .map_err(crate::Error::from)
                     .map(Iterator::collect)
+            }
+
+            /// Collect and return all signed transactions from the storage
+            fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+                self.storage
+                    .get::<db::DBUserTx, _>()
+                    .prefix_iter_decoded(&())
+                    .map_err(crate::Error::from)
+                    .map(|item| item.map(|item| item.1).collect())
             }
 
             fn get_keychain_usage_state(
@@ -330,6 +342,18 @@ macro_rules! impl_write_ops {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
             }
 
+            fn set_user_transaction(
+                &mut self,
+                id: &AccountWalletCreatedTxId,
+                tx: &SignedTransaction,
+            ) -> crate::Result<()> {
+                self.write::<db::DBUserTx, _, _, _>(id, tx)
+            }
+
+            fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()> {
+                self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
+            }
+
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
                 self.write::<db::DBAccounts, _, _, _>(id, tx)
             }
@@ -341,9 +365,9 @@ macro_rules! impl_write_ops {
             fn set_address(
                 &mut self,
                 id: &AccountDerivationPathId,
-                address: &Address,
+                address: &Address<Destination>,
             ) -> crate::Result<()> {
-                self.write::<db::DBAddresses, _, _, _>(id, address)
+                self.write::<db::DBAddresses, _, _, _>(id, address.get().to_owned())
             }
 
             fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {

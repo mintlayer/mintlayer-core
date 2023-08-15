@@ -12,3 +12,6 @@ serialization = { path = "../../serialization" }
 
 parity-scale-codec.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+serde_test.workspace = true

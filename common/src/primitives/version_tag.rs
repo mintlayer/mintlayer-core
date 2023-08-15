@@ -25,6 +25,12 @@ impl<const V: u8> Default for VersionTag<V> {
     }
 }
 
+impl<const V: u8> serde::Serialize for VersionTag<V> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u8(V)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

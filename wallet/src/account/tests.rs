@@ -16,9 +16,9 @@
 use super::*;
 use crate::key_chain::MasterKeyChain;
 use common::chain::config::create_regtest;
+use common::chain::output_value::OutputValue;
 use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::OutputValue;
 use common::chain::{GenBlock, Transaction, TxInput};
 use common::primitives::amount::UnsignedIntType;
 use common::primitives::{Amount, Id, H256};
@@ -90,7 +90,7 @@ fn account_addresses_lookahead() {
     );
 
     // Issue a new address
-    account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
+    let _address = account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
     assert_eq!(
         account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
         Some(U31::from_u32(0).unwrap())
@@ -140,7 +140,7 @@ fn sign_transaction(#[case] seed: Seed) {
                     .get_new_address(&mut db_tx, purpose)
                     .unwrap()
                     .1
-                    .destination(config.as_ref())
+                    .decode_object(config.as_ref())
                     .unwrap(),
             )
         })
@@ -186,7 +186,7 @@ fn sign_transaction(#[case] seed: Seed) {
                 .get_new_address(&mut db_tx, Change)
                 .unwrap()
                 .1
-                .destination(config.as_ref())
+                .decode_object(config.as_ref())
                 .unwrap(),
         ),
     ];
@@ -195,7 +195,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let req = SendRequest::from_transaction(tx, utxos.clone());
 
-    let sig_tx = account.sign_transaction(req, &db_tx).unwrap();
+    let sig_tx = account.sign_transaction_from_req(req, &db_tx).unwrap();
 
     let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 

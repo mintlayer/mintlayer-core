@@ -32,8 +32,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SignedTransaction,
+        Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
 };
@@ -477,8 +477,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
-    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
-        self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
+    fn is_initial_block_download(&self) -> bool {
+        self.chainstate.is_initial_block_download()
     }
 
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
@@ -558,7 +558,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
         let median_time = self.calculate_median_time_past(&best_block_id)?;
 
-        let is_initial_block_download = self.is_initial_block_download()?;
+        let is_initial_block_download = self.is_initial_block_download();
 
         Ok(ChainInfo {
             best_block_height,
@@ -578,6 +578,25 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_account_nonce_count(account)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .is_transaction_index_enabled()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_transaction(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<SignedTransaction>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_transaction_in_block(*tx_id)
+            .map_err(ChainstateError::from)
     }
 }
 

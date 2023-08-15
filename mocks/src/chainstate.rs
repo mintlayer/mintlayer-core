@@ -26,8 +26,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId, TxInput,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -140,7 +140,7 @@ mockall::mock! {
             include_orphans: bool,
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
-        fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+        fn is_initial_block_download(&self) -> bool;
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
@@ -166,6 +166,11 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, ChainstateError>;
+        fn is_transaction_index_enabled(&self) -> Result<bool, ChainstateError>;
+        fn get_transaction(
+            &self,
+            tx_id: &Id<Transaction>,
+        ) -> Result<Option<SignedTransaction>, ChainstateError>;
     }
 }
 

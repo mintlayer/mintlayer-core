@@ -36,9 +36,9 @@ use utils::atomics::SeqCstAtomicBool;
 tests![block_announcement, block_announcement_no_subscription,];
 
 #[allow(clippy::extra_unused_type_parameters)]
-async fn block_announcement<T, N, A>()
+async fn block_announcement<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug,
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
@@ -155,9 +155,9 @@ where
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
-async fn block_announcement_no_subscription<T, N, A>()
+async fn block_announcement_no_subscription<T, N>()
 where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    T: TestTransportMaker<Transport = N::Transport>,
     N: NetworkingService + Debug,
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,

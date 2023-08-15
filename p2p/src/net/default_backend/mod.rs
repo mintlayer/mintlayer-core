@@ -22,6 +22,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
 use common::time_getter::TimeGetter;
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -46,24 +47,24 @@ use crate::{
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
 
 #[derive(Debug)]
-pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
+pub struct ConnectivityHandle<S: NetworkingService> {
     /// The local addresses of a network service provider.
-    local_addresses: Vec<S::Address>,
+    local_addresses: Vec<SocketAddress>,
 
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command>,
 
     /// RX channel for receiving connectivity events from default_backend backend
-    conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
+    conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent>,
 
     _marker: PhantomData<fn() -> S>,
 }
 
-impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
+impl<S: NetworkingService> ConnectivityHandle<S> {
     pub fn new(
-        local_addresses: Vec<S::Address>,
-        cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
-        conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
+        local_addresses: Vec<SocketAddress>,
+        cmd_tx: mpsc::UnboundedSender<types::Command>,
+        conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent>,
     ) -> Self {
         Self {
             local_addresses,
@@ -75,17 +76,17 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
 }
 
 #[derive(Debug)]
-pub struct MessagingHandle<T: TransportSocket> {
-    command_sender: mpsc::UnboundedSender<types::Command<T::Address>>,
+pub struct MessagingHandle {
+    command_sender: mpsc::UnboundedSender<types::Command>,
 }
 
-impl<T: TransportSocket> MessagingHandle<T> {
-    pub fn new(command_sender: mpsc::UnboundedSender<types::Command<T::Address>>) -> Self {
+impl MessagingHandle {
+    pub fn new(command_sender: mpsc::UnboundedSender<types::Command>) -> Self {
         Self { command_sender }
     }
 }
 
-impl<T: TransportSocket> Clone for MessagingHandle<T> {
+impl Clone for MessagingHandle {
     fn clone(&self) -> Self {
         Self {
             command_sender: self.command_sender.clone(),
@@ -101,15 +102,13 @@ pub struct SyncingReceiver {
 #[async_trait]
 impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
-    type Address = T::Address;
-    type BannableAddress = T::BannableAddress;
-    type ConnectivityHandle = ConnectivityHandle<Self, T>;
-    type MessagingHandle = MessagingHandle<T>;
+    type ConnectivityHandle = ConnectivityHandle<Self>;
+    type MessagingHandle = MessagingHandle;
     type SyncingEventReceiver = SyncingReceiver;
 
     async fn start(
         transport: Self::Transport,
-        bind_addresses: Vec<Self::Address>,
+        bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         time_getter: TimeGetter,
@@ -164,12 +163,11 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 }
 
 #[async_trait]
-impl<S, T> ConnectivityService<S> for ConnectivityHandle<S, T>
+impl<S> ConnectivityService<S> for ConnectivityHandle<S>
 where
-    S: NetworkingService<Address = T::Address> + Send,
-    T: TransportSocket,
+    S: NetworkingService + Send,
 {
-    fn connect(&mut self, address: S::Address) -> crate::Result<()> {
+    fn connect(&mut self, address: SocketAddress) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
@@ -197,16 +195,16 @@ where
         })?)
     }
 
-    fn local_addresses(&self) -> &[S::Address] {
+    fn local_addresses(&self) -> &[SocketAddress] {
         &self.local_addresses
     }
 
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S::Address>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent> {
         self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 
-impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
+impl MessagingService for MessagingHandle {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
         Ok(self.command_sender.send(types::Command::SendMessage {
             peer,

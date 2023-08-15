@@ -23,6 +23,7 @@ use std::{
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use crypto::random::{make_pseudo_rng, Rng};
+use p2p_types::socket_address::SocketAddress;
 use tokio::time::timeout;
 
 use crate::{
@@ -45,16 +46,13 @@ pub trait TestTransportMaker {
     /// A transport type.
     type Transport;
 
-    /// An address type.
-    type Address: Clone + Eq + Debug + std::hash::Hash + Send + Sync + ToString;
-
     /// Creates new transport instance, generating new keys if needed.
     fn make_transport() -> Self::Transport;
 
     /// Creates a new unused address.
     ///
     /// This should work similar to requesting a port of number 0 when opening a TCP connection.
-    fn make_address() -> Self::Address;
+    fn make_address() -> SocketAddress;
 }
 
 pub struct TestTransportTcp {}
@@ -62,13 +60,11 @@ pub struct TestTransportTcp {}
 impl TestTransportMaker for TestTransportTcp {
     type Transport = TcpTransportSocket;
 
-    type Address = SocketAddr;
-
     fn make_transport() -> Self::Transport {
         TcpTransportSocket::new()
     }
 
-    fn make_address() -> Self::Address {
+    fn make_address() -> SocketAddress {
         "[::1]:0".parse().unwrap()
     }
 }
@@ -78,13 +74,11 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MpscChannelTransport;
 
-    type Address = SocketAddr;
-
     fn make_transport() -> Self::Transport {
         MpscChannelTransport::new()
     }
 
-    fn make_address() -> Self::Address {
+    fn make_address() -> SocketAddress {
         "0.0.0.0:0".parse().unwrap()
     }
 }
@@ -94,34 +88,21 @@ pub struct TestTransportNoise {}
 impl TestTransportMaker for TestTransportNoise {
     type Transport = NoiseTcpTransport;
 
-    type Address = SocketAddr;
-
     fn make_transport() -> Self::Transport {
         let stream_adapter = NoiseEncryptionAdapter::gen_new();
         let base_transport = TcpTransportSocket::new();
         NoiseTcpTransport::new(stream_adapter, base_transport)
     }
 
-    fn make_address() -> Self::Address {
+    fn make_address() -> SocketAddress {
         TestTransportTcp::make_address()
     }
 }
 
-/// An interface for creating random addresses.
-pub trait RandomAddressMaker {
-    /// An address type.
-    type Address;
+pub struct TestAddressMaker {}
 
-    /// Creates a new random address
-    fn new() -> Self::Address;
-}
-
-pub struct TestTcpAddressMaker {}
-
-impl RandomAddressMaker for TestTcpAddressMaker {
-    type Address = SocketAddr;
-
-    fn new() -> Self::Address {
+impl TestAddressMaker {
+    pub fn new_random_address() -> SocketAddress {
         let mut rng = make_pseudo_rng();
         let ip = Ipv6Addr::new(
             rng.gen(),
@@ -133,31 +114,23 @@ impl RandomAddressMaker for TestTcpAddressMaker {
             rng.gen(),
             rng.gen(),
         );
-        SocketAddr::new(IpAddr::V6(ip), rng.gen())
+        SocketAddress::new(SocketAddr::new(IpAddr::V6(ip), rng.gen()))
     }
 }
 
 pub struct TestChannelAddressMaker {}
 
-impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = SocketAddr;
-
-    fn new() -> Self::Address {
-        TestTcpAddressMaker::new()
-    }
-}
-
 /// Can be used in tests only, will panic in case of errors
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo, PeerInfo)
+) -> (SocketAddress, PeerInfo, PeerInfo)
 where
     T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).expect("dial to succeed");
+    conn1.connect(addr[0]).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -190,7 +163,7 @@ where
 pub async fn connect_and_accept_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo, PeerInfo)
+) -> (SocketAddress, PeerInfo, PeerInfo)
 where
     T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -207,11 +180,11 @@ where
 pub async fn filter_connectivity_event<T, F>(
     conn: &mut T::ConnectivityHandle,
     predicate: F,
-) -> crate::Result<ConnectivityEvent<T::Address>>
+) -> crate::Result<ConnectivityEvent>
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    F: Fn(&crate::Result<ConnectivityEvent<T::Address>>) -> bool,
+    F: Fn(&crate::Result<ConnectivityEvent>) -> bool,
 {
     let recv_fut = async {
         loop {
@@ -230,7 +203,7 @@ where
 /// Returns first event or panics on timeout.
 pub async fn get_connectivity_event<T>(
     conn: &mut T::ConnectivityHandle,
-) -> crate::Result<ConnectivityEvent<T::Address>>
+) -> crate::Result<ConnectivityEvent>
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,

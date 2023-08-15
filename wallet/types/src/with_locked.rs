@@ -13,17 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::peer_address::PeerAddress;
-
-/// Allow working with abstract socket address types.
-/// For example change socket port or encode for sending on wire.
-/// It's might better to completely replace abstract socket types with PeerAddress.
-pub trait TransportAddress: Sized {
-    /// Convert abstract socket address to concrete type (PeerAddress)
-    fn as_peer_address(&self) -> PeerAddress;
-
-    /// Try get address back from PeerAddress.
-    ///
-    /// This may fail if the address is invalid or from another transport.
-    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self>;
+/// Enum used to specify whether to include locked balance/utxos for wallet commands
+#[derive(Debug, Clone, Copy)]
+pub enum WithLocked {
+    Any,
+    Unlocked,
+    Locked,
 }

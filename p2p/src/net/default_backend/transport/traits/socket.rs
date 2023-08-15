@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, hash::Hash, str::FromStr};
-
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use p2p_types::socket_address::SocketAddress;
 
-use crate::{net::AsBannableAddress, Result};
+use crate::Result;
 
-use super::{listener::TransportListener, stream::PeerStream, TransportAddress};
+use super::{listener::TransportListener, stream::PeerStream};
 
 /// An abstraction layer for the transport layer at the highest level, which is responsible for:
 /// 1. Binding to a socket at a specific port, where we listen to connections.
@@ -28,31 +27,15 @@ use super::{listener::TransportListener, stream::PeerStream, TransportAddress};
 /// 2. Providing the connect function, that's used to connect to other peers
 #[async_trait]
 pub trait TransportSocket: Send + Sync + 'static {
-    /// An address type.
-    type Address: TransportAddress
-        + Clone
-        + Debug
-        + Eq
-        + Ord
-        + Hash
-        + Send
-        + Sync
-        + ToString
-        + FromStr
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
-
-    /// A bannable address format.
-    type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
-
     /// A listener type (or acceptor as per boost terminology).
-    type Listener: TransportListener<Stream = Self::Stream, Address = Self::Address>;
+    type Listener: TransportListener<Stream = Self::Stream>;
 
     /// A messages stream.
     type Stream: PeerStream;
 
     /// Creates a new listener bound to the specified address.
-    async fn bind(&self, address: Vec<Self::Address>) -> Result<Self::Listener>;
+    async fn bind(&self, address: Vec<SocketAddress>) -> Result<Self::Listener>;
 
     /// Returns a future that opens a connection to the given address.
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>>;
+    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>>;
 }

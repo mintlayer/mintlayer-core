@@ -14,19 +14,17 @@
 // limitations under the License.
 
 use crate::{
-    address::pubkeyhash::PublicKeyHash,
-    chain::{
-        tokens::{OutputValue, TokenData},
-        DelegationId, PoolId,
-    },
+    address::{pubkeyhash::PublicKeyHash, traits::Addressable, AddressError},
+    chain::{output_value::OutputValue, tokens::TokenData, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{Decode, Encode};
+use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
 pub mod classic_multisig;
+pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
@@ -44,7 +42,33 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+impl serde::Serialize for Destination {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("0x{}", self.hex_encode()))
+    }
+}
+
+impl Addressable for Destination {
+    type Error = AddressError;
+
+    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
+        chain_config.destination_address_prefix(self)
+    }
+
+    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
+        self.encode()
+    }
+
+    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::decode_all(&mut address_bytes.as_ref())
+            .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TxOutput {
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),

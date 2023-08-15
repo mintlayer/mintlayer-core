@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    net::{IpAddr, SocketAddr},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use p2p_types::socket_address::SocketAddress;
 use tokio::net::TcpStream;
 use tokio_socks::tcp::Socks5Stream;
 
@@ -47,23 +45,21 @@ impl Socks5TransportSocket {
 
 #[async_trait]
 impl TransportSocket for Socks5TransportSocket {
-    type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type Listener = Socks5TransportListener;
     type Stream = Socks5TransportStream;
 
-    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
         Socks5TransportListener::new(addresses)
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
         let proxy = Arc::clone(&self.proxy);
         Box::pin(async move {
             let socket = TcpStream::connect(proxy.as_str()).await.map_err(|e| {
                 DialError::ProxyError(format!("Connection to the SOCKS5 proxy failed: {e}"))
             })?;
 
-            let stream = Socks5Stream::connect_with_socket(socket, address)
+            let stream = Socks5Stream::connect_with_socket(socket, address.socket_addr())
                 .await
                 .map_err(|e| DialError::ProxyError(format!("Unexpected SOCKS5 error: {e}")))?;
 
@@ -75,7 +71,7 @@ impl TransportSocket for Socks5TransportSocket {
 pub struct Socks5TransportListener {}
 
 impl Socks5TransportListener {
-    fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
+    fn new(addresses: Vec<SocketAddress>) -> Result<Self> {
         utils::ensure!(
             addresses.is_empty(),
             P2pError::InvalidConfigurationValue(
@@ -89,13 +85,12 @@ impl Socks5TransportListener {
 #[async_trait]
 impl TransportListener for Socks5TransportListener {
     type Stream = Socks5TransportStream;
-    type Address = SocketAddr;
 
-    async fn accept(&mut self) -> Result<(Socks5TransportStream, SocketAddr)> {
+    async fn accept(&mut self) -> Result<(Socks5TransportStream, SocketAddress)> {
         std::future::pending().await
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
         Ok(Vec::new())
     }
 }

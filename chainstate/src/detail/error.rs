@@ -21,6 +21,7 @@ use super::{
         storage::TransactionVerifierStorageError,
     },
 };
+use chainstate_storage::ChainstateStorageVersion;
 use chainstate_types::{GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
@@ -206,6 +207,30 @@ pub enum InitializationError {
     Block1Missing,
     #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
     GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
+    #[error("Storage compatibility check error: `{0}`")]
+    StorageCompatibilityCheckError(#[from] StorageCompatibilityCheckError),
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum StorageCompatibilityCheckError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("Storage version is missing in the db")]
+    StorageVersionMissing,
+    #[error("Magic bytes are missing in the db")]
+    MagicBytesMissing,
+    #[error("Chain type is missing in the db")]
+    ChainTypeMissing,
+    #[error(
+        "Node cannot load chainstate database because the versions mismatch: db `{0:?}`, app `{1:?}`"
+    )]
+    ChainstateStorageVersionMismatch(ChainstateStorageVersion, ChainstateStorageVersion),
+    #[error(
+        "Chain's config magic bytes do not match the one from database : expected `{0:?}`, actual `{1:?}`"
+    )]
+    ChainConfigMagicBytesMismatch([u8; 4], [u8; 4]),
+    #[error("Node's chain type doesn't match the one in the database : db `{0}`, app `{1}`")]
+    ChainTypeMismatch(String, String),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

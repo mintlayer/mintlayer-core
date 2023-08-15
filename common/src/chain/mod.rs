@@ -18,11 +18,12 @@ pub mod chaintrust;
 pub mod config;
 pub mod gen_block;
 pub mod genesis;
+pub mod tokens;
+pub mod transaction;
+
 mod mlt;
 mod pos;
 mod pow;
-pub mod tokens;
-pub mod transaction;
 mod upgrades;
 
 pub use signed_transaction::SignedTransaction;
@@ -37,5 +38,5 @@ pub use pos::{
     create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
     get_initial_randomness, initial_difficulty, DelegationId, PoSChainConfig, PoolId,
 };
-pub use pow::PoWChainConfig;
+pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

@@ -15,14 +15,13 @@
 
 macro_rules! tests {
     ($($(#[$meta:meta])* $name:ident,)+) => {
-        pub fn tests<T, N, A>() -> impl Iterator<Item = libtest_mimic::Trial>
+        pub fn tests<T, N>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
-            T: p2p::testing_utils::TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+            T: p2p::testing_utils::TestTransportMaker<Transport = N::Transport>,
             N: p2p::net::NetworkingService + std::fmt::Debug + 'static,
             N::ConnectivityHandle: p2p::net::ConnectivityService<N> + std::fmt::Debug,
             N::MessagingHandle: MessagingService + std::fmt::Debug,
             N::SyncingEventReceiver: SyncingEventReceiver + std::fmt::Debug,
-            A: p2p::testing_utils::RandomAddressMaker<Address = N::Address>,
         {
             [
                 $($(#[$meta])*
@@ -35,7 +34,7 @@ macro_rules! tests {
                         .build()
                         .unwrap()
                         .block_on(async {
-                            $name::<T, N, A>().await;
+                            $name::<T, N>().await;
                         });
                     Ok(())
                 }

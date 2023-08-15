@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use std::{
-    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -61,8 +61,8 @@ use crate::{
 // try to connect to an address that no one listening on and verify it fails
 async fn test_peer_manager_connect<T: NetworkingService>(
     transport: T::Transport,
-    bind_addr: T::Address,
-    remote_addr: T::Address,
+    bind_addr: SocketAddress,
+    remote_addr: SocketAddress,
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -86,7 +86,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
 async fn test_peer_manager_connect_tcp() {
     let transport = TestTransportTcp::make_transport();
     let bind_addr = TestTransportTcp::make_address();
-    let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
+    let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<TcpTransportSocket>>(
         transport,
@@ -100,7 +100,7 @@ async fn test_peer_manager_connect_tcp() {
 async fn test_peer_manager_connect_tcp_noise() {
     let transport = TestTransportNoise::make_transport();
     let bind_addr = TestTransportTcp::make_address();
-    let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
+    let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<NoiseTcpTransport>>(
         transport,
@@ -114,7 +114,7 @@ async fn test_peer_manager_connect_tcp_noise() {
 // is below the desired threshold and there are idle peers in the peerdb
 async fn test_auto_connect<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -127,7 +127,7 @@ where
     let (mut pm2, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let addr = pm2.peer_connectivity_handle.local_addresses()[0].clone();
+    let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
     tokio::spawn(async move {
         loop {
@@ -164,7 +164,7 @@ async fn test_auto_connect_noise() {
 
 async fn connect_outbound_same_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -205,7 +205,7 @@ async fn connect_outbound_same_network_noise() {
 
 async fn connect_outbound_different_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -259,7 +259,7 @@ async fn connect_outbound_different_network_noise() {
 
 async fn connect_inbound_same_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -303,7 +303,7 @@ async fn connect_inbound_same_network_noise() {
 
 async fn connect_inbound_different_network<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -367,7 +367,7 @@ async fn connect_inbound_different_network_noise() {
 
 async fn remote_closes_connection<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -420,9 +420,9 @@ async fn remote_closes_connection_noise() {
         .await;
 }
 
-async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(T::Address, PeerInfo)>)
+async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(SocketAddress, PeerInfo)>)
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -536,7 +536,7 @@ async fn inbound_connection_too_many_peers_noise() {
     .await;
 }
 
-async fn connection_timeout<T>(transport: T::Transport, addr1: T::Address, addr2: T::Address)
+async fn connection_timeout<T>(transport: T::Transport, addr1: SocketAddress, addr2: SocketAddress)
 where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -608,14 +608,38 @@ async fn connection_timeout_noise() {
 // try to establish a new connection through RPC and verify that it is notified of the timeout
 async fn connection_timeout_rpc_notified<T>(
     transport: T::Transport,
-    addr1: T::Address,
-    addr2: T::Address,
+    addr1: SocketAddress,
+    addr2: SocketAddress,
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(test_p2p_config());
+    let p2p_config = Arc::new(P2pConfig {
+        outbound_connection_timeout: Duration::from_secs(1).into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -649,23 +673,27 @@ async fn connection_timeout_rpc_notified<T>(
     });
 
     let (rtx, rrx) = oneshot_nofail::channel();
-    tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
+    tx.send(PeerManagerEvent::Connect(
+        addr2.to_string().parse().unwrap(),
+        rtx,
+    ))
+    .unwrap();
 
-    match timeout(*p2p_config.outbound_connection_timeout, rrx).await {
-        Ok(res) => assert!(std::matches!(
-            res.unwrap(),
-            Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))
-        )),
-        Err(_err) => panic!("did not receive `ConnectionError` in time"),
+    match timeout(Duration::from_secs(60), rrx).await.unwrap() {
+        Ok(Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))) => {}
+        event => panic!("unexpected event: {event:?}"),
     }
 }
+
+// Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
+const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
-        TestTransportTcp::make_address(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
@@ -675,7 +703,7 @@ async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        TestTransportChannel::make_address(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
@@ -685,7 +713,7 @@ async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
-        TestTransportNoise::make_address(),
+        GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
 }
@@ -693,7 +721,7 @@ async fn connection_timeout_rpc_notified_noise() {
 // verify that peer connection is made when valid reserved_node parameter is used
 async fn connection_reserved_node<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -739,6 +767,10 @@ where
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
     let bind_addresses = timeout(Duration::from_secs(20), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
 
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -746,7 +778,7 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses,
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -815,7 +847,7 @@ async fn connection_reserved_node_channel() {
 // All listening addresses are discovered and multiple connections are made.
 async fn discovered_node<A, T>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
@@ -863,6 +895,10 @@ where
 
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
@@ -870,7 +906,7 @@ where
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses.clone(),
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -898,13 +934,18 @@ where
     )
     .await;
 
+    let reserved_nodes = bind_addresses
+        .iter()
+        .map(|s| IpOrSocketAddress::new_socket_address(s.socket_addr()))
+        .collect();
+
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes: bind_addresses,
+        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),

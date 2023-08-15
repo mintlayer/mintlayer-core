@@ -15,6 +15,7 @@
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use p2p_types::socket_address::SocketAddress;
 
 use crate::net::{
     default_backend::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
@@ -48,18 +49,16 @@ impl<S, T> WrappedTransportSocket<S, T> {
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     for WrappedTransportSocket<S, T>
 {
-    type Address = T::Address;
-    type BannableAddress = T::BannableAddress;
     type Listener = AdaptedListener<S, T>;
     type Stream = S::Stream;
 
-    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
         let stream_adapter = self.stream_adapter.clone();
         let listener = self.base_transport.bind(addresses).await?;
         Ok(AdaptedListener::new(stream_adapter, listener))
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
         let base = self.base_transport.connect(address);
         let stream_adapter = self.stream_adapter.clone();
         Box::pin(async move {

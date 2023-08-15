@@ -19,6 +19,10 @@ use std::{
 };
 
 use common::chain::SignedTransaction;
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 
 use crate::{types::peer_id::PeerId, P2pEvent};
 
@@ -28,7 +32,7 @@ use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
     P2pInterface for T
 {
-    async fn connect(&mut self, addr: String) -> crate::Result<()> {
+    async fn connect(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().connect(addr).await
     }
 
@@ -36,11 +40,21 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().disconnect(peer_id).await
     }
 
+    async fn list_banned(&mut self) -> crate::Result<Vec<BannableAddress>> {
+        self.deref_mut().list_banned().await
+    }
+    async fn ban(&mut self, addr: BannableAddress) -> crate::Result<()> {
+        self.deref_mut().ban(addr).await
+    }
+    async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()> {
+        self.deref_mut().unban(addr).await
+    }
+
     async fn get_peer_count(&self) -> crate::Result<usize> {
         self.deref().get_peer_count().await
     }
 
-    async fn get_bind_addresses(&self) -> crate::Result<Vec<String>> {
+    async fn get_bind_addresses(&self) -> crate::Result<Vec<SocketAddress>> {
         self.deref().get_bind_addresses().await
     }
 
@@ -48,11 +62,11 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().get_connected_peers().await
     }
 
-    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+    async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().add_reserved_node(addr).await
     }
 
-    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+    async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()> {
         self.deref_mut().remove_reserved_node(addr).await
     }
 

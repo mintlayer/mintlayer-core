@@ -15,6 +15,10 @@
 
 use common::chain::SignedTransaction;
 use mempool::TxStatus;
+use p2p_types::{
+    bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+    socket_address::SocketAddress,
+};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
@@ -25,11 +29,20 @@ trait P2pRpc {
     /// Try to connect to a remote node (just once).
     /// For persistent connections `add_reserved_node` should be used.
     #[method(name = "connect")]
-    async fn connect(&self, addr: String) -> RpcResult<()>;
+    async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
     /// Disconnect peer
     #[method(name = "disconnect")]
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
+
+    #[method(name = "list_banned")]
+    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>>;
+
+    #[method(name = "ban")]
+    async fn ban(&self, address: BannableAddress) -> RpcResult<()>;
+
+    #[method(name = "unban")]
+    async fn unban(&self, address: BannableAddress) -> RpcResult<()>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
@@ -37,7 +50,7 @@ trait P2pRpc {
 
     /// Get bind address of the local node
     #[method(name = "get_bind_addresses")]
-    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>>;
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>>;
 
     /// Get details of connected peers
     #[method(name = "get_connected_peers")]
@@ -46,12 +59,12 @@ trait P2pRpc {
     /// Add the address to the reserved nodes list.
     /// The node will try to keep connections open to all reserved peers.
     #[method(name = "add_reserved_node")]
-    async fn add_reserved_node(&self, addr: String) -> RpcResult<()>;
+    async fn add_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
     /// Remove the address from the reserved nodes list.
     /// Existing connection to the peer is not closed.
     #[method(name = "remove_reserved_node")]
-    async fn remove_reserved_node(&self, addr: String) -> RpcResult<()>;
+    async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()>;
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
@@ -60,7 +73,7 @@ trait P2pRpc {
 
 #[async_trait::async_trait]
 impl P2pRpcServer for super::P2pHandle {
-    async fn connect(&self, addr: String) -> RpcResult<()> {
+    async fn connect(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.connect(addr)).await;
         rpc::handle_result(res)
     }
@@ -70,12 +83,27 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
+    async fn list_banned(&self) -> RpcResult<Vec<BannableAddress>> {
+        let res = self.call_async_mut(|this| this.list_banned()).await;
+        rpc::handle_result(res)
+    }
+
+    async fn ban(&self, address: BannableAddress) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.ban(address)).await;
+        rpc::handle_result(res)
+    }
+
+    async fn unban(&self, address: BannableAddress) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.unban(address)).await;
+        rpc::handle_result(res)
+    }
+
     async fn get_peer_count(&self) -> RpcResult<usize> {
         let res = self.call_async(|this| this.get_peer_count()).await;
         rpc::handle_result(res)
     }
 
-    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>> {
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<SocketAddress>> {
         let res = self.call_async(|this| this.get_bind_addresses()).await;
         rpc::handle_result(res)
     }
@@ -85,12 +113,12 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn add_reserved_node(&self, addr: String) -> RpcResult<()> {
+    async fn add_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.add_reserved_node(addr)).await;
         rpc::handle_result(res)
     }
 
-    async fn remove_reserved_node(&self, addr: String) -> RpcResult<()> {
+    async fn remove_reserved_node(&self, addr: IpOrSocketAddress) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.remove_reserved_node(addr)).await;
         rpc::handle_result(res)
     }

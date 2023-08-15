@@ -37,14 +37,14 @@ impl From<AccountSpending> for AccountType {
 /// The type represents the amount to withdraw from a particular account.
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub enum AccountSpending {
     #[codec(index = 0)]
     Delegation(DelegationId, Amount),
 }
 
 /// Type of OutPoint that represents spending from an account
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub struct AccountOutPoint {
     nonce: AccountNonce,
     account: AccountSpending,

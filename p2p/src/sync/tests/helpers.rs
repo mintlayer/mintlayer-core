@@ -13,17 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    net::{IpAddr, SocketAddr},
-    panic,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
 use itertools::Itertools;
+use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -41,8 +36,8 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::create_mainnet,
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::OutputValue,
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
         TxOutput,
     },
@@ -74,7 +69,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct SyncManagerHandle {
     pub peer_id: PeerId,
-    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
+    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
@@ -119,7 +114,7 @@ impl SyncManagerHandle {
             events_receiver: messaging_receiver,
         };
 
-        let sync = BlockSyncManager::new(
+        let sync = BlockSyncManager::<NetworkingServiceStub>::new(
             chain_config,
             p2p_config,
             messaging_handle,
@@ -233,7 +228,7 @@ impl SyncManagerHandle {
 
     pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
         match self.peer_manager_receiver.recv().await.unwrap() {
-            PeerManagerEvent::Disconnect(peer_id, sender) => {
+            PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
                 assert_eq!(id, peer_id);
                 sender.send(Ok(()));
             }
@@ -245,7 +240,7 @@ impl SyncManagerHandle {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
                 match self.peer_manager_receiver.recv().await.unwrap() {
-                    PeerManagerEvent::Disconnect(peer_id, _) if id == peer_id => {
+                    PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _) if id == peer_id => {
                         break;
                     }
                     _ => {}
@@ -468,15 +463,13 @@ struct NetworkingServiceStub {}
 #[async_trait]
 impl NetworkingService for NetworkingServiceStub {
     type Transport = TcpTransportSocket;
-    type Address = SocketAddr;
-    type BannableAddress = IpAddr;
     type ConnectivityHandle = ();
     type MessagingHandle = MessagingHandleMock;
     type SyncingEventReceiver = SyncingEventReceiverMock;
 
     async fn start(
         _: Self::Transport,
-        _: Vec<Self::Address>,
+        _: Vec<SocketAddress>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
         _: TimeGetter,

@@ -16,13 +16,22 @@
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
-    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock, PoolId, SignedTransaction,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use mempool::TxStatus;
 use mempool::{rpc::MempoolRpcClient, FeeRate};
-use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
+use p2p::{
+    interface::types::ConnectedPeer,
+    rpc::P2pRpcClient,
+    types::{
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId,
+    },
+};
 use serialization::hex_encoded::HexEncoded;
 
 use crate::node_traits::NodeInterface;
@@ -98,6 +107,18 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
+    async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        ChainstateRpcClient::stake_pool_pledge(&self.http_client, pool_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        ChainstateRpcClient::token_info(&self.http_client, token_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -133,7 +154,7 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         P2pRpcClient::connect(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
@@ -143,6 +164,23 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+
+    async fn p2p_list_banned(&self) -> Result<Vec<BannableAddress>, Self::Error> {
+        P2pRpcClient::list_banned(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_ban(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        P2pRpcClient::ban(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        P2pRpcClient::unban(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         P2pRpcClient::get_peer_count(&self.http_client)
             .await
@@ -153,12 +191,15 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_add_reserved_node(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
         P2pRpcClient::add_reserved_node(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+    async fn p2p_remove_reserved_node(
+        &self,
+        address: IpOrSocketAddress,
+    ) -> Result<(), Self::Error> {
         P2pRpcClient::remove_reserved_node(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)

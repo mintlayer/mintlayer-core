@@ -221,7 +221,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     // Generate a valid graph of transactions
-    let num_txs = rng.gen_range(15..40);
+    let num_txs = rng.gen_range(15..90);
     let time = TimeGetter::default().get_time();
     let full_tx_sequence: Vec<_> =
         generate_transaction_graph(&mut rng, time).take(num_txs).collect();
@@ -250,6 +250,13 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
             let tx = tx.transaction().clone();
             let _ = mempool.add_transaction(tx, TxOrigin::TEST).expect("tx add");
         });
+
+        log::info!(
+            "Stats: count {}, memory {}, encoded size {}",
+            mempool.store.txs_by_id.len(),
+            mempool.memory_usage(),
+            mempool.store.txs_by_id.values().map(|e| e.size()).sum::<usize>(),
+        );
 
         // Check the final state of each transaction in the original sequence
         results.push(all_tx_ids.iter().map(|id| TxStatus::fetch(&mempool, id)).collect());

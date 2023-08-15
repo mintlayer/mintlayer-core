@@ -124,7 +124,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::UtxoBlockUndoError(_) => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
-            ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
@@ -324,7 +323,6 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
-            ConsensusPoWError::GenesisCannotHaveOngoingDifficulty => 100,
             ConsensusPoWError::InvalidBlockRewardMaturityDistance(_) => 0,
         }
     }

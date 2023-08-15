@@ -51,6 +51,10 @@ fn check_integrity(orphans: &TxOrphanPool) {
     });
 }
 
+fn random_peer_origin(rng: &mut impl Rng) -> TxOrigin {
+    TxOrigin::Peer(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
+}
+
 fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let n_inputs = rng.gen_range(1..=10);
     let inputs: Vec<_> = (0..n_inputs)
@@ -73,7 +77,14 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Time::from_secs(rng.gen());
 
-    TxEntry::new(transaction, insertion_time, crate::TxOrigin::LocalMempool)
+    let origin = match rng.gen_range(0..4) {
+        0 | 1 => random_peer_origin(rng),
+        2 => TxOrigin::LocalMempool,
+        3 => TxOrigin::LocalP2p,
+        _ => panic!("out of range"),
+    };
+
+    TxEntry::new(transaction, insertion_time, origin)
 }
 
 #[rstest]
@@ -138,7 +149,7 @@ fn simulation(#[case] seed: Seed) {
 
     for _ in 0..300 {
         let len_before = orphans.len();
-        match rng.gen_range(0..=4) {
+        match rng.gen_range(0..=5) {
             // Insert a random tx
             0..=1 => {
                 let entry = random_tx_entry(&mut rng);
@@ -178,6 +189,23 @@ fn simulation(#[case] seed: Seed) {
                 orphans.enforce_max_size(limit);
                 assert!(orphans.len() <= limit);
                 assert!(orphans.len() <= len_before);
+            }
+
+            // Delete all txs by origin
+            5..=5 => {
+                let origin = match rng.gen_range(0..=5) {
+                    0..=3 => random_peer_origin(&mut rng),
+                    4..=4 => TxOrigin::LocalMempool,
+                    5..=5 => TxOrigin::LocalP2p,
+                    _ => panic!("out of range"),
+                };
+                orphans.remove_by_origin(origin);
+                let count = orphans
+                    .maps
+                    .by_origin
+                    .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))
+                    .count();
+                assert_eq!(count, 0, "Removing txs by origin {origin:?} failed");
             }
 
             // This should not be generated

@@ -1,0 +1,11 @@
+# Build Stage
+FROM mintlayer-builder:latest AS builder
+
+# Runtime Stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/src/target/release/wallet-cli /usr/bin/wallet-cli
+
+CMD ["wallet-cli"]

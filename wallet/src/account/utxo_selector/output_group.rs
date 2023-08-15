@@ -14,10 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        tokens::{OutputValue, TokenData},
-        TxInput, TxOutput,
-    },
+    chain::{output_value::OutputValue, tokens::TokenData, TxInput, TxOutput},
     primitives::Amount,
 };
 

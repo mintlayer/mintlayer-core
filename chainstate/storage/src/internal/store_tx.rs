@@ -22,7 +22,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        UtxoOutPoint,
+        SignedTransaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
@@ -37,11 +37,12 @@ use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
     schema::{self as db, Schema},
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag,
+    BlockchainStorageRead, BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag,
+    TipStorageTag,
 };
 
 mod well_known {
-    use super::{Codec, GenBlock, Id};
+    use super::{ChainstateStorageVersion, Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -61,10 +62,12 @@ mod well_known {
         };
     }
 
-    declare_entry!(StoreVersion: u32);
+    declare_entry!(StoreVersion: ChainstateStorageVersion);
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
     declare_entry!(TxIndexEnabled: bool);
+    declare_entry!(MagicBytes: [u8; 4]);
+    declare_entry!(ChainType: String);
 }
 
 /// Read-only chainstate storage transaction
@@ -77,8 +80,16 @@ macro_rules! impl_read_ops {
     ($TxType:ident) => {
         /// Blockchain data storage transaction
         impl<'st, B: storage::Backend> BlockchainStorageRead for $TxType<'st, B> {
-            fn get_storage_version(&self) -> crate::Result<u32> {
-                self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
+                self.read_value::<well_known::StoreVersion>()
+            }
+
+            fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>> {
+                self.read_value::<well_known::MagicBytes>()
+            }
+
+            fn get_chain_type(&self) -> crate::Result<Option<String>> {
+                self.read_value::<well_known::ChainType>()
             }
 
             fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
@@ -132,7 +143,7 @@ macro_rules! impl_read_ops {
             fn get_mainchain_tx_by_position(
                 &self,
                 tx_index: &TxMainChainPosition,
-            ) -> crate::Result<Option<Transaction>> {
+            ) -> crate::Result<Option<SignedTransaction>> {
                 let block_id = tx_index.block_id();
                 match self.0.get::<db::DBBlock, _>().get(block_id) {
                     Err(e) => Err(e.into()),
@@ -142,7 +153,7 @@ macro_rules! impl_read_ops {
                         let begin = tx_index.byte_offset_in_block() as usize;
                         let encoded_tx =
                             block.get(begin..).expect("Transaction outside of block range");
-                        let tx = Transaction::decode(&mut &*encoded_tx)
+                        let tx = SignedTransaction::decode(&mut &*encoded_tx)
                             .expect("Invalid tx encoding in DB");
                         Ok(Some(tx))
                     }
@@ -384,8 +395,16 @@ impl_read_ops!(StoreTxRo);
 impl_read_ops!(StoreTxRw);
 
 impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
+    fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
+    }
+
+    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()> {
+        self.write_value::<well_known::MagicBytes>(bytes)
+    }
+
+    fn set_chain_type(&mut self, chain: &str) -> crate::Result<()> {
+        self.write_value::<well_known::ChainType>(&chain.to_owned())
     }
 
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()> {

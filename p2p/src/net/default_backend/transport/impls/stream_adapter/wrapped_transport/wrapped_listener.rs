@@ -18,6 +18,7 @@ use futures::{
     future::BoxFuture,
     stream::{FuturesUnordered, StreamExt},
 };
+use p2p_types::socket_address::SocketAddress;
 
 use crate::{
     net::{
@@ -39,7 +40,7 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     stream_adapter: S,
     listener: T::Listener,
     #[allow(clippy::type_complexity)]
-    handshakes: FuturesUnordered<BoxFuture<'static, (Result<S::Stream>, T::Address)>>,
+    handshakes: FuturesUnordered<BoxFuture<'static, (Result<S::Stream>, SocketAddress)>>,
 }
 
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
@@ -55,9 +56,8 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
 #[async_trait]
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for AdaptedListener<S, T> {
     type Stream = S::Stream;
-    type Address = T::Address;
 
-    async fn accept(&mut self) -> Result<(S::Stream, T::Address)> {
+    async fn accept(&mut self) -> Result<(S::Stream, SocketAddress)> {
         loop {
             let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
             tokio::select! {
@@ -92,7 +92,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
         }
     }
 
-    fn local_addresses(&self) -> Result<Vec<T::Address>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
         self.listener.local_addresses()
     }
 }

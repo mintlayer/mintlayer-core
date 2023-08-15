@@ -22,8 +22,8 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
+        PoolId, SignedTransaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -42,14 +42,39 @@ use crate::{
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 
+mod version;
+pub use version::ChainstateStorageVersion;
+
 /// Store for blockchain data, parametrized over the backend B
 pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 
 impl<B: storage::Backend> Store<B> {
     /// Create a new chainstate storage
-    pub fn new(backend: B) -> crate::Result<Self> {
-        let mut storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
-        storage.set_storage_version(1)?;
+    pub fn new(backend: B, chain_config: &ChainConfig) -> crate::Result<Self> {
+        let storage = Self::from_backend(backend)?;
+
+        // Set defaults if missing
+        let mut db_tx = storage.transaction_rw(None)?;
+
+        if db_tx.get_storage_version()?.is_none() {
+            db_tx.set_storage_version(ChainstateStorageVersion::CURRENT)?;
+        }
+
+        if db_tx.get_magic_bytes()?.is_none() {
+            db_tx.set_magic_bytes(chain_config.magic_bytes())?;
+        }
+
+        if db_tx.get_chain_type()?.is_none() {
+            db_tx.set_chain_type(chain_config.chain_type().name())?;
+        }
+
+        db_tx.commit()?;
+
+        Ok(storage)
+    }
+
+    fn from_backend(backend: B) -> crate::Result<Self> {
+        let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         Ok(storage)
     }
 
@@ -147,7 +172,7 @@ impl<B: storage::Backend> Store<B> {
 impl<B: Default + storage::Backend> Store<B> {
     /// Create a default storage (mostly for testing, may want to remove this later)
     pub fn new_empty() -> crate::Result<Self> {
-        Self::new(B::default())
+        Self::from_backend(B::default())
     }
 }
 
@@ -202,7 +227,9 @@ macro_rules! delegate_to_transaction {
 
 impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
-        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
+        fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
+        fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
@@ -218,7 +245,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
+        ) -> crate::Result<Option<SignedTransaction>>;
 
         fn get_block_id_by_height(
             &self,
@@ -355,7 +382,9 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
 
 impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
-        fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
+        fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> crate::Result<()>;
+        fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;

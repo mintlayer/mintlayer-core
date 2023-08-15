@@ -24,14 +24,16 @@ pub mod schema;
 use std::collections::BTreeMap;
 
 use common::chain::block::signed_block_header::SignedBlockHeader;
-pub use internal::Store;
+pub use internal::{ChainstateStorageVersion, Store};
 
 use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
 use common::chain::block::BlockReward;
 use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{AccountNonce, AccountType, Block, GenBlock, OutPointSourceId};
+use common::chain::{
+    AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, SignedTransaction,
+};
 use common::primitives::{BlockHeight, Id};
 use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
@@ -61,7 +63,13 @@ pub trait BlockchainStorageRead:
     + EpochStorageRead
 {
     /// Get storage version
-    fn get_storage_version(&self) -> crate::Result<u32>;
+    fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
+
+    /// Get magic bytes
+    fn get_magic_bytes(&self) -> crate::Result<Option<[u8; 4]>>;
+
+    /// Get chain type name
+    fn get_chain_type(&self) -> crate::Result<Option<String>>;
 
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -87,7 +95,7 @@ pub trait BlockchainStorageRead:
     fn get_mainchain_tx_by_position(
         &self,
         tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<Transaction>>;
+    ) -> crate::Result<Option<SignedTransaction>>;
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
@@ -132,7 +140,13 @@ pub trait BlockchainStorageWrite:
     + EpochStorageWrite
 {
     /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;
+
+    /// Set magic bytes
+    fn set_magic_bytes(&mut self, bytes: &[u8; 4]) -> Result<()>;
+
+    /// Set chain type name
+    fn set_chain_type(&mut self, chain: &str) -> Result<()>;
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> Result<()>;

@@ -23,16 +23,17 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
+use chainstate_launcher::StorageBackendConfig;
 use paste::paste;
 
-use chainstate::rpc::ChainstateRpcServer;
+use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
 use common::{
     chain::{
         config::{
-            create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig, ChainType,
-            EmissionScheduleTabular,
+            regtest::create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig,
+            ChainType, EmissionScheduleTabular,
         },
         Destination, NetUpgrades,
     },
@@ -56,6 +57,8 @@ use crate::{
     options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
 };
+
+const LOCK_FILE_NAME: &str = ".lock";
 
 pub struct Node {
     manager: subsystem::Manager,
@@ -116,8 +119,8 @@ async fn initialize(
     let p2p = p2p::make_p2p(
         Arc::clone(&chain_config),
         Arc::new(node_config.p2p.unwrap_or_default().into()),
-        chainstate.clone(),
-        mempool.clone(),
+        subsystem::Handle::clone(&chainstate),
+        subsystem::Handle::clone(&mempool),
         Default::default(),
         peerdb_storage,
     )?;
@@ -131,9 +134,9 @@ async fn initialize(
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
             Arc::new(node_config.blockprod.unwrap_or_default().into()),
-            chainstate.clone(),
-            mempool.clone(),
-            p2p.clone(),
+            subsystem::Handle::clone(&chainstate),
+            subsystem::Handle::clone(&mempool),
+            subsystem::Handle::clone(&p2p),
             Default::default(),
         )?,
     );
@@ -211,7 +214,7 @@ pub async fn setup(options: Options) -> Result<Node> {
             .await
         }
         Command::Regtest(ref regtest_options) => {
-            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
+            let chain_config = regtest_chain_config(&command, &regtest_options.chain_config)?;
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
@@ -226,11 +229,30 @@ pub async fn setup(options: Options) -> Result<Node> {
 /// Creates an exclusive lock file in the specified directory.
 /// Fails if the lock file cannot be created or is already locked.
 fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
-    let lock = std::fs::File::create(data_dir.join(".lock"))
+    let lock = std::fs::File::create(data_dir.join(LOCK_FILE_NAME))
         .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
     fs4::FileExt::try_lock_exclusive(&lock)
         .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
     Ok(lock)
+}
+
+fn clean_data_dir(data_dir: &Path, exclude: &[&Path]) -> Result<()> {
+    for entry in std::fs::read_dir(data_dir)? {
+        let entry_path = entry?.path();
+
+        if exclude
+            .iter()
+            .map(|e| e.file_name())
+            .all(|exclude| entry_path.file_name() != exclude)
+        {
+            if entry_path.is_dir() {
+                std::fs::remove_dir_all(entry_path)?;
+            } else {
+                std::fs::remove_file(entry_path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn start(
@@ -253,8 +275,45 @@ async fn start(
     .expect("Failed to prepare data directory");
     let lock_file = lock_data_dir(&data_dir)?;
 
+    if run_options.clean_data.unwrap_or(false) {
+        clean_data_dir(
+            &data_dir,
+            std::slice::from_ref(&data_dir.join(LOCK_FILE_NAME).as_path()),
+        )?;
+    }
+
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let (manager, controller) = initialize(chain_config, data_dir, node_config).await?;
+    let (manager, controller) = match initialize(
+        chain_config.clone(),
+        data_dir.clone(),
+        node_config.clone(),
+    )
+    .await
+    {
+        Ok((manager, controller)) => (manager, controller),
+        Err(error) => match error.downcast_ref::<ChainstateError>() {
+            Some(ChainstateError::FailedToInitializeChainstate(
+                InitializationError::StorageCompatibilityCheckError(e),
+            )) => {
+                log::warn!("Failed to init chainstate: {e} \n Cleaning up current db and trying from scratch.");
+
+                let storage_config: StorageBackendConfig =
+                    node_config.chainstate.clone().unwrap_or_default().storage_backend.into();
+
+                // cleanup storage directory and retry initialization
+                if let Some(storage_subdir_name) = storage_config.subdirectory_name() {
+                    let path = data_dir.join(storage_subdir_name);
+                    if path.exists() {
+                        std::fs::remove_dir_all(path)
+                            .expect("Removing chainstate storage directory must succeed");
+                    }
+                }
+
+                initialize(chain_config, data_dir, node_config).await?
+            }
+            _ => return Err(error),
+        },
+    };
 
     Ok(Node {
         manager,
@@ -263,8 +322,16 @@ async fn start(
     })
 }
 
-fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Result<ChainConfig> {
+    match command {
+        Command::Regtest(_) => {}
+        Command::Mainnet(_) | Command::Testnet(_) => {
+            panic!("RegTest configuration options must only be used on RegTest")
+        }
+    };
+
     let ChainConfigOptions {
+        chain_magic_bytes,
         chain_max_future_block_time_offset,
         chain_version,
         chain_target_block_spacing,
@@ -274,6 +341,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_genesis_staking_settings,
     } = options;
 
     let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
@@ -298,6 +366,15 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         };
     }
 
+    let magic_bytes_from_string = |magic_string: String| -> Result<[u8; 4]> {
+        ensure!(magic_string.len() == 4, "Invalid size of magic_bytes");
+        let mut result: [u8; 4] = [0; 4];
+        for (i, byte) in magic_string.bytes().enumerate() {
+            result[i] = byte;
+        }
+        Ok(result)
+    };
+    update_builder!(magic_bytes, magic_bytes_from_string, map_err);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
@@ -311,9 +388,12 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder
-            .net_upgrades(NetUpgrades::regtest_with_pos())
-            .genesis_custom(create_regtest_pos_genesis(Destination::AnyoneCanSpend));
+        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
+            create_regtest_pos_genesis(
+                chain_genesis_staking_settings.clone(),
+                Destination::AnyoneCanSpend,
+            ),
+        );
     }
 
     Ok(builder.build())

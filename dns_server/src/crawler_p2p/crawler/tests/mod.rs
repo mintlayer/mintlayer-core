@@ -27,7 +27,7 @@ use p2p::{
     error::{DialError, P2pError},
     net::types::PeerInfo,
     protocol::NETWORK_PROTOCOL_CURRENT,
-    types::peer_id::PeerId,
+    types::{peer_id::PeerId, socket_address::SocketAddress},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -46,7 +46,7 @@ use crate::crawler_p2p::crawler::CrawlerEvent;
 #[case(Seed::from_entropy())]
 fn basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let peer1 = PeerId::new();
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(BTreeSet::new(), [node1].into_iter().collect());
@@ -73,7 +73,7 @@ fn basic(#[case] seed: Seed) {
     assert!(crawler.persistent.contains(&node1));
     assert!(crawler.reachable.contains(&node1));
 
-    let node2: SocketAddr = "4.3.2.1:12345".parse().unwrap();
+    let node2: SocketAddress = "4.3.2.1:12345".parse().unwrap();
     let peer2 = PeerId::new();
 
     crawler.step(
@@ -138,6 +138,7 @@ fn randomized(#[case] seed: Seed) {
                 ))
             }
         })
+        .map(SocketAddress::new)
         .collect::<Vec<_>>();
 
     let reserved_count = rng.gen_range(0..5);
@@ -226,7 +227,7 @@ fn randomized(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn incompatible_node(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
+    let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let peer1 = PeerId::new();
     let chain_config = common::chain::config::create_mainnet();
     let mut crawler = test_crawler(BTreeSet::new(), [node1].into_iter().collect());
@@ -260,8 +261,8 @@ fn incompatible_node(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn long_offline(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let loaded_node: SocketAddr = "1.0.0.0:3031".parse().unwrap();
-    let added_node: SocketAddr = "2.0.0.0:3031".parse().unwrap();
+    let loaded_node: SocketAddress = "1.0.0.0:3031".parse().unwrap();
+    let added_node: SocketAddress = "2.0.0.0:3031".parse().unwrap();
     let mut crawler = test_crawler(
         [loaded_node].into_iter().collect(),
         [added_node].into_iter().collect(),

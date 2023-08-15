@@ -25,6 +25,7 @@ use chainstate_types::{
     BlockIndexHandle, EpochStorageRead, GenBlockIndex, PropertyQueryError,
 };
 use common::{
+    address::Address,
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
@@ -37,6 +38,7 @@ use common::{
     Uint256, Uint512,
 };
 use crypto::vrf::VRFPublicKey;
+use logging::log;
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
@@ -214,6 +216,7 @@ where
 }
 
 pub fn stake(
+    chain_config: &ChainConfig,
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
@@ -228,6 +231,14 @@ pub fn stake(
     ensure!(
         block_timestamp <= finalize_pos_data.max_block_timestamp(),
         ConsensusPoSError::FutureTimestampInThePast
+    );
+
+    log::debug!(
+        "Search for a valid block ({}..{}), pool_id: {}",
+        block_timestamp,
+        finalize_pos_data.max_block_timestamp(),
+        Address::new(chain_config, pos_data.stake_pool_id())
+            .expect("Pool id to address cannot fail")
     );
 
     while block_timestamp <= finalize_pos_data.max_block_timestamp() {
@@ -253,6 +264,12 @@ pub fn stake(
         )
         .is_ok()
         {
+            log::info!(
+                "Valid block found, timestamp: {}, pool_id: {}",
+                block_timestamp,
+                pos_data.stake_pool_id()
+            );
+
             block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
             block_header.update_timestamp(block_timestamp);
             return Ok(StakeResult::Success);

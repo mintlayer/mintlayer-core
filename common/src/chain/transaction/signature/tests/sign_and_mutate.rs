@@ -21,6 +21,7 @@ use super::utils::*;
 use crate::{
     chain::{
         config::create_mainnet,
+        output_value::OutputValue,
         signature::{
             sighash::sighashtype::{OutputsMode, SigHashType},
             tests::{
@@ -30,7 +31,6 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        tokens::OutputValue,
         AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -970,7 +970,7 @@ fn mutate_first_input(
     let mutated_input = match updater.inputs.get(0).unwrap() {
         TxInput::Utxo(outpoint) => {
             if rng.gen::<bool>() {
-                TxInput::Utxo(UtxoOutPoint::new(outpoint.tx_id(), rng.gen()))
+                TxInput::Utxo(UtxoOutPoint::new(outpoint.source_id(), rng.gen()))
             } else {
                 TxInput::Utxo(UtxoOutPoint::new(
                     OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
