@@ -33,8 +33,13 @@ pub trait BlockProductionInterface: Send {
 
     /// Generate a block with the given transactions
     ///
-    /// If `transactions` is `None`, the block will be generated with
-    /// available transactions in the mempool
+    /// There are 3 levels of priority for transactions to be included
+    /// in the generated block - `transactions` contains the highest
+    /// priority transactions, followed by `transaction_ids` which
+    /// refer to transactions within the mempool.
+    ///
+    /// If `include_mempool` is true, the rest of the block will be
+    /// filled with available transactions from the mempool.
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,
