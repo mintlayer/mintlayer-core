@@ -970,17 +970,18 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .expect("best index to exist");
         let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
-        let mut dedupe_txids = BTreeSet::new();
+        let mut unique_txids = BTreeSet::new();
         let mut ordered_txids = vec![];
 
         for transaction in tx_accumulator.transactions().iter() {
-            // Use transactions already in the Accumulated for
-            // deduping only i.e don't send them through the verifier
-            dedupe_txids.insert(transaction.transaction().get_id());
+            // Use transactions already in the Accumulator to sort for
+            // uniqueness only i.e don't send them through the
+            // verifier
+            unique_txids.insert(transaction.transaction().get_id());
         }
 
         for transaction_id in transaction_ids {
-            if dedupe_txids.insert(transaction_id) {
+            if unique_txids.insert(transaction_id) {
                 ordered_txids.push(transaction_id)
             }
         }
@@ -989,7 +990,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let fill_txids = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
 
             for transaction_id in fill_txids {
-                if dedupe_txids.insert(*transaction_id) {
+                if unique_txids.insert(*transaction_id) {
                     ordered_txids.push(*transaction_id)
                 }
             }
