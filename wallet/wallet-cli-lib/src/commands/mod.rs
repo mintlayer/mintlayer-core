@@ -113,7 +113,7 @@ pub enum WalletCommand {
         #[clap(long)]
         pool_id: Option<String>,
 
-        count: u32,
+        block_count: u32,
     },
 
     /// Creates a new account
@@ -686,7 +686,10 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::GenerateBlocks { pool_id, count } => {
+            WalletCommand::GenerateBlocks {
+                pool_id,
+                block_count,
+            } => {
                 let pool_id = pool_id
                     .map(|pool_id| parse_pool_id(chain_config, pool_id.as_str()))
                     .transpose()?;
@@ -696,7 +699,7 @@ impl CommandHandler {
                     .generate_blocks(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         pool_id,
-                        count,
+                        block_count,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
