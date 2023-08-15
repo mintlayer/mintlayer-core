@@ -15,7 +15,7 @@
 
 use crate::{
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
-    send_request::make_address_output,
+    send_request::{make_address_output, make_create_delegation_output},
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
@@ -60,6 +60,7 @@ fn get_best_block(wallet: &DefaultWallet) -> (Id<GenBlock>, BlockHeight) {
     *wallet.get_best_block().first_key_value().unwrap().1
 }
 
+#[track_caller]
 fn scan_wallet(wallet: &mut DefaultWallet, height: BlockHeight, blocks: Vec<Block>) {
     for account in wallet.get_best_block().keys() {
         wallet
@@ -1018,6 +1019,225 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         pool_amount,
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_spend_from_delegations(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
+    let block1_amount = (chain_config.min_stake_pool_pledge() + delegation_amount).unwrap();
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert!(pool_ids.is_empty());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let pool_amount = chain_config.min_stake_pool_pledge();
+
+    let stake_pool_transaction = wallet
+        .create_stake_pool_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            None,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+            StakePoolDataArguments {
+                amount: pool_amount,
+                margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+                cost_per_block: Amount::ZERO,
+            },
+        )
+        .unwrap();
+    let block2 = Block::new(
+        vec![stake_pool_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+
+    let currency_balances = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::CreateStakePool,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+    assert_eq!(
+        currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
+        block1_amount,
+    );
+
+    let pool_ids = wallet.get_pool_ids(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(pool_ids.len(), 1);
+
+    let pool_id = pool_ids.first().unwrap().0;
+    let (delegation_id, delegation_tx) = wallet
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(chain_config.as_ref(), address.clone(), pool_id)
+                .unwrap()],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block3 = Block::new(
+        vec![delegation_tx],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3]);
+
+    let delegation_stake_tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block4 = Block::new(
+        vec![delegation_stake_tx],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]);
+
+    let delegation_tx1 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address.clone(),
+            Amount::from_atoms(1),
+            delegation_id,
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet
+        .add_unconfirmed_tx(delegation_tx1.clone(), &mut WalletEventsNoOp)
+        .unwrap();
+    let delegation_tx1 = vec![delegation_tx1];
+
+    let delegation_tx2 = wallet
+        .create_transaction_to_addresses_from_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            address,
+            Amount::from_atoms(1),
+            delegation_id,
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+    wallet
+        .add_unconfirmed_tx(delegation_tx2.clone(), &mut WalletEventsNoOp)
+        .unwrap();
+    let delegation_tx2 = vec![delegation_tx2];
+
+    // Check delegation balance after unconfirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_amount) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(
+        deleg_amount,
+        (delegation_amount - Amount::from_atoms(2)).unwrap()
+    );
+
+    let block5 = Block::new(
+        delegation_tx1,
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(4), vec![block5]);
+    let block6 = Block::new(
+        delegation_tx2,
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(5), vec![block6]);
+
+    // Check delegation balance after confirmed tx status
+    let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
+    assert_eq!(delegations.len(), 1);
+    let (deleg_id, deleg_amount) = delegations.pop().unwrap();
+    assert_eq!(*deleg_id, delegation_id);
+    assert_eq!(
+        deleg_amount,
+        (delegation_amount - Amount::from_atoms(2)).unwrap()
     );
 }
 
