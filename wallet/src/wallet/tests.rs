@@ -271,6 +271,12 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     wallet.unlock_wallet(&password).unwrap();
     let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
     assert_eq!(seed_phrase.mnemonic.to_string(), MNEMONIC);
+
+    let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
+    assert_eq!(seed_phrase.mnemonic.to_string(), MNEMONIC);
+
+    let seed_phrase = wallet.seed_phrase().unwrap();
+    assert!(seed_phrase.is_none());
 }
 
 #[test]
@@ -1081,7 +1087,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet =
+        Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None, false).unwrap();
 
     let coin_balance = wallet
         .get_balance(

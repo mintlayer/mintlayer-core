@@ -69,7 +69,7 @@ impl MasterKeyChain {
         )
     }
 
-    pub fn new_from_root_key<B: storage::Backend>(
+    fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRwUnlocked<B>,
         root_key: ExtendedPrivateKey,

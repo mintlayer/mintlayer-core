@@ -47,10 +47,10 @@ use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
+    TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::keys::SeedPhrase;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
@@ -241,6 +241,14 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn seed_phrase(&self) -> WalletResult<Option<SeedPhrase>> {
         self.db.transaction_ro_unlocked()?.get_seed_phrase().map_err(WalletError::from)
+    }
+
+    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SeedPhrase>> {
+        let mut tx = self.db.transaction_rw_unlocked(None)?;
+        let seed_phrase = tx.del_seed_phrase().map_err(WalletError::from)?;
+        tx.commit()?;
+
+        Ok(seed_phrase)
     }
 
     pub fn is_encrypted(&self) -> bool {

@@ -506,6 +506,12 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
         let value = MaybeEncrypted::new(&seed_phrase, self.encryption_key);
         self.write::<db::DBSeedPhrase, _, _, _>(SeedPhraseConstant, value)
     }
+
+    fn del_seed_phrase(&mut self) -> crate::Result<Option<SeedPhrase>> {
+        let phrase = self.get_seed_phrase()?;
+        self.storage.get_mut::<db::DBSeedPhrase, _>().del(&SeedPhraseConstant {})?;
+        Ok(phrase)
+    }
 }
 
 impl<'st, B: storage::Backend> crate::TransactionRoLocked for StoreTxRo<'st, B> {

@@ -142,6 +142,7 @@ pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageW
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
     fn set_seed_phrase(&mut self, seed_phrase: SeedPhrase) -> Result<()>;
+    fn del_seed_phrase(&mut self) -> Result<Option<SeedPhrase>>;
 }
 
 /// Modifying operations on persistent wallet data for encryption

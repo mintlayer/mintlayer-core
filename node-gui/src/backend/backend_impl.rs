@@ -127,7 +127,7 @@ impl Backend {
             file_path.clone(),
             mnemonic,
             None,
-            false,
+            true,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
