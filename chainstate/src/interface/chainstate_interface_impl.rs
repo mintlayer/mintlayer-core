@@ -35,7 +35,7 @@ use common::{
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SignedTransaction,
         Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
@@ -195,11 +195,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         &self,
         headers: Vec<SignedBlockHeader>,
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
-        let first_non_existing_block_idx = self
-            .chainstate
-            .query()?
-            .find_first_non_existing_block(&headers)?
-            .unwrap_or(headers.len());
+        let first_non_existing_block_idx = {
+            let mut idx = 0;
+            for header in headers.iter() {
+                if self.get_block_index(&header.get_id())?.is_none() {
+                    break;
+                }
+                idx += 1;
+            }
+            idx
+        };
+
         assert!(first_non_existing_block_idx <= headers.len());
         let mut headers = headers;
         let non_existing_block_headers = headers.split_off(first_non_existing_block_idx);

@@ -27,29 +27,15 @@ use crate::{
 
 use super::{get_random_hash, TestNode};
 
-pub struct TestNodeGroup {
-    data: Vec<NodeDataItem>,
-    prevent_peer_manager_events: bool,
-}
-
 struct NodeDataItem {
     node: TestNode,
     delay_sync_messages_from: bool,
 }
 
-#[derive(Clone, Debug)]
-pub struct SyncMessageWithNodeIdx {
-    pub message: SyncMessage,
-    pub sender_node_idx: usize,
-    pub receiver_node_idx: usize,
-}
-
-#[allow(dead_code)]
-#[derive(Eq, PartialEq)]
-pub enum MsgAction {
-    SendAndContinue,
-    SendAndBreak,
-    Break,
+/// A struct that represents a group of test nodes.
+pub struct TestNodeGroup {
+    data: Vec<NodeDataItem>,
+    prevent_peer_manager_events: bool,
 }
 
 impl TestNodeGroup {
@@ -98,7 +84,8 @@ impl TestNodeGroup {
     /// Receive a SyncMessage from any peer for which delay_sync_messages_from is set to false.
     /// Panic if a timeout occurs.
     async fn receive_next_sync_message(&mut self) -> SyncMessageWithNodeIdx {
-        // TODO: is there anode1.try_connect_peer(node2.peer_id);
+        // TODO: is there a better way to perform select_all on sync_event_receivers (i.e. without
+        // extra allocations)?
 
         let mut sync_event_receivers: Vec<_> = self
             .data
@@ -326,4 +313,19 @@ impl TestNodeGroup {
             }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SyncMessageWithNodeIdx {
+    pub message: SyncMessage,
+    pub sender_node_idx: usize,
+    pub receiver_node_idx: usize,
+}
+
+#[allow(dead_code)]
+#[derive(Eq, PartialEq)]
+pub enum MsgAction {
+    SendAndContinue,
+    SendAndBreak,
+    Break,
 }

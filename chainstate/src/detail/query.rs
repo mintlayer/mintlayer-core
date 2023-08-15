@@ -265,19 +265,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_mainchain_headers_higher_than(latest_fork_point_height, header_count_limit)
     }
 
-    pub fn find_first_non_existing_block(
-        &self,
-        headers: &[SignedBlockHeader],
-    ) -> Result<Option<usize>, PropertyQueryError> {
-        for (idx, header) in headers.iter().enumerate() {
-            if self.get_block_index(&header.get_id())?.is_none() {
-                return Ok(Some(idx));
-            }
-        }
-
-        Ok(None)
-    }
-
     pub fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,

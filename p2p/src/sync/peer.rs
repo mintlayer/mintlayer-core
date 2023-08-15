@@ -129,7 +129,7 @@ struct IncomingDataState {
     peers_best_block_that_we_have: Option<Id<GenBlock>>,
     /// The number of singular unconnected headers received from a peer. This counter is reset
     /// after receiving a valid header list.
-    singular_unconnected_headers: usize,
+    singular_unconnected_headers_count: usize,
 }
 
 struct OutgoingDataState {
@@ -189,7 +189,7 @@ where
                 pending_headers: Vec::new(),
                 requested_blocks: BTreeSet::new(),
                 peers_best_block_that_we_have: None,
-                singular_unconnected_headers: 0,
+                singular_unconnected_headers_count: 0,
             },
             outgoing: OutgoingDataState {
                 blocks_queue: VecDeque::new(),
@@ -265,8 +265,9 @@ where
         // This function is not supposed to be called when in IBD.
         debug_assert!(!self.is_initial_block_download.load());
 
-        let best_sent_block =
+        let best_sent_block_id =
             self.outgoing.best_sent_block.as_ref().map(|index| (*index.block_id()).into());
+
         log::debug!(
             concat!(
                 "[peer id = {}] In handle_new_tip: send_tip_updates = {}, ",
@@ -276,7 +277,7 @@ where
             self.id(),
             self.send_tip_updates,
             self.outgoing.best_sent_block_header,
-            best_sent_block,
+            best_sent_block_id,
             self.incoming.peers_best_block_that_we_have
         );
 
@@ -289,7 +290,8 @@ where
             // "received pending headers" correctly. So, they may see the announced header list
             // as disconnected. But they can only tolerate disconnected lists of length 1,
             // therefore, they might ban us eventually.
-            if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block.is_some() {
+            if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block_id.is_some()
+            {
                 let limit = *self.p2p_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
 
@@ -297,11 +299,12 @@ where
                     .incoming
                     .peers_best_block_that_we_have
                     .iter()
-                    .chain(best_sent_block.iter())
+                    .chain(best_sent_block_id.iter())
                     .copied()
                     .collect();
 
-                let peer_id = self.id();
+                // Obtain the headers to be sent and also the best block id, which will be
+                // needed for a later check.
                 let (headers, best_block_id) = self
                     .chainstate_handle
                     .call(move |c| {
@@ -319,7 +322,7 @@ where
                             "[peer id = {}] Got new tip event with block id {}, ",
                             "but there is nothing to send"
                         ),
-                        peer_id,
+                        self.id(),
                         new_tip_id,
                     );
                 } else if best_block_id != new_tip_id {
@@ -334,7 +337,7 @@ where
                             "[peer id = {}] Got new tip event with block id {}, ",
                             "but the tip has changed since then to {}"
                         ),
-                        peer_id,
+                        self.id(),
                         new_tip_id,
                         best_block_id
                     );
@@ -395,7 +398,7 @@ where
             );
         }
 
-        log::trace!("[peer id = {}] Sending header list request", self.id());
+        log::debug!("[peer id = {}] Sending header list request", self.id());
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
@@ -435,7 +438,6 @@ where
                 *self.p2p_config.msg_max_locator_count,
             )));
         }
-        log::trace!("[peer id = {}] locator: {locator:#?}", self.id());
 
         if self.is_initial_block_download.load() {
             // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
@@ -461,7 +463,7 @@ where
                 let peers_best_block_that_we_have = if let Some(header) = headers.first() {
                     // If headers obtained from the locator are non-empty, the parent of
                     // the first one represents the locator's latest block that is present in
-                    // this node's main chain.
+                    // this node's main chain (or the genesis).
                     let last_common_block_id = *header.prev_block_id();
                     choose_peers_best_block(
                         c,
@@ -529,10 +531,6 @@ where
                     *self.p2p_config.max_request_blocks_count,
                 ),
             ))?;
-        log::trace!(
-            "[peer id = {}] Requested block ids: {block_ids:#?}",
-            self.id()
-        );
 
         // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
@@ -550,8 +548,8 @@ where
 
                     if let Some(ref best_sent_block) = best_sent_block {
                         if index.block_height() <= best_sent_block.block_height() {
-                            // This can be normal in case of reorg, ensure that the mainchain block
-                            // at best_sent_block's height has different id.
+                            // This can be normal in case of reorg; ensure that the mainchain block
+                            // at best_sent_block's height has a different id.
                             // Note that mainchain could have become shorter due to blocks
                             // invalidation, so no block at that height may be present at all.
                             if let Some(mainchain_block_id_at_height) =
@@ -626,7 +624,6 @@ where
                 ),
             ));
         }
-        log::trace!("[peer id = {}] Received headers: {headers:#?}", self.id());
 
         // Each header must be connected to the previous one.
         if !headers
@@ -651,23 +648,20 @@ where
             .await??
             .is_some();
 
-        let first_header_is_connected_to_pending_headers =
-            if self.incoming.pending_headers.is_empty() {
-                false
-            } else {
-                // If the peer reorged, the new header list may not start where the previous one ended.
-                // If so, the non-connecting old headers are now considered stale by the peer, so
-                // we should remove them from pending_headers.
-                while let Some(known_header) = self.incoming.pending_headers.last() {
-                    if known_header.get_id() == first_header_prev_id {
-                        break;
-                    }
-
-                    self.incoming.pending_headers.pop();
+        let first_header_is_connected_to_pending_headers = {
+            // If the peer reorged, the new header list may not start where the previous one ended.
+            // If so, the non-connecting old headers are now considered stale by the peer, so
+            // we should remove them from pending_headers.
+            while let Some(known_header) = self.incoming.pending_headers.last() {
+                if known_header.get_id() == first_header_prev_id {
+                    break;
                 }
 
-                !self.incoming.pending_headers.is_empty()
-            };
+                self.incoming.pending_headers.pop();
+            }
+
+            !self.incoming.pending_headers.is_empty()
+        };
 
         let first_header_is_connected_to_requested_blocks = first_header_prev_id
             .classify(&self.chain_config)
@@ -683,14 +677,14 @@ where
             // so we have to handle this behavior here.
             // TODO: this should be removed in the protocol v2.
             if headers.len() == 1 {
-                self.incoming.singular_unconnected_headers += 1;
+                self.incoming.singular_unconnected_headers_count += 1;
 
                 log::debug!(
                     "[peer id = {}] The peer has sent {} singular unconnected headers",
                     self.id(),
-                    self.incoming.singular_unconnected_headers
+                    self.incoming.singular_unconnected_headers_count
                 );
-                if self.incoming.singular_unconnected_headers
+                if self.incoming.singular_unconnected_headers_count
                     <= *self.p2p_config.max_singular_unconnected_headers
                 {
                     self.request_headers().await?;
@@ -698,32 +692,21 @@ where
                 }
             }
 
-            // TODO: technically, we may have failed to send a block request on the previous
-            // iteration, due to some local or network issues; in that case, the corresponding
-            // headers won't be present in pending_headers anymore, but they
-            // won't be in requested_blocks or the chainstate either.
-            // Alternatively, we may have successfully received a block but then failed
-            // to add it to chainstate due to a local issue, with the same result.
-            // In all such cases, when the peer sends us its remaining blocks, they may appear
-            // disconnected even if the peer was behaving correctly.
-            // But this is a general problem of a code failure that leaves the object in an
-            // intermediate state. Perhaps, when sending tip updates we should calculate the
-            // fork point based on tip updates that the peer has already sent us and not on
-            // what we've sent to the peer. The alternatives are:
-            // 1) try to recover from this state by explicitly sending a header request to the peer.
-            // 2) keep a header in pending_headers until the block is received.
-            // Such situation will be quite rare though.
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
         // Now that we've received a properly connected header list, this counter may be reset.
-        self.incoming.singular_unconnected_headers = 0;
+        self.incoming.singular_unconnected_headers_count = 0;
 
         let already_downloading_blocks = if !self.incoming.requested_blocks.is_empty() {
             true
         } else if !self.incoming.pending_headers.is_empty() {
-            log::warn!(
-                "[peer id = {}] self.incoming.requested_blocks is empty, but self.incoming.pending_headers is not", self.id()
+            log::debug!(
+                concat!(
+                    "[peer id = {}] self.incoming.requested_blocks is empty, ",
+                    "but self.incoming.pending_headers is not"
+                ),
+                self.id()
             );
             true
         } else {
@@ -772,7 +755,7 @@ where
         if first_header_is_connected_to_chainstate {
             let first_header = new_block_headers
                 .first()
-                // This is OK because of the `headers.is_empty()` check above.
+                // This is OK because of the `new_block_headers.is_empty()` check above.
                 .expect("Headers shouldn't be empty")
                 .clone();
             self.chainstate_handle
@@ -1012,6 +995,13 @@ where
             | P2pError::InvalidConfigurationValue(_)) => panic!("Unexpected error {e:?}"),
 
             // Fatal errors, simply propagate them to stop the sync manager.
+            // Note/TODO: due to how error types are currently organized, a storage error can
+            // "hide" in other error types. E.g. ChainstateError can contain a BlockError, which
+            // can contain a storage error (both directly and through other error types such as
+            // PropertyQueryError). Also, MempoolError may contain ChainstateError through
+            // TxValidationError. I.e. the code above may silently consume a fatal error,
+            // leaving this struct in some intermediate state. Because of this, a malfunctioning
+            // node may see its peers as behaving incorrectly and ban them eventually.
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
@@ -1021,7 +1011,7 @@ where
 
     /// Sends a block list request.
     ///
-    /// The number of blocks requested equals to `P2pConfig::requested_blocks_limit`, the remaining
+    /// The number of blocks requested equals `P2pConfig::requested_blocks_limit`, the remaining
     /// headers are stored in the peer context.
     fn request_blocks(&mut self, mut headers: Vec<SignedBlockHeader>) -> Result<()> {
         debug_assert!(self.incoming.pending_headers.is_empty());
