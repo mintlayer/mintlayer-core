@@ -448,7 +448,7 @@ impl BlockProduction {
 
             // We conservatively use the minimum timestamp here in order to figure out
             // which transactions are valid for the block.
-            // TODO: Alternatively, we can construct the transaction sequence from the
+            // TODO: Alternatively, we can construct the transaction sequence from
             // scratch every time a different timestamp is attempted. That is more costly
             // in terms of computational resources but will allow the node to include more
             // transactions since the passing time may release some time locks.
