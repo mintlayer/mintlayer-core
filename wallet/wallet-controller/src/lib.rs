@@ -98,8 +98,6 @@ pub enum ControllerError<T: NodeInterface> {
     AddressEncodingError(#[from] AddressError),
     #[error("No staking pool found")]
     NoStakingPool,
-    #[error("More than one pool found, please specify pool id")]
-    MoreThanOneStakingPool,
     #[error("Wallet is locked")]
     WalletIsLocked,
     #[error("Cannot lock wallet because staking is running")]
@@ -662,26 +660,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.broadcast_to_mempool(tx).await
     }
 
-    pub async fn generate_block(
+    pub async fn generate_block_by_pool(
         &self,
         account_index: U31,
-        pool_id: Option<PoolId>,
+        pool_id: PoolId,
         transactions_opt: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, ControllerError<T>> {
-        let pool_id = match pool_id {
-            Some(pool_id) => pool_id,
-            None => {
-                let pools = self
-                    .wallet
-                    .get_pool_ids(account_index)
-                    .map_err(ControllerError::WalletError)?;
-                match pools.as_slice() {
-                    [] => return Err(ControllerError::NoStakingPool),
-                    [(pool_id, _)] => *pool_id,
-                    [_, _, ..] => return Err(ControllerError::MoreThanOneStakingPool),
-                }
-            }
-        };
         let pos_data = self
             .wallet
             .get_pos_gen_block_data(account_index, pool_id)
@@ -695,18 +679,40 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::NodeCallError)
     }
 
+    /// Attempt to generate a new block by trying all pools. If all pools fail,
+    /// the last pool block generation error is returned (or `ControllerError::NoStakingPool` if there are no staking pools).
+    pub async fn generate_block(
+        &self,
+        account_index: U31,
+        transactions_opt: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, ControllerError<T>> {
+        let pools =
+            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+
+        let mut last_error = ControllerError::NoStakingPool;
+        for (pool_id, _) in pools {
+            let block_res = self
+                .generate_block_by_pool(account_index, pool_id, transactions_opt.clone())
+                .await;
+            match block_res {
+                Ok(block) => return Ok(block),
+                Err(err) => last_error = err,
+            }
+        }
+        Err(last_error)
+    }
+
     /// Try to generate the `block_count` number of blocks.
     /// The function may return an error early if some attempt fails.
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
-        pool_id: Option<PoolId>,
         block_count: u32,
     ) -> Result<(), ControllerError<T>> {
         for _ in 0..block_count {
             self.sync_once().await?;
 
-            let block = self.generate_block(account_index, pool_id, None).await?;
+            let block = self.generate_block(account_index, None).await?;
 
             self.rpc_client
                 .submit_block(block)
@@ -835,26 +841,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
 
             for account_index in self.staking_started.iter() {
-                let pools = self.wallet.get_pool_ids(*account_index).expect("Should not fail");
+                let generate_res = self.generate_block(*account_index, None).await;
 
-                for (pool_id, _) in pools {
-                    let generate_res =
-                        self.generate_block(*account_index, Some(pool_id), None).await;
+                if let Ok(block) = generate_res {
+                    log::info!(
+                        "New block generated successfully, block id: {}",
+                        block.get_id()
+                    );
 
-                    if let Ok(block) = generate_res {
-                        log::info!(
-                            "New block generated successfully, block id: {}",
-                            block.get_id()
-                        );
-
-                        let submit_res = self.rpc_client.submit_block(block).await;
-                        if let Err(e) = submit_res {
-                            log::error!("Block submit failed: {e}");
-                            tokio::time::sleep(ERROR_DELAY).await;
-                        }
-
-                        continue 'outer;
+                    let submit_res = self.rpc_client.submit_block(block).await;
+                    if let Err(e) = submit_res {
+                        log::error!("Block submit failed: {e}");
+                        tokio::time::sleep(ERROR_DELAY).await;
                     }
+
+                    continue 'outer;
                 }
             }
 
