@@ -557,16 +557,16 @@ impl Account {
         let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) = utxos
             .into_iter()
             .find(|(_kernel_input_outpoint, (kernel_input_utxo, _token_id))| {
-                pool_id
-                    == match kernel_input_utxo {
-                        TxOutput::CreateStakePool(pool_id, _) => *pool_id,
-                        TxOutput::ProduceBlockFromStake(_, pool_id) => *pool_id,
-                        TxOutput::Transfer(_, _)
-                        | TxOutput::LockThenTransfer(_, _, _)
-                        | TxOutput::Burn(_)
-                        | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
-                    }
+                let utxo_pool_id = match kernel_input_utxo {
+                    TxOutput::CreateStakePool(pool_id, _) => *pool_id,
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => *pool_id,
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+                };
+                pool_id == utxo_pool_id
             })
             .ok_or(WalletError::UnknownPoolId(pool_id))?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
