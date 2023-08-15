@@ -666,7 +666,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         transactions,
                         vec![],
-                        false,
+                        true,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
