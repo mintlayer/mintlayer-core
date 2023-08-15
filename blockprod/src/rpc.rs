@@ -21,6 +21,7 @@ use common::{
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
+use mempool::tx_accumulator::PackingStrategy;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
 
@@ -48,7 +49,7 @@ trait BlockProductionRpc {
         input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> RpcResult<HexEncoded<Block>>;
 }
 
@@ -72,7 +73,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> rpc::Result<HexEncoded<Block>> {
         let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
 
@@ -82,7 +83,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
                     input_data.take(),
                     transactions,
                     transaction_ids,
-                    include_mempool,
+                    packing_strategy,
                 )
             })
             .await,

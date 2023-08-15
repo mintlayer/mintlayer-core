@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{detail::job_manager::JobKey, BlockProductionError};
 use common::{
     chain::{Block, SignedTransaction, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
-
-use crate::{detail::job_manager::JobKey, BlockProductionError};
+use mempool::tx_accumulator::PackingStrategy;
 
 #[async_trait::async_trait]
 pub trait BlockProductionInterface: Send {
@@ -45,6 +45,6 @@ pub trait BlockProductionInterface: Send {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError>;
 }

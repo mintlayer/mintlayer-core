@@ -14,9 +14,11 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, event::MempoolEvent, pool::memory_usage_estimator::StoreMemoryUsageEstimator,
-    tx_accumulator::TransactionAccumulator, FeeRate, MempoolInterface, MempoolMaxSize,
-    MempoolSubsystemInterface, TxOrigin, TxStatus,
+    error::Error,
+    event::MempoolEvent,
+    pool::memory_usage_estimator::StoreMemoryUsageEstimator,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
+    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -144,9 +146,9 @@ impl MempoolInterface for Mempool {
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
-        fill_from_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
-        Ok(self.collect_txs(tx_accumulator, transaction_ids, fill_from_mempool))
+        Ok(self.collect_txs(tx_accumulator, transaction_ids, packing_strategy))
     }
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

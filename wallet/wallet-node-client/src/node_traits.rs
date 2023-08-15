@@ -23,7 +23,7 @@ use common::{
 };
 
 use consensus::GenerateBlockInputData;
-use mempool::FeeRate;
+use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
@@ -57,7 +57,7 @@ pub trait NodeInterface {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
     async fn submit_transaction(

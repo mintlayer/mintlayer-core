@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{
+    detail::{job_manager::JobKey, BlockProduction},
+    BlockProductionError,
+};
 use common::{
     chain::{Block, SignedTransaction, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
-
-use crate::{
-    detail::{job_manager::JobKey, BlockProduction},
-    BlockProductionError,
-};
+use mempool::tx_accumulator::PackingStrategy;
 
 use super::blockprod_interface::BlockProductionInterface;
 
@@ -41,10 +41,10 @@ impl BlockProductionInterface for BlockProduction {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError> {
         let (block, end_receiver) = self
-            .produce_block(input_data, transactions, transaction_ids, include_mempool)
+            .produce_block(input_data, transactions, transaction_ids, packing_strategy)
             .await?;
 
         // The only error that can happen is if the channel is closed. We don't care about that here.

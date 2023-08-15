@@ -23,7 +23,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::{FeeRate, MempoolHandle};
+use mempool::{tx_accumulator::PackingStrategy, FeeRate, MempoolHandle};
 use p2p::{
     error::P2pError,
     interface::types::ConnectedPeer,
@@ -178,12 +178,12 @@ impl NodeInterface for WalletHandlesClient {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
             .call_async_mut(move |this| {
-                this.generate_block(input_data, transactions, transaction_ids, include_mempool)
+                this.generate_block(input_data, transactions, transaction_ids, packing_strategy)
             })
             .await??;
 

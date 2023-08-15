@@ -42,7 +42,7 @@ use consensus::{
 use crypto::random::{make_true_rng, Rng};
 use logging::log;
 use mempool::{
-    tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
+    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
     MempoolHandle,
 };
 use p2p::P2pHandle;
@@ -182,7 +182,7 @@ impl BlockProduction {
         min_block_timestamp: BlockTimestamp,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
         let mut accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
@@ -200,7 +200,9 @@ impl BlockProduction {
 
         let returned_accumulator = self
             .mempool_handle
-            .call(move |mempool| mempool.collect_txs(accumulator, transaction_ids, include_mempool))
+            .call(move |mempool| {
+                mempool.collect_txs(accumulator, transaction_ids, packing_strategy)
+            })
             .await?
             .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
 
@@ -324,13 +326,13 @@ impl BlockProduction {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         self.produce_block_with_custom_id(
             input_data,
             transactions,
             transaction_ids,
-            include_mempool,
+            packing_strategy,
             None,
         )
         .await
@@ -341,7 +343,7 @@ impl BlockProduction {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
         custom_id_maybe: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let current_peer_count = self
@@ -459,7 +461,7 @@ impl BlockProduction {
                         min_constructed_block_timestamp,
                         transactions.clone(),
                         transaction_ids.clone(),
-                        include_mempool,
+                        packing_strategy,
                     )
                     .await?;
 

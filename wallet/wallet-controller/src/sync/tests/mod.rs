@@ -30,7 +30,7 @@ use common::{
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
-use mempool::FeeRate;
+use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use mempool_types::TxStatus;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
@@ -197,7 +197,7 @@ impl NodeInterface for MockNode {
         _input_data: GenerateBlockInputData,
         _transactions_hex: Vec<SignedTransaction>,
         _transaction_ids: Vec<Id<Transaction>>,
-        _include_mempool: bool,
+        _packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         unreachable!()
     }

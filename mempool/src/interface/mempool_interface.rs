@@ -14,8 +14,10 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, event::MempoolEvent, tx_accumulator::TransactionAccumulator, FeeRate,
-    MempoolMaxSize, TxOrigin, TxStatus,
+    error::Error,
+    event::MempoolEvent,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
+    FeeRate, MempoolMaxSize, TxOrigin, TxStatus,
 };
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -56,7 +58,7 @@ pub trait MempoolInterface: Send + Sync {
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
-        fill_from_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error>;
 
     /// Subscribe to events emitted by mempool

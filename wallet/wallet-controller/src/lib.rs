@@ -32,6 +32,7 @@ use std::{
     time::Duration,
 };
 
+use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::TxStatus;
 use utils::tap_error_log::LogError;
 
@@ -655,7 +656,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
         let pos_data = self
             .wallet
@@ -667,7 +668,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 GenerateBlockInputData::PoS(pos_data.into()),
                 transactions,
                 transaction_ids,
-                include_mempool,
+                packing_strategy,
             )
             .await
             .map_err(ControllerError::NodeCallError)?;
@@ -681,7 +682,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(), ControllerError<T>> {
         for _ in 0..count {
             self.sync_once().await?;
-            let block = self.generate_block(account_index, vec![], vec![], true).await?;
+            let block = self
+                .generate_block(
+                    account_index,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await?;
             self.rpc_client
                 .submit_block(block)
                 .await
@@ -804,7 +812,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             }
 
             for account_index in staking_started.iter() {
-                let generate_res = self.generate_block(*account_index, vec![], vec![], true).await;
+                let generate_res = self
+                    .generate_block(
+                        *account_index,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await;
 
                 if let Ok(block) = generate_res {
                     log::info!(

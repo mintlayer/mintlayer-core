@@ -27,6 +27,12 @@ pub enum TxAccumulatorError {
     FeeAccumulationError(Fee, Fee),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum PackingStrategy {
+    FillSpaceFromMempool,
+    LeaveEmptySpace,
+}
+
 pub trait TransactionAccumulator: Send {
     /// Add a transaction to the accumulator and its fee
     /// This method should not mutate self unless it's successful

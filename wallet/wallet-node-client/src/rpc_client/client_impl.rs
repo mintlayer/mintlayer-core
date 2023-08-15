@@ -23,8 +23,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::TxStatus;
 use mempool::{rpc::MempoolRpcClient, FeeRate};
+use mempool::{tx_accumulator::PackingStrategy, TxStatus};
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
@@ -124,7 +124,7 @@ impl NodeInterface for NodeRpcClient {
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
-        include_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         let transactions = transactions.into_iter().map(HexEncoded::new).collect::<Vec<_>>();
         BlockProductionRpcClient::generate_block(
@@ -132,7 +132,7 @@ impl NodeInterface for NodeRpcClient {
             input_data.into(),
             transactions,
             transaction_ids,
-            include_mempool,
+            packing_strategy,
         )
         .await
         .map(HexEncoded::take)

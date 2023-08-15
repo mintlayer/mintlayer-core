@@ -27,7 +27,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
-use mempool::TxStatus;
+use mempool::{tx_accumulator::PackingStrategy, TxStatus};
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
@@ -666,7 +666,7 @@ impl CommandHandler {
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
                         transactions,
                         vec![],
-                        true,
+                        PackingStrategy::FillSpaceFromMempool,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

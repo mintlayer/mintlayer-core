@@ -54,7 +54,7 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
             [1000 for _ in range(20)],
         )
 
-        block = node.blockprod_generate_block(block_input_data, [generate_utxos], [], False)
+        block = node.blockprod_generate_block(block_input_data, [generate_utxos], [], "LeaveEmptySpace")
         node.chainstate_submit_block(block)
         utxos = [(utxo_id, i) for i in range(20)]
 
@@ -118,6 +118,8 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                     # Setup Mempool parameter
                     #
 
+                    packing_strategy = "LeaveEmptySpace"
+
                     if include_mempool:
                         (utxo_id, utxo_index) = utxos.pop()
                         utxo = tx_input(utxo_id, utxo_index)
@@ -127,6 +129,8 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                         node.mempool_submit_transaction(tx)
                         assert(node.mempool_contains_tx(tx_id))
 
+                        packing_strategy = "FillSpaceFromMempool"
+
                         expected_transactions.append([utxo_id, utxo_index])
 
                     self.wait_until(
@@ -134,7 +138,13 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                         timeout = 5
                     )
 
-                    block_hex = node.blockprod_generate_block(block_input_data, transactions, transaction_ids, include_mempool)
+                    block_hex = node.blockprod_generate_block(
+                        block_input_data,
+                        transactions,
+                        transaction_ids,
+                        packing_strategy
+                    )
+
                     block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(bytearray.fromhex(block_hex))).decode()
 
                     for expected_transaction in expected_transactions:

@@ -24,7 +24,7 @@ use common::{
 use mempool::{
     error::{Error, TxValidationError},
     event::MempoolEvent,
-    tx_accumulator::TransactionAccumulator,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
     FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
 };
 use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
@@ -114,7 +114,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         _transaction_ids: Vec<Id<Transaction>>,
-        _fill_from_mempool: bool,
+        _packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
         self.collect_txs_called.store(true);
 

@@ -38,7 +38,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use mempool::{MempoolInterface, MempoolSubsystemInterface};
+use mempool::{tx_accumulator::PackingStrategy, MempoolInterface, MempoolSubsystemInterface};
 use mocks::{MempoolInterfaceMock, MockChainstateInterfaceMock};
 use rstest::rstest;
 use subsystem::CallRequest;
@@ -98,7 +98,13 @@ mod collect_transactions {
                 .expect("Error initializing blockprod");
 
                 let accumulator = block_production
-                    .collect_transactions(current_tip, DUMMY_TIMESTAMP, vec![], vec![], true)
+                    .collect_transactions(
+                        current_tip,
+                        DUMMY_TIMESTAMP,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
@@ -151,7 +157,13 @@ mod collect_transactions {
             .expect("Error initializing blockprod");
 
             let accumulator = block_production
-                .collect_transactions(current_tip, DUMMY_TIMESTAMP, vec![], vec![], false)
+                .collect_transactions(
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::LeaveEmptySpace,
+                )
                 .await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load();
@@ -204,7 +216,13 @@ mod collect_transactions {
                 });
 
                 let accumulator = block_production
-                    .collect_transactions(current_tip, DUMMY_TIMESTAMP, vec![], vec![], true)
+                    .collect_transactions(
+                        current_tip,
+                        DUMMY_TIMESTAMP,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load();
@@ -252,7 +270,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -303,7 +326,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -352,7 +380,12 @@ mod produce_block {
                 block_production.set_job_manager(mock_job_manager);
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -403,7 +436,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -450,7 +488,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -522,8 +565,9 @@ mod produce_block {
                     )
                     .await;
 
-                let result =
-                    block_production.produce_block(input_data, vec![], vec![], false).await;
+                let result = block_production
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
+                    .await;
 
                 match result {
                     Err(BlockProductionError::FailedConsensusInitialization(
@@ -585,7 +629,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -646,7 +695,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -707,7 +761,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await;
 
                 match result {
@@ -755,7 +814,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], true)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await;
 
                 match result {
@@ -794,7 +858,12 @@ mod produce_block {
 
                 let (new_block, job_finished_receiver) = block_production
                     // TODO: Add transactions to the mempool
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], true)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await
                     .expect("Failed to produce a block: {:?}");
 
@@ -834,7 +903,12 @@ mod produce_block {
 
                 let (new_block, job_finished_receiver) = block_production
                     // TODO: Add transactions to the parameters
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await
                     .expect("Failed to produce a block: {:?}");
 
@@ -922,7 +996,7 @@ mod produce_block {
                         ))),
                         vec![],
                         vec![],
-                        false,
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -961,7 +1035,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let (new_block, job_finished_receiver) = block_production
-                    .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
+                    )
                     .await
                     .expect("Failed to produce a block: {:?}");
 
@@ -1019,7 +1098,7 @@ mod produce_block {
                         ))),
                         vec![],
                         vec![],
-                        false,
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1085,7 +1164,7 @@ mod produce_block {
                         GenerateBlockInputData::PoS(input_data),
                         vec![],
                         vec![],
-                        false,
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1251,7 +1330,12 @@ mod produce_block {
                     {
                         RequiredConsensus::IgnoreConsensus => {
                             let (new_block, job_finished_receiver) = block_production
-                                .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await
                                 .expect("Failed to produce a block: {:?}");
 
@@ -1263,7 +1347,12 @@ mod produce_block {
                             // Try no input data for PoS consensus
 
                             let input_data_none_result = block_production
-                                .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_none_result {
@@ -1278,7 +1367,12 @@ mod produce_block {
                             // Try PoW input data for PoS consensus
 
                             let input_data_pow_result = block_production
-                                .produce_block(input_data_pow, vec![], vec![], false)
+                                .produce_block(
+                                    input_data_pow,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_pow_result {
@@ -1293,7 +1387,12 @@ mod produce_block {
                             // Try PoS input data for PoS consensus
 
                             let (new_block, job_finished_receiver) = block_production
-                                .produce_block(input_data_pos, vec![], vec![], false)
+                                .produce_block(
+                                    input_data_pos,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await
                                 .expect("Failed to produce a job: {:?}");
 
@@ -1319,7 +1418,12 @@ mod produce_block {
                             // Try no input data for PoW consensus
 
                             let input_data_none_result = block_production
-                                .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                                .produce_block(
+                                    GenerateBlockInputData::None,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_none_result {
@@ -1334,7 +1438,12 @@ mod produce_block {
                             // Try PoS input data for PoW consensus
 
                             let input_data_pos_result = block_production
-                                .produce_block(input_data_pos, vec![], vec![], false)
+                                .produce_block(
+                                    input_data_pos,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_pos_result {
@@ -1349,7 +1458,12 @@ mod produce_block {
                             // Try PoW input data for PoW consensus
 
                             let (new_block, job_finished_receiver) = block_production
-                                .produce_block(input_data_pow, vec![], vec![], false)
+                                .produce_block(
+                                    input_data_pow,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await
                                 .expect("Failed to produce a block: {:?}");
 
@@ -1397,7 +1511,12 @@ mod produce_block {
 
                 for _ in 0..jobs_to_create {
                     let (_block, job) = block_production
-                        .produce_block(GenerateBlockInputData::None, vec![], vec![], false)
+                        .produce_block(
+                            GenerateBlockInputData::None,
+                            vec![],
+                            vec![],
+                            PackingStrategy::LeaveEmptySpace,
+                        )
                         .await
                         .unwrap();
 
@@ -1452,7 +1571,7 @@ mod process_block_with_custom_id {
                         GenerateBlockInputData::None,
                         vec![],
                         vec![],
-                        false,
+                        PackingStrategy::LeaveEmptySpace,
                         Some(id),
                     )
                 });
@@ -1517,7 +1636,7 @@ mod process_block_with_custom_id {
                             GenerateBlockInputData::None,
                             vec![],
                             vec![],
-                            false,
+                            PackingStrategy::LeaveEmptySpace,
                             Some(id.clone()),
                         )
                         .await;

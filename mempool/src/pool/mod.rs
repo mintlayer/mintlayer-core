@@ -59,7 +59,7 @@ use crate::{
     config,
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
     event::{self, MempoolEvent},
-    tx_accumulator::TransactionAccumulator,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
     TxOrigin, TxStatus,
 };
 
@@ -937,7 +937,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
         transaction_ids: Vec<Id<Transaction>>,
-        fill_from_mempool: bool,
+        packing_strategy: PackingStrategy,
     ) -> Option<Box<dyn TransactionAccumulator>> {
         let mempool_tip = self.best_block_id();
 
@@ -979,7 +979,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let mut ordered_txids =
             Vec::from_iter(transaction_ids.iter().filter(|&tx_id| unique_txids.insert(*tx_id)));
 
-        if fill_from_mempool {
+        if packing_strategy == PackingStrategy::FillSpaceFromMempool {
             ordered_txids.extend(
                 self.store
                     .txs_by_ancestor_score
