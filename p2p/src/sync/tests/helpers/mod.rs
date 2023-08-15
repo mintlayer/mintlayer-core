@@ -479,12 +479,15 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
     }
 }
 
-fn make_new_block_impl(
+pub fn make_new_block(
     chain_config: &ChainConfig,
     prev_block: Option<&Block>,
-    timestamp: BlockTimestamp,
-    random_bytes: Vec<u8>,
+    time_getter: &TimeGetter,
+    rng: &mut impl Rng,
 ) -> Block {
+    let random_bytes = get_random_bytes(rng);
+    let timestamp = BlockTimestamp::from_duration_since_epoch(time_getter.get_time());
+
     let input = match prev_block {
         None => common::chain::OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
         Some(block) => {
@@ -515,20 +518,6 @@ fn make_new_block_impl(
         BlockReward::new(vec![]),
     )
     .unwrap()
-}
-
-pub fn make_new_block(
-    chain_config: &ChainConfig,
-    prev_block: Option<&Block>,
-    time_getter: &TimeGetter,
-    rng: &mut impl Rng,
-) -> Block {
-    make_new_block_impl(
-        chain_config,
-        prev_block,
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time()),
-        get_random_bytes(rng),
-    )
 }
 
 pub fn make_new_blocks(

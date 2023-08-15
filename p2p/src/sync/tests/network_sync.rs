@@ -236,7 +236,7 @@ async fn reorg(#[case] seed: Seed) {
 // b) The peer, having received a disconnected header, would ignore it send a proper header request.
 // After doing that multiple times, it would get multiple header responses, which it may not expect,
 // depending on certain conditions, so it would produce 'ProtocolError(UnexpectedMessage("Headers list"))'.
-// c) Sometimes, in case b the peer would actually send multiple block requests in that case
+// c) Sometimes, in the case b the peer would actually send multiple block requests in that case
 // exceeding the node's requested block limit, so that it would produce ProtocolError(BlocksRequestLimitExceeded).
 // All of the above would increase the ban score of the other side.
 // Expected result: the ban score should not be increased.
