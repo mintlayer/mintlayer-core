@@ -20,10 +20,7 @@ use tokio::task::JoinHandle;
 
 use std::{
     net::SocketAddr,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc,
-    },
+    sync::{mpsc, Arc},
     time::Duration,
 };
 
@@ -56,11 +53,11 @@ use wallet_cli_lib::{
 pub const MNEMONIC: &str = "spawn dove notice resist rigid grass load forum tobacco category motor fantasy prison submit rescue pool panic unable enact oven trap lava floor toward";
 
 struct MockConsoleInput {
-    input_rx: Receiver<String>,
+    input_rx: mpsc::Receiver<String>,
 }
 
 struct MockConsoleOutput {
-    output_tx: Sender<String>,
+    output_tx: mpsc::Sender<String>,
 }
 
 impl ConsoleInput for MockConsoleInput {
@@ -271,8 +268,8 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
 
 pub struct CliTestFramework {
     pub wallet_task: JoinHandle<()>,
-    pub input_tx: Sender<String>,
-    pub output_rx: Receiver<String>,
+    pub input_tx: mpsc::Sender<String>,
+    pub output_rx: mpsc::Receiver<String>,
     pub shutdown_trigger: ShutdownTrigger,
     pub manager_task: ManagerJoinHandle,
     pub test_root: TestRoot,

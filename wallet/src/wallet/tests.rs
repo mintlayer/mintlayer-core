@@ -1182,9 +1182,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         )
         .unwrap();
 
-    wallet
-        .add_unconfirmed_tx(delegation_tx1.clone(), &mut WalletEventsNoOp)
-        .unwrap();
+    wallet.add_unconfirmed_tx(delegation_tx1.clone(), &WalletEventsNoOp).unwrap();
     let delegation_tx1 = vec![delegation_tx1];
 
     let delegation_tx2 = wallet
@@ -1196,9 +1194,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
-    wallet
-        .add_unconfirmed_tx(delegation_tx2.clone(), &mut WalletEventsNoOp)
-        .unwrap();
+    wallet.add_unconfirmed_tx(delegation_tx2.clone(), &WalletEventsNoOp).unwrap();
     let delegation_tx2 = vec![delegation_tx2];
 
     // Check delegation balance after unconfirmed tx status
