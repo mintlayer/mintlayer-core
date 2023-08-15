@@ -970,30 +970,24 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             .expect("best index to exist");
         let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
-        let mut unique_txids = BTreeSet::new();
-        let mut ordered_txids = vec![];
+        // Use transactions already in the Accumulator to sort for
+        // uniqueness only i.e don't send them through the verifier
+        let mut unique_txids = BTreeSet::from_iter(
+            tx_accumulator.transactions().iter().map(|tx| tx.transaction().get_id()),
+        );
 
-        for transaction in tx_accumulator.transactions().iter() {
-            // Use transactions already in the Accumulator to sort for
-            // uniqueness only i.e don't send them through the
-            // verifier
-            unique_txids.insert(transaction.transaction().get_id());
-        }
-
-        for transaction_id in transaction_ids {
-            if unique_txids.insert(transaction_id) {
-                ordered_txids.push(transaction_id)
-            }
-        }
+        let mut ordered_txids =
+            Vec::from_iter(transaction_ids.iter().filter(|&tx_id| unique_txids.insert(*tx_id)));
 
         if fill_from_mempool {
-            let fill_txids = self.store.txs_by_ancestor_score.iter().map(|(_, id)| id).rev();
-
-            for transaction_id in fill_txids {
-                if unique_txids.insert(*transaction_id) {
-                    ordered_txids.push(*transaction_id)
-                }
-            }
+            ordered_txids.extend(
+                self.store
+                    .txs_by_ancestor_score
+                    .iter()
+                    .map(|(_, id)| id)
+                    .rev()
+                    .filter(|&tx_id| unique_txids.insert(*tx_id)),
+            );
         }
 
         let block_timestamp = tx_accumulator.block_timestamp();
