@@ -28,9 +28,9 @@ use mempool::{
 use subsystem::{CallRequest, ShutdownRequest};
 
 mockall::mock! {
-    pub MempoolInterfaceMock {}
+    pub MempoolInterface {}
 
-    impl MempoolInterface for MempoolInterfaceMock {
+    impl MempoolInterface for MempoolInterface {
         fn add_transaction(
             &mut self,
             tx: SignedTransaction,
@@ -59,7 +59,7 @@ mockall::mock! {
 }
 
 #[async_trait::async_trait]
-impl MempoolSubsystemInterface for MockMempoolInterfaceMock {
+impl MempoolSubsystemInterface for MockMempoolInterface {
     async fn run(
         mut self,
         mut call_rq: CallRequest<dyn MempoolInterface>,
