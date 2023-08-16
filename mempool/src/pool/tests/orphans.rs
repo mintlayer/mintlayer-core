@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::tx_origin::LocalTxOrigin;
 use common::primitives::id::hash_encoded;
 
 use super::*;
@@ -196,14 +197,8 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
 
     // Add the first two transactions into mempool
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    assert_eq!(
-        mempool.add_transaction(tx0, TxOrigin::TEST),
-        Ok(TxStatus::InMempool)
-    );
-    assert_eq!(
-        mempool.add_transaction(tx1a, TxOrigin::TEST),
-        Ok(TxStatus::InMempool)
-    );
+    mempool.add_transaction(tx0, TxOrigin::TEST).unwrap().assert_in_mempool();
+    mempool.add_transaction(tx1a, TxOrigin::TEST).unwrap().assert_in_mempool();
 
     // Check transaction that conflicts with one in mempool gets rejected instead of ending up in
     // the orphan pool.
@@ -267,4 +262,37 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     // is not exhausted. Here, we are within the capacity.
     log::debug!("result = {:?}", results[0]);
     assert_eq!(results[0], results[1]);
+}
+
+#[rstest]
+#[trace]
+#[case::p2p(Seed::from_entropy(), LocalTxOrigin::LocalP2p)]
+#[trace]
+#[case::mempool(Seed::from_entropy(), LocalTxOrigin::LocalMempool)]
+#[trace]
+#[case::block(Seed::from_entropy(), LocalTxOrigin::PastBlock)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigin) {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis_id = tf.genesis().get_id();
+
+    // Set up the transactions
+
+    let tx0 = make_tx(
+        &mut rng,
+        &[(OutPointSourceId::BlockReward(genesis_id.into()), 0)],
+        &[100_000_000],
+    );
+    let tx0_outpt = OutPointSourceId::Transaction(tx0.transaction().get_id());
+
+    let tx1 = make_tx(&mut rng, &[(tx0_outpt, 0)], &[80_000_000]);
+
+    // Check the second transaction gets rejected by mempool
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let res = mempool.add_transaction(tx1, origin.into());
+    assert_eq!(
+        res,
+        Err(OrphanPoolError::NotSupportedForLocalOrigin(origin).into())
+    );
 }
