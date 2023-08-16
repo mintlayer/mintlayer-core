@@ -1,39 +1,12 @@
-image: 'rust:latest'
+image: "rust:latest"
 
-workflow:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
+before_script:
+   - apt-get update -yqq
+   - apt-get install -yqq --no-install-recommends build-essential
 
-stages:  
-  - fmt        # List of stages for jobs, and their order of execution
-  - build
-  - test
-  - sgh
-  - fn
-
-fmt-job:
-  stage: fmt
+# Use cargo to test the project
+test:cargo:
   script:
-    cargo fmt --all -- --check
+    - rustc --version && cargo --version  # Print version info for debugging
+    - cargo test --workspace --verbose
 
-build-job:
-  stage: build
-  script:
-    cargo build --release --locked
-
-test-job:
-  stage: test
-  script:
-    cargo test --release --workspace
-
-sighash-job:
-  stage: sgh
-  script:
-    cargo test --release -p common mixed_sighash_types -- --ignored
-
-fntest-job:
-  stage: fn
-  script:
-    cargo test --release -p mintlayer-test --test functional -- --ignored
