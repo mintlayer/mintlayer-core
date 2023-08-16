@@ -17,4 +17,4 @@ mod chainstate;
 mod mempool;
 
 pub use crate::chainstate::MockChainstateInterfaceMock;
-pub use crate::mempool::MempoolInterfaceMock;
+pub use crate::mempool::MockMempoolInterfaceMock;
