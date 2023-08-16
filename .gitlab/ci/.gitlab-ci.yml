@@ -1,0 +1,34 @@
+fmt-job:
+  stage: fmt
+  script:
+    cargo fmt --all -- --check
+  only:
+    - merge_requests
+
+build-job:
+  stage: build
+  script:
+    cargo build --release --locked
+  only:
+    - merge_requests
+
+test-job:
+  stage: test
+  script:
+    cargo test --release --workspace
+  only:
+    - merge_requests
+
+sighash-job:
+  stage: sgh
+  script:
+    cargo test --release -p common mixed_sighash_types -- --ignored
+  only:
+    - merge_requests
+
+fntest-job:
+  stage: fn
+  script:
+    cargo test --release -p mintlayer-test --test functional -- --ignored
+  only:
+    - merge_requests
