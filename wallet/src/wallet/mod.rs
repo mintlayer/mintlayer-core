@@ -155,6 +155,7 @@ pub enum WalletError {
 /// Result type used for the wallet
 pub type WalletResult<T> = Result<T, WalletError>;
 
+#[derive(PartialEq, Eq)]
 enum WalletState {
     InitialCreation,
     Syncing,
@@ -173,7 +174,10 @@ pub struct Wallet<B: storage::Backend> {
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum WalletSyncingState {
     NewlyCreated,
-    Syncing(BTreeMap<U31, (Id<GenBlock>, BlockHeight)>),
+    Syncing {
+        account_best_blocks: BTreeMap<U31, (Id<GenBlock>, BlockHeight)>,
+        unused_account_best_block: (Id<GenBlock>, BlockHeight),
+    },
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -537,12 +541,14 @@ impl<B: storage::Backend> Wallet<B> {
         let (next_account_index, next_account) = next_unused_account;
 
         // no need to rescan the blockchain from the start for the next unused account as we have been
-        // scaning for addresses of the previous next unused account and it is not alowed to create a gap in
+        // scanning for addresses of the previous next unused account and it is not allowed to create a gap in
         // the account indexes
         let (best_block_id, best_block_height) = next_account.best_block();
-        self.next_unused_account
-            .1
-            .sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
+        self.next_unused_account.1.update_best_block(
+            &mut db_tx,
+            best_block_height,
+            best_block_id,
+        )?;
 
         db_tx.commit()?;
 
@@ -896,7 +902,10 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_syncing_state(&self) -> WalletSyncingState {
         match self.state {
             WalletState::InitialCreation => WalletSyncingState::NewlyCreated,
-            WalletState::Syncing => WalletSyncingState::Syncing(self.get_best_block()),
+            WalletState::Syncing => WalletSyncingState::Syncing {
+                account_best_blocks: self.get_best_block(),
+                unused_account_best_block: self.next_unused_account.1.best_block(),
+            },
         }
     }
 
@@ -931,7 +940,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
@@ -959,22 +968,22 @@ impl<B: storage::Backend> Wallet<B> {
         best_block_height: BlockHeight,
         best_block_id: Id<GenBlock>,
     ) -> WalletResult<()> {
-        match self.state {
-            WalletState::InitialCreation => {
-                // all ok
-            }
-            WalletState::Syncing => return Err(WalletError::NotInInitialCreation),
-        }
+        ensure!(
+            self.state == WalletState::InitialCreation,
+            WalletError::NotInInitialCreation
+        );
 
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            account.sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
+            account.update_best_block(&mut db_tx, best_block_height, best_block_id)?;
         }
 
-        self.next_unused_account
-            .1
-            .sync_best_block(&mut db_tx, best_block_height, best_block_id)?;
+        self.next_unused_account.1.update_best_block(
+            &mut db_tx,
+            best_block_height,
+            best_block_id,
+        )?;
 
         db_tx.commit()?;
 

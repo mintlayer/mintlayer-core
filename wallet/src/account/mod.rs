@@ -868,6 +868,8 @@ impl Account {
         Ok(())
     }
 
+    /// Scan the new blocks for relevant transactions and updates the state
+    /// Returns true if a new transaction was added else false
     pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
@@ -887,27 +889,37 @@ impl Account {
             self.reset_to_height(db_tx, wallet_events, common_block_height)?;
         }
 
-        let mut new_tx_was_added = false;
-        for (index, block) in blocks.iter().enumerate() {
-            let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+        let new_tx_was_added = blocks.iter().enumerate().try_fold(
+            false,
+            |mut new_tx_was_added, (index, block)| -> WalletResult<bool> {
+                let block_height =
+                    BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+                let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
 
-            let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
-            new_tx_was_added = self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?
-                || new_tx_was_added;
+                new_tx_was_added |=
+                    self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
 
-            for (index, signed_tx) in block.transactions().iter().enumerate() {
-                let wallet_tx = WalletTx::Tx(TxData::new(
-                    signed_tx.transaction().clone().into(),
-                    TxState::Confirmed(block_height, block.timestamp(), index as u64),
-                ));
-                new_tx_was_added = self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                    db_tx,
-                    wallet_events,
-                    wallet_tx,
-                    signed_tx,
-                )? || new_tx_was_added;
-            }
-        }
+                block.transactions().iter().enumerate().try_fold(
+                    new_tx_was_added,
+                    |mut new_tx_was_added, (idx, signed_tx)| {
+                        let tx_state =
+                            TxState::Confirmed(block_height, block.timestamp(), idx as u64);
+                        let wallet_tx = WalletTx::Tx(TxData::new(
+                            signed_tx.transaction().clone().into(),
+                            tx_state,
+                        ));
+                        new_tx_was_added |= self
+                            .add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                                db_tx,
+                                wallet_events,
+                                wallet_tx,
+                                signed_tx,
+                            )?;
+                        Ok(new_tx_was_added)
+                    },
+                )
+            },
+        )?;
 
         // Update best_block_height and best_block_id only after successful commit call!
         let best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
@@ -942,7 +954,7 @@ impl Account {
         )
     }
 
-    pub fn sync_best_block(
+    pub fn update_best_block(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         best_block_height: BlockHeight,
@@ -1043,7 +1055,7 @@ impl Account {
     }
 
     pub fn has_transactions(&self) -> bool {
-        !self.output_cache.txs_with_unconfirmed().is_empty()
+        self.output_cache.has_confirmed_transactions()
     }
 
     pub fn name(&self) -> &Option<String> {

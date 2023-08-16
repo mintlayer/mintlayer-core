@@ -126,6 +126,16 @@ impl OutputCache {
         &self.txs
     }
 
+    pub fn has_confirmed_transactions(&self) -> bool {
+        self.txs.values().any(|tx| match tx.state() {
+            TxState::Inactive(_)
+            | TxState::InMempool(_)
+            | TxState::Conflicted(_)
+            | TxState::Abandoned => false,
+            TxState::Confirmed(_, _, _) => true,
+        })
+    }
+
     pub fn get_txo(&self, outpoint: &UtxoOutPoint) -> Option<&TxOutput> {
         self.txs
             .get(&outpoint.source_id())

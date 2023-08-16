@@ -1987,14 +1987,14 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
     assert_eq!(wallet.number_of_accounts(), 2);
 
-    // as the new accout will be in sync by default we need to make it out of sync
+    // as the new account will be in sync by default we need to make it out of sync
     let mut new_account = wallet.accounts.pop_last().unwrap();
 
     let mut db_tx = wallet.db.transaction_rw(None).unwrap();
 
     new_account
         .1
-        .sync_best_block(
+        .update_best_block(
             &mut db_tx,
             BlockHeight::new(0),
             chain_config.genesis_block_id(),

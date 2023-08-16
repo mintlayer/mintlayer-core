@@ -71,10 +71,13 @@ impl MockWallet {
 
 impl SyncingWallet for MockWallet {
     fn syncing_state(&self) -> WalletSyncingState {
-        WalletSyncingState::Syncing(BTreeMap::from([(
-            U31::ZERO,
-            (self.get_best_block_id(), self.get_block_height()),
-        )]))
+        WalletSyncingState::Syncing {
+            account_best_blocks: BTreeMap::from([(
+                U31::ZERO,
+                (self.get_best_block_id(), self.get_block_height()),
+            )]),
+            unused_account_best_block: (self.get_best_block_id(), self.get_block_height()),
+        }
     }
 
     fn fast_forward_to_latest_block(
@@ -112,6 +115,15 @@ impl SyncingWallet for MockWallet {
             self.get_block_height()
         );
 
+        Ok(())
+    }
+
+    fn scan_blocks_for_unused_account(
+        &mut self,
+        _common_block_height: BlockHeight,
+        _blocks: Vec<Block>,
+        _wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
         Ok(())
     }
 
