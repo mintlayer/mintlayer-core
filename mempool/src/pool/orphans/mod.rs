@@ -66,7 +66,7 @@ struct TxOrphanPoolMaps {
     by_deps: BTreeSet<(TxDependency, InternalId)>,
 
     /// Transactions indexed by the origin
-    by_origin: BTreeSet<(TxOrigin, InternalId)>,
+    by_origin: BTreeSet<(TxOrigin, InternalId)>, // TODO(PR) change to PeerId
 }
 
 impl TxOrphanPoolMaps {

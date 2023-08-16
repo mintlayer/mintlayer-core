@@ -52,7 +52,7 @@ fn check_integrity(orphans: &TxOrphanPool) {
 }
 
 fn random_peer_origin(rng: &mut impl Rng) -> TxOrigin {
-    TxOrigin::Peer(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
+    TxOrigin::peer(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
 }
 
 fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
@@ -79,8 +79,8 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
 
     let origin = match rng.gen_range(0..4) {
         0 | 1 => random_peer_origin(rng),
-        2 => TxOrigin::LocalMempool,
-        3 => TxOrigin::LocalP2p,
+        2 => TxOrigin::local_mempool(),
+        3 => TxOrigin::local_p2p(),
         _ => panic!("out of range"),
     };
 
@@ -195,8 +195,8 @@ fn simulation(#[case] seed: Seed) {
             5..=5 => {
                 let origin = match rng.gen_range(0..=5) {
                     0..=3 => random_peer_origin(&mut rng),
-                    4..=4 => TxOrigin::LocalMempool,
-                    5..=5 => TxOrigin::LocalP2p,
+                    4..=4 => TxOrigin::local_mempool(),
+                    5..=5 => TxOrigin::local_p2p(),
                     _ => panic!("out of range"),
                 };
                 orphans.remove_by_origin(origin);

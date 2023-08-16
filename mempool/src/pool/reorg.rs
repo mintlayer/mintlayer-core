@@ -164,7 +164,7 @@ pub fn refresh_mempool<M: MemoryUsageEstimator>(
 
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
-        if let Err(e) = mempool.add_transaction(tx, TxOrigin::PastBlock) {
+        if let Err(e) = mempool.add_transaction(tx, TxOrigin::past_block()) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }

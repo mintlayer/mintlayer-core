@@ -1106,7 +1106,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
-        self.orphans.remove_by_origin(TxOrigin::Peer(peer_id));
+        self.orphans.remove_by_origin(TxOrigin::peer(peer_id));
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {

@@ -44,7 +44,7 @@ pub trait TxOriginExt {
 }
 
 impl TxOriginExt for TxOrigin {
-    const TEST: Self = TxOrigin::LocalMempool;
+    const TEST: Self = TxOrigin::local_mempool();
 }
 
 pub trait TxStatusExt: Sized {
