@@ -73,30 +73,42 @@ class StakingIncentivesTest(BitcoinTestFramework):
         block = self.nodes[0].chainstate_get_block(tip)
         assert_equal(block, expected_block)
 
-    def generate_block(self, expected_height, block_input_data, transactions):
-        previous_block_id = self.nodes[0].chainstate_best_block_id()
-
+    def generate_block(self, node_index, block_input_data, transactions):
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
             try:
-                block_hex = self.nodes[0].blockprod_generate_block(
+                block_hex = self.nodes[node_index].blockprod_generate_block(
                     block_input_data, transactions)
                 break
             except JSONRPCException:
-                block_hex = self.nodes[0].blockprod_generate_block(
+                block_hex = self.nodes[node_index].blockprod_generate_block(
                     block_input_data, transactions)
                 time.sleep(1)
+        return block_hex
+
+    def submit_block(self, node_index, block_hex):
+        previous_block_id = self.nodes[node_index].chainstate_best_block_id()
 
         block_hex_array = bytearray.fromhex(block_hex)
         block = ScaleDecoder.get_decoder_class(
             'BlockV1', ScaleBytes(block_hex_array)).decode()
 
-        self.nodes[0].chainstate_submit_block(block_hex)
+        self.nodes[node_index].chainstate_submit_block(block_hex)
 
         self.assert_tip(block_hex)
-        # self.assert_height(expected_height, block_hex)
         self.assert_pos_consensus(block)
         self.assert_chain(block, previous_block_id)
+
+    def extract_timestamp_from_block(self, block_hex):
+        block_hex_array = bytearray.fromhex(block_hex)
+        block = ScaleDecoder.get_decoder_class(
+            'BlockV1', ScaleBytes(block_hex_array)).decode()
+        return block["header"]["header"]["timestamp"]
+
+    def generate_and_submit_block(self, node_index, block_input_data, transactions):
+        block_hex = self.generate_block(
+            node_index, block_input_data, transactions)
+        self.submit_block(node_index, block_hex)
 
     def genesis_pool_id(self):
         return hex_to_dec_array(GENESIS_POOL_ID)
@@ -339,7 +351,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
                 }
             }).to_hex()[2:]
 
-            self.generate_block(3 + i, block_input_data, [])
+            self.generate_and_submit_block(block_input_data, 0, [])
 
             kernel_input_outpoint = {
                 "id": {
@@ -356,6 +368,39 @@ class StakingIncentivesTest(BitcoinTestFramework):
                     pool_id,
                 ],
             }
+
+    def generate_block_from(self, block_id, pool_id, stake_pk, stake_sk, vrf_sk):
+        kernel_input_outpoint = {
+            "id": {
+                "BlockReward": hex_to_dec_array(block_id),
+            },
+            "index": 0,
+        }
+
+        kernel_input_utxo = {
+            "ProduceBlockFromStake": [
+                {
+                    "PublicKey": stake_pk,
+                },
+                pool_id,
+            ],
+        }
+
+        block_input_data = block_input_data_obj.encode({
+            "PoS": {
+                "stake_private_key": stake_sk,
+                "vrf_private_key": vrf_sk,
+                "pool_id": pool_id,
+                "kernel_inputs": [
+                    {
+                        "Utxo": kernel_input_outpoint,
+                    },
+                ],
+                "kernel_input_utxo": [kernel_input_utxo]
+            }
+        }).to_hex()[2:]
+
+        return self.generate_block(0, block_input_data, [])
 
     def run_test(self):
         #
@@ -401,6 +446,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
 
         (stake_sk_1, stake_pk_1) = self.new_stake_keys()
         (vrf_sk_1, vrf_pk_1) = self.new_vrf_keys()
+        pool_1_pledge = 40_000*MLT_COIN
 
         genesis_kernel0_outpoint = {
             "id": {
@@ -409,7 +455,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 0,
         }
         (pool_id_1, tx1_encoded, tx1_id) = self.create_pool_tx(
-            genesis_kernel0_outpoint, stake_pk_1, vrf_pk_1, 40_000*MLT_COIN, 500, 400_000*MLT_COIN)
+            genesis_kernel0_outpoint, stake_pk_1, vrf_pk_1, pool_1_pledge, 500, 400_000*MLT_COIN)
 
         tx1_outpoint = {
             "id": {
@@ -429,8 +475,8 @@ class StakingIncentivesTest(BitcoinTestFramework):
         (tx3_encoded, tx3_id) = self.create_delegate_staking_tx(
             tx2_outpoint, delegation_id_1, 160_000*MLT_COIN, 200_000*MLT_COIN)
 
-        self.generate_block(1, block_input_data, [
-                            tx1_encoded, tx2_encoded, tx3_encoded])
+        self.generate_and_submit_block(0, block_input_data, [
+            tx1_encoded, tx2_encoded, tx3_encoded])
 
         #
         # Create a block with second pool and delegation
@@ -466,6 +512,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
 
         (stake_sk_2, stake_pk_2) = self.new_stake_keys()
         (vrf_sk_2, vrf_pk_2) = self.new_vrf_keys()
+        pool_2_pledge = 160_000*MLT_COIN
 
         tx3_outpoint = {
             "id": {
@@ -473,8 +520,9 @@ class StakingIncentivesTest(BitcoinTestFramework):
             },
             "index": 1,
         }
+
         (pool_id_2, tx4_encoded, tx4_id) = self.create_pool_tx(
-            tx3_outpoint, stake_pk_2, vrf_pk_2, 160_000*MLT_COIN, 500, 40_000*MLT_COIN)
+            tx3_outpoint, stake_pk_2, vrf_pk_2, pool_2_pledge, 500, 40_000*MLT_COIN)
 
         tx4_outpoint = {
             "id": {
@@ -494,8 +542,8 @@ class StakingIncentivesTest(BitcoinTestFramework):
         (tx6_encoded, tx6_id) = self.create_delegate_staking_tx(
             tx5_outpoint, delegation_id_2, 40_000*MLT_COIN, 0)
 
-        self.generate_block(2, block_input_data, [
-                            tx4_encoded, tx5_encoded, tx6_encoded])
+        self.generate_and_submit_block(0, block_input_data, [
+            tx4_encoded, tx5_encoded, tx6_encoded])
 
         pool_id_1_hex = ScaleBytes(bytes(pool_id_1)).to_hex()[2:]
         pool_1_balance = self.nodes[0].chainstate_stake_pool_balance(
@@ -510,20 +558,119 @@ class StakingIncentivesTest(BitcoinTestFramework):
         assert_equal(pool_1_balance, pool_2_balance)
 
         #
-        # Stake multiple blocks using both pools. Check that the one with more pledge received more reward
+        # Generate 2 block just to get rid of CreateStakePool output
         #
-        num_blocks = random.randint(10, 100)
-        self.create_multiple_blocks(
-            num_blocks, tx1_id, pool_id_1, 40_000*MLT_COIN, stake_pk_1, stake_sk_1, vrf_pk_1, vrf_sk_1)
-        self.create_multiple_blocks(
-            num_blocks, tx4_id, pool_id_2, 160_000*MLT_COIN, stake_pk_2, stake_sk_2, vrf_pk_2, vrf_sk_2)
+
+        block_input_data = block_input_data_obj.encode({
+            "PoS": {
+                "stake_private_key": stake_sk_1,
+                "vrf_private_key": vrf_sk_1,
+                "pool_id": pool_id_1,
+                "kernel_inputs": [
+                    {
+                        "Utxo": {
+                            "id": {
+                                "Transaction": hex_to_dec_array(tx1_id),
+                            },
+                            "index": 0,
+                        },
+                    },
+                ],
+                "kernel_input_utxo": [
+                    {
+                        "CreateStakePool": [
+                            pool_id_1,
+                            {
+                                "value": pool_1_pledge,
+                                "staker": {
+                                    "PublicKey": stake_pk_1,
+                                },
+                                "vrf_public_key": vrf_pk_1,
+                                "decommission_key": "AnyoneCanSpend",
+                                "margin_ratio_per_thousand": 500,
+                                "cost_per_block": "0"
+                            },
+                        ],
+                    }
+                ],
+            }
+        }).to_hex()[2:]
+        self.generate_and_submit_block(0, block_input_data, [])
+        pool_1_last_block = self.nodes[0].chainstate_best_block_id()
+
+        block_input_data = block_input_data_obj.encode({
+            "PoS": {
+                "stake_private_key": stake_sk_2,
+                "vrf_private_key": vrf_sk_2,
+                "pool_id": pool_id_2,
+                "kernel_inputs": [
+                    {
+                        "Utxo": {
+                            "id": {
+                                "Transaction": hex_to_dec_array(tx4_id),
+                            },
+                            "index": 0,
+                        },
+                    },
+                ],
+                "kernel_input_utxo": [
+                    {
+                        "CreateStakePool": [
+                            pool_id_2,
+                            {
+                                "value": pool_2_pledge,
+                                "staker": {
+                                    "PublicKey": stake_pk_2,
+                                },
+                                "vrf_public_key": vrf_pk_2,
+                                "decommission_key": "AnyoneCanSpend",
+                                "margin_ratio_per_thousand": 500,
+                                "cost_per_block": "0"
+                            },
+                        ],
+                    }
+                ],
+            }
+        }).to_hex()[2:]
+        self.generate_and_submit_block(0, block_input_data, [])
+        pool_2_last_block = self.nodes[0].chainstate_best_block_id()
+
+        #node0_tip = self.nodes[0].chainstate_best_block_id()
+        #node1_tip = self.nodes[1].chainstate_best_block_id()
+        #assert_equal(node0_tip, node1_tip)
+
+        for i in range(0, 1000):
+            block_pool1_hex = self.generate_block_from(
+                pool_1_last_block, pool_id_1, stake_pk_1, stake_sk_1, vrf_sk_1)
+            block_pool2_hex = self.generate_block_from(
+                pool_2_last_block, pool_id_2, stake_pk_2, stake_sk_2, vrf_sk_2)
+
+            block_pool1_timestamp = self.extract_timestamp_from_block(block_pool1_hex)
+            block_pool2_timestamp = self.extract_timestamp_from_block(block_pool2_hex)
+            self.log.info("Pool 1 timestamp {}, 2 timestamp {}".format(block_pool1_timestamp, block_pool2_timestamp))
+
+            if block_pool1_timestamp < block_pool2_timestamp:
+                self.submit_block(0, block_pool1_hex)
+                pool_1_last_block = self.nodes[0].chainstate_best_block_id()
+            elif block_pool1_timestamp > block_pool2_timestamp:
+                self.submit_block(0, block_pool2_hex)
+                pool_2_last_block = self.nodes[0].chainstate_best_block_id()
+            else:
+                if random.getrandbits(1) == 0:
+                    self.submit_block(0, block_pool1_hex)
+                    pool_1_last_block = self.nodes[0].chainstate_best_block_id()
+                else:
+                    self.submit_block(0, block_pool2_hex)
+                    pool_2_last_block = self.nodes[0].chainstate_best_block_id()
+
 
         pool_1_balance = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_1_hex)
+           pool_id_1_hex)
         self.log.debug("Pool 1 final balance {}".format(pool_1_balance))
         pool_2_balance = self.nodes[0].chainstate_stake_pool_balance(
-            pool_id_2_hex)
+           pool_id_2_hex)
         self.log.debug("Pool 2 final balance {}".format(pool_2_balance))
+        self.log.info("pool1 balance / pool2 balance = {}".format(pool_1_balance['val'] / pool_2_balance['val']))
         assert (pool_1_balance['val'] < pool_2_balance['val'])
 
 

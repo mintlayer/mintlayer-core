@@ -32,7 +32,7 @@ use common::{
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
         config::EpochIndex,
-        ChainConfig, PoSStatus, TxOutput,
+        ChainConfig, Mlt, PoSStatus, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
@@ -60,7 +60,7 @@ pub enum StakeResult {
 
 type Rational128 = num::rational::Ratio<u128>;
 
-const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 500);
+const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 2);
 const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(3, 10);
 
 fn pool_balance_power(
@@ -77,7 +77,7 @@ fn pool_balance_power(
     let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
     let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
 
-    // FIXME: overflow while mul?
+    // FIXME: overflow on mul?
     let result = (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1);
     result
 }
@@ -107,11 +107,16 @@ pub fn check_pos_hash(
     .into();
 
     let hash: Uint512 = hash.into();
-    // FIXME: pass total stake
-    let pool_balance_power =
-        pool_balance_power(pledge_amount, pool_balance, Amount::from_atoms(100));
+    // FIXME: retrieve total stake from db
+    let pool_balance_power = pool_balance_power(
+        pledge_amount,
+        pool_balance,
+        Amount::from_atoms(400_000 * Mlt::ATOMS_PER_MLT),
+    );
+    println!("Pool balance power: {}", pool_balance_power);
     let pool_balance: Uint512 =
         (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
+    println!("Pool balance power applied: {:?}", pool_balance);
 
     ensure!(
         hash <= pool_balance * target.into(),
