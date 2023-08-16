@@ -28,7 +28,6 @@ use super::{config::ChainType, ChainConfig};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
-
 pub type PoolId = Id<Pool>;
 
 #[derive(Eq, PartialEq, TypeName)]

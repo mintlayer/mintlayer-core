@@ -15,15 +15,13 @@
 #  limitations under the License.
 
 from hashlib import blake2b
-from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
+from scalecodec.base import ScaleBytes, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
     block_input_data_obj,
     mintlayer_hash,
     MLT_COIN,
-    outpoint_obj,
-    signed_tx_obj,
 )
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (

@@ -688,3 +688,75 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
         assert!(delegation_data.is_none());
     });
 }
+
+// Create a pool, create delegation id and delegate staking in different transaction in the same blocks
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let min_stake_pool_pledge =
+            tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+        let amount_to_stake =
+            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
+        let (stake_pool_data, _) =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
+
+        let genesis_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(amount_to_stake),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx1_source_id = OutPointSourceId::Transaction(tx1.transaction().get_id());
+        let tx_1_kernel0_outpoint = UtxoOutPoint::new(tx1_source_id.clone(), 1);
+
+        let delegation_id = pos_accounting::make_delegation_id(&tx_1_kernel0_outpoint);
+        let tx2 = TransactionBuilder::new()
+            .add_input(tx_1_kernel0_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(amount_to_stake),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx2_source_id = OutPointSourceId::Transaction(tx2.transaction().get_id());
+
+        let tx3 = TransactionBuilder::new()
+            .add_input(
+                UtxoOutPoint::new(tx2_source_id, 1).into(),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(amount_to_stake, delegation_id))
+            .build();
+
+        tf.make_block_builder()
+            .with_transactions(vec![tx1, tx2, tx3])
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tf.chainstate.get_stake_delegation_balance(delegation_id).unwrap(),
+            Some(amount_to_stake)
+        );
+    });
+}
