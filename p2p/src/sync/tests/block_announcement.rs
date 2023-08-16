@@ -44,7 +44,7 @@ use super::helpers::{make_new_top_blocks, make_new_top_blocks_return_headers};
 // The header list request is sent if the parent of the singular announced block is unknown.
 // However, if max_singular_unconnected_headers is exceeded, the DisconnectedHeaders error
 // is generated.
-// Note: this is a legacy behavior that will be removed in the protocol v2.
+// Note: this is a legacy behavior that will be removed in the protocol v2. See the issue #1110.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -408,9 +408,9 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         node.assert_no_event().await;
     }
 
-    // Note: since best_sent_block_header is currently is not taken onto account by
+    // Note: since best_sent_block_header is currently not taken onto account by
     // the implementation, this portion of the test has to be disabled.
-    // TODO: it should be re-enabled when we switch to the protocol V2.
+    // TODO: it should be re-enabled when we switch to the protocol V2. See the issue #1110.
     if false {
         // Do exactly the same as in the previous section; the expected result is the same as well.
         // The purpose of this is to ensure that the node correctly takes into account

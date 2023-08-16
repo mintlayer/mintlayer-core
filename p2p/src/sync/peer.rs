@@ -444,11 +444,11 @@ where
             // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
             // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
             // does something like that.
-
             // TODO: in the protocol v2 we should not silently ignore header requests; instead,
             // we should communicate our best block (id/height/header?) from the start, so that
             // the peer just knows that we don't have better blocks and doesn't ask us in the
             // first place.
+            // See the issue #1110.
             log::debug!("[peer id = {}] Ignoring headers request because the node is in initial block download", self.id());
             return Ok(());
         }
@@ -580,6 +580,7 @@ where
     /// because one side may see the new block as invalid.
     // TODO: this must be removed; but at this moment this is not really possible, because
     // blockprod currently creates new blocks in the future, near the maximally allowed mark.
+    // Also, see the issue #1024.
     async fn wait_for_clock_diff(&self, block_timestamp: Duration) {
         let max_block_timestamp =
             self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
@@ -675,7 +676,7 @@ where
         {
             // Note: legacy nodes will send singular unconnected headers during block announcement,
             // so we have to handle this behavior here.
-            // TODO: this should be removed in the protocol v2.
+            // TODO: this should be removed in the protocol v2. See the issue #1110.
             if headers.len() == 1 {
                 self.incoming.singular_unconnected_headers_count += 1;
 

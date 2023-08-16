@@ -132,7 +132,7 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         let mut last_block_id = tf.genesis().get_id().into();
         last_block_id = tf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 
-        // The locator is from this exact chain, so get_mainchain_headers_by_locator\
+        // The locator is from this exact chain, so get_mainchain_headers_by_locator
         // should return an empty sequence.
         let locator = tf.chainstate.get_locator().unwrap();
         assert_eq!(

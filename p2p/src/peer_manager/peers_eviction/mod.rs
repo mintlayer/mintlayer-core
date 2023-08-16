@@ -40,7 +40,7 @@ pub struct EvictionCandidate {
     /// Deterministically randomized address group ID
     net_group_keyed: NetGroupKeyed,
 
-    /// Minimum ping time in microseconds (or i64::MAX if not yet known yet)
+    /// Minimum ping time in microseconds (or i64::MAX if not known yet)
     ping_min: i64,
 
     /// Inbound or Outbound
