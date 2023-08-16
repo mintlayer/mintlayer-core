@@ -65,9 +65,11 @@ impl MempoolSubsystemInterface for MockMempoolInterface {
         mut call_rq: CallRequest<dyn MempoolInterface>,
         mut shut_rq: ShutdownRequest,
     ) {
-        tokio::select! {
-            call = call_rq.recv() => call(&mut self).await,
-            () = shut_rq.recv() => return,
+        loop {
+            tokio::select! {
+                call = call_rq.recv() => call(&mut self).await,
+                () = shut_rq.recv() => return,
+            }
         }
     }
 }
