@@ -15,7 +15,9 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::chain::config::create_unit_test_config;
+use common::{
+    chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
+};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
@@ -35,9 +37,29 @@ fn unban_peer() {
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
         Arc::new(P2pConfig {
-            socks5_proxy: None,
             ban_duration: Duration::from_secs(60).into(),
-            ..P2pConfig::default()
+
+            bind_addresses: Default::default(),
+            socks5_proxy: None,
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            max_inbound_connections: Default::default(),
+            ban_threshold: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            max_clock_diff: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            msg_header_count_limit: Default::default(),
+            msg_max_locator_count: Default::default(),
+            max_request_blocks_count: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            max_message_size: Default::default(),
+            max_peer_tx_announcements: Default::default(),
+            max_singular_unconnected_headers: Default::default(),
+            sync_stalling_timeout: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,

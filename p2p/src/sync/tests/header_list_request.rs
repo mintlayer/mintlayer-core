@@ -17,7 +17,10 @@ use std::{iter, sync::Arc, time::Duration};
 
 use chainstate::{ban_score::BanScore, Locator};
 use chainstate_test_framework::TestFramework;
-use common::{chain::config::create_unit_test_config, primitives::Idable};
+use common::{
+    chain::config::create_unit_test_config,
+    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
@@ -138,7 +141,27 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(#[case] see
         // (just in case it becomes important in the future, like it is for msg_header_count_limit).
         max_request_blocks_count: 1.into(),
         sync_stalling_timeout: STALLING_TIMEOUT.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
     });
 
     let blocks = make_new_blocks(

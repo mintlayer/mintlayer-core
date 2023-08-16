@@ -51,7 +51,28 @@ pub async fn start_subsystems(
 
     let p2p_config = p2p::config::P2pConfig {
         bind_addresses: vec!["127.0.0.1:0".to_owned()],
-        ..p2p::config::P2pConfig::default()
+
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     };
 
     let chainstate = make_chainstate(

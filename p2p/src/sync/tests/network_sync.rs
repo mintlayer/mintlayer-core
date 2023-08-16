@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::primitives::Idable;
+use common::primitives::{user_agent::mintlayer_core_user_agent, Idable};
 use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -46,7 +46,27 @@ async fn basic(#[case] seed: Seed) {
     let p2p_config = Arc::new(P2pConfig {
         msg_header_count_limit: 10.into(),
         max_request_blocks_count: 5.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_max_locator_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
 
     let blocks = make_new_blocks(
@@ -110,8 +130,6 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig::default());
-
     let mut blocks = Vec::new();
     for _ in 0..1000 {
         let block = make_new_block(
@@ -128,7 +146,6 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     // Start `node1` with up-to-date blockchain
     let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks)
         .build()
@@ -137,7 +154,6 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     // A new node is joining the network
     let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
@@ -166,8 +182,6 @@ async fn reorg(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig::default());
-
     let mut blocks = Vec::new();
     for _ in 0..10 {
         let block = make_new_block(
@@ -184,7 +198,6 @@ async fn reorg(#[case] seed: Seed) {
     // Start `node1` with up-to-date blockchain
     let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks.clone())
         .build()
@@ -194,7 +207,6 @@ async fn reorg(#[case] seed: Seed) {
     // Start `node2` with up-to-date blockchain
     let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks)
         .build()
@@ -256,7 +268,27 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     let p2p_config = Arc::new(P2pConfig {
         msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
         max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_max_locator_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
 
     let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);

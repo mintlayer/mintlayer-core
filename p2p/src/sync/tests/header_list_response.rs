@@ -194,9 +194,28 @@ async fn valid_headers(#[case] seed: Seed) {
 async fn disconnect() {
     let p2p_config = Arc::new(P2pConfig {
         node_type: NodeType::Full.into(),
-        user_agent: "test".try_into().unwrap(),
         sync_stalling_timeout: Duration::from_millis(100).into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: "test".try_into().unwrap(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
     });
     let mut node = TestNode::builder().with_p2p_config(Arc::clone(&p2p_config)).build().await;
 

@@ -23,7 +23,7 @@ use common::{
         config::{create_unit_test_config, Builder as ChainConfigBuilder, ChainType},
         Block, NetUpgrades,
     },
-    primitives::Idable,
+    primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use consensus::ConsensusVerificationError;
 use logging::log;
@@ -61,7 +61,28 @@ async fn single_header_with_unknown_prev_block(#[case] seed: Seed) {
 
     let p2p_config = Arc::new(P2pConfig {
         max_singular_unconnected_headers: 1.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
 
     let mut node = TestNode::builder()
@@ -124,7 +145,28 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
 
     let p2p_config = Arc::new(P2pConfig {
         max_singular_unconnected_headers: 1.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
 
     let mut node = TestNode::builder()

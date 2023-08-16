@@ -132,8 +132,28 @@ async fn no_transaction_service(#[case] seed: Seed) {
 
     let p2p_config = Arc::new(P2pConfig {
         node_type: NodeType::BlocksOnly.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
         user_agent: "test".try_into().unwrap(),
-        ..P2pConfig::default()
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -176,9 +196,28 @@ async fn too_many_announcements(#[case] seed: Seed) {
 
     let p2p_config = Arc::new(P2pConfig {
         node_type: NodeType::Full.into(),
-        user_agent: "test".try_into().unwrap(),
         max_peer_tx_announcements: 0.into(),
-        ..P2pConfig::default()
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: "test".try_into().unwrap(),
+        max_message_size: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let mut node = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
