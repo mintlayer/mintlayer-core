@@ -421,6 +421,8 @@ pub fn pos_mine(
     target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {
     let mut timestamp = initial_timestamp;
+    // FIXME: pass pledge amount as parameter
+    let pledge_amount = Amount::from_atoms(1);
 
     for _ in 0..1000 {
         let transcript = chainstate_types::vrf_tools::construct_transcript(
@@ -445,6 +447,7 @@ pub fn pos_mine(
             &pos_data,
             &vrf_pk,
             timestamp,
+            pledge_amount,
             pool_balance,
         )
         .is_ok()

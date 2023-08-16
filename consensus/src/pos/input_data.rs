@@ -136,6 +136,8 @@ pub struct PoSFinalizeBlockInputData {
     sealed_epoch_randomness: PoSRandomness,
     /// The maximum timestamp to try and staking with
     max_block_timestamp: BlockTimestamp,
+    /// The amount pledged to the pool
+    pledge_amount: Amount,
     /// The current pool balance of the stake pool
     pool_balance: Amount,
 }
@@ -147,6 +149,7 @@ impl PoSFinalizeBlockInputData {
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
         max_block_timestamp: BlockTimestamp,
+        pledge_amount: Amount,
         pool_balance: Amount,
     ) -> Self {
         Self {
@@ -155,6 +158,7 @@ impl PoSFinalizeBlockInputData {
             epoch_index,
             sealed_epoch_randomness,
             max_block_timestamp,
+            pledge_amount,
             pool_balance,
         }
     }
@@ -185,6 +189,10 @@ impl PoSFinalizeBlockInputData {
 
     pub fn vrf_public_key(&self) -> VRFPublicKey {
         VRFPublicKey::from_private_key(&self.vrf_private_key)
+    }
+
+    pub fn pledge_amount(&self) -> Amount {
+        self.pledge_amount
     }
 }
 

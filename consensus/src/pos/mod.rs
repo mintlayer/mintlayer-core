@@ -88,6 +88,7 @@ pub fn check_pos_hash(
     pos_data: &PoSData,
     vrf_pub_key: &VRFPublicKey,
     block_timestamp: BlockTimestamp,
+    pledge_amount: Amount,
     pool_balance: Amount,
 ) -> Result<(), ConsensusPoSError> {
     let target: Uint256 = pos_data
@@ -106,12 +107,9 @@ pub fn check_pos_hash(
     .into();
 
     let hash: Uint512 = hash.into();
-    // FIXME: pass pledge and total stake
-    let pool_balance_power = pool_balance_power(
-        Amount::from_atoms(100),
-        pool_balance,
-        Amount::from_atoms(100),
-    );
+    // FIXME: pass total stake
+    let pool_balance_power =
+        pool_balance_power(pledge_amount, pool_balance, Amount::from_atoms(100));
     let pool_balance: Uint512 =
         (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
 
@@ -233,6 +231,10 @@ where
     let pool_balance = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
+    let pledge_amount = pos_accounting_view
+        .get_pool_data(stake_pool_id)?
+        .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
+        .pledge_amount();
 
     check_pos_hash(
         current_epoch_index,
@@ -240,6 +242,7 @@ where
         pos_data,
         &vrf_pub_key,
         header.timestamp(),
+        pledge_amount,
         pool_balance,
     )?;
 
@@ -291,6 +294,7 @@ pub fn stake(
             pos_data,
             &vrf_pk,
             block_timestamp,
+            finalize_pos_data.pledge_amount(),
             finalize_pos_data.pool_balance(),
         )
         .is_ok()

@@ -593,6 +593,19 @@ fn generate_finalize_block_data(
                 .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                 .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
+            let pledge_amount = chainstate_handle
+                .get_stake_pool_data(pos_input_data.pool_id())
+                .map_err(|_| {
+                    // FIXME
+                    ConsensusPoSError::PropertyQueryError(
+                        PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
+                    )
+                })?
+                .ok_or(ConsensusPoSError::PropertyQueryError(
+                    PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
+                ))?
+                .pledge_amount();
+
             let pool_balance = chainstate_handle
                 .get_stake_pool_balance(pos_input_data.pool_id())
                 .map_err(|_| {
@@ -612,6 +625,7 @@ fn generate_finalize_block_data(
                 epoch_index,
                 sealed_epoch_randomness,
                 max_block_timestamp,
+                pledge_amount,
                 pool_balance,
             )))
         }
