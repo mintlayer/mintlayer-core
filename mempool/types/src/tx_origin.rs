@@ -94,6 +94,10 @@ impl LocalTxOrigin {
 pub struct RemoteTxOrigin(PeerId);
 
 impl RemoteTxOrigin {
+    pub fn new(peer_id: PeerId) -> Self {
+        Self(peer_id)
+    }
+
     pub fn should_propagate(self) -> bool {
         true
     }
@@ -126,4 +130,17 @@ impl std::fmt::Display for RemoteTxOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "peer node {}", self.0)
     }
+}
+
+/// Marker for origin types
+pub trait IsOrigin: Copy + Eq + Ord + std::fmt::Debug + seal::IsOrigin {}
+impl IsOrigin for TxOrigin {}
+impl IsOrigin for LocalTxOrigin {}
+impl IsOrigin for RemoteTxOrigin {}
+
+mod seal {
+    pub trait IsOrigin {}
+    impl IsOrigin for super::TxOrigin {}
+    impl IsOrigin for super::LocalTxOrigin {}
+    impl IsOrigin for super::RemoteTxOrigin {}
 }

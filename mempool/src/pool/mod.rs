@@ -60,6 +60,7 @@ use crate::{
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
     event::{self, MempoolEvent},
     tx_accumulator::TransactionAccumulator,
+    tx_origin::RemoteTxOrigin,
     TxOrigin, TxStatus,
 };
 
@@ -155,7 +156,7 @@ impl<M> Mempool<M> {
         // Clear the orphan pool, returning the list of previous transactions.
         let orphan_txs = mem::replace(&mut self.orphans, TxOrphanPool::new()).into_transactions();
 
-        pool_txs.chain(orphan_txs)
+        pool_txs.chain(orphan_txs.map(|entry| entry.map_origin(TxOrigin::from)))
     }
 
     pub fn best_block_id(&self) -> Id<GenBlock> {
@@ -268,7 +269,9 @@ enum ValidationOutcome {
 
     /// Transaction is valid of acceptance to orphan pool.
     /// It may or may not end up being valid, depending on the validity of the missing inputs.
-    Orphan { transaction: TxEntry },
+    Orphan {
+        transaction: TxEntry<RemoteTxOrigin>,
+    },
 }
 
 /// Result of transaction validation
@@ -340,7 +343,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 transaction,
                 orphan_type,
             } => {
-                self.check_orphan_pool_policy(&transaction, orphan_type)?;
+                let transaction = self.check_orphan_pool_policy(transaction, orphan_type)?;
                 ValidationOutcome::Orphan { transaction }
             }
         };
@@ -460,9 +463,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn check_orphan_pool_policy(
         &self,
-        transaction: &TxEntry,
+        transaction: TxEntry,
         orphan_type: OrphanType,
-    ) -> Result<(), OrphanPoolError> {
+    ) -> Result<TxEntry<RemoteTxOrigin>, OrphanPoolError> {
+        // Only remote transactions are allowed in the orphan pool
+        let transaction = transaction
+            .try_map_origin(|origin| match origin {
+                TxOrigin::Local(o) => Err(OrphanPoolError::NotSupportedForLocalOrigin(o)),
+                TxOrigin::Remote(o) => Ok(o),
+            })
+            .map_err(|(_, e)| e)?;
+
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.
         ensure!(
@@ -479,9 +490,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             );
         }
 
-        self.orphan_rbf_checks(transaction)?;
+        self.orphan_rbf_checks(&transaction)?;
 
-        Ok(())
+        Ok(transaction)
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
@@ -520,9 +531,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
-    fn conflicting_tx_ids<'a>(
+    fn conflicting_tx_ids<'a, O: crate::tx_origin::IsOrigin>(
         &'a self,
-        entry: &'a TxEntry,
+        entry: &'a TxEntry<O>,
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
         entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
@@ -543,7 +554,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         }
     }
 
-    fn orphan_rbf_checks(&self, tx: &TxEntry) -> Result<(), OrphanPoolError> {
+    fn orphan_rbf_checks<O: crate::tx_origin::IsOrigin>(
+        &self,
+        tx: &TxEntry<O>,
+    ) -> Result<(), OrphanPoolError> {
         let mut conflicts = self.conflicting_tx_ids(tx).peekable();
         if conflicts.peek().is_none() {
             // Early exit if there are no conflicts
@@ -647,9 +661,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(total_conflict_fees)
     }
 
-    fn spends_no_new_unconfirmed_outputs(
+    fn spends_no_new_unconfirmed_outputs<O: crate::tx_origin::IsOrigin>(
         &self,
-        tx: &TxEntry,
+        tx: &TxEntry<O>,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), MempoolConflictError> {
         let inputs_spent_by_conflicts = conflicts
@@ -865,7 +879,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             while let Some(orphan_tx_id) = work_queue.pop_front() {
                 let orphan = match self.orphans.remove(orphan_tx_id) {
                     None => continue,
-                    Some(orphan) => orphan,
+                    Some(orphan) => orphan.map_origin(TxOrigin::from),
                 };
 
                 match self.add_transaction_entry(orphan) {
@@ -1106,7 +1120,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
-        self.orphans.remove_by_origin(TxOrigin::peer(peer_id));
+        let origin = RemoteTxOrigin::new(peer_id);
+        self.orphans.remove_by_origin(origin);
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {

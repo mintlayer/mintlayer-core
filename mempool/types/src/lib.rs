@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tx_origin;
+pub mod tx_origin;
 mod tx_status;
 
 pub use tx_origin::TxOrigin;

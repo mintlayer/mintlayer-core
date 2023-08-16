@@ -22,6 +22,7 @@ use common::{
 };
 
 use super::{Fee, Time, TxOrigin};
+use crate::tx_origin::IsOrigin;
 
 /// A dependency of a transaction on a previous account state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -82,17 +83,17 @@ impl TxDependency {
 
 /// A transaction together with its creation time
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TxEntry {
+pub struct TxEntry<O = TxOrigin> {
     tx_id: Id<Transaction>,
     transaction: SignedTransaction,
     creation_time: Time,
     encoded_size: usize,
-    origin: TxOrigin,
+    origin: O,
 }
 
-impl TxEntry {
+impl<O: IsOrigin> TxEntry<O> {
     /// Create a new mempool transaction entry
-    pub fn new(transaction: SignedTransaction, creation_time: Time, origin: TxOrigin) -> Self {
+    pub fn new(transaction: SignedTransaction, creation_time: Time, origin: O) -> Self {
         let tx_id = transaction.transaction().get_id();
         let encoded_size = serialization::Encode::encoded_size(&transaction);
         Self {
@@ -125,7 +126,7 @@ impl TxEntry {
     }
 
     /// Where we got this transaction
-    pub fn origin(&self) -> TxOrigin {
+    pub fn origin(&self) -> O {
         self.origin
     }
 
@@ -144,6 +145,37 @@ impl TxEntry {
 
     fn inputs_iter(&self) -> impl Iterator<Item = &TxInput> + ExactSizeIterator + '_ {
         self.transaction().inputs().iter()
+    }
+
+    pub fn map_origin<R: IsOrigin>(self, func: impl FnOnce(O) -> R) -> TxEntry<R> {
+        self.try_map_origin::<R, std::convert::Infallible>(|o| Ok(func(o)))
+            .unwrap_or_else(|(_, e)| match e {})
+    }
+
+    pub fn try_map_origin<R: IsOrigin, E>(
+        self,
+        func: impl FnOnce(O) -> Result<R, E>,
+    ) -> Result<TxEntry<R>, (Self, E)> {
+        match func(self.origin) {
+            Ok(origin) => {
+                let TxEntry {
+                    tx_id,
+                    transaction,
+                    creation_time,
+                    encoded_size,
+                    origin: _,
+                } = self;
+
+                Ok(TxEntry {
+                    tx_id,
+                    transaction,
+                    creation_time,
+                    encoded_size,
+                    origin,
+                })
+            }
+            Err(err) => Err((self, err)),
+        }
     }
 }
 

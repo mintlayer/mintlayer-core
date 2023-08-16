@@ -398,7 +398,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     let res = node
         .mempool()
-        .call_mut(|m| m.add_transaction(tx1, TxOrigin::local_p2p()))
+        .call_mut(move |m| m.add_transaction(tx1, TxOrigin::peer(peer)))
         .await
         .unwrap();
     assert_eq!(res, Ok(mempool::TxStatus::InOrphanPool));
@@ -409,7 +409,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     let res = node
         .mempool()
-        .call_mut(|m| m.add_transaction(tx0, TxOrigin::local_p2p()))
+        .call_mut(move |m| m.add_transaction(tx0, TxOrigin::peer(peer)))
         .await
         .unwrap();
     assert_eq!(res, Ok(mempool::TxStatus::InMempool));

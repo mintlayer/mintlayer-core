@@ -20,11 +20,14 @@ use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
 use utils::{const_value::ConstValue, ensure};
 
-use super::{OrphanPoolError, Time, TxDependency, TxEntry, TxOrigin};
-use crate::config;
+use super::{OrphanPoolError, Time, TxDependency};
+use crate::{config, tx_origin::RemoteTxOrigin};
 pub use detect::OrphanType;
 
 mod detect;
+
+/// Specialize [super::TxEntry] for use in orphan pool. Only allow entries coming from remote peers.
+type TxEntry = super::TxEntry<RemoteTxOrigin>;
 
 /// Max number of transactions the orphan pool data structure can handle
 pub const ORPHAN_POOL_SIZE_HARD_LIMIT: usize = 50_000;
@@ -66,7 +69,7 @@ struct TxOrphanPoolMaps {
     by_deps: BTreeSet<(TxDependency, InternalId)>,
 
     /// Transactions indexed by the origin
-    by_origin: BTreeSet<(TxOrigin, InternalId)>, // TODO(PR) change to PeerId
+    by_origin: BTreeSet<(RemoteTxOrigin, InternalId)>,
 }
 
 impl TxOrphanPoolMaps {
@@ -148,9 +151,9 @@ impl TxOrphanPool {
     ///
     /// By ready, we mean it has no remaining dependencies in orphan pool. That means they can be
     /// considered for verification and, if the verification passes, moved to mempool.
-    pub fn ready_children_of<'a>(
+    pub fn ready_children_of<'a, R: crate::tx_origin::IsOrigin>(
         &'a self,
-        entry: &'a TxEntry,
+        entry: &'a super::TxEntry<R>,
     ) -> impl Iterator<Item = Id<Transaction>> + 'a {
         entry.provides().flat_map(move |dep| {
             self.maps
@@ -275,7 +278,7 @@ impl TxOrphanPool {
     }
 
     /// Remove orphans for given originator
-    pub fn remove_by_origin(&mut self, origin: TxOrigin) -> usize {
+    pub fn remove_by_origin(&mut self, origin: RemoteTxOrigin) -> usize {
         let mut n_removed = 0;
 
         while let Some(iid) = self.pick_by_origin(origin) {
@@ -287,7 +290,7 @@ impl TxOrphanPool {
     }
 
     /// Pick one orphan from given origin
-    fn pick_by_origin(&self, origin: TxOrigin) -> Option<InternalId> {
+    fn pick_by_origin(&self, origin: RemoteTxOrigin) -> Option<InternalId> {
         self.maps
             .by_origin
             .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))

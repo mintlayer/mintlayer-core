@@ -109,6 +109,8 @@ pub enum OrphanPoolError {
     NonceGapTooLarge(u64),
     #[error("Conflicts with an irreplaceable transaction in mempool")]
     MempoolConflict,
+    #[error("Orphans not supported for transactions originating at {0}")]
+    NotSupportedForLocalOrigin(crate::tx_origin::LocalTxOrigin),
 }
 
 impl From<ConnectTransactionError> for Error {

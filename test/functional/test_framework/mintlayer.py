@@ -29,11 +29,14 @@ outpoint_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('OutPo
 signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
 vec_output_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Vec<TxOutput>')
 
+
 def mintlayer_hash(data):
     return hashlib.blake2b(data, digest_size = 64).digest()[0:32]
 
+
 def hash_object(obj, data):
     return scalecodec.ScaleBytes(mintlayer_hash(obj.encode(data).data)).to_hex()[2:]
+
 
 def reward_input(block_id, index = 0):
     return { 'Utxo' : {
@@ -42,12 +45,14 @@ def reward_input(block_id, index = 0):
         }
     }
 
+
 def tx_input(tx_id, index = 0):
     return { 'Utxo' : {
            'id': { 'Transaction': '0x{}'.format(tx_id) },
            'index': index,
         }
     }
+
 
 def tx_output(amount, timelock = None):
     if isinstance(amount, dict):
@@ -58,7 +63,7 @@ def tx_output(amount, timelock = None):
         return {'LockThenTransfer': [ { 'Coin': amount }, { 'AnyoneCanSpend': None }, timelock ]}
 
 
-def make_tx(inputs, outputs, flags = 0):
+def make_tx_dict(inputs, outputs, flags = 0):
     outputs = [ tx_output(amt) for amt in outputs ]
     witness = { 'NoSignature': None }
     tx = {
@@ -67,13 +72,24 @@ def make_tx(inputs, outputs, flags = 0):
         'inputs': inputs,
         'outputs': outputs,
     }
-    signed_tx = {
+    return {
         'transaction': tx,
         'signatures': [witness for _ in inputs],
     }
-    tx_id = hash_object(base_tx_obj, tx)
+
+
+def calc_tx_id(tx):
+    if 'transaction' in tx:
+        tx = tx['transaction']
+    return hash_object(base_tx_obj, tx)
+
+
+def make_tx(inputs, outputs, flags = 0):
+    signed_tx = make_tx_dict(inputs, outputs, flags)
+    tx_id = calc_tx_id(signed_tx)
     encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
     return (encoded_tx, tx_id)
+
 
 def make_pow_block(parent_id, nonce, transactions = [], timestamp = None):
     empty_merkle_root = "0x" + hash_object(vec_output_obj, [])
@@ -106,6 +122,7 @@ def make_pow_block(parent_id, nonce, transactions = [], timestamp = None):
     block_id = hash_object(block_header_obj, header)
     encoded_block = block_obj.encode(block).to_hex()[2:]
     return (encoded_block, block_id)
+
 
 def mine_pow_block(parent_id, transactions = [], timestamp = None):
     for nonce in range(1000):

@@ -17,15 +17,17 @@
 """Mempool orphan submission test
 
 Check that:
-* After submitting a transaction with a missing input UTXO, it ends up in the orphan pool
-* After submitting a transaction that defines the UTXO, both are in non-orphan mempool
+* Orphans transactions are rejected if submitted locally to mempool.
+* The initial rejection does not prevent resubmission once the dependencies are resolved.
 """
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
+from test_framework.util import assert_raises_rpc_error
 import scalecodec
 
-class MempoolOrphanSubmissionTest(BitcoinTestFramework):
+
+class MempoolLocalOrphanSubmissionTest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -45,18 +47,22 @@ class MempoolOrphanSubmissionTest(BitcoinTestFramework):
         (tx1, tx1_id) = make_tx([ reward_input(genesis_id) ], [ 1_000_000 ] )
         (tx2, tx2_id) = make_tx([ tx_input(tx1_id) ], [ 900_000 ] )
 
-        # Submit the dependent transaction first, check it is in orphan pool
-        node.mempool_submit_transaction(tx2)
+        # Submit tx2 first, check it is rejected since local txs should not be orphans
+        assert_raises_rpc_error(None, 'originating at local node', node.mempool_submit_transaction, tx2)
         assert not node.mempool_contains_tx(tx2_id)
-        assert node.mempool_contains_orphan_tx(tx2_id)
+        assert not node.mempool_contains_orphan_tx(tx2_id)
 
-        # Submit the first transaction, resolving the sequence
+        # Submit the first transaction now
         node.mempool_submit_transaction(tx1)
         assert node.mempool_contains_tx(tx1_id)
-        assert node.mempool_contains_tx(tx2_id)
+        assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_orphan_tx(tx1_id)
         assert not node.mempool_contains_orphan_tx(tx2_id)
 
+        # Check local submission of the second transaction has not been blocked
+        node.mempool_submit_transaction(tx2)
+        assert node.mempool_contains_tx(tx2_id)
+
 
 if __name__ == '__main__':
-    MempoolOrphanSubmissionTest().main()
+    MempoolLocalOrphanSubmissionTest().main()

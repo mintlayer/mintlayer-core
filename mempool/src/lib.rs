@@ -17,7 +17,7 @@
 
 pub use config::MempoolMaxSize;
 pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
-pub use mempool_types::{TxOrigin, TxStatus};
+pub use mempool_types::{tx_origin, TxOrigin, TxStatus};
 
 mod config;
 pub mod error;

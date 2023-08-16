@@ -127,7 +127,7 @@ BASE_SCRIPTS = [
     'mempool_eviction.py',
     'mempool_ibd.py',
     'mempool_orphan_peer_disconnected.py',
-    'mempool_submit_orphan.py',
+    'mempool_local_orphan_rejected.py',
     'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
 
