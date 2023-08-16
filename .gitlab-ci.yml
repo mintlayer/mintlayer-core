@@ -1,12 +1,38 @@
 image: "rust:latest"
 
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+      when: never
+
 before_script:
-  - apt-get update -yqq
-  - apt-get install -yqq --no-install-recommends build-essential
+   - apt-get update -yqq
+   - apt-get install -yqq --no-install-recommends build-essential
 
 # Use cargo to test the project
 test:cargo:
   script:
     - rustc --version && cargo --version  # Print version info for debugging
-    - cargo test --workspace --verbose
+    - cargo test --release --workspace --verbose
 
+build:cargo:
+  script:
+    - rustc --version && cargo --version
+    - cargo build --release --locked
+
+test:fmt:
+  script:
+    - cargo fmt --all -- --check
+
+test:func:
+  script:
+    cargo test --release -p mintlayer-test --test functional -- --ignored
+
+test:sighash:
+  script:
+    cargo test --release -p common mixed_sighash_types -- --ignored
