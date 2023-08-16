@@ -22,7 +22,6 @@ use p2p_test_utils::create_n_blocks;
 use test_utils::random::Seed;
 
 use crate::{
-    config::NodeType,
     error::ProtocolError,
     message::{BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::TestNode,
@@ -193,7 +192,6 @@ async fn valid_headers(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect() {
     let p2p_config = Arc::new(P2pConfig {
-        node_type: NodeType::Full.into(),
         sync_stalling_timeout: Duration::from_millis(100).into(),
 
         bind_addresses: Default::default(),
@@ -208,6 +206,7 @@ async fn disconnect() {
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
+        node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),

@@ -27,7 +27,6 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
-    config::NodeType,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
     sync::tests::helpers::TestNode,
@@ -138,7 +137,6 @@ async fn disconnect(#[case] seed: Seed) {
     let block = tf.make_block_builder().build();
 
     let p2p_config = Arc::new(P2pConfig {
-        node_type: NodeType::Full.into(),
         sync_stalling_timeout: Duration::from_millis(100).into(),
 
         bind_addresses: Default::default(),
@@ -153,6 +151,7 @@ async fn disconnect(#[case] seed: Seed) {
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
+        node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),

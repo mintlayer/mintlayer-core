@@ -195,7 +195,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
 
     let p2p_config = Arc::new(P2pConfig {
-        node_type: NodeType::Full.into(),
         max_peer_tx_announcements: 0.into(),
 
         bind_addresses: Default::default(),
@@ -210,6 +209,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
+        node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
