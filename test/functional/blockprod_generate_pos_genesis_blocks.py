@@ -68,10 +68,6 @@ class GeneratePoSGenesisBlocksTest(BitcoinTestFramework):
         block = self.nodes[0].chainstate_get_block(tip)
         assert_equal(block, expected_block)
 
-    def block_height(self, n):
-        tip = self.nodes[n].chainstate_best_block_id()
-        return self.nodes[n].chainstate_block_height_in_main_chain(tip)
-
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
 
@@ -94,35 +90,11 @@ class GeneratePoSGenesisBlocksTest(BitcoinTestFramework):
         self.assert_pos_consensus(block)
         self.assert_chain(block, previous_block_id)
 
-    def generate_pool_id(self, transaction_id):
-        kernel_input_outpoint = outpoint_obj.encode({
-            "id": {
-                "Transaction": self.hex_to_dec_array(transaction_id),
-            },
-            "index": 0,
-        }).to_hex()[2:]
-
-        # Include PoolId pre-image suffix of [0, 0, 0, 0]
-        blake2b_hasher = blake2b()
-        blake2b_hasher.update(bytes.fromhex(kernel_input_outpoint))
-        blake2b_hasher.update(bytes.fromhex("00000000"))
-
-        # Truncate output to match Rust's split()
-        return self.hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
-
     def genesis_pool_id(self):
         return self.hex_to_dec_array(GENESIS_POOL_ID)
 
     def hex_to_dec_array(self, hex_string):
         return [int(hex_string[i:i+2], 16) for i in range(0, len(hex_string), 2)]
-
-    def pack_transaction(self, transaction):
-        transaction_encoded = signed_tx_obj.encode(transaction).to_hex()[2:]
-        transaction_id = ScaleBytes(
-            mintlayer_hash(base_tx_obj.encode(transaction["transaction"]).data)
-        ).to_hex()[2:]
-
-        return (transaction_encoded, transaction_id)
 
     def previous_block_id(self):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
@@ -166,7 +138,7 @@ class GeneratePoSGenesisBlocksTest(BitcoinTestFramework):
 
     def run_test(self):
         #
-        # Generate the first block
+        # Generate the first block using genesis CreateStakePool output
         #
 
         block_input_data = block_input_data_obj.encode({
@@ -209,7 +181,7 @@ class GeneratePoSGenesisBlocksTest(BitcoinTestFramework):
         self.generate_block(1, block_input_data, [])
 
         #
-        # Stake many blocks with the new stake pool
+        # Stake many blocks using genesis ProduceBlockFromStake output
         #
 
         for i in range(1, random.randint(10,100)):

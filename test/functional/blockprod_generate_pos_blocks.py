@@ -68,10 +68,6 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         block = self.nodes[0].chainstate_get_block(tip)
         assert_equal(block, expected_block)
 
-    def block_height(self, n):
-        tip = self.nodes[n].chainstate_best_block_id()
-        return self.nodes[n].chainstate_block_height_in_main_chain(tip)
-
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
 
