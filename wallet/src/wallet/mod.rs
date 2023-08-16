@@ -520,6 +520,10 @@ impl<B: storage::Backend> Wallet<B> {
                 .has_transactions(),
             WalletError::EmptyLastAccount
         );
+        ensure!(
+            name.as_ref().map_or(true, |name| !name.is_empty()),
+            WalletError::EmptyAccountName
+        );
 
         let next_account_index =
             self.next_unused_account.0.plus_one().map_err(|_| {
@@ -897,8 +901,8 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     /// Returns the syncing state of the wallet
-    /// includes the last scanned block hash and height for the unsynced or synced account if in
-    /// syncing state else NewlyCreated if this is the first sync after creating a new account
+    /// includes the last scanned block hash and height for each account and the next unused one
+    /// if in syncing state else NewlyCreated if this is the first sync after creating a new wallet
     pub fn get_syncing_state(&self) -> WalletSyncingState {
         match self.state {
             WalletState::InitialCreation => WalletSyncingState::NewlyCreated,
@@ -942,19 +946,22 @@ impl<B: storage::Backend> Wallet<B> {
         blocks: Vec<Block>,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
-        let mut db_tx = self.db.transaction_rw(None)?;
+        loop {
+            let mut db_tx = self.db.transaction_rw(None)?;
+            let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
+                &mut db_tx,
+                wallet_events,
+                common_block_height,
+                &blocks,
+            )?;
 
-        let added_new_tx_in_unused_acc = self.next_unused_account.1.scan_new_blocks(
-            &mut db_tx,
-            wallet_events,
-            common_block_height,
-            &blocks,
-        )?;
+            db_tx.commit()?;
 
-        db_tx.commit()?;
-
-        if added_new_tx_in_unused_acc {
-            self.create_next_account(None)?;
+            if added_new_tx_in_unused_acc {
+                self.create_next_account(None)?;
+            } else {
+                break;
+            }
         }
 
         wallet_events.new_block();

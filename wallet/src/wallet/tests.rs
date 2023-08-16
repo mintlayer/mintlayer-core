@@ -70,6 +70,10 @@ fn scan_wallet(wallet: &mut DefaultWallet, height: BlockHeight, blocks: Vec<Bloc
             .scan_new_blocks(*account, height, blocks.clone(), &WalletEventsNoOp)
             .unwrap();
     }
+
+    wallet
+        .scan_new_blocks_unused_account(height, blocks, &WalletEventsNoOp)
+        .unwrap();
 }
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
@@ -843,6 +847,112 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
         assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
         assert_eq!(new_name.unwrap(), name);
         assert_eq!(wallet.number_of_accounts(), 2);
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_recover_new_account(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::create_new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+
+    let err = wallet.create_next_account(None).err().unwrap();
+    assert_eq!(err, WalletError::EmptyLastAccount);
+
+    let mut total_amounts = BTreeMap::new();
+    let mut last_account_index = DEFAULT_ACCOUNT_INDEX;
+    let blocks = (0..rng.gen_range(1..1000))
+        .map(|idx| {
+            let tx_amount1 = Amount::from_atoms(rng.gen_range(1..10));
+            total_amounts
+                .entry(last_account_index)
+                .and_modify(|amount: &mut Amount| *amount = (*amount + tx_amount1).unwrap())
+                .or_insert(tx_amount1);
+
+            let address = wallet.get_new_address(last_account_index).unwrap().1;
+
+            let transaction1 = Transaction::new(
+                0,
+                Vec::new(),
+                vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
+            )
+            .unwrap();
+            let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
+            let block = Block::new(
+                vec![signed_transaction1],
+                chain_config.genesis_block_id(),
+                chain_config.genesis_block().timestamp(),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap();
+
+            scan_wallet(&mut wallet, BlockHeight::new(idx), vec![block.clone()]);
+
+            if rng.gen_bool(0.2) {
+                last_account_index = wallet.create_next_account(None).unwrap().0;
+            }
+            block
+        })
+        .collect_vec();
+
+    // verify all accounts have the expected balances
+    for (acc_idx, expected_balance) in total_amounts.iter() {
+        let coin_balance = wallet
+            .get_balance(
+                *acc_idx,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            )
+            .unwrap()
+            .get(&Currency::Coin)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        assert_eq!(coin_balance, *expected_balance);
+    }
+
+    // Create a new wallet with the same mnemonic
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::create_new_wallet(
+        chain_config.clone(),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+    // scan the blocks again
+    scan_wallet(&mut wallet, BlockHeight::new(0), blocks.clone());
+
+    // verify the wallet has recovered all of the accounts
+    assert_eq!(wallet.number_of_accounts(), total_amounts.len(),);
+
+    // verify all accounts have the expected balances
+    for (acc_idx, expected_balance) in total_amounts {
+        let coin_balance = wallet
+            .get_balance(
+                acc_idx,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed.into(),
+                WithLocked::Unlocked,
+            )
+            .unwrap()
+            .get(&Currency::Coin)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        assert_eq!(coin_balance, expected_balance);
     }
 }
 
@@ -1925,125 +2035,6 @@ fn lock_then_transfer(#[case] seed: Seed) {
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
         (balance_without_locked_transer + amount_to_lock_then_transfer).unwrap()
     );
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn wallet_sync_new_account(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_mainnet());
-
-    let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::create_new_wallet(
-        Arc::clone(&chain_config),
-        db,
-        MNEMONIC,
-        None,
-        StoreSeedPhrase::DoNotStore,
-    )
-    .unwrap();
-
-    let err = wallet.create_next_account(None).err().unwrap();
-    assert_eq!(err, WalletError::EmptyLastAccount);
-
-    let mut total_amount = Amount::ZERO;
-    let blocks = (0..rng.gen_range(1..10))
-        .map(|idx| {
-            let tx_amount1 = Amount::from_atoms(rng.gen_range(1..1000));
-            total_amount = (total_amount + tx_amount1).unwrap();
-            let address = get_address(
-                &chain_config,
-                MNEMONIC,
-                DEFAULT_ACCOUNT_INDEX,
-                KeyPurpose::ReceiveFunds,
-                idx.try_into().unwrap(),
-            );
-
-            let transaction1 = Transaction::new(
-                0,
-                Vec::new(),
-                vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
-            )
-            .unwrap();
-            let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
-            Block::new(
-                vec![signed_transaction1],
-                chain_config.genesis_block_id(),
-                chain_config.genesis_block().timestamp(),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap()
-        })
-        .collect_vec();
-
-    // move old account 1..10 block further then genesis
-    scan_wallet(&mut wallet, BlockHeight::new(0), blocks.clone());
-    verify_wallet_balance(&chain_config, &wallet, total_amount);
-
-    // create new account which is back on genesis
-    let (new_account_index, _name) = wallet.create_next_account(None).unwrap();
-    assert_ne!(new_account_index, DEFAULT_ACCOUNT_INDEX);
-    assert_eq!(wallet.number_of_accounts(), 2);
-
-    // as the new account will be in sync by default we need to make it out of sync
-    let mut new_account = wallet.accounts.pop_last().unwrap();
-
-    let mut db_tx = wallet.db.transaction_rw(None).unwrap();
-
-    new_account
-        .1
-        .update_best_block(
-            &mut db_tx,
-            BlockHeight::new(0),
-            chain_config.genesis_block_id(),
-        )
-        .unwrap();
-
-    db_tx.commit().unwrap();
-
-    // and put it back as unsynced
-    wallet.accounts.insert(new_account.0, new_account.1);
-
-    assert_eq!(wallet.accounts.len(), 2);
-
-    // sync new account with the new block
-    for block in blocks {
-        // not yet synced
-        let _balance = wallet
-            .get_balance(
-                new_account_index,
-                UtxoType::Transfer.into(),
-                UtxoState::Confirmed.into(),
-                WithLocked::Unlocked,
-            )
-            .unwrap();
-
-        let (_, block_height) = *wallet.get_best_block().get(&new_account_index).unwrap();
-        wallet
-            .scan_new_blocks(
-                new_account_index,
-                block_height,
-                vec![block],
-                &WalletEventsNoOp,
-            )
-            .unwrap();
-    }
-    // now both account are in sync and can be used
-    let coin_balance = wallet
-        .get_balance(
-            new_account_index,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
-            UtxoState::Confirmed.into(),
-            WithLocked::Unlocked,
-        )
-        .unwrap()
-        .get(&Currency::Coin)
-        .copied()
-        .unwrap_or(Amount::ZERO);
-    assert_eq!(coin_balance, Amount::ZERO);
-    assert_eq!(wallet.accounts.len(), 2);
 }
 
 #[rstest]
