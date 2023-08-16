@@ -58,6 +58,30 @@ pub enum StakeResult {
     Stopped,
 }
 
+type Rational128 = num::rational::Ratio<u128>;
+
+const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 500);
+const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(3, 10);
+
+fn pool_balance_power(
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    total_stake: Amount,
+) -> Rational128 {
+    let relative_pool_stake = Rational128::new(pool_balance.into_atoms(), total_stake.into_atoms());
+    let relative_pledge_amount =
+        Rational128::new(pledge_amount.into_atoms(), total_stake.into_atoms());
+
+    let z = POOL_SATURATION_LEVEL;
+    let a = PLEDGE_INFLUENCE_PARAMETER;
+    let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
+    let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
+
+    // FIXME: overflow while mul?
+    let result = (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1);
+    result
+}
+
 pub fn check_pos_hash(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
@@ -82,7 +106,14 @@ pub fn check_pos_hash(
     .into();
 
     let hash: Uint512 = hash.into();
-    let pool_balance: Uint512 = pool_balance.into();
+    // FIXME: pass pledge and total stake
+    let pool_balance_power = pool_balance_power(
+        Amount::from_atoms(100),
+        pool_balance,
+        Amount::from_atoms(100),
+    );
+    let pool_balance: Uint512 =
+        (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
 
     ensure!(
         hash <= pool_balance * target.into(),
