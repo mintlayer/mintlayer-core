@@ -1,5 +1,12 @@
 image: "rust:latest"
 
+stages:
+  - test_cargo
+  - build_cargo
+  - test_fmt
+  - test_func
+  - test_sighash
+
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -13,25 +20,34 @@ before_script:
    - apt-get update -yqq
    - apt-get install -yqq --no-install-recommends build-essential
 
-# Use cargo to test the project
 test:cargo:
+  stage: test_cargo
   script:
-    - rustc --version && cargo --version  # Print version info for debugging
+    - rustc --version && cargo --version
+    - rm -rf target
     - cargo test --release --workspace --verbose
 
 build:cargo:
+  stage: build_cargo
   script:
     - rustc --version && cargo --version
+    - rm -rf target
     - cargo build --release --locked
 
 test:fmt:
+  stage: test_fmt
   script:
+    - rm -rf target
     - cargo fmt --all -- --check
 
 test:func:
+  stage: test_func
   script:
-    cargo test --release -p mintlayer-test --test functional -- --ignored
+    - rm -rf target
+    - cargo test --release -p mintlayer-test --test functional -- --ignored
 
 test:sighash:
+  stage: test_sighash
   script:
-    cargo test --release -p common mixed_sighash_types -- --ignored
+    - rm -rf target
+    - cargo test --release -p common mixed_sighash_types -- --ignored
