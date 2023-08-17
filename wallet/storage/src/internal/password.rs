@@ -43,7 +43,7 @@ pub fn password_to_sym_key(password: &String) -> crate::Result<(SymmetricKey, Kd
     let mut rng = make_true_rng();
     let config = KdfConfig::Argon2id {
         // TODO: hardcoded values
-        config: Argon2Config::new(700, 16, 2),
+        config: Argon2Config::new(65536, 16, 8),
         hash_length: NonZeroUsize::new(key_size(SymmetricKeyKind::XChacha20Poly1305))
             .expect("not 0"),
         salt_length: NonZeroUsize::new(32).expect("not 0"),
