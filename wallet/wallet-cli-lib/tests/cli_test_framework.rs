@@ -16,11 +16,11 @@
 use blockprod::{rpc::BlockProductionRpcServer, test_blockprod_config};
 use crypto::{key::PublicKey, random::Rng, vrf::VRFPublicKey};
 use hex::FromHex;
+use tokio::task::JoinHandle;
 
 use std::{
-    collections::VecDeque,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc},
     time::Duration,
 };
 
@@ -52,39 +52,31 @@ use wallet_cli_lib::{
 
 pub const MNEMONIC: &str = "spawn dove notice resist rigid grass load forum tobacco category motor fantasy prison submit rescue pool panic unable enact oven trap lava floor toward";
 
-#[derive(Clone)]
-struct MockConsole {
-    input: Arc<Mutex<VecDeque<String>>>,
-    output: Arc<Mutex<Vec<String>>>,
+struct MockConsoleInput {
+    input_rx: mpsc::Receiver<String>,
 }
 
-impl MockConsole {
-    fn new(input: &[&str]) -> Self {
-        let input = input.iter().map(|&s| s.to_owned()).collect();
-        MockConsole {
-            input: Arc::new(Mutex::new(input)),
-            output: Default::default(),
-        }
-    }
+struct MockConsoleOutput {
+    output_tx: mpsc::Sender<String>,
 }
 
-impl ConsoleInput for MockConsole {
+impl ConsoleInput for MockConsoleInput {
     fn is_tty(&self) -> bool {
         false
     }
 
     fn read_line(&mut self) -> Option<String> {
-        self.input.lock().unwrap().pop_front()
+        self.input_rx.recv().ok()
     }
 }
 
-impl ConsoleOutput for MockConsole {
+impl ConsoleOutput for MockConsoleOutput {
     fn print_line(&mut self, line: &str) {
-        self.output.lock().unwrap().push(line.to_owned());
+        self.output_tx.send(line.to_owned()).unwrap();
     }
 
     fn print_error(&mut self, error: WalletCliError) {
-        self.output.lock().unwrap().push(error.to_string());
+        self.output_tx.send(error.to_string()).unwrap();
     }
 }
 
@@ -275,8 +267,9 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
 }
 
 pub struct CliTestFramework {
-    pub chain_config: Arc<ChainConfig>,
-    pub rpc_address: SocketAddr,
+    pub wallet_task: JoinHandle<()>,
+    pub input_tx: mpsc::Sender<String>,
+    pub output_rx: mpsc::Receiver<String>,
     pub shutdown_trigger: ShutdownTrigger,
     pub manager_task: ManagerJoinHandle,
     pub test_root: TestRoot,
@@ -284,10 +277,9 @@ pub struct CliTestFramework {
 
 impl CliTestFramework {
     pub async fn setup(rng: &mut impl Rng) -> Self {
-        // logging::init_logging::<std::path::PathBuf>(None);
+        logging::init_logging::<std::path::PathBuf>(None);
 
         let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
-        // let test_dir = test_root.fresh_test_dir("basic_wallet_cli");
 
         let chain_config = Arc::new(create_chain_config(rng));
 
@@ -296,21 +288,11 @@ impl CliTestFramework {
         let shutdown_trigger = manager.make_shutdown_trigger();
         let manager_task = manager.main_in_task();
 
-        Self {
-            chain_config,
-            manager_task,
-            shutdown_trigger,
-            rpc_address,
-            test_root,
-        }
-    }
-
-    pub async fn run(&self, commands: &[&str]) -> Vec<String> {
         let wallet_options = WalletCliArgs {
             network: Network::Regtest,
             wallet_file: None,
             start_staking: false,
-            rpc_address: Some(self.rpc_address.to_string()),
+            rpc_address: Some(rpc_address.to_string()),
             rpc_cookie_file: None,
             rpc_username: Some(RPC_USERNAME.to_owned()),
             rpc_password: Some(RPC_PASSWORD.to_owned()),
@@ -320,27 +302,59 @@ impl CliTestFramework {
             vi_mode: false,
         };
 
-        let console = MockConsole::new(commands);
+        let (output_tx, output_rx) = std::sync::mpsc::channel();
+        let (input_tx, input_rx) = std::sync::mpsc::channel();
 
-        tokio::time::timeout(
-            Duration::from_secs(60),
-            wallet_cli_lib::run(
-                console.clone(),
-                wallet_options,
-                Some(Arc::clone(&self.chain_config)),
-            ),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        let input = MockConsoleInput { input_rx };
 
-        let res = console.output.lock().unwrap().clone();
-        res
+        let output = MockConsoleOutput { output_tx };
+
+        let wallet_task = tokio::spawn(async move {
+            tokio::time::timeout(
+                Duration::from_secs(120),
+                wallet_cli_lib::run(input, output, wallet_options, Some(chain_config)),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        });
+
+        Self {
+            wallet_task,
+            manager_task,
+            shutdown_trigger,
+            test_root,
+            input_tx,
+            output_rx,
+        }
+    }
+
+    pub fn exec(&self, command: &str) -> String {
+        self.input_tx.send(command.to_string()).unwrap();
+        self.output_rx.recv_timeout(Duration::from_secs(60)).unwrap()
+    }
+
+    pub fn create_genesis_wallet(&self) {
+        // Use dir name with spaces to make sure quoting works as expected
+        let file_name = self
+            .test_root
+            .fresh_test_dir("wallet dir")
+            .as_ref()
+            .join("genesis_wallet")
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let cmd = format!("createwallet \"{}\" \"{}\"", file_name, MNEMONIC);
+        assert_eq!(self.exec(&cmd), "New wallet created successfully");
     }
 
     pub async fn shutdown(self) {
+        drop(self.input_tx);
+        self.wallet_task.await.unwrap();
+
         self.shutdown_trigger.initiate();
         self.manager_task.join().await;
+
         self.test_root.delete();
     }
 }

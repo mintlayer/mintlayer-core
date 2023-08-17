@@ -129,7 +129,7 @@ impl Account {
             account_info,
         };
 
-        account.scan_genesis(db_tx, &mut WalletEventsNoOp)?;
+        account.scan_genesis(db_tx, &WalletEventsNoOp)?;
 
         Ok(account)
     }
@@ -546,6 +546,7 @@ impl Account {
         &self,
         db_tx: &impl WalletStorageReadUnlocked,
         median_time: BlockTimestamp,
+        pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let utxos = self.get_utxos(
             UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
@@ -553,9 +554,21 @@ impl Account {
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,
         );
-        // TODO: Select by pool_id if there is more than one UTXO
-        let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) =
-            utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
+        let (kernel_input_outpoint, (kernel_input_utxo, _token_id)) = utxos
+            .into_iter()
+            .find(|(_kernel_input_outpoint, (kernel_input_utxo, _token_id))| {
+                let utxo_pool_id = match kernel_input_utxo {
+                    TxOutput::CreateStakePool(pool_id, _) => *pool_id,
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => *pool_id,
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+                };
+                pool_id == utxo_pool_id
+            })
+            .ok_or(WalletError::UnknownPoolId(pool_id))?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
 
         let stake_destination = Self::get_tx_output_destination(kernel_input_utxo)
@@ -566,22 +579,12 @@ impl Account {
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
-        let pool_id = match kernel_input_utxo {
-            TxOutput::CreateStakePool(pool_id, _) => pool_id,
-            TxOutput::ProduceBlockFromStake(_, pool_id) => pool_id,
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
-        };
-
         let (vrf_private_key, _vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let data = PoSGenerateBlockInputData::new(
             stake_private_key,
             vrf_private_key,
-            *pool_id,
+            pool_id,
             vec![kernel_input],
             vec![kernel_input_utxo.clone()],
         );
@@ -793,7 +796,7 @@ impl Account {
     fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
         let revoked_txs = self
@@ -829,7 +832,7 @@ impl Account {
     fn add_wallet_tx_if_relevant(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         tx: WalletTx,
     ) -> WalletResult<bool> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
@@ -854,7 +857,7 @@ impl Account {
     fn scan_genesis(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
@@ -867,7 +870,7 @@ impl Account {
     pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
@@ -919,7 +922,7 @@ impl Account {
     fn add_wallet_tx_if_relevant_and_remove_from_user_txs(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
         wallet_tx: WalletTx,
         signed_tx: &SignedTransaction,
     ) -> Result<bool, WalletError> {
@@ -942,7 +945,7 @@ impl Account {
         transactions: &[SignedTransaction],
         tx_state: TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
 

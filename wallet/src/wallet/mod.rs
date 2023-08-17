@@ -240,6 +240,10 @@ impl<B: storage::Backend> Wallet<B> {
         self.db.is_encrypted()
     }
 
+    pub fn is_locked(&self) -> bool {
+        self.db.is_locked()
+    }
+
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
         self.db.encrypt_private_keys(password).map_err(WalletError::from)
     }
@@ -613,12 +617,16 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_pos_gen_block_data(
-        &mut self,
+        &self,
         account_index: U31,
+        pool_id: PoolId,
     ) -> WalletResult<PoSGenerateBlockInputData> {
         let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?
-            .get_pos_gen_block_data(&db_tx, self.latest_median_time)
+        self.get_account(account_index)?.get_pos_gen_block_data(
+            &db_tx,
+            self.latest_median_time,
+            pool_id,
+        )
     }
 
     /// Returns the last scanned block hash and height.
@@ -647,7 +655,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.scan_new_blocks(db_tx, wallet_events, common_block_height, &blocks)
@@ -660,7 +668,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn scan_mempool(
         &mut self,
         transactions: &[SignedTransaction],
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
@@ -681,7 +689,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn add_unconfirmed_tx(
         &mut self,
         transaction: SignedTransaction,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
 

@@ -83,7 +83,7 @@ impl SyncingWallet for MockWallet {
         _account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &mut impl WalletEvents,
+        _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(
@@ -264,7 +264,7 @@ async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<
 fn run_sync(chain_config: Arc<ChainConfig>, node: MockNode, mut wallet: MockWallet) {
     tokio::spawn(async move {
         loop {
-            let _ = sync_once(&chain_config, &node, &mut wallet, &mut WalletEventsNoOp).await;
+            let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     });

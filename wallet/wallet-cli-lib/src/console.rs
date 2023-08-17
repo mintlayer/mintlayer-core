@@ -25,16 +25,15 @@ pub trait ConsoleInput: Send + 'static {
     fn read_line(&mut self) -> Option<String>;
 }
 
-pub trait ConsoleOutput: Clone + Send + 'static {
+pub trait ConsoleOutput: Send + 'static {
     fn print_line(&mut self, line: &str);
 
     fn print_error(&mut self, error: WalletCliError);
 }
 
-#[derive(Clone)]
-pub struct StdioConsole;
+pub struct StdioInputConsole;
 
-impl ConsoleInput for StdioConsole {
+impl ConsoleInput for StdioInputConsole {
     fn is_tty(&self) -> bool {
         std::io::stdin().is_tty()
     }
@@ -49,7 +48,9 @@ impl ConsoleInput for StdioConsole {
     }
 }
 
-impl ConsoleOutput for StdioConsole {
+pub struct StdioOutputConsole;
+
+impl ConsoleOutput for StdioOutputConsole {
     fn print_line(&mut self, line: &str) {
         println!("{line}");
     }

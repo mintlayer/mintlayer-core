@@ -107,7 +107,7 @@ pub enum WalletCommand {
     },
 
     GenerateBlocks {
-        count: u32,
+        block_count: u32,
     },
 
     /// Creates a new account
@@ -673,13 +673,13 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
-            WalletCommand::GenerateBlocks { count } => {
+            WalletCommand::GenerateBlocks { block_count } => {
                 controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .generate_blocks(
                         selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        count,
+                        block_count,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;

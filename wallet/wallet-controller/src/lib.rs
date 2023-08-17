@@ -96,6 +96,12 @@ pub enum ControllerError<T: NodeInterface> {
     WalletError(wallet::wallet::WalletError),
     #[error("Encoding error: {0}")]
     AddressEncodingError(#[from] AddressError),
+    #[error("No staking pool found")]
+    NoStakingPool,
+    #[error("Wallet is locked")]
+    WalletIsLocked,
+    #[error("Cannot lock wallet because staking is running")]
+    StakingRunning,
 }
 
 pub struct Controller<T, W> {
@@ -214,6 +220,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ///
     /// This method returns an error if the wallet is not encrypted.
     pub fn lock_wallet(&mut self) -> Result<(), ControllerError<T>> {
+        utils::ensure!(
+            self.staking_started.is_empty(),
+            ControllerError::StakingRunning
+        );
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
@@ -411,7 +421,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         match status {
             mempool::TxStatus::InMempool => {
                 self.wallet
-                    .add_unconfirmed_tx(tx, &mut self.wallet_events)
+                    .add_unconfirmed_tx(tx, &self.wallet_events)
                     .map_err(ControllerError::WalletError)?;
             }
             mempool::TxStatus::InOrphanPool => {
@@ -650,39 +660,66 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.broadcast_to_mempool(tx).await
     }
 
-    pub async fn generate_block(
-        &mut self,
+    pub async fn generate_block_by_pool(
+        &self,
         account_index: U31,
+        pool_id: PoolId,
         transactions_opt: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, ControllerError<T>> {
         let pos_data = self
             .wallet
-            .get_pos_gen_block_data(account_index)
+            .get_pos_gen_block_data(account_index, pool_id)
             .map_err(ControllerError::WalletError)?;
-        let block = self
-            .rpc_client
+        self.rpc_client
             .generate_block(
                 GenerateBlockInputData::PoS(pos_data.into()),
-                transactions_opt,
+                transactions_opt.clone(),
             )
             .await
-            .map_err(ControllerError::NodeCallError)?;
-        Ok(block)
+            .map_err(ControllerError::NodeCallError)
     }
 
+    /// Attempt to generate a new block by trying all pools. If all pools fail,
+    /// the last pool block generation error is returned (or `ControllerError::NoStakingPool` if there are no staking pools).
+    pub async fn generate_block(
+        &self,
+        account_index: U31,
+        transactions_opt: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, ControllerError<T>> {
+        let pools =
+            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+
+        let mut last_error = ControllerError::NoStakingPool;
+        for (pool_id, _) in pools {
+            let block_res = self
+                .generate_block_by_pool(account_index, pool_id, transactions_opt.clone())
+                .await;
+            match block_res {
+                Ok(block) => return Ok(block),
+                Err(err) => last_error = err,
+            }
+        }
+        Err(last_error)
+    }
+
+    /// Try to generate the `block_count` number of blocks.
+    /// The function may return an error early if some attempt fails.
     pub async fn generate_blocks(
         &mut self,
         account_index: U31,
-        count: u32,
+        block_count: u32,
     ) -> Result<(), ControllerError<T>> {
-        for _ in 0..count {
+        for _ in 0..block_count {
             self.sync_once().await?;
+
             let block = self.generate_block(account_index, None).await?;
+
             self.rpc_client
                 .submit_block(block)
                 .await
                 .map_err(ControllerError::NodeCallError)?;
         }
+
         self.sync_once().await
     }
 
@@ -705,6 +742,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+        utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
+        // Make sure that account_index is valid and that pools exist
+        let pool_ids =
+            self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
+        utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", account_index);
         self.staking_started.insert(account_index);
         Ok(())
@@ -778,7 +820,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &self.chain_config,
             &self.rpc_client,
             &mut self.wallet,
-            &mut self.wallet_events,
+            &self.wallet_events,
         )
         .await?;
         Ok(())
@@ -788,7 +830,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
         let mut rebroadcast_txs_timer = get_time();
-        loop {
+
+        'outer: loop {
             let sync_res = self.sync_once().await;
 
             if let Err(e) = sync_res {
@@ -797,8 +840,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 continue;
             }
 
-            // TODO: Try to remove the `clone` call
-            for account_index in self.staking_started.clone().iter() {
+            for account_index in self.staking_started.iter() {
                 let generate_res = self.generate_block(*account_index, None).await;
 
                 if let Ok(block) = generate_res {
@@ -813,7 +855,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                         tokio::time::sleep(ERROR_DELAY).await;
                     }
 
-                    continue;
+                    continue 'outer;
                 }
             }
 
