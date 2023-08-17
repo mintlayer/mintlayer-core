@@ -7081,6 +7081,7 @@ dependencies = [
  "bip39",
  "common",
  "crypto",
+ "hex",
  "itertools 0.11.0",
  "parity-scale-codec",
  "rstest",

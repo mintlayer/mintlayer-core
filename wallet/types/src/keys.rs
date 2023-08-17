@@ -13,9 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools;
-use std::str::FromStr;
-
 use crate::keys::KeyPurpose::{Change, ReceiveFunds};
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -133,55 +130,9 @@ pub struct RootKeys {
     pub root_vrf_key: ExtendedVRFPrivateKey,
 }
 
-/// Just an empty struct used as key for the DB table
-/// It only represents a single value as there can be only one root key
-#[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct SeedPhraseConstant;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SeedPhrase {
-    pub mnemonic: zeroize::Zeroizing<bip39::Mnemonic>,
-}
-
-impl Encode for SeedPhrase {
-    fn size_hint(&self) -> usize {
-        Itertools::intersperse(self.mnemonic.word_iter().map(|w| w.len()), 1).sum::<usize>()
-            + std::mem::size_of::<u16>()
-    }
-
-    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
-        let words: String = self.mnemonic.word_iter().join(" ");
-        words.encode_to(dest);
-    }
-}
-
-impl Decode for SeedPhrase {
-    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let words = String::decode(input)?;
-
-        Ok(Self {
-            mnemonic: zeroize::Zeroizing::new(
-                bip39::Mnemonic::from_str(words.as_str())
-                    .map_err(|_| serialization::Error::from("Mnemonic deserialization failed"))?,
-            ),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn seed_phrase_size_hint() {
-        let seed_phrase = SeedPhrase {
-            mnemonic: zeroize::Zeroizing::new(bip39::Mnemonic::generate(24).unwrap()),
-        };
-
-        let size_hint = seed_phrase.size_hint();
-        let encoded = seed_phrase.encode();
-        assert_eq!(size_hint, encoded.len());
-    }
 
     #[test]
     fn keychain_usage_state() {

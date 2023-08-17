@@ -256,7 +256,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None, true).unwrap();
 
     let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.mnemonic.to_string(), MNEMONIC);
+    assert_eq!(seed_phrase.to_string(), MNEMONIC);
 
     let password = gen_random_password(&mut rng);
     wallet.encrypt_wallet(&Some(password.clone())).unwrap();
@@ -270,10 +270,10 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
 
     wallet.unlock_wallet(&password).unwrap();
     let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.mnemonic.to_string(), MNEMONIC);
+    assert_eq!(seed_phrase.to_string(), MNEMONIC);
 
     let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.mnemonic.to_string(), MNEMONIC);
+    assert_eq!(seed_phrase.to_string(), MNEMONIC);
 
     let seed_phrase = wallet.seed_phrase().unwrap();
     assert!(seed_phrase.is_none());

@@ -27,8 +27,8 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    keys::{RootKeyConstant, SeedPhraseConstant},
-    keys::{RootKeys, SeedPhrase},
+    keys::{RootKeyConstant, RootKeys},
+    seed_phrase::{SeedPhraseConstant, SerializedSeedPhrase},
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
@@ -317,7 +317,7 @@ macro_rules! impl_read_unlocked_ops {
                     }),
                 )
             }
-            fn get_seed_phrase(&self) -> crate::Result<Option<SeedPhrase>> {
+            fn get_seed_phrase(&self) -> crate::Result<Option<SerializedSeedPhrase>> {
                 Ok(
                     self.read::<db::DBSeedPhrase, _, _>(&SeedPhraseConstant {})?.map(|v| {
                         v.try_take(self.encryption_key).expect("key was checked when unlocked")
@@ -502,12 +502,12 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
             .map_err(Into::into)
     }
 
-    fn set_seed_phrase(&mut self, seed_phrase: SeedPhrase) -> crate::Result<()> {
+    fn set_seed_phrase(&mut self, seed_phrase: SerializedSeedPhrase) -> crate::Result<()> {
         let value = MaybeEncrypted::new(&seed_phrase, self.encryption_key);
         self.write::<db::DBSeedPhrase, _, _, _>(SeedPhraseConstant, value)
     }
 
-    fn del_seed_phrase(&mut self) -> crate::Result<Option<SeedPhrase>> {
+    fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializedSeedPhrase>> {
         let phrase = self.get_seed_phrase()?;
         self.storage.get_mut::<db::DBSeedPhrase, _>().del(&SeedPhraseConstant {})?;
         Ok(phrase)

@@ -194,7 +194,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
         self.wallet
             .seed_phrase()
-            .map(|opt| opt.map(|phrase| phrase.mnemonic.to_string()))
+            .map(|opt| opt.map(|phrase| phrase.to_string()))
             .map_err(ControllerError::WalletError)
     }
 
@@ -202,7 +202,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn delete_seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
         self.wallet
             .delete_seed_phrase()
-            .map(|opt| opt.map(|phrase| phrase.mnemonic.to_string()))
+            .map(|opt| opt.map(|phrase| phrase.to_string()))
             .map_err(ControllerError::WalletError)
     }
 
