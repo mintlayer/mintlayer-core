@@ -38,9 +38,9 @@ use utxo::Utxo;
 use chainstate::chainstate_interface::ChainstateInterface;
 
 mockall::mock! {
-    pub ChainstateInterfaceMock {}
+    pub ChainstateInterface {}
 
-    impl ChainstateInterface for ChainstateInterfaceMock {
+    impl ChainstateInterface for ChainstateInterface {
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
         fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
@@ -174,4 +174,4 @@ mockall::mock! {
     }
 }
 
-impl subsystem::Subsystem for MockChainstateInterfaceMock {}
+impl subsystem::Subsystem for MockChainstateInterface {}
