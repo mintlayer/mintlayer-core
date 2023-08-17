@@ -776,9 +776,58 @@ fn wallet_accounts_creation() {
     )
     .unwrap();
     test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1,
+            Amount::from_atoms(100),
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+    // DEFAULT_ACCOUNT_INDEX now has 1 transaction so next account can be created
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+    let res = wallet.create_next_account(Some("name".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(1).unwrap(), Some("name".into())));
 
+    // but we cannot create a third account as the new one has no transactions
     let error = wallet.create_next_account(None).err().unwrap();
     assert_eq!(error, WalletError::EmptyLastAccount);
+
+    let acc1_pk = wallet.get_new_public_key(res.0).unwrap();
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::PublicKey(acc1_pk),
+            )],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    // even with an unconfirmed transaction we cannot create a new account
+    wallet.add_unconfirmed_tx(tx.clone(), &WalletEventsNoOp).unwrap();
+    let error = wallet.create_next_account(None).err().unwrap();
+    assert_eq!(error, WalletError::EmptyLastAccount);
+
+    let block2 = Block::new(
+        vec![tx],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+    // after getting a confirmed transaction we can create a new account
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+    let res = wallet.create_next_account(Some("name2".into())).unwrap();
+    assert_eq!(res, (U31::from_u32(2).unwrap(), Some("name2".into())));
 }
 
 #[rstest]
