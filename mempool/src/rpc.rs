@@ -19,10 +19,11 @@ use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
+use mempool_types::tx_origin::LocalTxOrigin;
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_error_log::LogError;
 
-use crate::{FeeRate, MempoolMaxSize, TxOrigin, TxStatus};
+use crate::{FeeRate, MempoolMaxSize, TxStatus};
 
 use rpc::Result as RpcResult;
 
@@ -49,7 +50,7 @@ trait MempoolRpc {
     async fn get_all_transactions(&self) -> RpcResult<Vec<HexEncoded<SignedTransaction>>>;
 
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus>;
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()>;
 
     #[method(name = "local_best_block_id")]
     async fn local_best_block_id(&self) -> RpcResult<Id<GenBlock>>;
@@ -105,9 +106,9 @@ impl MempoolRpcServer for super::MempoolHandle {
         }))
     }
 
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<TxStatus> {
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<()> {
         let res = self
-            .call_mut(move |this| this.add_transaction(tx.take(), TxOrigin::local_mempool()))
+            .call_mut(move |m| m.add_transaction_local(tx.take(), LocalTxOrigin::LocalMempool))
             .await
             .log_err();
         rpc::handle_result(res)

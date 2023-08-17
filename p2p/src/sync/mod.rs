@@ -34,7 +34,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{event::TransactionProcessed, MempoolHandle, TxOrigin};
+use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
 use utils::atomics::AcqRelAtomicBool;
 use utils::sync::Arc;
 use utils::tap_error_log::LogError;

@@ -27,7 +27,6 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
-use mempool::TxStatus;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
@@ -443,14 +442,8 @@ impl CommandHandler {
         }
     }
 
-    pub fn handle_mempool_tx_status(status: TxStatus) -> ConsoleCommand {
-        let status_text = match status {
-            mempool::TxStatus::InMempool => "The transaction was submitted successfully",
-            mempool::TxStatus::InOrphanPool => {
-                // Mempool should reject the transaction and not return `InOrphanPool`
-                "The transaction has been added to the orphan pool"
-            }
-        };
+    pub fn tx_submitted_command() -> ConsoleCommand {
+        let status_text = "The transaction was submitted successfully";
         ConsoleCommand::Print(status_text.to_owned())
     }
 
@@ -458,8 +451,8 @@ impl CommandHandler {
         rpc_client: &NodeRpcClient,
         tx: SignedTransaction,
     ) -> Result<ConsoleCommand, WalletCliError> {
-        let status = rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
-        Ok(Self::handle_mempool_tx_status(status))
+        rpc_client.submit_transaction(tx).await.map_err(WalletCliError::RpcError)?;
+        Ok(Self::tx_submitted_command())
     }
 
     pub async fn handle_wallet_command(
@@ -780,7 +773,7 @@ impl CommandHandler {
                 let amount_to_issue = parse_coin_amount(chain_config, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
-                let (token_id, _tx_status) = controller_opt
+                let token_id = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .issue_new_token(
@@ -826,7 +819,7 @@ impl CommandHandler {
                     media_hash: media_hash.into_bytes(),
                 };
 
-                let (token_id, _tx_status) = controller_opt
+                let token_id = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .issue_new_nft(
@@ -950,7 +943,7 @@ impl CommandHandler {
             WalletCommand::SendToAddress { address, amount } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                let status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address(
@@ -960,7 +953,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(Self::handle_mempool_tx_status(status))
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::SendTokensToAddress {
@@ -980,7 +973,7 @@ impl CommandHandler {
                     parse_token_amount(token_number_of_decimals, &amount)?
                 };
 
-                let status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_tokens_to_address(
@@ -991,14 +984,14 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(Self::handle_mempool_tx_status(status))
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::CreateDelegation { address, pool_id } => {
                 let address = parse_address(chain_config, &address)?;
                 let pool_id_address = Address::from_str(chain_config, &pool_id)?;
 
-                let (delegation_id, _status) = controller_opt
+                let delegation_id = controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_delegation(
@@ -1021,8 +1014,7 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
 
-                // TODO: Take status into account
-                let _status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .delegate_staking(
@@ -1074,7 +1066,7 @@ impl CommandHandler {
                 let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
                 let margin_ratio_per_thousand =
                     to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
-                let status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .create_stake_pool_tx(
@@ -1087,12 +1079,12 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::Controller)?;
 
-                Ok(Self::handle_mempool_tx_status(status))
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::DecommissionStakePool { pool_id } => {
                 let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                let status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .decommission_stake_pool(
@@ -1101,7 +1093,7 @@ impl CommandHandler {
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(Self::handle_mempool_tx_status(status))
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::NodeVersion => {

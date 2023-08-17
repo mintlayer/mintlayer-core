@@ -14,9 +14,12 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, event::MempoolEvent, pool::memory_usage_estimator::StoreMemoryUsageEstimator,
-    tx_accumulator::TransactionAccumulator, FeeRate, MempoolInterface, MempoolMaxSize,
-    MempoolSubsystemInterface, TxOrigin, TxStatus,
+    error::Error,
+    event::MempoolEvent,
+    pool::memory_usage_estimator::StoreMemoryUsageEstimator,
+    tx_accumulator::TransactionAccumulator,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -108,12 +111,24 @@ impl MempoolSubsystemInterface for MempoolInit {
 }
 
 impl MempoolInterface for Mempool {
-    fn add_transaction(
+    fn add_transaction_local(
         &mut self,
         tx: SignedTransaction,
-        origin: TxOrigin,
+        origin: LocalTxOrigin,
+    ) -> Result<(), Error> {
+        let status = self.add_transaction(tx, origin.into())?;
+        // TODO The following assertion could be avoided by parametrizing the above
+        // `add_transaction` by the origin type and have the return type depend on it.
+        assert_eq!(status, TxStatus::InMempool);
+        Ok(())
+    }
+
+    fn add_transaction_remote(
+        &mut self,
+        tx: SignedTransaction,
+        origin: RemoteTxOrigin,
     ) -> Result<TxStatus, Error> {
-        self.add_transaction(tx, origin)
+        self.add_transaction(tx, origin.into())
     }
 
     fn get_all(&self) -> Vec<SignedTransaction> {

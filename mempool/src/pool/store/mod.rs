@@ -580,7 +580,8 @@ impl TxMempoolEntry {
         ancestors: BTreeSet<TxMempoolEntry>,
         creation_time: Time,
     ) -> Result<TxMempoolEntry, MempoolPolicyError> {
-        let entry = TxEntry::new(tx, creation_time, crate::TxOrigin::local_mempool());
+        use crate::tx_origin::LocalTxOrigin;
+        let entry = TxEntry::new(tx, creation_time, LocalTxOrigin::LocalMempool.into());
         Self::new(TxEntryWithFee::new(entry, fee), parents, ancestors)
     }
 

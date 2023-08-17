@@ -31,7 +31,6 @@ use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
 use mempool::FeeRate;
-use mempool_types::TxStatus;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
@@ -202,7 +201,7 @@ impl NodeInterface for MockNode {
     async fn submit_block(&self, _block: Block) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<TxStatus, Self::Error> {
+    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<(), Self::Error> {
         unreachable!()
     }
 

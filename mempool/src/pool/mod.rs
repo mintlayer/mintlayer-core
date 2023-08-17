@@ -60,8 +60,8 @@ use crate::{
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
     event::{self, MempoolEvent},
     tx_accumulator::TransactionAccumulator,
-    tx_origin::RemoteTxOrigin,
-    TxOrigin, TxStatus,
+    tx_origin::{RemoteTxOrigin, TxOrigin},
+    TxStatus,
 };
 
 use crate::config::*;

@@ -16,5 +16,4 @@
 pub mod tx_origin;
 mod tx_status;
 
-pub use tx_origin::TxOrigin;
 pub use tx_status::TxStatus;
