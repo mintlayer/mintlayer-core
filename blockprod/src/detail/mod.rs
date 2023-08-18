@@ -324,8 +324,8 @@ impl BlockProduction {
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let is_initial_block_download = self
             .chainstate_handle
-            .call(|this| this.info().map(|info| info.is_initial_block_download))
-            .await?
+            .call(|this| this.is_initial_block_download())
+            .await
             .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
 
         if is_initial_block_download {
