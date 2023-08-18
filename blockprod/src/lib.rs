@@ -193,9 +193,15 @@ mod tests {
 
         let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
+        let chainstate_config = {
+            let mut chainstate_config = ChainstateConfig::new();
+            chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
+            chainstate_config
+        };
+
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
-            ChainstateConfig::new(),
+            chainstate_config,
             Store::new_empty().expect("Error initializing empty store"),
             DefaultTransactionVerificationStrategy::new(),
             None,

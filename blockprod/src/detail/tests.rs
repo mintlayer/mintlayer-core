@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroU64, sync::Arc, time::Duration};
 
-use chainstate::{ChainInfo, ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
+use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
@@ -231,16 +231,8 @@ mod produce_block {
         let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None);
 
         let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = Box::new(MockChainstateInterfaceMock::new());
-            mock_chainstate.expect_info().times(..=1).returning(|| {
-                Ok(ChainInfo {
-                    best_block_height: BlockHeight::new(0),
-                    best_block_id: Id::new(H256::zero()),
-                    best_block_timestamp: BlockTimestamp::from_int_seconds(0),
-                    median_time: BlockTimestamp::from_int_seconds(0),
-                    is_initial_block_download: true,
-                })
-            });
+            let mut mock_chainstate = Box::new(MockChainstateInterface::new());
+            mock_chainstate.expect_is_initial_block_download().returning(|| true);
 
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
             manager.add_subsystem("mock-chainstate", mock_chainstate)
@@ -334,6 +326,7 @@ mod produce_block {
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterface::new());
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             mock_chainstate.expect_get_best_block_index().times(1).returning(|| {
                 Err(ChainstateError::FailedToReadProperty(
@@ -685,6 +678,7 @@ mod produce_block {
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterface::new());
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![
                 Ok(GenBlockIndex::Genesis(Arc::clone(
@@ -749,6 +743,7 @@ mod produce_block {
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterface::new());
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+            mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![
                 Ok(GenBlockIndex::Genesis(Arc::clone(
