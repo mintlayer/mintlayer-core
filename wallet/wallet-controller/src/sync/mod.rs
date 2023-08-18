@@ -157,79 +157,109 @@ pub async fn sync_once<T: NodeInterface>(
                     accounts_grouped.entry(*best_block).or_default().push(*account);
                 }
 
+                // sync all account groups
                 for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
                     .iter()
                     .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
                 {
-                    fetch_and_sync(
+                    sync_account_group(
                         &chain_info,
-                        *wallet_block_id,
-                        *wallet_block_height,
+                        (*wallet_block_id, *wallet_block_height),
                         chain_config,
                         rpc_client,
-                        &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
-                            let block_id = blocks
-                                .last()
-                                .expect("blocks must not be empty")
-                                .header()
-                                .block_id();
-                            let new_height = common_block_height.into_int() + blocks.len() as u64;
-
-                            for account in accounts {
-                                log::debug!(
-                                    "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
-                                    account,
-                                    new_height,
-                                    block_id
-                                );
-                                wallet
-                                    .scan_blocks(
-                                        *account,
-                                        common_block_height,
-                                        blocks.clone(),
-                                        wallet_events,
-                                    )
-                                    .map_err(ControllerError::WalletError)?;
-                            }
-
-                            Ok(())
-                        },
+                        accounts,
+                        wallet,
+                        wallet_events,
                     )
                     .await?;
                 }
 
-                fetch_and_sync(
-                    &chain_info,
-                    unused_account_best_block.0,
-                    unused_account_best_block.1,
+                sync_next_unused_account(
+                    chain_info,
+                    unused_account_best_block,
                     chain_config,
                     rpc_client,
-                    &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
-                        let block_id =
-                            blocks.last().expect("blocks must not be empty").header().block_id();
-                        let new_height = common_block_height.into_int() + blocks.len() as u64;
-
-                        log::debug!(
-                            "Node chainstate updated, unused account, block height: {}, tip block id: {}",
-                            new_height,
-                            block_id
-                        );
-
-                        wallet
-                            .scan_blocks_for_unused_account(
-                                common_block_height,
-                                blocks.clone(),
-                                wallet_events,
-                            )
-                            .map_err(ControllerError::WalletError)?;
-
-                        Ok(())
-                    },
+                    wallet,
+                    wallet_events,
                 )
                 .await?;
             }
         }
     }
+}
+
+// Sync the next unused account, this can create/discover new accounts if a transaction is related
+// to them
+async fn sync_next_unused_account<T: NodeInterface>(
+    chain_info: chainstate::ChainInfo,
+    unused_account_best_block: (Id<GenBlock>, BlockHeight),
+    chain_config: &ChainConfig,
+    rpc_client: &T,
+    wallet: &mut impl SyncingWallet,
+    wallet_events: &impl WalletEvents,
+) -> Result<(), ControllerError<T>> {
+    fetch_and_sync(
+        &chain_info,
+        unused_account_best_block.0,
+        unused_account_best_block.1,
+        chain_config,
+        rpc_client,
+        &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
+            let block_id = blocks.last().expect("blocks must not be empty").header().block_id();
+            let new_height = common_block_height.into_int() + blocks.len() as u64;
+
+            log::debug!(
+                "Node chainstate updated, unused account, block height: {}, tip block id: {}",
+                new_height,
+                block_id
+            );
+
+            wallet
+                .scan_blocks_for_unused_account(common_block_height, blocks.clone(), wallet_events)
+                .map_err(ControllerError::WalletError)?;
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+/// Sync an account group that shares a same common block
+async fn sync_account_group<T: NodeInterface>(
+    chain_info: &chainstate::ChainInfo,
+    wallet_block_info: (Id<GenBlock>, BlockHeight),
+    chain_config: &ChainConfig,
+    rpc_client: &T,
+    accounts: &Vec<U31>,
+    wallet: &mut impl SyncingWallet,
+    wallet_events: &impl WalletEvents,
+) -> Result<(), ControllerError<T>> {
+    fetch_and_sync(
+        chain_info,
+        wallet_block_info.0,
+        wallet_block_info.1,
+        chain_config,
+        rpc_client,
+        &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
+            let block_id = blocks.last().expect("blocks must not be empty").header().block_id();
+            let new_height = common_block_height.into_int() + blocks.len() as u64;
+
+            for account in accounts {
+                log::debug!(
+                    "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
+                    account,
+                    new_height,
+                    block_id
+                );
+                wallet
+                    .scan_blocks(*account, common_block_height, blocks.clone(), wallet_events)
+                    .map_err(ControllerError::WalletError)?;
+            }
+
+            Ok(())
+        },
+    )
+    .await
 }
 
 async fn fetch_and_sync<T: NodeInterface>(
