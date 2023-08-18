@@ -29,11 +29,7 @@ use tokio::{
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
-    chain::{
-        block::{signed_block_header::SignedBlockHeader, Block},
-        config::ChainConfig,
-        Transaction,
-    },
+    chain::{config::ChainConfig, Block, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
@@ -56,8 +52,9 @@ use crate::{
     PeerManagerEvent, Result,
 };
 
+#[derive(Debug)]
 pub enum LocalEvent {
-    ChainstateNewTip(SignedBlockHeader),
+    ChainstateNewTip(Id<Block>),
     MempoolNewTx(Id<Transaction>),
 }
 
@@ -76,7 +73,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     p2p_config: Arc<P2pConfig>,
 
     messaging_handle: T::MessagingHandle,
-    sync_event_receiver: T::SyncingEventReceiver,
+    syncing_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -106,7 +103,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::MessagingHandle,
-        sync_event_receiver: T::SyncingEventReceiver,
+        syncing_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -116,7 +113,7 @@ where
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             mempool_handle,
@@ -131,14 +128,8 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
-        self.is_initial_block_download.store(
-            self.chainstate_handle
-                .call(|c| c.is_initial_block_download())
-                .await
-                // This shouldn't fail unless the chainstate subsystem is down which shouldn't
-                // happen since subsystems are shutdown in reverse order.
-                .expect("Chainstate call failed"),
-        );
+        self.is_initial_block_download
+            .store(self.chainstate_handle.call(|c| c.is_initial_block_download()).await?);
 
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
@@ -155,7 +146,7 @@ where
                     self.handle_transaction_processed(&tx_proc)?;
                 },
 
-                event = self.sync_event_receiver.poll_next() => {
+                event = self.syncing_event_receiver.poll_next() => {
                     self.handle_peer_event(event?).await;
                 },
             }
@@ -226,16 +217,9 @@ where
             return Ok(());
         }
 
-        let header = self
-            .chainstate_handle
-            .call(move |c| c.get_block_header(block_id))
-            .await??
-            // This should never happen because this block has just been produced by chainstate.
-            .expect("A new tip block unavailable");
-
-        log::debug!("Broadcasting a new tip header {}", header.block_id());
+        log::debug!("Broadcasting a new tip {}", block_id);
         for peer in self.peers.values_mut() {
-            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(header.clone()));
+            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id));
         }
         Ok(())
     }

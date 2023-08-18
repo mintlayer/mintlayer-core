@@ -35,7 +35,7 @@ use common::{
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SignedTransaction,
         Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
@@ -167,27 +167,49 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers(locator, header_count_limit)
+            .get_mainchain_headers_by_locator(locator, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn filter_already_existing_blocks(
+    fn get_mainchain_headers_since_latest_fork_point(
         &self,
-        headers: Vec<SignedBlockHeader>,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .filter_already_existing_blocks(headers)
+            .get_mainchain_headers_since_latest_fork_point(block_ids, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn split_off_leading_known_headers(
+        &self,
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
+        let first_non_existing_block_idx = {
+            let mut idx = 0;
+            for header in headers.iter() {
+                if self.get_block_index(&header.get_id())?.is_none() {
+                    break;
+                }
+                idx += 1;
+            }
+            idx
+        };
+
+        assert!(first_non_existing_block_idx <= headers.len());
+        let mut headers = headers;
+        let non_existing_block_headers = headers.split_off(first_non_existing_block_idx);
+        Ok((headers, non_existing_block_headers))
     }
 
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {

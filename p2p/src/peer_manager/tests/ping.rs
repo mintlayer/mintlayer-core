@@ -43,6 +43,9 @@ async fn ping_timeout() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
+        ping_check_period: Duration::from_secs(1).into(),
+        ping_timeout: Duration::from_secs(5).into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -52,8 +55,6 @@ async fn ping_timeout() {
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        ping_check_period: Duration::from_secs(1).into(),
-        ping_timeout: Duration::from_secs(5).into(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -63,7 +64,7 @@ async fn ping_timeout() {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;

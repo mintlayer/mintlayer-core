@@ -189,67 +189,80 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block_height_in_main_chain(id)
     }
 
-    pub fn get_headers(
+    fn get_mainchain_headers_higher_than(
         &self,
-        locator: Locator,
+        height: BlockHeight,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
         let header_count_limit = BlockDistance::new(
             header_count_limit.try_into().expect("Unreasonable header count limit"),
         );
 
-        // use genesis block if no common ancestor with better block height is found
-        let mut best = BlockHeight::new(0);
-
-        for block_id in locator.iter() {
-            if let Some(block_index) = self.chainstate_ref.get_gen_block_index(block_id)? {
-                if self.chainstate_ref.is_block_in_main_chain(block_id)? {
-                    best = block_index.block_height();
-                    break;
-                }
-            }
-        }
-
         // get headers until either the best block or header limit is reached
         let best_height = self
             .chainstate_ref
             .get_best_block_index()?
-            .expect("best block's height to exist")
+            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?
             .block_height();
 
         let limit = std::cmp::min(
-            (best + header_count_limit).expect("BlockHeight limit reached"),
+            (height + header_count_limit).expect("BlockHeight limit reached"),
             best_height,
         );
 
-        let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
+        let headers = itertools::iterate(height.next_height(), |iter| iter.next_height())
             .take_while(|height| height <= &limit)
             .map(|height| self.chainstate_ref.get_header_from_height(&height));
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub fn filter_already_existing_blocks(
+    pub fn get_mainchain_headers_by_locator(
         &self,
-        headers: Vec<SignedBlockHeader>,
+        locator: &Locator,
+        header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
-        let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
-        let config = &self.chainstate_ref.chain_config();
-        // verify that the first block attaches to our chain
-        if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
-            utils::ensure!(
-                self.get_block_index(&id)?.is_some(),
-                PropertyQueryError::BlockNotFound(id)
-            );
+        // use genesis block if no common ancestor with better block height is found
+        let mut best_height = BlockHeight::new(0);
+
+        for block_id in locator.iter() {
+            if let Some(block_index) = self.chainstate_ref.get_gen_block_index(block_id)? {
+                if self.chainstate_ref.is_block_in_main_chain(block_id)? {
+                    best_height = block_index.block_height();
+                    break;
+                }
+            }
         }
 
-        let res = headers
-            .into_iter()
-            .skip_while(|header| {
-                self.get_block_index(&header.get_id()).expect("Database failure").is_some()
-            })
-            .collect::<Vec<_>>();
+        self.get_mainchain_headers_higher_than(best_height, header_count_limit)
+    }
 
-        Ok(res)
+    pub fn get_mainchain_headers_since_latest_fork_point(
+        &self,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
+        if block_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let latest_fork_point_height = {
+            let mut best_height = BlockHeight::zero();
+
+            for block_id in block_ids {
+                let block_index = self
+                    .chainstate_ref
+                    .get_gen_block_index(block_id)?
+                    .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))?;
+                let fork_point_block_index =
+                    self.chainstate_ref.last_common_ancestor_in_main_chain(&block_index)?;
+
+                best_height = std::cmp::max(best_height, fork_point_block_index.block_height());
+            }
+
+            best_height
+        };
+
+        self.get_mainchain_headers_higher_than(latest_fork_point_height, header_count_limit)
     }
 
     pub fn get_mainchain_tx_index(

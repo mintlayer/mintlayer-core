@@ -311,7 +311,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    fn last_common_ancestor_in_main_chain(
+    pub fn last_common_ancestor_in_main_chain(
         &self,
         block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {

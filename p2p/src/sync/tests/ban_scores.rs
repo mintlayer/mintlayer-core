@@ -29,7 +29,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{HeaderList, SyncMessage},
     net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
-    sync::{peer::Peer, tests::helpers::SyncManagerHandle},
+    sync::{peer::Peer, tests::helpers::TestNode},
     types::peer_id::PeerId,
 };
 
@@ -120,22 +120,20 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
         .build();
 
     // Connect a peer and have it send the child header. Ensure the peer's ban score is increased.
-    let mut handle =
-        SyncManagerHandle::builder().with_chainstate(tf.into_chainstate()).build().await;
+    let mut node = TestNode::builder().with_chainstate(tf.into_chainstate()).build().await;
 
     let peer_id = PeerId::new();
-    handle.connect_peer(peer_id).await;
+    node.connect_peer(peer_id).await;
 
-    handle
-        .send_message(
-            peer_id,
-            SyncMessage::HeaderList(HeaderList::new(vec![valid_child_block.header().clone()])),
-        )
-        .await;
+    node.send_message(
+        peer_id,
+        SyncMessage::HeaderList(HeaderList::new(vec![valid_child_block.header().clone()])),
+    )
+    .await;
 
-    let (adjusted_peer_id, ban_score_delta) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer_id, ban_score_delta) = node.adjust_peer_score_event().await;
     assert_eq!(adjusted_peer_id, peer_id);
     assert_eq!(ban_score_delta, 100);
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }

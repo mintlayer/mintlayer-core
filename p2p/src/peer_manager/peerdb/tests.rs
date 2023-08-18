@@ -37,6 +37,8 @@ fn unban_peer() {
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
         Arc::new(P2pConfig {
+            ban_duration: Duration::from_secs(60).into(),
+
             bind_addresses: Default::default(),
             socks5_proxy: None,
             disable_noise: Default::default(),
@@ -44,7 +46,6 @@ fn unban_peer() {
             reserved_nodes: Default::default(),
             max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
-            ban_duration: Duration::from_secs(60).into(),
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
@@ -57,7 +58,7 @@ fn unban_peer() {
             user_agent: mintlayer_core_user_agent(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
-            max_unconnected_headers: Default::default(),
+            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
         }),
         time_getter.get_time_getter(),

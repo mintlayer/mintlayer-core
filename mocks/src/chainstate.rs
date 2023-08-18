@@ -66,15 +66,20 @@ mockall::mock! {
         fn get_block_header(&self, block_id: Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
         fn get_locator(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
-        fn get_headers(
+        fn get_mainchain_headers_by_locator(
             &self,
-            locator: Locator,
+            locator: &Locator,
             header_count_limit: usize,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-        fn filter_already_existing_blocks(
+        fn get_mainchain_headers_since_latest_fork_point(
+            &self,
+            block_ids: &[Id<GenBlock>],
+            header_count_limit: usize,
+        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+        fn split_off_leading_known_headers(
             &self,
             headers: Vec<SignedBlockHeader>,
-        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+        ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
         fn get_block_index(
             &self,
             id: &Id<Block>

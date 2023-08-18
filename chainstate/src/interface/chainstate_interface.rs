@@ -79,22 +79,31 @@ pub trait ChainstateInterface: Send {
     /// Returns a locator starting from the specified height.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
 
-    /// Returns a list of block headers starting from the last locator's block that is in the main
-    /// chain.
+    /// Returns a list of mainchain block headers starting from the locator's highest block that
+    /// is in the main chain (or genesis, if there is no such block).
     ///
-    /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
-    /// header is returned in case there is no common ancestor with a better block height.
-    fn get_headers(
+    /// The number of returned headers is limited by `header_count_limit`.
+    fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
-    /// Removes all headers that are already known to the chain from the given vector.
-    fn filter_already_existing_blocks(
+    /// For each block id in the list, find its latest ancestor that is still on the main chain
+    /// (the fork point); among the obtained fork points choose the one with the biggest height;
+    /// return headers of all mainchain blocks above that height.
+    fn get_mainchain_headers_since_latest_fork_point(
+        &self,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+
+    /// Find the first header in the passed vector for which the block is not in the chainstate;
+    /// split the vector into two parts - first, all headers up to the found one, second, the rest.
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
     fn get_gen_block_index(

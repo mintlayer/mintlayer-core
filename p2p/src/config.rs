@@ -67,6 +67,12 @@ impl From<NodeType> for Services {
 }
 
 /// The p2p subsystem configuration.
+// TODO: some of these "configuration options" should never be changed in production code,
+// because their values are a part of the protocol, e.g. this includes msg_header_count_limit and
+// max_request_blocks_count. Some other, like msg_max_locator_count, are never changed even
+// in tests. It might be better to separate these "settings" off into a separate struct and/or
+// make some of them constants (and the constant corresponding to msg_max_locator_count may
+// even be moved to chainstate, where locators are actually produced).
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
@@ -113,9 +119,11 @@ pub struct P2pConfig {
     pub max_message_size: MaxMessageSize,
     /// A maximum number of announcements (hashes) for which we haven't receive transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// A maximum number of unconnected headers (block announcements) that a peer can send before
+    /// A maximum number of singular unconnected headers that a peer can send before
     /// it will be considered malicious.
-    pub max_unconnected_headers: MaxUnconnectedHeaders,
+    // TODO: this is a legacy behavior that should be removed in the protocol v2.
+    // See the issue #1110.
+    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
 }

@@ -165,6 +165,8 @@ where
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
+        node_type: NodeType::Inactive.into(),
+
         bind_addresses: Vec::new(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -177,7 +179,6 @@ where
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
-        node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
@@ -185,7 +186,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));

@@ -166,6 +166,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
 async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, SocketAddr) {
     let p2p_config = p2p::config::P2pConfig {
         bind_addresses: vec!["127.0.0.1:0".to_owned()],
+
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
@@ -185,7 +186,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     };
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();

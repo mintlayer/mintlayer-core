@@ -637,7 +637,7 @@ async fn connection_timeout_rpc_notified<T>(
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
@@ -750,7 +750,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -774,11 +774,12 @@ where
 
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes,
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -794,7 +795,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -857,6 +858,8 @@ where
 
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
+        allow_discover_private_ips: true.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -870,14 +873,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -902,11 +904,13 @@ where
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -915,14 +919,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -941,11 +944,13 @@ where
 
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -954,14 +959,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(

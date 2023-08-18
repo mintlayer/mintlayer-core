@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -17,8 +17,8 @@ use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
-use itertools::Itertools;
 use p2p_types::socket_address::SocketAddress;
+use test_utils::random::Seed;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -30,18 +30,21 @@ use tokio::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
-    ChainstateHandle, DefaultTransactionVerificationStrategy,
+    ChainstateHandle, DefaultTransactionVerificationStrategy, Locator,
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
+        },
         config::create_mainnet,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
         TxOutput,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
@@ -50,7 +53,7 @@ use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     config::NodeType,
-    message::{SyncMessage, TransactionResponse},
+    message::{HeaderList, SyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
@@ -59,18 +62,21 @@ use crate::{
     Result, SyncingEventReceiver,
 };
 
+pub mod test_node_group;
+
 /// A timeout for blocking calls.
 const LONG_TIMEOUT: Duration = Duration::from_secs(60);
 /// A short timeout for events that shouldn't occur.
 const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// A wrapper over other ends of the sync manager channels.
+/// A wrapper over other ends of the sync manager channels that simulates a test node.
 ///
 /// Provides methods for manipulating and observing the sync manager state.
-pub struct SyncManagerHandle {
-    pub peer_id: PeerId,
-    peer_manager_receiver: UnboundedReceiver<PeerManagerEvent>,
-    sync_event_sender: UnboundedSender<SyncingEvent>,
+pub struct TestNode {
+    /// This node's peer id, as seen by other nodes.
+    peer_id: PeerId,
+    peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
+    syncing_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
@@ -82,15 +88,15 @@ pub struct SyncManagerHandle {
     connected_peers: BTreeMap<PeerId, Sender<SyncMessage>>,
 }
 
-impl SyncManagerHandle {
+impl TestNode {
     /// Starts the sync manager event loop and returns a handle for manipulating and observing the
     /// manager state.
     pub async fn start() -> Self {
         Self::builder().build().await
     }
 
-    pub fn builder() -> SyncManagerHandleBuilder {
-        SyncManagerHandleBuilder::new()
+    pub fn builder() -> TestNodeBuilder {
+        TestNodeBuilder::new()
     }
 
     pub async fn start_with_params(
@@ -102,26 +108,26 @@ impl SyncManagerHandle {
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
     ) -> Self {
-        let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
+        let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
         let connected_peers = Default::default();
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
-        let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
+        let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
         };
-        let sync_event_receiver = SyncingEventReceiverMock {
-            events_receiver: messaging_receiver,
+        let syncing_event_receiver_mock = SyncingEventReceiverMock {
+            events_receiver: syncing_event_receiver,
         };
 
         let sync = BlockSyncManager::<NetworkingServiceStub>::new(
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver_mock,
             chainstate_handle.clone(),
             mempool_handle.clone(),
-            peer_manager_sender,
+            peer_manager_event_sender,
             time_getter,
         );
 
@@ -135,8 +141,8 @@ impl SyncManagerHandle {
 
         Self {
             peer_id: PeerId::new(),
-            peer_manager_receiver,
-            sync_event_sender: handle_sender,
+            peer_manager_event_receiver,
+            syncing_event_sender,
             sync_event_receiver: handle_receiver,
             error_receiver,
             sync_manager_handle,
@@ -160,7 +166,7 @@ impl SyncManagerHandle {
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
         let (sync_tx, sync_rx) = mpsc::channel(20);
-        self.sync_event_sender
+        self.syncing_event_sender
             .send(SyncingEvent::Connected {
                 peer_id: peer,
                 services: NodeType::Full.into(),
@@ -181,11 +187,19 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Disconnected` event.
     pub fn disconnect_peer(&mut self, peer: PeerId) {
-        self.sync_event_sender
+        self.syncing_event_sender
             .send(SyncingEvent::Disconnected { peer_id: peer })
             .unwrap();
         self.connected_peers.remove(&peer);
     }
+
+    // TODO: naming of methods in this struct should be reconsidered.
+    // E.g. message, try_message, adjust_peer_score_event should at least get a prefix like
+    // "get", "receive" etc.
+    // Secondly, send_message and send_headers should be named more specifically, e.g.
+    // "send_message_as_if_from" to indicate that they "send" a message to the current node
+    // and not from it.
+    // Also, methods dealing with SyncMessage's should probably have "sync" in their name.
 
     /// Sends an announcement to the sync manager.
     pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
@@ -210,6 +224,11 @@ impl SyncManagerHandle {
         }
     }
 
+    /// Send the specified headers.
+    pub async fn send_headers(&mut self, peer: PeerId, headers: Vec<SignedBlockHeader>) {
+        self.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
+    }
+
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.error_receiver.recv()).await.unwrap_err();
@@ -217,7 +236,7 @@ impl SyncManagerHandle {
 
     /// Receives the `AdjustPeerScore` event from the peer manager.
     pub async fn adjust_peer_score_event(&mut self) -> (PeerId, u32) {
-        match self.peer_manager_receiver.recv().await.unwrap() {
+        match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
                 sender.send(Ok(()));
                 (peer, score)
@@ -227,7 +246,7 @@ impl SyncManagerHandle {
     }
 
     pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
-        match self.peer_manager_receiver.recv().await.unwrap() {
+        match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
                 assert_eq!(id, peer_id);
                 sender.send(Ok(()));
@@ -239,7 +258,7 @@ impl SyncManagerHandle {
     pub async fn assert_no_disconnect_peer_event(&mut self, id: PeerId) {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
-                match self.peer_manager_receiver.recv().await.unwrap() {
+                match self.peer_manager_event_receiver.recv().await.unwrap() {
                     PeerManagerEvent::Disconnect(peer_id, _peerdb_action, _) if id == peer_id => {
                         break;
                     }
@@ -253,7 +272,7 @@ impl SyncManagerHandle {
 
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
+        time::timeout(SHORT_TIMEOUT, self.peer_manager_event_receiver.recv())
             .await
             .unwrap_err();
     }
@@ -261,6 +280,16 @@ impl SyncManagerHandle {
     /// Panics if the sync manager sends an event (message or announcement).
     pub async fn assert_no_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
+    }
+
+    pub async fn assert_peer_score_adjustment(
+        &mut self,
+        expected_peer: PeerId,
+        expected_score: u32,
+    ) {
+        let (adjusted_peer, score) = self.adjust_peer_score_event().await;
+        assert_eq!(adjusted_peer, expected_peer);
+        assert_eq!(score, expected_score);
     }
 
     /// Awaits on the sync manager join handle and rethrows the panic.
@@ -273,7 +302,7 @@ impl SyncManagerHandle {
 
     pub async fn join_subsystem_manager(self) {
         // Shutdown sync manager first
-        drop(self.sync_event_sender);
+        drop(self.syncing_event_sender);
         let _ = self.sync_manager_handle.await;
 
         // Shutdown remaining subsystems
@@ -283,81 +312,19 @@ impl SyncManagerHandle {
         // Finally, when all services are down, receivers could be closed too
         drop(self.sync_event_receiver);
         drop(self.error_receiver);
-        drop(self.peer_manager_receiver);
+        drop(self.peer_manager_event_receiver);
     }
-}
 
-pub async fn sync_managers_in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
-    let best_blocks = futures::future::join_all(managers.iter().map(|manager| async {
-        manager
-            .chainstate()
-            .call(|this| this.get_best_block_id().unwrap())
+    pub async fn get_locator_from_height(&self, height: BlockHeight) -> Locator {
+        self.chainstate_handle
+            .call_mut(move |this| this.get_locator_from_height(height))
             .await
             .unwrap()
-    }))
-    .await;
-    best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
-}
-
-pub async fn try_sync_managers_once(
-    rng: &mut impl Rng,
-    managers: &mut [&mut SyncManagerHandle],
-    message_limit: usize,
-) -> bool {
-    let peer_ids = managers.iter().map(|mng| mng.peer_id).collect::<Vec<_>>();
-    for manager in managers.iter_mut() {
-        let sender_peer_id = manager.peer_id;
-
-        // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
-        let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
-        let requested_txid = get_random_hash(rng).into();
-        manager
-            .send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid))
-            .await;
-
-        if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
-            // There should be no peer scoring or disconnections
-            panic!("Unexpected message: {peer_event:?}");
-        }
-
-        for _ in 0..message_limit {
-            let (peer, sync_event) = manager.sync_event_receiver.recv().await.unwrap();
-
-            // Send sync messages between peers
-            match &sync_event {
-                SyncMessage::TransactionResponse(tx_resp) => match tx_resp {
-                    TransactionResponse::NotFound(txid) if *txid == requested_txid => {
-                        break;
-                    }
-                    _ => {}
-                },
-                message => {
-                    let other_manager = managers.iter_mut().find(|m| m.peer_id == peer).unwrap();
-                    let sync_tx =
-                        other_manager.connected_peers.get(&sender_peer_id).unwrap().clone();
-                    sync_tx.send(message.clone()).await.unwrap();
-                    return true;
-                }
-            }
-        }
+            .unwrap()
     }
-
-    false
 }
 
-pub async fn sync_managers(rng: &mut impl Rng, managers: &mut [&mut SyncManagerHandle]) {
-    let sync_managers_helper = async move {
-        while !sync_managers_in_sync(managers).await {
-            while try_sync_managers_once(rng, managers, usize::MAX).await {}
-        }
-    };
-
-    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper)
-        .await
-        .unwrap();
-}
-
-pub struct SyncManagerHandleBuilder {
+pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
@@ -365,7 +332,7 @@ pub struct SyncManagerHandleBuilder {
     blocks: Vec<Block>,
 }
 
-impl SyncManagerHandleBuilder {
+impl TestNodeBuilder {
     pub fn new() -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
@@ -401,8 +368,8 @@ impl SyncManagerHandleBuilder {
         self
     }
 
-    pub async fn build(self) -> SyncManagerHandle {
-        let SyncManagerHandleBuilder {
+    pub async fn build(self) -> TestNode {
+        let TestNodeBuilder {
             chain_config,
             p2p_config,
             chainstate,
@@ -440,7 +407,7 @@ impl SyncManagerHandleBuilder {
 
         let manager_handle = manager.main_in_task();
 
-        SyncManagerHandle::start_with_params(
+        TestNode::start_with_params(
             chain_config,
             p2p_config,
             chainstate.clone(),
@@ -490,15 +457,16 @@ impl NetworkingService for NetworkingServiceStub {
 struct MessagingHandleMock {
     events_sender: UnboundedSender<(PeerId, SyncMessage)>,
 }
-struct SyncingEventReceiverMock {
-    events_receiver: UnboundedReceiver<SyncingEvent>,
-}
 
 impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send((peer, message)).unwrap();
         Ok(())
     }
+}
+
+struct SyncingEventReceiverMock {
+    events_receiver: UnboundedReceiver<SyncingEvent>,
 }
 
 #[async_trait]
@@ -511,12 +479,15 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
     }
 }
 
-pub fn new_block(
+pub fn make_new_block(
     chain_config: &ChainConfig,
     prev_block: Option<&Block>,
-    timestamp: BlockTimestamp,
-    random_bytes: Vec<u8>,
+    time_getter: &TimeGetter,
+    rng: &mut impl Rng,
 ) -> Block {
+    let random_bytes = get_random_bytes(rng);
+    let timestamp = BlockTimestamp::from_duration_since_epoch(time_getter.get_time());
+
     let input = match prev_block {
         None => common::chain::OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
         Some(block) => {
@@ -549,15 +520,41 @@ pub fn new_block(
     .unwrap()
 }
 
-pub async fn new_top_blocks(
+pub fn make_new_blocks(
+    chain_config: &ChainConfig,
+    prev_block: Option<&Block>,
+    time_getter: &TimeGetter,
+    count: usize,
+    rng: &mut impl Rng,
+) -> Vec<Block> {
+    let mut result = Vec::new();
+    let mut last_block = prev_block;
+
+    for _ in 0..count {
+        let new_block = make_new_block(chain_config, last_block, time_getter, rng);
+
+        result.push(new_block);
+        last_block = result.last();
+    }
+
+    result
+}
+
+pub async fn make_new_top_blocks_return_headers(
     chainstate: &ChainstateHandle,
-    timestamp: BlockTimestamp,
-    random_bytes: Vec<u8>,
+    time_getter: TimeGetter,
+    rng: &mut impl Rng,
     start_distance_from_top: u64,
-    count: u32,
-) {
+    count: usize,
+) -> Vec<SignedBlockHeader> {
+    assert!(count > 0);
+
+    let new_rng = test_utils::random::make_seedable_rng(Seed::from_u64(rng.gen()));
+
     chainstate
         .call_mut(move |this| {
+            let mut new_rng = new_rng;
+            let mut block_headers = Vec::new();
             let start_height = this
                 .get_best_block_height()
                 .unwrap()
@@ -565,26 +562,46 @@ pub async fn new_top_blocks(
                 .saturating_sub(start_distance_from_top);
             let start_block_id =
                 this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
-            let mut start_block = match start_block_id.classify(this.get_chain_config()) {
+            let mut last_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
                 common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
             };
 
             for _ in 0..count {
-                let new_block = new_block(
+                let new_block = make_new_block(
                     this.get_chain_config(),
-                    start_block.as_ref(),
-                    timestamp,
-                    random_bytes.clone(),
+                    last_block.as_ref(),
+                    &time_getter,
+                    &mut new_rng,
                 );
 
+                block_headers.push(new_block.header().clone());
                 this.process_block(new_block.clone(), BlockSource::Local).unwrap();
-
-                start_block = Some(new_block);
+                last_block = Some(new_block);
             }
+
+            block_headers
         })
         .await
-        .unwrap();
+        .unwrap()
+}
+
+pub async fn make_new_top_blocks(
+    chainstate: &ChainstateHandle,
+    time_getter: TimeGetter,
+    rng: &mut impl Rng,
+    start_distance_from_top: u64,
+    count: usize,
+) -> Id<Block> {
+    let headers = make_new_top_blocks_return_headers(
+        chainstate,
+        time_getter,
+        rng,
+        start_distance_from_top,
+        count,
+    )
+    .await;
+    headers.last().unwrap().block_id()
 }
 
 pub fn get_random_hash(rng: &mut impl Rng) -> H256 {
