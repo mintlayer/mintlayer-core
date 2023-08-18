@@ -44,7 +44,7 @@ pub trait TxOriginExt {
 }
 
 impl TxOriginExt for TxOrigin {
-    const TEST: Self = TxOrigin::peer(p2p_types::PeerId::from_u64(1));
+    const TEST: Self = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
 }
 
 pub trait TxStatusExt: Sized {

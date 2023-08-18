@@ -118,7 +118,7 @@ where
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
         let res = self
             .mempool_handle
-            .call_mut(move |mempool| mempool.add_transaction_local(tx, LocalTxOrigin::LocalP2p))
+            .call_mut(move |mempool| mempool.add_transaction_local(tx, LocalTxOrigin::P2p))
             .await??;
         Ok(res)
     }

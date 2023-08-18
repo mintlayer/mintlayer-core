@@ -581,7 +581,7 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> Result<TxMempoolEntry, MempoolPolicyError> {
         use crate::tx_origin::LocalTxOrigin;
-        let entry = TxEntry::new(tx, creation_time, LocalTxOrigin::LocalMempool.into());
+        let entry = TxEntry::new(tx, creation_time, LocalTxOrigin::Mempool.into());
         Self::new(TxEntryWithFee::new(entry, fee), parents, ancestors)
     }
 
