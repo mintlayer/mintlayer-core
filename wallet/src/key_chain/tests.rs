@@ -28,6 +28,7 @@ use test_utils::assert_encoded_eq;
 use wallet_storage::{
     DefaultBackend, Store, TransactionRwLocked, TransactionRwUnlocked, Transactional,
 };
+use wallet_types::seed_phrase::SaveSeedPhrase;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, AccountInfo};
 
 const MNEMONIC: &str =
@@ -69,8 +70,14 @@ fn key_chain_creation(
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None, false).unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        chain_config,
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::Save,
+    )
+    .unwrap();
 
     let mut key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -126,9 +133,14 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None, false)
-            .unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        chain_config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::Save,
+    )
+    .unwrap();
     let mut key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
         .unwrap();
@@ -204,9 +216,14 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None, false)
-            .unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        chain_config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::Save,
+    )
+    .unwrap();
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
         .unwrap();

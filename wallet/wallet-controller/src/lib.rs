@@ -80,7 +80,7 @@ pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
-use wallet_types::{with_locked::WithLocked, BlockInfo};
+use wallet_types::{seed_phrase::SaveSeedPhrase, with_locked::WithLocked, BlockInfo};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -146,7 +146,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         file_path: impl AsRef<Path>,
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
-        save_seed_phrase: bool,
+        save_seed_phrase: SaveSeedPhrase,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),

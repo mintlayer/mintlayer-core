@@ -511,10 +511,7 @@ impl CommandHandler {
                     wallet_path,
                     mnemonic.clone(),
                     None,
-                    match save_seed_phrase {
-                        CliSaveSeedPhrase::Save => true,
-                        CliSaveSeedPhrase::DoNotSave => false,
-                    },
+                    save_seed_phrase.to_walet_type(),
                 )
                 .map_err(WalletCliError::Controller)?;
 

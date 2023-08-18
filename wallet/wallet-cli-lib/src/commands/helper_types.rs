@@ -23,7 +23,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, BlockHeight},
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{seed_phrase::SaveSeedPhrase, with_locked::WithLocked};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -145,6 +145,15 @@ impl CliWithLocked {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliSaveSeedPhrase {
-    Save,
-    DoNotSave,
+    SaveSeedPhrase,
+    DoNotSaveSeedPhrase,
+}
+
+impl CliSaveSeedPhrase {
+    pub fn to_walet_type(self) -> SaveSeedPhrase {
+        match self {
+            Self::SaveSeedPhrase => SaveSeedPhrase::Save,
+            Self::DoNotSaveSeedPhrase => SaveSeedPhrase::DoNotSave,
+        }
+    }
 }

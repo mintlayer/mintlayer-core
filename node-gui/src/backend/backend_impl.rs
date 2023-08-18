@@ -31,7 +31,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{seed_phrase::SaveSeedPhrase, with_locked::WithLocked};
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -127,7 +127,7 @@ impl Backend {
             file_path.clone(),
             mnemonic,
             None,
-            true,
+            SaveSeedPhrase::Save,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 

@@ -30,6 +30,7 @@ use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::seed_phrase::SaveSeedPhrase;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
 const MNEMONIC: &str =
@@ -41,9 +42,14 @@ fn account_addresses() {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
-            .unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::DoNotSave,
+    )
+    .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -71,9 +77,14 @@ fn account_addresses_lookahead() {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
-            .unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::DoNotSave,
+    )
+    .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
@@ -113,9 +124,14 @@ fn sign_transaction(#[case] seed: Seed) {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None, false)
-            .unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        SaveSeedPhrase::DoNotSave,
+    )
+    .unwrap();
 
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)

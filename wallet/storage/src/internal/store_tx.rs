@@ -509,7 +509,10 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
 
     fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializedSeedPhrase>> {
         let phrase = self.get_seed_phrase()?;
+        // overwrite the old seed phrase
+        self.set_seed_phrase(SerializedSeedPhrase::zero_seed_phrase())?;
         self.storage.get_mut::<db::DBSeedPhrase, _>().del(&SeedPhraseConstant {})?;
+        // TODO: probably will need to VACUUM the sqlite DB to make sure it is deleted
         Ok(phrase)
     }
 }

@@ -16,6 +16,20 @@
 use serialization::{Decode, Encode};
 use std::fmt::Display;
 
+pub enum SaveSeedPhrase {
+    Save,
+    DoNotSave,
+}
+
+impl SaveSeedPhrase {
+    pub fn should_save(self) -> bool {
+        match self {
+            Self::Save => true,
+            Self::DoNotSave => false,
+        }
+    }
+}
+
 /// Just an empty struct used as key for the DB table
 /// It only represents a single value as there can be only one root key
 #[derive(PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -27,6 +41,14 @@ pub enum SeedPhraseLanguage {
     English,
 }
 
+impl SeedPhraseLanguage {
+    fn new(language: bip39::Language) -> Self {
+        match language {
+            bip39::Language::English => Self::English,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum SerializedSeedPhrase {
     #[codec(index = 0)]
@@ -34,14 +56,27 @@ pub enum SerializedSeedPhrase {
 }
 
 impl SerializedSeedPhrase {
+    pub fn zero_seed_phrase() -> Self {
+        SerializedSeedPhrase::V0(
+            SeedPhraseLanguage::English,
+            SeedPhrase {
+                mnemonic: zeroize::Zeroizing::new(vec![String::new(); 24]),
+            },
+        )
+    }
+
     pub fn new(mnemonic: zeroize::Zeroizing<bip39::Mnemonic>) -> Self {
-        Self::V0(SeedPhraseLanguage::English, SeedPhrase::new(mnemonic))
+        Self::V0(
+            SeedPhraseLanguage::new(mnemonic.language()),
+            SeedPhrase::new(mnemonic),
+        )
     }
 }
 
 impl Display for SerializedSeedPhrase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            //FIXME write language as well
             Self::V0(_, words) => f.write_str(words.mnemonic.join(" ").as_str()),
         }
     }
