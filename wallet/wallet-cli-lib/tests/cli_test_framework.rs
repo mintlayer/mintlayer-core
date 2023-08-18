@@ -200,9 +200,15 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
 
     let mut manager = subsystem::Manager::new("wallet-cli-test-manager");
 
+    let chainstate_config = {
+        let mut chainstate_config = ChainstateConfig::new();
+        chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
+        chainstate_config
+    };
+
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
-        ChainstateConfig::new(),
+        chainstate_config,
         chainstate_storage::inmemory::Store::new_empty().unwrap(),
         DefaultTransactionVerificationStrategy::new(),
         None,
