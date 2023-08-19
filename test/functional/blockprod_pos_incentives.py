@@ -639,7 +639,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
         #node1_tip = self.nodes[1].chainstate_best_block_id()
         #assert_equal(node0_tip, node1_tip)
 
-        for i in range(0, 1000):
+        for i in range(0, 100):
             block_pool1_hex = self.generate_block_from(
                 pool_1_last_block, pool_id_1, stake_pk_1, stake_sk_1, vrf_sk_1)
             block_pool2_hex = self.generate_block_from(

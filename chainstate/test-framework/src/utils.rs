@@ -422,7 +422,9 @@ pub fn pos_mine(
 ) -> Option<(PoSData, BlockTimestamp)> {
     let mut timestamp = initial_timestamp;
     // FIXME: pass pledge amount as parameter
-    let pledge_amount = Amount::from_atoms(1);
+    let pledge_amount = common::chain::Mlt::from_mlt(40_000);
+    // FIXME: get from chain config
+    let total_supply = common::chain::Mlt::from_mlt(599_990_800);
 
     for _ in 0..1000 {
         let transcript = chainstate_types::vrf_tools::construct_transcript(
@@ -447,8 +449,9 @@ pub fn pos_mine(
             &pos_data,
             &vrf_pk,
             timestamp,
-            pledge_amount,
+            pledge_amount.to_amount_atoms(),
             pool_balance,
+            total_supply.to_amount_atoms(),
         )
         .is_ok()
         {

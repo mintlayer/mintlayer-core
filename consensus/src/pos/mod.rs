@@ -39,10 +39,13 @@ use common::{
 };
 use crypto::vrf::VRFPublicKey;
 use logging::log;
+use num::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
-use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
-use utils::ensure;
+use utils::{
+    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
+    ensure,
+};
 use utxo::UtxosView;
 
 use crate::{
@@ -60,25 +63,60 @@ pub enum StakeResult {
 
 type Rational128 = num::rational::Ratio<u128>;
 
-const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 2);
-const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(3, 10);
+const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 1000);
+const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789, 1000);
 
 fn pool_balance_power(
     pledge_amount: Amount,
     pool_balance: Amount,
-    total_stake: Amount,
-) -> Rational128 {
-    let relative_pool_stake = Rational128::new(pool_balance.into_atoms(), total_stake.into_atoms());
+    total_supply: Amount,
+) -> Option<Rational128> {
+    //println!(
+    //    "pledge: {:?}, balance: {:?}, total_supply: {:?}",
+    //    pledge_amount, pool_balance, total_supply
+    //);
+
+    let relative_pool_stake =
+        Rational128::new(pool_balance.into_atoms(), total_supply.into_atoms());
     let relative_pledge_amount =
-        Rational128::new(pledge_amount.into_atoms(), total_stake.into_atoms());
+        Rational128::new(pledge_amount.into_atoms(), total_supply.into_atoms());
 
     let z = POOL_SATURATION_LEVEL;
     let a = PLEDGE_INFLUENCE_PARAMETER;
     let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
     let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
 
-    // FIXME: overflow on mul?
-    let result = (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1);
+    assert!(
+        sigma <= z,
+        "Relative stake cannot be greater then saturation level"
+    );
+    assert!(
+        s <= sigma,
+        "Relative pledge cannot be greater then relative stake"
+    );
+
+    //                 ⎛            ⎛z - sigma⎞⎞
+    //                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
+    //                 ⎜            ⎝    z    ⎠⎟
+    // sigma + s ⋅ a ⋅ ⎜───────────────────────⎟
+    //                 ⎝            z          ⎠
+    // ─────────────────────────────────────────
+    //                a + 1
+
+    // t1 = (z - sigma) / z * s
+    let t1 = z
+        .checked_sub(&sigma)
+        .and_then(|v| v.checked_div(&z))
+        .and_then(|v| v.checked_mul(&s))?;
+    // t2 = (sigma - t1) / z * a * s
+    let t2 = sigma
+        .checked_sub(&t1)
+        .and_then(|v| v.checked_div(&z))
+        .and_then(|v| v.checked_mul(&a))
+        .and_then(|v| v.checked_mul(&s))?;
+    // t3 = a + 1
+    let t3 = a.checked_add(&1.into())?;
+    let result = sigma.checked_add(&t2).and_then(|v| v.checked_div(&t3));
     result
 }
 
@@ -90,6 +128,7 @@ pub fn check_pos_hash(
     block_timestamp: BlockTimestamp,
     pledge_amount: Amount,
     pool_balance: Amount,
+    total_supply: Amount,
 ) -> Result<(), ConsensusPoSError> {
     let target: Uint256 = pos_data
         .compact_target()
@@ -107,16 +146,11 @@ pub fn check_pos_hash(
     .into();
 
     let hash: Uint512 = hash.into();
-    // FIXME: retrieve total stake from db
-    let pool_balance_power = pool_balance_power(
-        pledge_amount,
-        pool_balance,
-        Amount::from_atoms(400_000 * Mlt::ATOMS_PER_MLT),
-    );
-    println!("Pool balance power: {}", pool_balance_power);
+    let pool_balance_power = pool_balance_power(pledge_amount, pool_balance, total_supply)
+        .ok_or(ConsensusPoSError::PoolBalancePowerArithmeticsFailed)?;
+    // FIXME: multiplication can overflow
     let pool_balance: Uint512 =
         (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
-    println!("Pool balance power applied: {:?}", pool_balance);
 
     ensure!(
         hash <= pool_balance * target.into(),
@@ -240,6 +274,7 @@ where
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
         .pledge_amount();
+    let total_supply = Mlt::from_mlt(599_990_800); // FIXME: get from chain config
 
     check_pos_hash(
         current_epoch_index,
@@ -249,6 +284,7 @@ where
         header.timestamp(),
         pledge_amount,
         pool_balance,
+        total_supply.to_amount_atoms(),
     )?;
 
     Ok(())
@@ -264,6 +300,7 @@ pub fn stake(
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
+    let total_supply = Mlt::from_mlt(599_990_800); // FIXME: get from chain config
 
     let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
@@ -301,6 +338,7 @@ pub fn stake(
             block_timestamp,
             finalize_pos_data.pledge_amount(),
             finalize_pos_data.pool_balance(),
+            total_supply.to_amount_atoms(),
         )
         .is_ok()
         {
