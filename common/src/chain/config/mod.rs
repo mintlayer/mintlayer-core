@@ -157,6 +157,7 @@ pub struct ChainConfig {
     coin_decimals: u8,
     coin_ticker: &'static str,
     emission_schedule: EmissionSchedule,
+    final_supply: Option<Mlt>, // `None` if the supply increases indefinitely
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
@@ -490,6 +491,10 @@ impl ChainConfig {
     /// Min pledge required to create a stake pool
     pub fn min_stake_pool_pledge(&self) -> Amount {
         self.min_stake_pool_pledge
+    }
+
+    pub fn final_supply(&self) -> Option<Mlt> {
+        self.final_supply
     }
 }
 

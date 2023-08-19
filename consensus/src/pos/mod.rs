@@ -32,7 +32,7 @@ use common::{
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
         config::EpochIndex,
-        ChainConfig, Mlt, PoSStatus, TxOutput,
+        ChainConfig, PoSStatus, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
@@ -274,7 +274,9 @@ where
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
         .pledge_amount();
-    let total_supply = Mlt::from_mlt(599_990_800); // FIXME: get from chain config
+    let total_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
     check_pos_hash(
         current_epoch_index,
@@ -300,7 +302,9 @@ pub fn stake(
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
-    let total_supply = Mlt::from_mlt(599_990_800); // FIXME: get from chain config
+    let total_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
     let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 

@@ -17,6 +17,7 @@ use std::num::NonZeroU64;
 
 use crate::{framework::BlockOutputs, TestChainstate, TestFramework};
 use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
     chain::{
@@ -30,7 +31,7 @@ use common::{
         },
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
-        Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades,
         OutPointSourceId, PoolId, RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
         UtxoOutPoint,
     },
@@ -42,6 +43,7 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
+use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -410,22 +412,23 @@ pub fn produce_kernel_signature(
 
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
+    storage: &impl BlockchainStorageRead,
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: UtxoOutPoint,
     kernel_witness: InputWitness,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
-    pool_balance: Amount,
+    total_supply: Mlt,
     epoch_index: EpochIndex,
     target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {
-    let mut timestamp = initial_timestamp;
-    // FIXME: pass pledge amount as parameter
-    let pledge_amount = common::chain::Mlt::from_mlt(40_000);
-    // FIXME: get from chain config
-    let total_supply = common::chain::Mlt::from_mlt(599_990_800);
+    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
 
+    let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
+    let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().pledge_amount();
+
+    let mut timestamp = initial_timestamp;
     for _ in 0..1000 {
         let transcript = chainstate_types::vrf_tools::construct_transcript(
             epoch_index,
@@ -449,7 +452,7 @@ pub fn pos_mine(
             &pos_data,
             &vrf_pk,
             timestamp,
-            pledge_amount.to_amount_atoms(),
+            pledge_amount,
             pool_balance,
             total_supply.to_amount_atoms(),
         )

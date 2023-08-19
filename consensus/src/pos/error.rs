@@ -89,4 +89,6 @@ pub enum ConsensusPoSError {
     PoSBlockTimeStrictOrderInvalid(Id<Block>),
     #[error("Pool balance power arithmetics failed")]
     PoolBalancePowerArithmeticsFailed,
+    #[error("Finite total supply is required")]
+    FiniteTotalSupplyIsRequired,
 }

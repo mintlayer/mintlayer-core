@@ -32,7 +32,7 @@ use crypto::{
 use super::block_index_handle_impl::TestBlockIndexHandle;
 
 pub fn calculate_new_target(
-    tf: &mut TestFramework,
+    tf: &TestFramework,
     block_height: BlockHeight,
 ) -> Result<Compact, ConsensusPoSError> {
     let pos_status =
