@@ -274,18 +274,19 @@ impl<'f> PoSBlockBuilder<'f> {
         );
 
         let new_block_height = parent_block_index.block_height().next_height();
-        let current_difficulty = match self
+        let pos_status = match self
             .framework
             .chainstate
             .get_chain_config()
             .net_upgrade()
             .consensus_status(new_block_height)
         {
-            RequiredConsensus::PoS(status) => status.get_chain_config().target_limit(),
+            RequiredConsensus::PoS(status) => status,
             RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
                 panic!("Invalid consensus")
             }
         };
+        let current_difficulty = pos_status.get_chain_config().target_limit();
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
         let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
 
@@ -300,6 +301,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         pos_mine(
             &self.framework.storage,
+            pos_status.get_chain_config(),
             BlockTimestamp::from_duration_since_epoch(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),

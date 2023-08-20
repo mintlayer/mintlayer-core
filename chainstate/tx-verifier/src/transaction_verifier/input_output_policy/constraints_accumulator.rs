@@ -207,8 +207,8 @@ mod tests {
         chain::{
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
             timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade,
-            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId,
-            TxOutput, UpgradeVersion, UtxoOutPoint,
+            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfig,
+            PoSConsensusVersion, PoolId, TxOutput, UpgradeVersion, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
         Uint256,
@@ -433,6 +433,7 @@ mod tests {
                     required_spend_share_maturity.into(),
                     2,
                     PerThousand::new(0).unwrap(),
+                    PoSConsensusVersion::CURRENT,
                 )
                 .unwrap(),
             }),

@@ -91,4 +91,6 @@ pub enum ConsensusPoSError {
     PoolBalancePowerArithmeticsFailed,
     #[error("Finite total supply is required")]
     FiniteTotalSupplyIsRequired,
+    #[error("Unsupported PoS consensus version")]
+    UnsupportedConsensusVersion,
 }

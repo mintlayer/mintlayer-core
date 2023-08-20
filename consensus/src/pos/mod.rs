@@ -15,6 +15,7 @@
 
 pub mod block_sig;
 pub mod error;
+pub mod hash_check;
 pub mod input_data;
 pub mod kernel;
 pub mod target;
@@ -31,15 +32,11 @@ use common::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
-        config::EpochIndex,
-        ChainConfig, PoSStatus, TxOutput,
+        ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Idable},
-    Uint256, Uint512,
+    primitives::{BlockHeight, Idable},
 };
-use crypto::vrf::VRFPublicKey;
 use logging::log;
-use num::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
 use utils::{
@@ -59,105 +56,6 @@ pub enum StakeResult {
     Success,
     Failed,
     Stopped,
-}
-
-type Rational128 = num::rational::Ratio<u128>;
-
-const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 1000);
-const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789, 1000);
-
-fn pool_balance_power(
-    pledge_amount: Amount,
-    pool_balance: Amount,
-    total_supply: Amount,
-) -> Option<Rational128> {
-    //println!(
-    //    "pledge: {:?}, balance: {:?}, total_supply: {:?}",
-    //    pledge_amount, pool_balance, total_supply
-    //);
-
-    let relative_pool_stake =
-        Rational128::new(pool_balance.into_atoms(), total_supply.into_atoms());
-    let relative_pledge_amount =
-        Rational128::new(pledge_amount.into_atoms(), total_supply.into_atoms());
-
-    let z = POOL_SATURATION_LEVEL;
-    let a = PLEDGE_INFLUENCE_PARAMETER;
-    let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
-    let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
-
-    assert!(
-        sigma <= z,
-        "Relative stake cannot be greater then saturation level"
-    );
-    assert!(
-        s <= sigma,
-        "Relative pledge cannot be greater then relative stake"
-    );
-
-    //                 ⎛            ⎛z - sigma⎞⎞
-    //                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
-    //                 ⎜            ⎝    z    ⎠⎟
-    // sigma + s ⋅ a ⋅ ⎜───────────────────────⎟
-    //                 ⎝            z          ⎠
-    // ─────────────────────────────────────────
-    //                a + 1
-
-    // t1 = (z - sigma) / z * s
-    let t1 = z
-        .checked_sub(&sigma)
-        .and_then(|v| v.checked_div(&z))
-        .and_then(|v| v.checked_mul(&s))?;
-    // t2 = (sigma - t1) / z * a * s
-    let t2 = sigma
-        .checked_sub(&t1)
-        .and_then(|v| v.checked_div(&z))
-        .and_then(|v| v.checked_mul(&a))
-        .and_then(|v| v.checked_mul(&s))?;
-    // t3 = a + 1
-    let t3 = a.checked_add(&1.into())?;
-    let result = sigma.checked_add(&t2).and_then(|v| v.checked_div(&t3));
-    result
-}
-
-pub fn check_pos_hash(
-    epoch_index: EpochIndex,
-    random_seed: &PoSRandomness,
-    pos_data: &PoSData,
-    vrf_pub_key: &VRFPublicKey,
-    block_timestamp: BlockTimestamp,
-    pledge_amount: Amount,
-    pool_balance: Amount,
-    total_supply: Amount,
-) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
-    let hash: Uint256 = PoSRandomness::from_block(
-        epoch_index,
-        block_timestamp,
-        random_seed,
-        pos_data,
-        vrf_pub_key,
-    )?
-    .value()
-    .into();
-
-    let hash: Uint512 = hash.into();
-    let pool_balance_power = pool_balance_power(pledge_amount, pool_balance, total_supply)
-        .ok_or(ConsensusPoSError::PoolBalancePowerArithmeticsFailed)?;
-    // FIXME: multiplication can overflow
-    let pool_balance: Uint512 =
-        (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
-
-    ensure!(
-        hash <= pool_balance * target.into(),
-        ConsensusPoSError::StakeKernelHashTooHigh
-    );
-
-    Ok(())
 }
 
 fn randomness_of_sealed_epoch<S: EpochStorageRead>(
@@ -278,7 +176,8 @@ where
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    check_pos_hash(
+    hash_check::check_pos_hash(
+        pos_status.get_chain_config(),
         current_epoch_index,
         &random_seed,
         pos_data,
@@ -294,6 +193,7 @@ where
 
 pub fn stake(
     chain_config: &ChainConfig,
+    pos_config: &PoSChainConfig,
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
@@ -334,7 +234,8 @@ pub fn stake(
 
         pos_data.update_vrf_data(vrf_data);
 
-        if check_pos_hash(
+        if hash_check::check_pos_hash(
+            pos_config,
             finalize_pos_data.epoch_index(),
             sealed_epoch_randomness,
             pos_data,

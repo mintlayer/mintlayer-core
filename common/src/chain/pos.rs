@@ -34,6 +34,17 @@ pub type PoolId = Id<Pool>;
 pub enum Delegation {}
 pub type DelegationId = Id<Delegation>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub struct PoSConsensusVersion(u32);
+
+impl PoSConsensusVersion {
+    // FIXME: add versions description
+    pub const V0: Self = Self(0);
+    pub const V1: Self = Self(1);
+
+    pub const CURRENT: Self = Self::V1;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct PoSChainConfig {
     /// The lowest possible difficulty
@@ -48,6 +59,7 @@ pub struct PoSChainConfig {
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
     difficulty_change_limit: PerThousand,
+    consensus_version: PoSConsensusVersion,
 }
 
 impl Addressable for PoolId {
@@ -98,6 +110,7 @@ impl PoSChainConfig {
         spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
+        consensus_version: PoSConsensusVersion,
     ) -> Option<Self> {
         let target_block_time = NonZeroU64::new(target_block_time)?;
         if block_count_to_average_for_blocktime < 2 {
@@ -111,6 +124,7 @@ impl PoSChainConfig {
             spend_share_maturity_distance,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
+            consensus_version,
         })
     }
 
@@ -137,6 +151,10 @@ impl PoSChainConfig {
     pub fn difficulty_change_limit(&self) -> PerThousand {
         self.difficulty_change_limit
     }
+
+    pub fn consensus_version(&self) -> PoSConsensusVersion {
+        self.consensus_version
+    }
 }
 
 const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
@@ -153,6 +171,7 @@ pub fn create_testnet_pos_config() -> PoSChainConfig {
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
+        consensus_version: PoSConsensusVersion::CURRENT,
     }
 }
 
@@ -164,6 +183,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
+        consensus_version: PoSConsensusVersion::CURRENT,
     }
 }
 
@@ -178,6 +198,7 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
+        consensus_version: PoSConsensusVersion::CURRENT,
     }
 }
 
