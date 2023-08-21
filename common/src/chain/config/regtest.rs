@@ -36,6 +36,7 @@ use crypto::{
 use hex::FromHex;
 use serialization::hex::HexEncode;
 
+const GENESIS_BLOCK_TIMESTAMP: u64 = 1639975460;
 const GENESIS_POOL_ID: &str = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4";
 const GENESIS_STAKE_PRIVATE_KEY: &str =
     "008717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638";
@@ -240,6 +241,7 @@ pub fn genesis_values(
 
 pub fn create_regtest_pos_genesis(
     genesis_staking_settings: GenesisStakingSettings,
+    genesis_block_timestamp: Option<u64>,
     premine_destination: Destination,
 ) -> Genesis {
     let (
@@ -259,8 +261,26 @@ pub fn create_regtest_pos_genesis(
 
     Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(1639975460),
+        BlockTimestamp::from_int_seconds(
+            genesis_block_timestamp.unwrap_or(GENESIS_BLOCK_TIMESTAMP),
+        ),
         vec![premine_output, create_genesis_pool_txoutput],
+    )
+}
+
+pub fn create_regtest_pow_genesis(
+    genesis_block_timestamp: Option<u64>,
+    premine_destination: Destination,
+) -> Genesis {
+    let premine_output =
+        TxOutput::Transfer(OutputValue::Coin(DEFAULT_INITIAL_MINT), premine_destination);
+
+    Genesis::new(
+        String::new(),
+        BlockTimestamp::from_int_seconds(
+            genesis_block_timestamp.unwrap_or(GENESIS_BLOCK_TIMESTAMP),
+        ),
+        vec![premine_output],
     )
 }
 
