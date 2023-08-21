@@ -39,10 +39,7 @@ pub trait P2pInterface: Send + Sync {
     async fn add_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
     async fn remove_reserved_node(&mut self, addr: IpOrSocketAddress) -> crate::Result<()>;
 
-    async fn submit_transaction(
-        &mut self,
-        tx: SignedTransaction,
-    ) -> crate::Result<mempool::TxStatus>;
+    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()>;
 
     fn subscribe_to_events(
         &mut self,

@@ -32,7 +32,6 @@ use std::{
     time::Duration,
 };
 
-use mempool_types::TxStatus;
 use utils::tap_error_log::LogError;
 
 use common::{
@@ -315,7 +314,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         amount_to_issue: Amount,
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
-    ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
+    ) -> Result<TokenId, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -339,7 +338,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )
             .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
+        self.broadcast_to_mempool(tx).await?;
+
+        Ok(token_id)
     }
 
     pub async fn issue_new_nft(
@@ -347,7 +348,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         address: Address<Destination>,
         metadata: Metadata,
-    ) -> Result<(TokenId, TxStatus), ControllerError<T>> {
+    ) -> Result<TokenId, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -366,7 +367,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )
             .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await.map(|status| (token_id, status))
+        self.broadcast_to_mempool(tx).await?;
+
+        Ok(token_id)
     }
 
     pub fn new_address(
@@ -439,28 +442,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     async fn broadcast_to_mempool(
         &mut self,
         tx: SignedTransaction,
-    ) -> Result<TxStatus, ControllerError<T>> {
-        let status = self
-            .rpc_client
+    ) -> Result<(), ControllerError<T>> {
+        self.rpc_client
             .submit_transaction(tx.clone())
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        match status {
-            mempool::TxStatus::InMempool => {
-                self.wallet
-                    .add_unconfirmed_tx(tx, &self.wallet_events)
-                    .map_err(ControllerError::WalletError)?;
-            }
-            mempool::TxStatus::InOrphanPool => {
-                // Mempool should reject the transaction and not return `InOrphanPool`
-                log::warn!("Newly created Transaction was sent to the orphan pool")
-                // We will not save the Tx in our wallet so that we don't start building other
-                // transactions on top of it
-            }
-        };
+        self.wallet
+            .add_unconfirmed_tx(tx, &self.wallet_events)
+            .map_err(ControllerError::WalletError)?;
 
-        Ok(status)
+        Ok(())
     }
 
     pub async fn send_to_address(
@@ -468,7 +460,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         address: Address<Destination>,
         amount: Amount,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
         let current_fee_rate = self
@@ -497,7 +489,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         address: Address<Destination>,
         pool_id: PoolId,
-    ) -> Result<(DelegationId, TxStatus), ControllerError<T>> {
+    ) -> Result<DelegationId, ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -517,7 +509,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )
             .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await.map(|status| (delegation_id, status))
+        self.broadcast_to_mempool(tx).await?;
+
+        Ok(delegation_id)
     }
 
     pub async fn delegate_staking(
@@ -525,7 +519,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let output = TxOutput::DelegateStaking(amount, delegation_id);
 
         let current_fee_rate = self
@@ -554,7 +548,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -581,7 +575,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         token_id: TokenId,
         address: Address<Destination>,
         amount: Amount,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -633,7 +627,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         decommission_key: Option<PublicKey>,
         margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)
@@ -664,7 +658,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         account_index: U31,
         pool_id: PoolId,
-    ) -> Result<TxStatus, ControllerError<T>> {
+    ) -> Result<(), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
             .mempool_get_fee_rate(IN_TOP_N_MB)

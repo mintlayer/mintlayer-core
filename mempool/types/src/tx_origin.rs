@@ -26,22 +26,6 @@ pub enum TxOrigin {
 }
 
 impl TxOrigin {
-    pub const fn peer(peer_id: PeerId) -> Self {
-        Self::Remote(RemoteTxOrigin(peer_id))
-    }
-
-    pub const fn local_mempool() -> Self {
-        Self::Local(LocalTxOrigin::LocalMempool)
-    }
-
-    pub const fn local_p2p() -> Self {
-        Self::Local(LocalTxOrigin::LocalP2p)
-    }
-
-    pub const fn past_block() -> Self {
-        Self::Local(LocalTxOrigin::PastBlock)
-    }
-
     /// Should this transaction be passed on to peers once accepted?
     pub fn should_propagate(self) -> bool {
         match self {
@@ -67,10 +51,10 @@ impl From<RemoteTxOrigin> for TxOrigin {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum LocalTxOrigin {
     /// Transaction was submitted to local node's mempool. It should not be propagated further.
-    LocalMempool,
+    Mempool,
 
     /// Transaction was submitted via local node's RPC subsystem. It should be propagated if valid.
-    LocalP2p,
+    P2p,
 
     /// Transaction was in a block but moved into the mempool upon a reorg.
     PastBlock,
@@ -79,8 +63,8 @@ pub enum LocalTxOrigin {
 impl LocalTxOrigin {
     pub fn should_propagate(self) -> bool {
         match self {
-            LocalTxOrigin::LocalMempool => false,
-            LocalTxOrigin::LocalP2p => true,
+            LocalTxOrigin::Mempool => false,
+            LocalTxOrigin::P2p => true,
             LocalTxOrigin::PastBlock => false,
         }
     }
@@ -94,7 +78,7 @@ impl LocalTxOrigin {
 pub struct RemoteTxOrigin(PeerId);
 
 impl RemoteTxOrigin {
-    pub fn new(peer_id: PeerId) -> Self {
+    pub const fn new(peer_id: PeerId) -> Self {
         Self(peer_id)
     }
 
@@ -102,7 +86,7 @@ impl RemoteTxOrigin {
         true
     }
 
-    pub fn peer_id(self) -> PeerId {
+    pub const fn peer_id(self) -> PeerId {
         self.0
     }
 }
@@ -119,8 +103,8 @@ impl std::fmt::Display for TxOrigin {
 impl std::fmt::Display for LocalTxOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::LocalMempool => write!(f, "local node mempool"),
-            Self::LocalP2p => write!(f, "local node p2p"),
+            Self::Mempool => write!(f, "local node mempool"),
+            Self::P2p => write!(f, "local node p2p"),
             Self::PastBlock => write!(f, "reorged-out block"),
         }
     }

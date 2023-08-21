@@ -266,9 +266,9 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case::p2p(Seed::from_entropy(), LocalTxOrigin::LocalP2p)]
+#[case::p2p(Seed::from_entropy(), LocalTxOrigin::P2p)]
 #[trace]
-#[case::mempool(Seed::from_entropy(), LocalTxOrigin::LocalMempool)]
+#[case::mempool(Seed::from_entropy(), LocalTxOrigin::Mempool)]
 #[trace]
 #[case::block(Seed::from_entropy(), LocalTxOrigin::PastBlock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

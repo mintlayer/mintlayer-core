@@ -27,7 +27,7 @@ use common::{
 };
 use mempool::{
     error::{Error as MempoolError, MempoolPolicyError},
-    TxOrigin,
+    tx_origin::RemoteTxOrigin,
 };
 use test_utils::random::Seed;
 
@@ -398,7 +398,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     let res = node
         .mempool()
-        .call_mut(move |m| m.add_transaction(tx1, TxOrigin::peer(peer)))
+        .call_mut(move |m| m.add_transaction_remote(tx1, RemoteTxOrigin::new(peer)))
         .await
         .unwrap();
     assert_eq!(res, Ok(mempool::TxStatus::InOrphanPool));
@@ -409,7 +409,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
     let res = node
         .mempool()
-        .call_mut(move |m| m.add_transaction(tx0, TxOrigin::peer(peer)))
+        .call_mut(move |m| m.add_transaction_remote(tx0, RemoteTxOrigin::new(peer)))
         .await
         .unwrap();
     assert_eq!(res, Ok(mempool::TxStatus::InMempool));

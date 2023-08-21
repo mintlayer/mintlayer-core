@@ -360,16 +360,13 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction_status = wallet
+        wallet
             .controller
             .send_to_address(account_id.account_index(), address, amount)
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo {
-            wallet_id,
-            transaction_status,
-        })
+        Ok(TransactionInfo { wallet_id })
     }
 
     async fn stake_amount(
@@ -390,7 +387,7 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction_status = wallet
+        wallet
             .controller
             .create_stake_pool_tx(
                 account_id.account_index(),
@@ -403,10 +400,7 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo {
-            wallet_id,
-            transaction_status,
-        })
+        Ok(TransactionInfo { wallet_id })
     }
 
     fn get_account_balance(

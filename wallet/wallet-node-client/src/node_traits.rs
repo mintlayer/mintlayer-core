@@ -58,10 +58,7 @@ pub trait NodeInterface {
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
-    async fn submit_transaction(
-        &self,
-        tx: SignedTransaction,
-    ) -> Result<mempool::TxStatus, Self::Error>;
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;

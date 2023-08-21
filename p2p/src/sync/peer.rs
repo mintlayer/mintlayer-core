@@ -869,10 +869,10 @@ where
         }
 
         if let Some(transaction) = tx {
-            let origin = mempool::TxOrigin::peer(self.id());
+            let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
             let _tx_status = self
                 .mempool_handle
-                .call_mut(move |m| m.add_transaction(transaction, origin))
+                .call_mut(move |m| m.add_transaction_remote(transaction, origin))
                 .await??;
         }
 

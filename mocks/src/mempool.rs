@@ -22,8 +22,11 @@ use common::{
     primitives::Id,
 };
 use mempool::{
-    error::Error, event::MempoolEvent, tx_accumulator::TransactionAccumulator, FeeRate,
-    MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxOrigin, TxStatus,
+    error::Error,
+    event::MempoolEvent,
+    tx_accumulator::TransactionAccumulator,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
 };
 use subsystem::{CallRequest, ShutdownRequest};
 
@@ -31,10 +34,16 @@ mockall::mock! {
     pub MempoolInterface {}
 
     impl MempoolInterface for MempoolInterface {
-        fn add_transaction(
+        fn add_transaction_local(
             &mut self,
             tx: SignedTransaction,
-            origin: TxOrigin,
+            origin: LocalTxOrigin
+        ) -> Result<(), Error>;
+
+        fn add_transaction_remote(
+            &mut self,
+            tx: SignedTransaction,
+            origin: RemoteTxOrigin,
         ) -> Result<TxStatus, Error>;
 
         fn get_all(&self) -> Vec<SignedTransaction>;

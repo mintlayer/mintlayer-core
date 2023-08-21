@@ -14,8 +14,11 @@
 // limitations under the License.
 
 use crate::{
-    error::Error, event::MempoolEvent, tx_accumulator::TransactionAccumulator, FeeRate,
-    MempoolMaxSize, TxOrigin, TxStatus,
+    error::Error,
+    event::MempoolEvent,
+    tx_accumulator::TransactionAccumulator,
+    tx_origin::{LocalTxOrigin, RemoteTxOrigin},
+    FeeRate, MempoolMaxSize, TxStatus,
 };
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
@@ -25,12 +28,19 @@ use std::sync::Arc;
 use subsystem::{CallRequest, ShutdownRequest};
 
 pub trait MempoolInterface: Send + Sync {
-    /// Add a transaction to mempool
-    fn add_transaction(
+    /// Add a transaction from remote peer to mempool
+    fn add_transaction_remote(
         &mut self,
         tx: SignedTransaction,
-        origin: TxOrigin,
+        origin: RemoteTxOrigin,
     ) -> Result<TxStatus, Error>;
+
+    /// Add a local transaction
+    fn add_transaction_local(
+        &mut self,
+        tx: SignedTransaction,
+        origin: LocalTxOrigin,
+    ) -> Result<(), Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Vec<SignedTransaction>;

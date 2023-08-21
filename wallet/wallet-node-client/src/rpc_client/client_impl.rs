@@ -23,7 +23,6 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::TxStatus;
 use mempool::{rpc::MempoolRpcClient, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
@@ -136,7 +135,7 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<TxStatus, Self::Error> {
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
         let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
             .await
             .map_err(NodeRpcError::ResponseError)?;
