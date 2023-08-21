@@ -28,7 +28,7 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    keys::RootKeys, seed_phrase::SerializedSeedPhrase, AccountDerivationPathId, AccountId,
+    keys::RootKeys, seed_phrase::SerializableSeedPhrase, AccountDerivationPathId, AccountId,
     AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
     KeychainUsageState, WalletTx,
 };
@@ -93,7 +93,7 @@ pub trait WalletStorageReadLocked {
 /// Queries on persistent wallet data with access to encrypted data
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
     fn get_root_key(&self) -> Result<Option<RootKeys>>;
-    fn get_seed_phrase(&self) -> Result<Option<SerializedSeedPhrase>>;
+    fn get_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -141,8 +141,8 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
-    fn set_seed_phrase(&mut self, seed_phrase: SerializedSeedPhrase) -> Result<()>;
-    fn del_seed_phrase(&mut self) -> Result<Option<SerializedSeedPhrase>>;
+    fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> Result<()>;
+    fn del_seed_phrase(&mut self) -> Result<Option<SerializableSeedPhrase>>;
 }
 
 /// Modifying operations on persistent wallet data for encryption

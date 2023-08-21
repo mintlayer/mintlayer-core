@@ -25,7 +25,7 @@ use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::seed_phrase::{SaveSeedPhrase, SerializedSeedPhrase};
+use wallet_types::seed_phrase::{SaveSeedPhrase, SerializableSeedPhrase};
 
 use super::DEFAULT_VRF_KEY_KIND;
 
@@ -41,7 +41,7 @@ impl MasterKeyChain {
     ) -> KeyChainResult<(
         ExtendedPrivateKey,
         ExtendedVRFPrivateKey,
-        SerializedSeedPhrase,
+        SerializableSeedPhrase,
     )> {
         let mnemonic = zeroize::Zeroizing::new(
             bip39::Mnemonic::parse(mnemonic_str).map_err(KeyChainError::Bip39)?,
@@ -49,7 +49,11 @@ impl MasterKeyChain {
         let seed = zeroize::Zeroizing::new(mnemonic.to_seed(passphrase.unwrap_or("")));
         let root_key = ExtendedPrivateKey::new_master(seed.as_ref(), DEFAULT_KEY_KIND)?;
         let root_vrf_key = ExtendedVRFPrivateKey::new_master(seed.as_ref(), DEFAULT_VRF_KEY_KIND)?;
-        Ok((root_key, root_vrf_key, SerializedSeedPhrase::new(mnemonic)))
+        Ok((
+            root_key,
+            root_vrf_key,
+            SerializableSeedPhrase::new(mnemonic),
+        ))
     }
 
     pub fn new_from_mnemonic<B: storage::Backend>(
@@ -78,7 +82,7 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRwUnlocked<B>,
         root_key: ExtendedPrivateKey,
         root_vrf_key: ExtendedVRFPrivateKey,
-        seed_phrase: Option<SerializedSeedPhrase>,
+        seed_phrase: Option<SerializableSeedPhrase>,
     ) -> KeyChainResult<Self> {
         if !root_key.get_derivation_path().is_root() {
             return Err(KeyChainError::KeyNotRoot);

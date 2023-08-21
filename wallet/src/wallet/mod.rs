@@ -51,7 +51,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::seed_phrase::{SaveSeedPhrase, SerializedSeedPhrase};
+use wallet_types::seed_phrase::{SaveSeedPhrase, SerializableSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
 use wallet_types::with_locked::WithLocked;
@@ -239,11 +239,11 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn seed_phrase(&self) -> WalletResult<Option<SerializedSeedPhrase>> {
+    pub fn seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
         self.db.transaction_ro_unlocked()?.get_seed_phrase().map_err(WalletError::from)
     }
 
-    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SerializedSeedPhrase>> {
+    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
         let mut tx = self.db.transaction_rw_unlocked(None)?;
         let seed_phrase = tx.del_seed_phrase().map_err(WalletError::from)?;
         tx.commit()?;

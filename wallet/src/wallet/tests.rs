@@ -284,7 +284,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     {
         let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
         let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
@@ -304,7 +304,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     {
         let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
         let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
@@ -314,7 +314,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         // Deleting the seed phrase will return it
         let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
         let (seed_phrase_language, seed_phrase) = match seed_phrase {
-            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
         };
         assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
         assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);

@@ -20,7 +20,7 @@ use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     keys::{RootKeyConstant, RootKeys},
-    seed_phrase::{SeedPhraseConstant, SerializedSeedPhrase},
+    seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
@@ -45,6 +45,6 @@ storage::decl_schema! {
         /// Store for wallet created transactions
         pub DBUserTx: Map<AccountWalletCreatedTxId, SignedTransaction>,
         /// Store for the wallet's passphrase
-        pub DBSeedPhrase: Map<SeedPhraseConstant, MaybeEncrypted<SerializedSeedPhrase>>,
+        pub DBSeedPhrase: Map<SeedPhraseConstant, MaybeEncrypted<SerializableSeedPhrase>>,
     }
 }

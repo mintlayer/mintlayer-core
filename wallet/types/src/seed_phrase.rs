@@ -49,14 +49,14 @@ impl SeedPhraseLanguage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub enum SerializedSeedPhrase {
+pub enum SerializableSeedPhrase {
     #[codec(index = 0)]
     V0(SeedPhraseLanguage, SeedPhrase),
 }
 
-impl SerializedSeedPhrase {
+impl SerializableSeedPhrase {
     pub fn zero_seed_phrase() -> Self {
-        SerializedSeedPhrase::V0(
+        SerializableSeedPhrase::V0(
             SeedPhraseLanguage::English,
             SeedPhrase {
                 mnemonic: zeroize::Zeroizing::new(vec![String::new(); 24]),

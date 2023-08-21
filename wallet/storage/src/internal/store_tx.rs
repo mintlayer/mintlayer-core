@@ -28,7 +28,7 @@ use utils::{
 };
 use wallet_types::{
     keys::{RootKeyConstant, RootKeys},
-    seed_phrase::{SeedPhraseConstant, SerializedSeedPhrase},
+    seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
@@ -317,7 +317,7 @@ macro_rules! impl_read_unlocked_ops {
                     }),
                 )
             }
-            fn get_seed_phrase(&self) -> crate::Result<Option<SerializedSeedPhrase>> {
+            fn get_seed_phrase(&self) -> crate::Result<Option<SerializableSeedPhrase>> {
                 Ok(
                     self.read::<db::DBSeedPhrase, _, _>(&SeedPhraseConstant {})?.map(|v| {
                         v.try_take(self.encryption_key).expect("key was checked when unlocked")
@@ -502,15 +502,15 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
             .map_err(Into::into)
     }
 
-    fn set_seed_phrase(&mut self, seed_phrase: SerializedSeedPhrase) -> crate::Result<()> {
+    fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> crate::Result<()> {
         let value = MaybeEncrypted::new(&seed_phrase, self.encryption_key);
         self.write::<db::DBSeedPhrase, _, _, _>(SeedPhraseConstant, value)
     }
 
-    fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializedSeedPhrase>> {
+    fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializableSeedPhrase>> {
         let phrase = self.get_seed_phrase()?;
         // overwrite the old seed phrase
-        self.set_seed_phrase(SerializedSeedPhrase::zero_seed_phrase())?;
+        self.set_seed_phrase(SerializableSeedPhrase::zero_seed_phrase())?;
         self.storage.get_mut::<db::DBSeedPhrase, _>().del(&SeedPhraseConstant {})?;
         // TODO: probably will need to VACUUM the sqlite DB to make sure it is deleted
         Ok(phrase)

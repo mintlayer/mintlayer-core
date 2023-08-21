@@ -191,10 +191,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     fn serializable_seed_phrase_to_vec(
-        serializable_seed_phrase: wallet_types::seed_phrase::SerializedSeedPhrase,
+        serializable_seed_phrase: wallet_types::seed_phrase::SerializableSeedPhrase,
     ) -> Vec<String> {
         match serializable_seed_phrase {
-            wallet_types::seed_phrase::SerializedSeedPhrase::V0(_, words) => {
+            wallet_types::seed_phrase::SerializableSeedPhrase::V0(_, words) => {
                 words.mnemonic().to_vec()
             }
         }
