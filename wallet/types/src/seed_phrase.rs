@@ -123,6 +123,8 @@ mod tests {
             bip39::Mnemonic::from_entropy(&entropy).unwrap(),
         ));
 
+        assert_eq!(seed_phrase.mnemonic().len(), 24);
+
         let encoded = seed_phrase.encode();
         let decoded_seed_phrase = SeedPhrase::decode_all(&mut encoded.as_slice()).unwrap();
 
