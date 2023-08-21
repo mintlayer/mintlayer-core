@@ -54,7 +54,7 @@ async fn wallet_cli_file(#[case] seed: Seed) {
         .to_owned();
 
     assert!(test
-        .exec(&format!("createwallet \"{file_name}\" save-seed-phrase"))
+        .exec(&format!("createwallet \"{file_name}\" store-seed-phrase"))
         .starts_with("New wallet created successfully\n"));
     assert_eq!(test.exec("closewallet"), "Successfully closed the wallet.");
 

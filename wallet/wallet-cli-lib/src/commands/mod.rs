@@ -36,7 +36,7 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 use crate::{errors::WalletCliError, CliController};
 
 use self::helper_types::{
-    format_delegation_info, format_pool_info, CliSaveSeedPhrase, CliUtxoState, CliUtxoTypes,
+    format_delegation_info, format_pool_info, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
     CliWithLocked,
 };
 
@@ -48,12 +48,12 @@ pub enum WalletCommand {
         /// File path
         wallet_path: PathBuf,
 
-        /// If 'save', the seed-phrase will be saved in the wallet file.
-        /// If 'do-no-save', the seed-phrase will only be printed on the screen.
-        /// Not saving the seed-phrase can be seen as a security measure
+        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
+        /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        save_seed_phrase: CliSaveSeedPhrase,
+        save_seed_phrase: CliStoreSeedPhrase,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,

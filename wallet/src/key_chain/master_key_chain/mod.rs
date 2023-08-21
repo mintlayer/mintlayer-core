@@ -25,7 +25,7 @@ use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::seed_phrase::{SaveSeedPhrase, SerializableSeedPhrase};
+use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 
 use super::DEFAULT_VRF_KEY_KIND;
 
@@ -61,7 +61,7 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
-        save_seed_phrase: SaveSeedPhrase,
+        save_seed_phrase: StoreSeedPhrase,
     ) -> KeyChainResult<Self> {
         // TODO: Do not store the master key here, store only the key relevant to the mintlayer
         // (see make_account_path)

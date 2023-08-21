@@ -19,7 +19,7 @@ use common::chain::config::create_unit_test_config;
 use crypto::key::secp256k1::Secp256k1PublicKey;
 use rstest::rstest;
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, seed_phrase::SaveSeedPhrase};
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, seed_phrase::StoreSeedPhrase};
 
 // TODO: More tests
 
@@ -40,7 +40,7 @@ fn check_mine_methods(#[case] public: &str) {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
     let mut key_chain = master_key_chain

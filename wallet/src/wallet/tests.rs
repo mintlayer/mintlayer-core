@@ -214,7 +214,7 @@ fn test_balance_from_genesis(
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -239,7 +239,7 @@ fn wallet_creation_in_memory() {
         empty_db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
     let initialized_db = wallet.db;
@@ -263,7 +263,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
             db,
             MNEMONIC,
             None,
-            SaveSeedPhrase::DoNotSave,
+            StoreSeedPhrase::DoNotStore,
         )
         .unwrap();
         let seed_phrase = wallet.seed_phrase().unwrap();
@@ -277,7 +277,7 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::Save,
+        StoreSeedPhrase::Store,
     )
     .unwrap();
 
@@ -400,7 +400,7 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -445,7 +445,7 @@ fn wallet_balance_block_reward() {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -579,7 +579,7 @@ fn wallet_balance_block_transactions() {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -624,7 +624,7 @@ fn wallet_balance_parent_child_transactions() {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -703,7 +703,7 @@ fn wallet_accounts_creation() {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
     test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
@@ -725,7 +725,7 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -794,7 +794,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -926,7 +926,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1023,7 +1023,7 @@ fn lock_wallet_fail_empty_password() {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
     let empty_password = Some(String::new());
@@ -1048,7 +1048,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1198,7 +1198,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1420,7 +1420,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1675,7 +1675,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1875,7 +1875,7 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -1972,7 +1972,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -2104,7 +2104,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -2256,7 +2256,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -2369,7 +2369,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         db,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 

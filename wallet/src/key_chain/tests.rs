@@ -28,7 +28,7 @@ use test_utils::assert_encoded_eq;
 use wallet_storage::{
     DefaultBackend, Store, TransactionRwLocked, TransactionRwUnlocked, Transactional,
 };
-use wallet_types::seed_phrase::SaveSeedPhrase;
+use wallet_types::seed_phrase::StoreSeedPhrase;
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, AccountInfo};
 
 const MNEMONIC: &str =
@@ -75,7 +75,7 @@ fn key_chain_creation(
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::Save,
+        StoreSeedPhrase::Store,
     )
     .unwrap();
 
@@ -138,7 +138,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::Save,
+        StoreSeedPhrase::Store,
     )
     .unwrap();
     let mut key_chain = master_key_chain
@@ -221,7 +221,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::Save,
+        StoreSeedPhrase::Store,
     )
     .unwrap();
     let key_chain = master_key_chain

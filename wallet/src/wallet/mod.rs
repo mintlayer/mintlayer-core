@@ -51,7 +51,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::seed_phrase::{SaveSeedPhrase, SerializableSeedPhrase};
+use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
 use wallet_types::with_locked::WithLocked;
@@ -169,7 +169,7 @@ impl<B: storage::Backend> Wallet<B> {
         db: Store<B>,
         mnemonic: &str,
         passphrase: Option<&str>,
-        save_seed_phrase: SaveSeedPhrase,
+        save_seed_phrase: StoreSeedPhrase,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 

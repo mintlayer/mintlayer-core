@@ -15,16 +15,16 @@
 
 use serialization::{Decode, Encode};
 
-pub enum SaveSeedPhrase {
-    Save,
-    DoNotSave,
+pub enum StoreSeedPhrase {
+    Store,
+    DoNotStore,
 }
 
-impl SaveSeedPhrase {
+impl StoreSeedPhrase {
     pub fn should_save(self) -> bool {
         match self {
-            Self::Save => true,
-            Self::DoNotSave => false,
+            Self::Store => true,
+            Self::DoNotStore => false,
         }
     }
 }

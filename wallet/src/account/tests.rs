@@ -30,7 +30,7 @@ use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-use wallet_types::seed_phrase::SaveSeedPhrase;
+use wallet_types::seed_phrase::StoreSeedPhrase;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
 const MNEMONIC: &str =
@@ -47,7 +47,7 @@ fn account_addresses() {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -82,7 +82,7 @@ fn account_addresses_lookahead() {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
@@ -129,7 +129,7 @@ fn sign_transaction(#[case] seed: Seed) {
         &mut db_tx,
         MNEMONIC,
         None,
-        SaveSeedPhrase::DoNotSave,
+        StoreSeedPhrase::DoNotStore,
     )
     .unwrap();
 
