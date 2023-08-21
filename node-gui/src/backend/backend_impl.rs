@@ -108,7 +108,7 @@ impl Backend {
         self.add_wallet(file_path, wallet).await
     }
 
-    async fn create_wallet(
+    async fn recover_wallet(
         &mut self,
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
@@ -121,8 +121,7 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
-        // TODO: add support for passphrase and saving of seed phrase
-        let wallet = GuiController::create_wallet(
+        let wallet = GuiController::recover_wallet(
             Arc::clone(&self.chain_config),
             file_path.clone(),
             mnemonic,
@@ -447,11 +446,11 @@ impl Backend {
                 let open_res = self.open_wallet(file_path).await;
                 Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
             }
-            BackendRequest::CreateWallet {
+            BackendRequest::RecoverWallet {
                 mnemonic,
                 file_path,
             } => {
-                let import_res = self.create_wallet(mnemonic, file_path).await;
+                let import_res = self.recover_wallet(mnemonic, file_path).await;
                 Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {

@@ -545,7 +545,7 @@ impl MainWindow {
                 file_path,
             } => {
                 self.file_dialog_active = false;
-                backend_sender.send(BackendRequest::CreateWallet {
+                backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
                     file_path,
                 });

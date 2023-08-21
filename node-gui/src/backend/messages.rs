@@ -124,7 +124,7 @@ pub enum BackendRequest {
     },
     // This will remove the old file if it already exists.
     // The frontend should check if this is what the user really wants.
-    CreateWallet {
+    RecoverWallet {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
     },
