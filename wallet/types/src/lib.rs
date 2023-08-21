@@ -15,6 +15,7 @@
 
 pub mod account_id;
 pub mod account_info;
+pub mod chain_info;
 pub mod keys;
 pub mod seed_phrase;
 pub mod utxo_types;

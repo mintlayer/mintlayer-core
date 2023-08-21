@@ -33,8 +33,8 @@ use password::{challenge_to_sym_key, password_to_sym_key};
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use wallet_types::{
-    wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
+    chain_info::ChainInfo, wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
 };
 
 use self::store_tx::EncryptionState;
@@ -234,6 +234,7 @@ macro_rules! delegate_to_transaction {
 impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_chain_info(&self) -> crate::Result<ChainInfo>;
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self, account_id: &AccountId) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>>;
         fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
@@ -252,6 +253,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
 impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
         fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
         fn set_user_transaction(&mut self, id: &AccountWalletCreatedTxId, tx: &SignedTransaction) -> crate::Result<()>;

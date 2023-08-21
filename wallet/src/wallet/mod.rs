@@ -51,6 +51,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
+use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
@@ -59,13 +60,18 @@ use wallet_types::{AccountId, BlockInfo, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
-pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V1;
+pub const WALLET_VERSION_V2: u32 = 2;
+pub const CURRENT_WALLET_VERSION: u32 = WALLET_VERSION_V2;
 
 /// Wallet errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum WalletError {
     #[error("Wallet is not initialized")]
     WalletNotInitialized,
+    #[error("The wallet belongs to a different chain then the one specified")]
+    DifferentChainType,
+    #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
+    UnsupportedWalletVersion(u32),
     #[error("Wallet database error: {0}")]
     DatabaseError(#[from] wallet_storage::Error),
     #[error("Transaction already present: {0}")]
@@ -173,8 +179,6 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
-        // TODO wallet should save the chain config
-
         let key_chain = MasterKeyChain::new_from_mnemonic(
             chain_config.clone(),
             &mut db_tx,
@@ -184,6 +188,7 @@ impl<B: storage::Backend> Wallet<B> {
         )?;
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
+        db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
         db_tx.commit()?;
 
@@ -201,15 +206,60 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(wallet)
     }
 
+    /// Migrate the wallet DB from version 1 to version 2
+    /// * save the chain info in the DB based on the chain type specified by the user
+    fn migration_v2(
+        db_tx: &mut impl WalletStorageWriteLocked,
+        chain_config: &ChainConfig,
+    ) -> WalletResult<()> {
+        db_tx.set_chain_info(&ChainInfo::new(chain_config))?;
+
+        Ok(())
+    }
+
+    /// Check the wallet DB version and perform any migrations needed
+    fn check_and_migrate_db(db: &Store<B>, chain_config: &ChainConfig) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw(None)?;
+
+        match db_tx.get_storage_version()? {
+            WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
+            WALLET_VERSION_V1 => Self::migration_v2(&mut db_tx, chain_config)?,
+            CURRENT_WALLET_VERSION => return Ok(()),
+            unsupported_version => {
+                return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
+            }
+        }
+
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            CURRENT_WALLET_VERSION
+        );
+
+        Ok(())
+    }
+
+    fn validate_chain_info(
+        chain_config: &ChainConfig,
+        db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<()> {
+        let chain_info = db_tx.get_chain_info()?;
+        ensure!(
+            chain_info.is_same(chain_config),
+            WalletError::DifferentChainType
+        );
+
+        Ok(())
+    }
+
     pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
+        Self::check_and_migrate_db(&db, chain_config.as_ref())?;
+
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
 
-        let version = db_tx.get_storage_version()?;
-        if version == WALLET_VERSION_UNINITIALIZED {
-            return Err(WalletError::WalletNotInitialized);
-        }
+        Self::validate_chain_info(chain_config.as_ref(), &db_tx)?;
 
         let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), &db_tx)?;
 
