@@ -322,6 +322,18 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id_maybe: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        if !self.blockprod_config.skip_ibd_check {
+            let is_initial_block_download = self
+                .chainstate_handle
+                .call(|this| this.is_initial_block_download())
+                .await
+                .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
+
+            if is_initial_block_download {
+                return Err(BlockProductionError::ChainstateWaitForSync);
+            }
+        }
+
         let current_peer_count = self
             .p2p_handle
             .call_async_mut(move |this| this.get_peer_count())

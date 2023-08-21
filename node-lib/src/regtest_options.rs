@@ -67,6 +67,10 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
 
+    /// Genesis block timestamp in seconds since UNIX epoch.
+    #[clap(long)]
+    pub chain_genesis_block_timestamp: Option<u64>,
+
     /// PoS Genesis staking settings
     #[clap(long, default_value_t)]
     pub chain_genesis_staking_settings: GenesisStakingSettings,

@@ -43,6 +43,10 @@ pub enum BlockProductionError {
     MempoolChannelClosed,
     #[error("Chainstate channel closed")]
     ChainstateChannelClosed,
+    #[error("Failed to retrieve chainstate info")]
+    ChainstateInfoRetrievalError,
+    #[error("Wait for chainstate to sync before producing blocks")]
+    ChainstateWaitForSync,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
     #[error("Block creation error: {0}")]
@@ -105,6 +109,7 @@ pub fn make_blockproduction(
 pub fn test_blockprod_config() -> BlockProdConfig {
     BlockProdConfig {
         min_peers_to_produce_blocks: 0,
+        skip_ibd_check: false,
     }
 }
 
@@ -189,9 +194,15 @@ mod tests {
 
         let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
+        let chainstate_config = {
+            let mut chainstate_config = ChainstateConfig::new();
+            chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
+            chainstate_config
+        };
+
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
-            ChainstateConfig::new(),
+            chainstate_config,
             Store::new_empty().expect("Error initializing empty store"),
             DefaultTransactionVerificationStrategy::new(),
             None,

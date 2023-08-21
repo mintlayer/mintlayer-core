@@ -98,14 +98,18 @@ fn blockprod_config(config: BlockProdConfigFile, options: &RunOptions) -> BlockP
 
     let BlockProdConfigFile {
         min_peers_to_produce_blocks,
+        skip_ibd_check,
     } = config;
 
     let min_peers_to_produce_blocks = options
         .blockprod_min_peers_to_produce_blocks
         .or(min_peers_to_produce_blocks.or(Some(DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS)));
 
+    let skip_ibd_check = options.blockprod_skip_ibd_check.or(skip_ibd_check).unwrap_or(false);
+
     BlockProdConfigFile {
         min_peers_to_produce_blocks,
+        skip_ibd_check: Some(skip_ibd_check),
     }
 }
 

@@ -116,6 +116,8 @@ BASE_SCRIPTS = [
     'blockprod_generate_pos_blocks_rand_genesis_keys.py',
     'blockprod_generate_pos_genesis_blocks.py',
     'blockprod_generate_pow_blocks.py',
+    'blockprod_ibd.py',
+    'blockprod_ibd_genesis.py',
     'example_test.py',
     'p2p_ping.py',
     'p2p_submit_orphan.py',

@@ -32,8 +32,8 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::{
     chain::{
         config::{
-            regtest::create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig,
-            ChainType, EmissionScheduleTabular,
+            regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
+            Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
         },
         Destination, NetUpgrades,
     },
@@ -341,6 +341,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_genesis_block_timestamp,
         chain_genesis_staking_settings,
     } = options;
 
@@ -391,9 +392,15 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
             create_regtest_pos_genesis(
                 chain_genesis_staking_settings.clone(),
+                *chain_genesis_block_timestamp,
                 Destination::AnyoneCanSpend,
             ),
         );
+    } else {
+        builder = builder.genesis_custom(create_regtest_pow_genesis(
+            *chain_genesis_block_timestamp,
+            Destination::AnyoneCanSpend,
+        ));
     }
 
     Ok(builder.build())
