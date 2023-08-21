@@ -117,7 +117,7 @@ mod tests {
     fn seed_phrase_encode_decode(#[case] seed: test_utils::random::Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let entropy = rng.gen::<[u8; 24]>();
+        let entropy = rng.gen::<[u8; 32]>();
 
         let seed_phrase = SeedPhrase::new(zeroize::Zeroizing::new(
             bip39::Mnemonic::from_entropy(&entropy).unwrap(),
