@@ -44,6 +44,7 @@ use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::WalletStorageEncryptionRead;
+use wallet_types::seed_phrase::SeedPhraseLanguage;
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoType},
@@ -280,8 +281,14 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.to_string(), MNEMONIC);
+    {
+        let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
 
     let password = gen_random_password(&mut rng);
     wallet.encrypt_wallet(&Some(password.clone())).unwrap();
@@ -294,12 +301,26 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     );
 
     wallet.unlock_wallet(&password).unwrap();
-    let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.to_string(), MNEMONIC);
+    {
+        let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
 
-    let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
-    assert_eq!(seed_phrase.to_string(), MNEMONIC);
+    {
+        // Deleting the seed phrase will return it
+        let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializedSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
 
+    // Now the seed phrase doesn't exist in the wallet anymore
     let seed_phrase = wallet.seed_phrase().unwrap();
     assert!(seed_phrase.is_none());
 }

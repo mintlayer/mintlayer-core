@@ -93,6 +93,10 @@ impl SeedPhrase {
             mnemonic: zeroize::Zeroizing::new(mnemonic.word_iter().map(|w| w.into()).collect()),
         }
     }
+
+    pub fn mnemonic(&self) -> &[String] {
+        &self.mnemonic
+    }
 }
 
 impl Encode for SeedPhrase {
