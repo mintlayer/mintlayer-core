@@ -46,5 +46,7 @@ storage::decl_schema! {
         pub DBUserTx: Map<AccountWalletCreatedTxId, SignedTransaction>,
         /// Store for the wallet's passphrase
         pub DBSeedPhrase: Map<SeedPhraseConstant, MaybeEncrypted<SerializableSeedPhrase>>,
+        /// Store for each account's unconfirmed transaction order counter
+        pub DBUnconfirmedTxCounters: Map<AccountId, u64>,
     }
 }

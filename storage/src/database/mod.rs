@@ -180,6 +180,18 @@ where
         internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 
+    /// Iterator over entries with key starting with given prefix
+    pub fn prefix_iter_keys<Pfx>(
+        &self,
+        prefix: &Pfx,
+    ) -> crate::Result<impl '_ + Iterator<Item = DbMap::Key>>
+    where
+        Pfx: Encode,
+        DbMap::Key: HasPrefix<Pfx>,
+    {
+        internal::prefix_iter_keys::<DbMap, _>(self.dbtx, self.map_id, prefix.encode())
+    }
+
     /// Iterator over decoded entries with key starting with given prefix
     pub fn prefix_iter_decoded<Pfx>(
         &self,

@@ -105,9 +105,15 @@ impl OutputCache {
         let mut cache = Self::empty();
 
         txs.sort_by(|x, y| match (x.1.state(), y.1.state()) {
-            (TxState::Confirmed(h1, _), TxState::Confirmed(h2, _)) => h1.cmp(&h2),
-            (TxState::Confirmed(_, _), _) => std::cmp::Ordering::Less,
-            (_, TxState::Confirmed(_, _)) => std::cmp::Ordering::Greater,
+            (TxState::Confirmed(h1, _, idx1), TxState::Confirmed(h2, _, idx2)) => {
+                (h1, idx1).cmp(&(h2, idx2))
+            }
+            (TxState::Confirmed(_, _, _), _) => std::cmp::Ordering::Less,
+            (_, TxState::Confirmed(_, _, _)) => std::cmp::Ordering::Greater,
+            (TxState::InMempool(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
+            (TxState::InMempool(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
+            (TxState::Inactive(idx1), TxState::Inactive(idx2)) => idx1.cmp(&idx2),
+            (TxState::Inactive(idx1), TxState::InMempool(idx2)) => idx1.cmp(&idx2),
             (_, _) => std::cmp::Ordering::Equal,
         });
         for (tx_id, tx) in txs {
@@ -153,11 +159,11 @@ impl OutputCache {
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let already_present = self.txs.contains_key(&tx_id);
         let is_unconfirmed = match tx.state() {
-            TxState::Inactive
-            | TxState::InMempool
+            TxState::Inactive(_)
+            | TxState::InMempool(_)
             | TxState::Conflicted(_)
             | TxState::Abandoned => true,
-            TxState::Confirmed(_, _) => false,
+            TxState::Confirmed(_, _, _) => false,
         };
         if is_unconfirmed && !already_present {
             self.unconfirmed_descendants.insert(tx_id.clone(), BTreeSet::new());
@@ -382,10 +388,10 @@ impl OutputCache {
             .filter_map(|tx| match tx {
                 WalletTx::Block(_) => None,
                 WalletTx::Tx(tx) => match tx.state() {
-                    TxState::Inactive => Some(tx.get_transaction_with_id()),
-                    TxState::Confirmed(_, _)
+                    TxState::Inactive(_) => Some(tx.get_transaction_with_id()),
+                    TxState::Confirmed(_, _, _)
                     | TxState::Conflicted(_)
-                    | TxState::InMempool
+                    | TxState::InMempool(_)
                     | TxState::Abandoned => None,
                 },
             })
@@ -413,7 +419,7 @@ impl OutputCache {
                     match entry.get_mut() {
                         WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
                         WalletTx::Tx(tx) => match tx.state() {
-                            TxState::Inactive => {
+                            TxState::Inactive(_) => {
                                 tx.set_state(TxState::Abandoned);
                                 for input in tx.get_transaction().inputs() {
                                     match input {
@@ -479,10 +485,11 @@ fn is_specific_lock_state(
 /// Get the block info (block height and timestamp) if the Tx is in confirmed state
 fn get_block_info(tx: &WalletTx) -> Option<BlockInfo> {
     match tx.state() {
-        TxState::Confirmed(height, timestamp) => Some(BlockInfo { height, timestamp }),
-        TxState::InMempool | TxState::Inactive | TxState::Conflicted(_) | TxState::Abandoned => {
-            None
-        }
+        TxState::Confirmed(height, timestamp, _) => Some(BlockInfo { height, timestamp }),
+        TxState::InMempool(_)
+        | TxState::Inactive(_)
+        | TxState::Conflicted(_)
+        | TxState::Abandoned => None,
     }
 }
 
@@ -511,4 +518,98 @@ fn valid_timelock(
 /// Check Tx is in the selected state Confirmed/Inactive/Abandoned...
 fn is_in_state(tx: &WalletTx, utxo_states: UtxoStates) -> bool {
     utxo_states.contains(get_utxo_state(&tx.state()))
+}
+
+#[cfg(test)]
+mod tests {
+    use common::{
+        chain::block::timestamp::BlockTimestamp,
+        primitives::{BlockHeight, H256},
+    };
+    use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+    use wallet_types::{wallet_tx::TxData, AccountId};
+
+    use super::*;
+
+    fn make_delegation_tx(output_index: u32) -> (Transaction, DelegationId) {
+        let input0_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
+            output_index,
+        );
+        let delegation_id = make_delegation_id(&input0_outpoint);
+        let tx = Transaction::new(
+            0,
+            vec![TxInput::from(input0_outpoint)],
+            vec![TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                PoolId::new(H256::zero()),
+            )],
+        )
+        .unwrap();
+
+        (tx, delegation_id)
+    }
+
+    fn make_stake_delegation_tx(delegation_id: DelegationId) -> Transaction {
+        Transaction::new(
+            0,
+            vec![],
+            vec![TxOutput::DelegateStaking(Amount::ZERO, delegation_id)],
+        )
+        .unwrap()
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_wallet_transaction_sorting_on_load(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let account_id = AccountId::new_from_xpub(
+            &ExtendedPrivateKey::new_from_entropy(ExtendedKeyKind::Secp256k1Schnorr).1,
+        );
+
+        let mut delegation_ids = BTreeMap::new();
+        let txs = (0..100)
+            .map(|idx| {
+                let tx: WithId<Transaction> = if rng.gen::<bool>() || delegation_ids.is_empty() {
+                    let (tx, delegation_id) = make_delegation_tx(delegation_ids.len() as u32);
+                    delegation_ids.insert(delegation_id, Amount::ZERO);
+                    tx.into()
+                } else {
+                    let delegation_id =
+                        delegation_ids.keys().nth(rng.gen_range(0..delegation_ids.len())).unwrap();
+                    make_stake_delegation_tx(*delegation_id).into()
+                };
+
+                let tx_id = WithId::id(&tx);
+
+                let wtx = WalletTx::Tx(TxData::new(
+                    tx,
+                    TxState::Confirmed(
+                        BlockHeight::new(0),
+                        BlockTimestamp::from_int_seconds(0),
+                        idx as u64,
+                    ),
+                ));
+
+                (
+                    AccountWalletTxId::new(account_id.clone(), OutPointSourceId::from(tx_id)),
+                    wtx,
+                )
+            })
+            .collect();
+
+        let cache = OutputCache::new(txs).unwrap();
+
+        let delegations: BTreeMap<&DelegationId, _> = cache.delegation_ids().collect();
+
+        for (delegation_id, balance) in delegation_ids {
+            let data = delegations.get(&delegation_id).unwrap();
+            assert_eq!(data.balance, balance);
+        }
+    }
 }

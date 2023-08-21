@@ -119,6 +119,7 @@ impl Account {
         );
 
         db_tx.set_account(&account_id, &account_info)?;
+        db_tx.set_account_unconfirmed_tx_counter(&account_id, 0)?;
 
         let output_cache = OutputCache::empty();
 
@@ -793,7 +794,7 @@ impl Account {
         get_transaction_list(&self.key_chain, &self.output_cache, skip, count)
     }
 
-    fn reset_to_height<B: storage::Backend>(
+    pub fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_events: &impl WalletEvents,
@@ -804,16 +805,16 @@ impl Account {
             .txs_with_unconfirmed()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height, _) => {
+                TxState::Confirmed(height, _, _) => {
                     if height > common_block_height {
                         Some(AccountWalletTxId::new(self.get_account_id(), id.clone()))
                     } else {
                         None
                     }
                 }
-                TxState::Inactive
+                TxState::Inactive(_)
                 | TxState::Conflicted(_)
-                | TxState::InMempool
+                | TxState::InMempool(_)
                 | TxState::Abandoned => None,
             })
             .collect::<Vec<_>>();
@@ -888,15 +889,14 @@ impl Account {
 
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
-            let tx_state = TxState::Confirmed(block_height, block.timestamp());
 
             let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
             self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
 
-            for signed_tx in block.transactions() {
+            for (index, signed_tx) in block.transactions().iter().enumerate() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
-                    tx_state,
+                    TxState::Confirmed(block_height, block.timestamp(), index as u64),
                 ));
                 self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
                     db_tx,
@@ -939,17 +939,49 @@ impl Account {
             },
         )
     }
-
-    pub fn scan_new_unconfirmed_transactions(
+    pub fn scan_new_inmempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
-        tx_state: TxState,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.scan_new_unconfirmed_transactions(
+            transactions,
+            TxState::InMempool,
+            db_tx,
+            wallet_events,
+        )
+    }
+
+    pub fn scan_new_inactive_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.scan_new_unconfirmed_transactions(
+            transactions,
+            TxState::Inactive,
+            db_tx,
+            wallet_events,
+        )
+    }
+
+    fn scan_new_unconfirmed_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        make_tx_state: fn(u64) -> TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
+        let mut counter = db_tx
+            .get_account_unconfirmed_tx_counter(&self.get_account_id())?
+            .ok_or(WalletError::WalletNotInitialized)?;
 
         for signed_tx in transactions {
+            counter += 1;
+            let tx_state = make_tx_state(counter);
             let wallet_tx = WalletTx::Tx(TxData::new(
                 signed_tx.transaction().clone().into(),
                 tx_state,
@@ -961,7 +993,7 @@ impl Account {
                 wallet_tx,
                 signed_tx,
             )? {
-                not_added.push(signed_tx);
+                not_added.push((signed_tx, tx_state));
             }
         }
 
@@ -969,10 +1001,10 @@ impl Account {
         // and keep looping as long as we add a new tx
         loop {
             let mut not_added_next = vec![];
-            for signed_tx in not_added.iter() {
+            for (signed_tx, tx_state) in not_added.iter() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
-                    tx_state,
+                    *tx_state,
                 ));
 
                 if self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
@@ -981,7 +1013,7 @@ impl Account {
                     wallet_tx,
                     signed_tx,
                 )? {
-                    not_added_next.push(*signed_tx);
+                    not_added_next.push((*signed_tx, *tx_state));
                 }
             }
 
@@ -992,6 +1024,9 @@ impl Account {
 
             not_added = not_added_next;
         }
+
+        // update the new counter in the DB
+        db_tx.set_account_unconfirmed_tx_counter(&self.get_account_id(), counter)?;
 
         Ok(())
     }

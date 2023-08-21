@@ -208,11 +208,17 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
+    /// * reset transactions
     fn migration_v2(
         db_tx: &mut impl WalletStorageWriteLocked,
         chain_config: &ChainConfig,
     ) -> WalletResult<()> {
+        // set new chain info to the one provided by the user assuming it is the correct one
         db_tx.set_chain_info(&ChainInfo::new(chain_config))?;
+
+        // reset wallet transaction as now we will need to rescan the blockchain to store the
+        // correct order of the transactions to avoid bugs in loading them in the wrong order
+        Self::reset_wallet_transactions(chain_config, db_tx)?;
 
         Ok(())
     }
@@ -230,6 +236,7 @@ impl<B: storage::Backend> Wallet<B> {
             }
         }
 
+        db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.commit()?;
         logging::log::info!(
             "Successfully migrated wallet database to latest version {}",
@@ -248,6 +255,35 @@ impl<B: storage::Backend> Wallet<B> {
             chain_info.is_same(chain_config),
             WalletError::DifferentChainType
         );
+
+        Ok(())
+    }
+
+    fn reset_wallet_transactions(
+        chain_config: &ChainConfig,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        db_tx.clear_transactions()?;
+
+        // set all accounts best block to genesis
+        let accounts = db_tx.get_accounts_info()?;
+        for (id, mut info) in accounts {
+            info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
+            db_tx.set_account(&id, &info)?;
+            db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
+        }
+
+        Ok(())
+    }
+
+    /// Resets the wallet's accounts to the genesis block so it can start to do a rescan of the
+    /// blockchain
+    pub fn reset_wallet(&mut self, wallet_events: &impl WalletEvents) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        for account in self.accounts.values_mut() {
+            account.reset_to_height(&mut db_tx, wallet_events, BlockHeight::new(0))?;
+        }
 
         Ok(())
     }
@@ -738,12 +774,7 @@ impl<B: storage::Backend> Wallet<B> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            account.scan_new_unconfirmed_transactions(
-                transactions,
-                TxState::InMempool,
-                &mut db_tx,
-                wallet_events,
-            )?;
+            account.scan_new_inmempool_transactions(transactions, &mut db_tx, wallet_events)?;
         }
 
         Ok(())
@@ -760,12 +791,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         let txs = [transaction];
         for account in self.accounts.values_mut() {
-            account.scan_new_unconfirmed_transactions(
-                &txs,
-                TxState::Inactive,
-                &mut db_tx,
-                wallet_events,
-            )?;
+            account.scan_new_inactive_transactions(&txs, &mut db_tx, wallet_events)?;
         }
 
         Ok(())

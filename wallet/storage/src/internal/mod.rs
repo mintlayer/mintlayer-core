@@ -238,6 +238,7 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self, account_id: &AccountId) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>>;
         fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
+        fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> crate::Result<Option<u64>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, String>>;
@@ -256,6 +257,8 @@ impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
         fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
         fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
+        fn clear_transactions(&mut self) -> crate::Result<()>;
+        fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> crate::Result<()>;
         fn set_user_transaction(&mut self, id: &AccountWalletCreatedTxId, tx: &SignedTransaction) -> crate::Result<()>;
         fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;

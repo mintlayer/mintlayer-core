@@ -70,6 +70,7 @@ pub trait WalletStorageReadLocked {
         account_id: &AccountId,
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
+    fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -112,6 +113,8 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     fn set_chain_info(&mut self, chain_info: &ChainInfo) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
+    fn clear_transactions(&mut self) -> Result<()>;
+    fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> Result<()>;
     fn set_user_transaction(
         &mut self,
         id: &AccountWalletCreatedTxId,

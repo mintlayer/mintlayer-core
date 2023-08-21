@@ -215,6 +215,13 @@ macro_rules! impl_read_ops {
                     .map(|item| item.map(|item| item.1).collect())
             }
 
+            fn get_account_unconfirmed_tx_counter(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Option<u64>> {
+                self.read::<db::DBUnconfirmedTxCounters, _, _>(account_id)
+            }
+
             fn get_keychain_usage_state(
                 &self,
                 id: &AccountKeyPurposeId,
@@ -361,6 +368,21 @@ macro_rules! impl_write_ops {
 
             fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
+            }
+
+            fn clear_transactions(&mut self) -> crate::Result<()> {
+                let transactions: Vec<_> =
+                    self.storage.get::<db::DBTxs, _>().prefix_iter_keys(&())?.collect();
+
+                transactions.into_iter().try_for_each(|id| self.del_transaction(&id))
+            }
+
+            fn set_account_unconfirmed_tx_counter(
+                &mut self,
+                id: &AccountId,
+                counter: u64,
+            ) -> crate::Result<()> {
+                self.write::<db::DBUnconfirmedTxCounters, _, _, _>(id, counter)
             }
 
             fn set_user_transaction(
