@@ -15,6 +15,8 @@
 
 use serialization::{Decode, Encode};
 
+pub const MNEMONIC_24_WORDS_ENTROPY_SIZE: usize = 32;
+
 pub enum StoreSeedPhrase {
     Store,
     DoNotStore,
@@ -117,7 +119,7 @@ mod tests {
     fn seed_phrase_encode_decode(#[case] seed: test_utils::random::Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let entropy = rng.gen::<[u8; 32]>();
+        let entropy = rng.gen::<[u8; MNEMONIC_24_WORDS_ENTROPY_SIZE]>();
 
         let seed_phrase = SeedPhrase::new(zeroize::Zeroizing::new(
             bip39::Mnemonic::from_entropy(&entropy).unwrap(),
