@@ -94,6 +94,7 @@ impl<B: storage::Backend> Store<B> {
             }
         };
         tx.encrypt_root_keys(&sym_key)?;
+        tx.encrypt_seed_phrase(&sym_key)?;
         tx.commit()?;
 
         self.encryption_state = EncryptionState::Unlocked(sym_key);

@@ -36,7 +36,8 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 use crate::{errors::WalletCliError, CliController};
 
 use self::helper_types::{
-    format_delegation_info, format_pool_info, CliUtxoState, CliUtxoTypes, CliWithLocked,
+    format_delegation_info, format_pool_info, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
+    CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -46,6 +47,13 @@ pub enum WalletCommand {
     CreateWallet {
         /// File path
         wallet_path: PathBuf,
+
+        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
+        /// Not storing the seed-phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// elsewhere if this wallet is compromised.
+        save_seed_phrase: CliStoreSeedPhrase,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
@@ -255,6 +263,12 @@ pub enum WalletCommand {
     DecommissionStakePool {
         pool_id: String,
     },
+
+    /// Show the seed phrase for the loaded wallet if it has been saved
+    ShowSeedPhrase,
+
+    /// Delete the seed phrase from the loaded wallet if it has been saved
+    PurgeSeedPhrase,
 
     /// Node version
     NodeVersion,
@@ -474,6 +488,7 @@ impl CommandHandler {
             WalletCommand::CreateWallet {
                 wallet_path,
                 mnemonic,
+                save_seed_phrase,
             } => {
                 utils::ensure!(
                     controller_opt.is_none(),
@@ -496,6 +511,7 @@ impl CommandHandler {
                     wallet_path,
                     mnemonic.clone(),
                     None,
+                    save_seed_phrase.to_walet_type(),
                 )
                 .map_err(WalletCliError::Controller)?;
 
@@ -1102,6 +1118,38 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::handle_mempool_tx_status(status))
+            }
+
+            WalletCommand::ShowSeedPhrase => {
+                let phrase = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .seed_phrase()
+                    .map_err(WalletCliError::Controller)?;
+
+                let msg = if let Some(phrase) = phrase {
+                    format!("The saved seed phrase is \"{}\"", phrase.join(" "))
+                } else {
+                    "No saved seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase saved elsewhere when you created the wallet.".into()
+                };
+
+                Ok(ConsoleCommand::Print(msg))
+            }
+
+            WalletCommand::PurgeSeedPhrase => {
+                let phrase = controller_opt
+                    .as_mut()
+                    .ok_or(WalletCliError::NoWallet)?
+                    .delete_seed_phrase()
+                    .map_err(WalletCliError::Controller)?;
+
+                let msg = if let Some(phrase) = phrase {
+                    format!("The seed phrase has been deleted, you can save it if you haven't do so yet: \"{}\"", phrase.join(" "))
+                } else {
+                    "No saved seed phrase for this wallet.".into()
+                };
+
+                Ok(ConsoleCommand::Print(msg))
             }
 
             WalletCommand::NodeVersion => {

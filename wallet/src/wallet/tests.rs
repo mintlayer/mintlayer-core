@@ -44,6 +44,7 @@ use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::WalletStorageEncryptionRead;
+use wallet_types::seed_phrase::SeedPhraseLanguage;
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoType},
@@ -141,7 +142,8 @@ fn get_address(
     purpose: KeyPurpose,
     address_index: U31,
 ) -> Address<Destination> {
-    let (root_key, _root_vrf_key) = MasterKeyChain::mnemonic_to_root_key(mnemonic, None).unwrap();
+    let (root_key, _root_vrf_key, _) =
+        MasterKeyChain::mnemonic_to_root_key(mnemonic, None).unwrap();
     let mut address_path = make_account_path(chain_config, account_index).into_vec();
     address_path.push(purpose.get_deterministic_index());
     address_path.push(ChildNumber::from_normal(address_index));
@@ -207,7 +209,14 @@ fn test_balance_from_genesis(
 
     let db = create_wallet_in_memory().unwrap();
 
-    let wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     verify_wallet_balance(&chain_config, &wallet, expected_balance);
 }
@@ -225,11 +234,95 @@ fn wallet_creation_in_memory() {
 
     let empty_db = create_wallet_in_memory().unwrap();
     // initialize a new wallet with mnemonic
-    let wallet = Wallet::new_wallet(Arc::clone(&chain_config), empty_db, MNEMONIC, None).unwrap();
+    let wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        empty_db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
     let initialized_db = wallet.db;
 
     // successfully load a wallet from initialized db
     let _wallet = Wallet::load_wallet(chain_config, initialized_db).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    // create wallet without saving the seed phrase
+    {
+        let db = create_wallet_in_memory().unwrap();
+        let wallet = Wallet::new_wallet(
+            Arc::clone(&chain_config),
+            db,
+            MNEMONIC,
+            None,
+            StoreSeedPhrase::DoNotStore,
+        )
+        .unwrap();
+        let seed_phrase = wallet.seed_phrase().unwrap();
+        assert!(seed_phrase.is_none());
+    }
+
+    // create wallet with saving the seed phrase
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::Store,
+    )
+    .unwrap();
+
+    {
+        let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
+
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&Some(password.clone())).unwrap();
+    wallet.lock_wallet().unwrap();
+
+    let err = wallet.seed_phrase().unwrap_err();
+    assert_eq!(
+        err,
+        WalletError::DatabaseError(wallet_storage::Error::WalletLocked)
+    );
+
+    wallet.unlock_wallet(&password).unwrap();
+    {
+        let seed_phrase = wallet.seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
+
+    {
+        // Deleting the seed phrase will return it
+        let seed_phrase = wallet.delete_seed_phrase().unwrap().unwrap();
+        let (seed_phrase_language, seed_phrase) = match seed_phrase {
+            SerializableSeedPhrase::V0(language, seed_phrase) => (language, seed_phrase),
+        };
+        assert_eq!(seed_phrase.mnemonic().join(" "), MNEMONIC);
+        assert_eq!(seed_phrase_language, SeedPhraseLanguage::English);
+    }
+
+    // Now the seed phrase doesn't exist in the wallet anymore
+    let seed_phrase = wallet.seed_phrase().unwrap();
+    assert!(seed_phrase.is_none());
 }
 
 #[test]
@@ -302,7 +395,14 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -340,7 +440,14 @@ fn wallet_balance_block_reward() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -467,7 +574,14 @@ fn wallet_balance_block_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let tx_amount1 = Amount::from_atoms(10000);
     let address = get_address(
@@ -505,7 +619,14 @@ fn wallet_balance_parent_child_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let tx_amount1 = Amount::from_atoms(20000);
     let tx_amount2 = Amount::from_atoms(10000);
@@ -577,7 +698,14 @@ fn wallet_accounts_creation() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
     test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
 
     let error = wallet.create_account(None).err().unwrap();
@@ -592,7 +720,14 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     // Need at least one address used from the previous account in order to create a new account
     // Generate a new block which sends reward to the wallet
@@ -654,7 +789,14 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -779,7 +921,14 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -869,7 +1018,14 @@ fn lock_wallet_fail_empty_password() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
     let empty_password = Some(String::new());
     assert_eq!(
         wallet.encrypt_wallet(&empty_password),
@@ -887,7 +1043,14 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1030,7 +1193,14 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1245,7 +1415,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1493,7 +1670,14 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -1686,7 +1870,14 @@ fn wallet_sync_new_account(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let err = wallet.create_account(None).err().unwrap();
     assert_eq!(err, WalletError::EmptyLastAccount);
@@ -1776,7 +1967,14 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let blocks_to_add = rng.gen_range(1..10);
 
@@ -1901,7 +2099,14 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(
@@ -2046,7 +2251,14 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
 
     // create new wallet
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     // scan the first block
     scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
@@ -2152,7 +2364,14 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
 
     let coin_balance = wallet
         .get_balance(

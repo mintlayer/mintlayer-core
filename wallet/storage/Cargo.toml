@@ -18,6 +18,7 @@ wallet-types = { path = '../types' }
 utils = { path = '../../utils' }
 
 thiserror.workspace = true
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 
 [dev-dependencies]
 test-utils = {path = '../../test-utils'}

@@ -31,7 +31,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -121,11 +121,13 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
+        // TODO: add support for passphrase and saving of seed phrase
         let wallet = GuiController::create_wallet(
             Arc::clone(&self.chain_config),
             file_path.clone(),
             mnemonic,
             None,
+            StoreSeedPhrase::Store,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 

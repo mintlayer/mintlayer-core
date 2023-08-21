@@ -47,10 +47,11 @@ use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
-    WalletStorageReadLocked, WalletStorageWriteLocked,
+    DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
+    TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
+use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
 use wallet_types::with_locked::WithLocked;
@@ -168,6 +169,7 @@ impl<B: storage::Backend> Wallet<B> {
         db: Store<B>,
         mnemonic: &str,
         passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
@@ -178,6 +180,7 @@ impl<B: storage::Backend> Wallet<B> {
             &mut db_tx,
             mnemonic,
             passphrase,
+            save_seed_phrase,
         )?;
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
@@ -234,6 +237,18 @@ impl<B: storage::Backend> Wallet<B> {
             accounts,
             latest_median_time,
         })
+    }
+
+    pub fn seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
+        self.db.transaction_ro_unlocked()?.get_seed_phrase().map_err(WalletError::from)
+    }
+
+    pub fn delete_seed_phrase(&self) -> WalletResult<Option<SerializableSeedPhrase>> {
+        let mut tx = self.db.transaction_rw_unlocked(None)?;
+        let seed_phrase = tx.del_seed_phrase().map_err(WalletError::from)?;
+        tx.commit()?;
+
+        Ok(seed_phrase)
     }
 
     pub fn is_encrypted(&self) -> bool {

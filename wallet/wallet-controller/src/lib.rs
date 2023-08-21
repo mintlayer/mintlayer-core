@@ -80,7 +80,7 @@ pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
-use wallet_types::{with_locked::WithLocked, BlockInfo};
+use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked, BlockInfo};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -146,6 +146,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         file_path: impl AsRef<Path>,
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -158,10 +159,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
         let wallet = wallet::Wallet::new_wallet(
-            Arc::clone(&chain_config),
+            chain_config.clone(),
             db,
             &mnemonic.to_string(),
             passphrase,
+            save_seed_phrase,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -186,6 +188,32 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
+    }
+
+    fn serializable_seed_phrase_to_vec(
+        serializable_seed_phrase: wallet_types::seed_phrase::SerializableSeedPhrase,
+    ) -> Vec<String> {
+        match serializable_seed_phrase {
+            wallet_types::seed_phrase::SerializableSeedPhrase::V0(_, words) => {
+                words.mnemonic().to_vec()
+            }
+        }
+    }
+
+    /// Retrieve the seed phrase if stored in the database
+    pub fn seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
+        self.wallet
+            .seed_phrase()
+            .map(|opt| opt.map(|phrase| Self::serializable_seed_phrase_to_vec(phrase)))
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Delete the seed phrase if stored in the database
+    pub fn delete_seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
+        self.wallet
+            .delete_seed_phrase()
+            .map(|opt| opt.map(|phrase| Self::serializable_seed_phrase_to_vec(phrase)))
+            .map_err(ControllerError::WalletError)
     }
 
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
