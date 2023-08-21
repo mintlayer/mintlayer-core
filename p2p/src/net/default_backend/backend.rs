@@ -43,17 +43,18 @@ use crate::{
         default_backend::{
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{BackendEvent, Command, Message, PeerEvent},
+            types::{BackendEvent, Command, PeerEvent},
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
     },
+    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pEvent, P2pEventHandler,
 };
 
 use super::{
     peer::ConnectionInfo,
-    types::{HandshakeNonce, P2pTimestamp},
+    types::{HandshakeNonce, Message, P2pTimestamp},
 };
 
 /// Buffer size of the channel to the SyncManager peer task.
@@ -74,6 +75,8 @@ struct PeerContext {
     address: SocketAddress,
 
     inbound: bool,
+
+    protocol_version: SupportedProtocolVersion,
 
     user_agent: UserAgent,
 
@@ -142,6 +145,10 @@ pub struct Backend<T: TransportSocket> {
 
     events_controller: EventsController<P2pEvent>,
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+
+    /// The protocol version that this node is running. Normally this will be
+    /// equal to CURRENT_PROTOCOL_VERSION, but it can be overridden for testing purposes.
+    node_protocol_version: ProtocolVersion,
 }
 
 impl<T> Backend<T>
@@ -161,6 +168,7 @@ where
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+        node_protocol_version: ProtocolVersion,
     ) -> Self {
         let (peer_event_tx, peer_event_rx) = mpsc::unbounded_channel();
         Self {
@@ -181,6 +189,7 @@ where
             shutdown_receiver,
             events_controller: EventsController::new(),
             subscribers_receiver,
+            node_protocol_version,
         }
     }
 
@@ -235,6 +244,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services: peer.common_services,
+                protocol_version: peer.protocol_version,
                 sync_msg_rx,
             },
             &self.shutdown,
@@ -350,6 +360,7 @@ where
             receiver_address,
             peer_event_tx,
             backend_event_rx,
+            self.node_protocol_version,
         );
         let shutdown = Arc::clone(&self.shutdown);
         let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
@@ -400,6 +411,7 @@ where
         }
 
         let common_services = peer_info.common_services;
+        let protocol_version = peer_info.protocol_version;
         let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
@@ -430,6 +442,7 @@ where
                 handle,
                 address,
                 inbound,
+                protocol_version,
                 user_agent,
                 software_version,
                 common_services,
@@ -520,19 +533,23 @@ where
                 software_version,
                 receiver_address,
                 handshake_nonce,
-            } => self.create_peer(
-                peer_id,
-                handshake_nonce,
-                PeerInfo {
+            } => {
+                let common_protocol_version =
+                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
+                self.create_peer(
                     peer_id,
-                    protocol_version,
-                    network,
-                    software_version,
-                    user_agent,
-                    common_services,
-                },
-                receiver_address,
-            ),
+                    handshake_nonce,
+                    PeerInfo {
+                        peer_id,
+                        protocol_version: common_protocol_version,
+                        network,
+                        software_version,
+                        user_agent,
+                        common_services,
+                    },
+                    receiver_address,
+                )
+            }
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 

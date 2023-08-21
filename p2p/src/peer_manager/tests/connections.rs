@@ -29,7 +29,7 @@ use crate::{
     config::{MaxInboundConnections, P2pConfig},
     net::types::{services::Service, PeerRole},
     peer_manager::tests::{get_connected_peers, run_peer_manager},
-    protocol::NETWORK_PROTOCOL_CURRENT,
+    protocol::CURRENT_PROTOCOL_VERSION,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
@@ -467,7 +467,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: CURRENT_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
@@ -493,7 +493,7 @@ async fn inbound_connection_too_many_peers_channels() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: CURRENT_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
@@ -519,7 +519,7 @@ async fn inbound_connection_too_many_peers_noise() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: CURRENT_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),

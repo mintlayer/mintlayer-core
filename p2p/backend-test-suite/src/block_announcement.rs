@@ -99,6 +99,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            protocol_version: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
@@ -134,6 +135,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            protocol_version: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),

@@ -121,6 +121,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services: _,
+                protocol_version: _,
                 sync_msg_rx,
             } => (peer_id, sync_msg_rx),
             e => panic!("Unexpected event type: {e:?}"),

@@ -19,17 +19,13 @@ use std::{
     time::Duration,
 };
 
-use crypto::random::make_pseudo_rng;
 use itertools::Itertools;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::MissedTickBehavior,
 };
 
-use chainstate::{
-    ban_score::BanScore, chainstate_interface::ChainstateInterface, BlockIndex, BlockSource,
-    Locator,
-};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
     chain::{
         block::signed_block_header::SignedBlockHeader, Block, ChainConfig, GenBlock, Transaction,
@@ -38,13 +34,10 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{
-    error::{Error as MempoolError, MempoolPolicyError},
-    MempoolHandle,
-};
+use mempool::MempoolHandle;
+use utils::atomics::AcqRelAtomicBool;
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
-use utils::{atomics::AcqRelAtomicBool, bloom_filters::rolling_bloom_filter::RollingBloomFilter};
 
 use crate::{
     config::P2pConfig,
@@ -58,26 +51,13 @@ use crate::{
         NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    sync::types::PeerActivity,
+    sync::{peer_common, types::PeerActivity},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::LocalEvent;
-
-/// Use the same parameters as Bitcoin Core (see `m_tx_inventory_known_filter`)
-const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE: usize = 50000;
-const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP: f64 = 0.000001;
-
-/// Helper for `RollingBloomFilter` because `Id` does not implement `Hash`
-struct TxIdWrapper(Id<Transaction>);
-
-impl std::hash::Hash for TxIdWrapper {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.as_ref().hash(state);
-    }
-}
+use super::{peer_common::KnownTransactions, LocalEvent};
 
 // TODO: Take into account the chain work when syncing.
 // TODO: rename this struct to PeerState/PeerManager or similar.
@@ -105,7 +85,7 @@ pub struct Peer<T: NetworkingService> {
     /// Outgoing data state.
     outgoing: OutgoingDataState,
     /// A rolling filter of all known transactions (sent to us or sent by us)
-    known_transactions: RollingBloomFilter<TxIdWrapper>,
+    known_transactions: KnownTransactions,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
@@ -163,11 +143,7 @@ where
         is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
-        let known_transactions = RollingBloomFilter::new(
-            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE,
-            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP,
-            &mut make_pseudo_rng(),
-        );
+        let known_transactions = KnownTransactions::new();
 
         Self {
             id: id.into(),
@@ -373,7 +349,7 @@ where
         match event {
             LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
             LocalEvent::MempoolNewTx(txid) => {
-                if !self.known_transactions.contains(&TxIdWrapper(txid))
+                if !self.known_transactions.contains(&txid)
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
@@ -425,7 +401,7 @@ where
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        Self::handle_result(&self.peer_manager_sender, self.id(), res).await
+        peer_common::handle_result(&self.peer_manager_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -907,7 +883,7 @@ where
     }
 
     fn add_known_transaction(&mut self, txid: Id<Transaction>) {
-        self.known_transactions.insert(&TxIdWrapper(txid), &mut make_pseudo_rng());
+        self.known_transactions.insert(&txid);
     }
 
     // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
@@ -953,88 +929,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Handles a result of message processing.
-    ///
-    /// There are three possible types of errors:
-    /// - Fatal errors will be propagated by this function effectively stopping the peer event loop.
-    /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
-    ///   "ban score" value of the given error.
-    /// - Ignored errors aren't propagated and don't affect the peer score.
-    pub async fn handle_result(
-        peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
-        peer_id: PeerId,
-        result: Result<()>,
-    ) -> Result<()> {
-        let error = match result {
-            Ok(()) => return Ok(()),
-            Err(e) => e,
-        };
-
-        match error {
-            // Due to the fact that p2p is split into several tasks, it is possible to send a
-            // request/response after a peer is disconnected, but before receiving the disconnect
-            // event. Therefore this error can be safely ignored.
-            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            // The special handling of these mempool errors is not really necessary, because their ban score is 0
-            P2pError::MempoolError(MempoolError::Policy(
-                MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
-            )) => Ok(()),
-
-            // A protocol error - increase the ban score of a peer if needed.
-            e @ (P2pError::ProtocolError(_)
-            | P2pError::MempoolError(_)
-            | P2pError::ChainstateError(_)) => {
-                let ban_score = e.ban_score();
-                if ban_score > 0 {
-                    log::info!(
-                        "[peer id = {}] Adjusting peer's score by {}: {:?}",
-                        peer_id,
-                        ban_score,
-                        e,
-                    );
-
-                    let (sender, receiver) = oneshot_nofail::channel();
-                    peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                        peer_id, ban_score, sender,
-                    ))?;
-                    receiver.await?.or_else(|e| match e {
-                        P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-                        e => Err(e),
-                    })
-                } else {
-                    log::debug!(
-                        "[peer id = {}] Ignoring an error with the ban score of 0: {:?}",
-                        peer_id,
-                        e,
-                    );
-                    Ok(())
-                }
-            }
-
-            // Some of these errors aren't technically fatal,
-            // but they shouldn't occur in the sync manager.
-            e @ (P2pError::DialError(_)
-            | P2pError::ConversionError(_)
-            | P2pError::PeerError(_)
-            | P2pError::NoiseHandshakeError(_)
-            | P2pError::InvalidConfigurationValue(_)
-            | P2pError::MessageCodecError(_)) => panic!("Unexpected error {e:?}"),
-
-            // Fatal errors, simply propagate them to stop the sync manager.
-            // Note/TODO: due to how error types are currently organized, a storage error can
-            // "hide" in other error types. E.g. ChainstateError can contain a BlockError, which
-            // can contain a storage error (both directly and through other error types such as
-            // PropertyQueryError). Also, MempoolError may contain ChainstateError through
-            // TxValidationError. I.e. the code above may silently consume a fatal error,
-            // leaving this struct in some intermediate state. Because of this, a malfunctioning
-            // node may see its peers as behaving incorrectly and ban them eventually.
-            e @ (P2pError::ChannelClosed
-            | P2pError::SubsystemFailure
-            | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
-        }
     }
 
     /// Sends a block list request.

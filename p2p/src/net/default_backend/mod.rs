@@ -35,10 +35,12 @@ use crate::{
     error::P2pError,
     message::{PeerManagerMessage, SyncMessage},
     net::{
+        self,
         default_backend::transport::{TransportListener, TransportSocket},
         types::{ConnectivityEvent, SyncingEvent},
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService,
     },
+    protocol::{ProtocolVersion, CURRENT_PROTOCOL_VERSION},
     types::peer_id::PeerId,
     P2pConfig, P2pEventHandler,
 };
@@ -95,19 +97,14 @@ impl Clone for MessagingHandle {
 }
 
 #[derive(Debug)]
-pub struct SyncingReceiver {
+pub struct SyncingEventReceiver {
     syncing_event_rx: mpsc::UnboundedReceiver<SyncingEvent>,
 }
 
-#[async_trait]
-impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
-    type Transport = T;
-    type ConnectivityHandle = ConnectivityHandle<Self>;
-    type MessagingHandle = MessagingHandle;
-    type SyncingEventReceiver = SyncingReceiver;
-
-    async fn start(
-        transport: Self::Transport,
+impl<T: TransportSocket> DefaultNetworkingService<T> {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_with_version(
+        transport: <Self as NetworkingService>::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -115,10 +112,11 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+        protocol_version: ProtocolVersion,
     ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
+        <Self as NetworkingService>::ConnectivityHandle,
+        <Self as NetworkingService>::MessagingHandle,
+        <Self as NetworkingService>::SyncingEventReceiver,
         JoinHandle<()>,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
@@ -139,6 +137,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             Arc::clone(&shutdown),
             shutdown_receiver,
             subscribers_receiver,
+            protocol_version,
         );
         let backend_task = tokio::spawn(async move {
             match backend.run().await {
@@ -156,9 +155,46 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_event_rx),
             MessagingHandle::new(cmd_tx),
-            Self::SyncingEventReceiver { syncing_event_rx },
+            SyncingEventReceiver { syncing_event_rx },
             backend_task,
         ))
+    }
+}
+
+#[async_trait]
+impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
+    type Transport = T;
+    type ConnectivityHandle = ConnectivityHandle<Self>;
+    type MessagingHandle = MessagingHandle;
+    type SyncingEventReceiver = SyncingEventReceiver;
+
+    async fn start(
+        transport: Self::Transport,
+        bind_addresses: Vec<SocketAddress>,
+        chain_config: Arc<common::chain::ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
+        time_getter: TimeGetter,
+        shutdown: Arc<SeqCstAtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
+        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+    ) -> crate::Result<(
+        Self::ConnectivityHandle,
+        Self::MessagingHandle,
+        Self::SyncingEventReceiver,
+        JoinHandle<()>,
+    )> {
+        Self::start_with_version(
+            transport,
+            bind_addresses,
+            chain_config,
+            p2p_config,
+            time_getter,
+            shutdown,
+            shutdown_receiver,
+            subscribers_receiver,
+            CURRENT_PROTOCOL_VERSION.into(),
+        )
+        .await
     }
 }
 
@@ -221,7 +257,7 @@ impl MessagingService for MessagingHandle {
 }
 
 #[async_trait]
-impl SyncingEventReceiver for SyncingReceiver {
+impl net::SyncingEventReceiver for SyncingEventReceiver {
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
         self.syncing_event_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }

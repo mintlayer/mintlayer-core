@@ -60,7 +60,6 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    protocol::{NetworkProtocolVersion, NETWORK_PROTOCOL_MIN},
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
@@ -219,13 +218,6 @@ where
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
         })
-    }
-
-    /// Verify network protocol compatibility
-    ///
-    /// Make sure that the local and remote peers have compatible network protocols
-    fn validate_network_protocol(&self, protocol: NetworkProtocolVersion) -> bool {
-        protocol >= NETWORK_PROTOCOL_MIN
     }
 
     /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
@@ -535,10 +527,6 @@ where
         peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
-        ensure!(
-            self.validate_network_protocol(info.protocol_version),
-            P2pError::ProtocolError(ProtocolError::UnsupportedProtocol(info.protocol_version))
-        );
         ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -1486,7 +1474,7 @@ where
                 self.resend_own_address_randomly();
 
                 // Pick a random outbound peer to resend the listening address to.
-                // The delay has this value because there are at most `MAX_OUTBOUND_CONNECTIONS`
+                // The delay has this value because there are at most `OUTBOUND_FULL_RELAY_COUNT`
                 // that can have `discovered_own_address`.
                 let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));

@@ -26,7 +26,7 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::{
     message::{PeerManagerMessage, SyncMessage},
-    protocol::NetworkProtocolVersion,
+    protocol::SupportedProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
 };
@@ -73,7 +73,8 @@ pub struct PeerInfo {
     /// Unique ID of the peer
     pub peer_id: PeerId,
 
-    pub protocol_version: NetworkProtocolVersion,
+    /// Best protocol version that is supported both by us and by the peer.
+    pub protocol_version: SupportedProtocolVersion,
 
     /// Peer network
     pub network: [u8; 4],
@@ -173,6 +174,7 @@ pub enum SyncingEvent {
     Connected {
         peer_id: PeerId,
         common_services: Services,
+        protocol_version: SupportedProtocolVersion,
         sync_msg_rx: Receiver<SyncMessage>,
     },
 

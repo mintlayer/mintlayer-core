@@ -26,7 +26,7 @@ use p2p::{
     config::NodeType,
     error::{DialError, P2pError},
     net::types::PeerInfo,
-    protocol::NETWORK_PROTOCOL_CURRENT,
+    protocol::CURRENT_PROTOCOL_VERSION,
     types::{peer_id::PeerId, socket_address::SocketAddress},
 };
 use rstest::rstest;
@@ -60,7 +60,7 @@ fn basic(#[case] seed: Seed) {
             address: node1,
             peer_info: PeerInfo {
                 peer_id: peer1,
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION,
                 network: *chain_config.magic_bytes(),
                 software_version: *chain_config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -92,7 +92,7 @@ fn basic(#[case] seed: Seed) {
             address: node2,
             peer_info: PeerInfo {
                 peer_id: peer2,
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION,
                 network: *chain_config.magic_bytes(),
                 software_version: *chain_config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -172,7 +172,7 @@ fn randomized(#[case] seed: Seed) {
                     address,
                     peer_info: PeerInfo {
                         peer_id: PeerId::new(),
-                        protocol_version: NETWORK_PROTOCOL_CURRENT,
+                        protocol_version: CURRENT_PROTOCOL_VERSION,
                         network: *chain_config.magic_bytes(),
                         software_version: *chain_config.software_version(),
                         user_agent: mintlayer_core_user_agent(),
@@ -191,7 +191,7 @@ fn randomized(#[case] seed: Seed) {
                     address,
                     peer_info: PeerInfo {
                         peer_id: PeerId::new(),
-                        protocol_version: NETWORK_PROTOCOL_CURRENT,
+                        protocol_version: CURRENT_PROTOCOL_VERSION,
                         network: [255, 255, 255, 255],
                         software_version: *chain_config.software_version(),
                         user_agent: mintlayer_core_user_agent(),
@@ -242,7 +242,7 @@ fn incompatible_node(#[case] seed: Seed) {
             address: node1,
             peer_info: PeerInfo {
                 peer_id: peer1,
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION,
                 network: [255, 255, 255, 255],
                 software_version: *chain_config.software_version(),
                 user_agent: mintlayer_core_user_agent(),

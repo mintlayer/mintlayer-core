@@ -13,17 +13,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use enum_iterator::Sequence;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
+
+use serialization::{Decode, Encode};
+
+use crate::error::{P2pError, ProtocolError};
+
 /// Network protocol version
 ///
 /// When two nodes connect, they exchange protocol versions,
 /// and the minimum version is selected as the negotiated network protocol version.
-pub type NetworkProtocolVersion = u32;
+/// This type represents the "raw" version number that we receive from the peer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct ProtocolVersion(u32);
 
-/// Initial protocol version
-pub const NETWORK_PROTOCOL_V1: NetworkProtocolVersion = 1;
+impl ProtocolVersion {
+    pub fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub fn inner(&self) -> u32 {
+        self.0
+    }
+}
+
+/// The validated network protocol version.
+#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq, Eq, PartialOrd, Ord, Sequence)]
+pub enum SupportedProtocolVersion {
+    V1 = 1,
+    V2 = 2,
+}
+
+impl From<SupportedProtocolVersion> for ProtocolVersion {
+    fn from(value: SupportedProtocolVersion) -> Self {
+        ProtocolVersion::new(value as u32)
+    }
+}
+
+impl TryFrom<ProtocolVersion> for SupportedProtocolVersion {
+    type Error = P2pError;
+
+    fn try_from(value: ProtocolVersion) -> Result<Self, Self::Error> {
+        SupportedProtocolVersion::from_u32(value.inner()).ok_or(P2pError::ProtocolError(
+            ProtocolError::UnsupportedProtocol(value),
+        ))
+    }
+}
+
+/// Given this node's and peer's protocol versions (in any order), choose the best version
+/// that is supported by both.
+pub fn choose_common_protocol_version(
+    version1: ProtocolVersion,
+    version2: ProtocolVersion,
+) -> crate::Result<SupportedProtocolVersion> {
+    let min_version = std::cmp::min(version1, version2);
+    min_version.try_into()
+}
 
 /// Latest known network protocol version
-pub const NETWORK_PROTOCOL_CURRENT: NetworkProtocolVersion = NETWORK_PROTOCOL_V1;
-
-/// Minimum supported network protocol version
-pub const NETWORK_PROTOCOL_MIN: NetworkProtocolVersion = NETWORK_PROTOCOL_V1;
+pub const CURRENT_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;

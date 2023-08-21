@@ -27,7 +27,7 @@ use logging::log;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::{PeerManagerMessage, SyncMessage},
+    message::SyncMessage,
     net::{
         default_backend::{
             transport::TransportSocket,
@@ -35,13 +35,13 @@ use crate::{
         },
         types::Role,
     },
-    protocol::NETWORK_PROTOCOL_CURRENT,
+    protocol::ProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 use super::{
     transport::BufferedTranscoder,
-    types::{HandshakeMessage, HandshakeNonce, Message, P2pTimestamp},
+    types::{CategorizedMessage, HandshakeMessage, HandshakeNonce, Message, P2pTimestamp},
 };
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -89,6 +89,10 @@ pub struct Peer<T: TransportSocket> {
 
     /// Channel receiver for receiving events from Backend.
     backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
+
+    /// The protocol version that this node is running. Normally this will be
+    /// equal to CURRENT_PROTOCOL_VERSION, but it can be overridden for testing purposes.
+    node_protocol_version: ProtocolVersion,
 }
 
 impl<T> Peer<T>
@@ -105,6 +109,7 @@ where
         receiver_address: Option<PeerAddress>,
         peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
         backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
+        node_protocol_version: ProtocolVersion,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket, *p2p_config.max_message_size);
 
@@ -117,6 +122,7 @@ where
             receiver_address,
             peer_event_tx,
             backend_event_rx,
+            node_protocol_version,
         }
     }
 
@@ -183,7 +189,7 @@ where
 
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::HelloAck {
-                        protocol_version: NETWORK_PROTOCOL_CURRENT,
+                        protocol_version: self.node_protocol_version,
                         network: *self.chain_config.magic_bytes(),
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
@@ -202,7 +208,7 @@ where
 
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::Hello {
-                        protocol_version: NETWORK_PROTOCOL_CURRENT,
+                        protocol_version: self.node_protocol_version,
                         network: *self.chain_config.magic_bytes(),
                         services: local_services,
                         user_agent: self.p2p_config.user_agent.clone(),
@@ -259,57 +265,14 @@ where
         sync_msg_tx: &mut Sender<SyncMessage>,
     ) -> crate::Result<()> {
         // TODO: Use a bounded channel to send messages to the peer manager
-        match msg {
-            Message::Handshake(_) => {
+        match msg.categorize() {
+            CategorizedMessage::Handshake(_) => {
                 log::error!("peer {peer} sent handshaking message");
             }
-
-            Message::PingRequest(r) => peer_event_tx.send((
-                peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::PingRequest(r),
-                },
-            ))?,
-            Message::PingResponse(r) => peer_event_tx.send((
-                peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::PingResponse(r),
-                },
-            ))?,
-            Message::AddrListRequest(r) => peer_event_tx.send((
-                peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AddrListRequest(r),
-                },
-            ))?,
-            Message::AddrListResponse(r) => peer_event_tx.send((
-                peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AddrListResponse(r),
-                },
-            ))?,
-            Message::AnnounceAddrRequest(r) => peer_event_tx.send((
-                peer,
-                PeerEvent::MessageReceived {
-                    message: PeerManagerMessage::AnnounceAddrRequest(r),
-                },
-            ))?,
-
-            Message::HeaderListRequest(v) => {
-                sync_msg_tx.send(SyncMessage::HeaderListRequest(v)).await?
+            CategorizedMessage::PeerManagerMessage(msg) => {
+                peer_event_tx.send((peer, PeerEvent::MessageReceived { message: msg }))?
             }
-            Message::BlockListRequest(v) => {
-                sync_msg_tx.send(SyncMessage::BlockListRequest(v)).await?
-            }
-            Message::TransactionRequest(v) => {
-                sync_msg_tx.send(SyncMessage::TransactionRequest(v)).await?
-            }
-            Message::NewTransaction(v) => sync_msg_tx.send(SyncMessage::NewTransaction(v)).await?,
-            Message::TransactionResponse(v) => {
-                sync_msg_tx.send(SyncMessage::TransactionResponse(v)).await?
-            }
-            Message::HeaderList(v) => sync_msg_tx.send(SyncMessage::HeaderList(v)).await?,
-            Message::BlockResponse(v) => sync_msg_tx.send(SyncMessage::BlockResponse(v)).await?,
+            CategorizedMessage::SyncMessage(msg) => sync_msg_tx.send(msg).await?,
         }
 
         Ok(())
@@ -372,14 +335,19 @@ impl<T: TransportSocket> Drop for Peer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::HeaderListRequest;
-    use crate::net::default_backend::transport::{
-        MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket,
-    };
-    use crate::net::types::services::Service;
-    use crate::testing_utils::{
-        get_two_connected_sockets, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+    use crate::{
+        message::HeaderListRequest,
+        net::{
+            default_backend::transport::{
+                MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket,
+            },
+            types::services::Service,
+        },
+        protocol::CURRENT_PROTOCOL_VERSION,
+        testing_utils::{
+            get_two_connected_sockets, test_p2p_config, TestTransportChannel, TestTransportMaker,
+            TestTransportNoise, TestTransportTcp,
+        },
     };
     use chainstate::Locator;
     use futures::FutureExt;
@@ -405,6 +373,7 @@ mod tests {
             None,
             tx1,
             rx2,
+            CURRENT_PROTOCOL_VERSION.into(),
         );
 
         let handle = tokio::spawn(async move {
@@ -416,7 +385,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -432,7 +401,7 @@ mod tests {
         assert_eq!(
             rx1.try_recv().unwrap().1,
             PeerEvent::PeerInfoReceived {
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
                 common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -482,6 +451,7 @@ mod tests {
             None,
             tx1,
             rx2,
+            CURRENT_PROTOCOL_VERSION.into(),
         );
 
         let handle = tokio::spawn(async move {
@@ -493,7 +463,7 @@ mod tests {
         socket2.recv().await.unwrap();
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::HelloAck {
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -510,7 +480,7 @@ mod tests {
             Ok((
                 peer_id3,
                 PeerEvent::PeerInfoReceived {
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: CURRENT_PROTOCOL_VERSION.into(),
                     network: *chain_config.magic_bytes(),
                     common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     user_agent: p2p_config.user_agent.clone(),
@@ -558,6 +528,7 @@ mod tests {
             None,
             tx1,
             rx2,
+            CURRENT_PROTOCOL_VERSION.into(),
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
@@ -567,7 +538,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
@@ -618,6 +589,7 @@ mod tests {
             None,
             tx1,
             rx2,
+            CURRENT_PROTOCOL_VERSION.into(),
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);

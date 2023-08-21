@@ -15,8 +15,12 @@
 
 use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
+use enum_iterator::all;
+
 use async_trait::async_trait;
 use crypto::random::Rng;
+use futures::Future;
+use logging::log;
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 use tokio::{
@@ -54,6 +58,7 @@ use utils::atomics::SeqCstAtomicBool;
 use crate::{
     message::{HeaderList, SyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -86,19 +91,21 @@ pub struct TestNode {
     mempool_handle: MempoolHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
     connected_peers: BTreeMap<PeerId, Sender<SyncMessage>>,
+    protocol_version: ProtocolVersion,
 }
 
 impl TestNode {
     /// Starts the sync manager event loop and returns a handle for manipulating and observing the
     /// manager state.
-    pub async fn start() -> Self {
-        Self::builder().build().await
+    pub async fn start(protocol_version: ProtocolVersion) -> Self {
+        Self::builder(protocol_version).build().await
     }
 
-    pub fn builder() -> TestNodeBuilder {
-        TestNodeBuilder::new()
+    pub fn builder(protocol_version: ProtocolVersion) -> TestNodeBuilder {
+        TestNodeBuilder::new(protocol_version)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn start_with_params(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -107,6 +114,7 @@ impl TestNode {
         shutdown_trigger: ShutdownTrigger,
         subsystem_manager_handle: ManagerJoinHandle,
         time_getter: TimeGetter,
+        protocol_version: ProtocolVersion,
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
         let connected_peers = Default::default();
@@ -151,6 +159,7 @@ impl TestNode {
             mempool_handle,
             _new_tip_receiver: new_tip_receiver,
             connected_peers,
+            protocol_version,
         }
     }
 
@@ -163,12 +172,15 @@ impl TestNode {
     }
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
-    pub fn try_connect_peer(&mut self, peer_id: PeerId) {
+    pub fn try_connect_peer(&mut self, peer_id: PeerId, protocol_version: ProtocolVersion) {
         let (sync_msg_tx, sync_msg_rx) = mpsc::channel(20);
+        let common_protocol_version =
+            choose_common_protocol_version(self.protocol_version, protocol_version).unwrap();
         self.syncing_event_sender
             .send(SyncingEvent::Connected {
                 peer_id,
                 common_services: (*self.p2p_config.node_type).into(),
+                protocol_version: common_protocol_version,
                 sync_msg_rx,
             })
             .unwrap();
@@ -176,8 +188,8 @@ impl TestNode {
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
-    pub async fn connect_peer(&mut self, peer: PeerId) {
-        self.try_connect_peer(peer);
+    pub async fn connect_peer(&mut self, peer: PeerId, protocol_version: ProtocolVersion) {
+        self.try_connect_peer(peer, protocol_version);
 
         let (sent_to, message) = self.message().await;
         assert_eq!(peer, sent_to);
@@ -351,16 +363,18 @@ pub struct TestNodeBuilder {
     chainstate: Option<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
     blocks: Vec<Block>,
+    protocol_version: ProtocolVersion,
 }
 
 impl TestNodeBuilder {
-    pub fn new() -> Self {
+    pub fn new(protocol_version: ProtocolVersion) -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
             p2p_config: Arc::new(test_p2p_config()),
             chainstate: None,
             time_getter: TimeGetter::default(),
             blocks: Vec::new(),
+            protocol_version,
         }
     }
 
@@ -396,6 +410,7 @@ impl TestNodeBuilder {
             chainstate,
             time_getter,
             blocks,
+            protocol_version,
         } = self;
 
         let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
@@ -436,6 +451,7 @@ impl TestNodeBuilder {
             shutdown_trigger,
             manager_handle,
             time_getter,
+            protocol_version,
         )
         .await
     }
@@ -644,4 +660,17 @@ pub fn get_random_hash(rng: &mut impl Rng) -> H256 {
 
 pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
     get_random_hash(rng).as_bytes().to_vec()
+}
+
+pub async fn for_each_protocol_version<Func, Res>(func: Func)
+where
+    Func: Fn(ProtocolVersion) -> Res,
+    Res: Future<Output = ()>,
+{
+    logging::init_logging::<&std::path::Path>(None);
+
+    for version in all::<SupportedProtocolVersion>() {
+        log::info!("---------- Testing protocol version {version:?} ----------");
+        func(version.into()).await;
+    }
 }

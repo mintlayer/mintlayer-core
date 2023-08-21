@@ -23,7 +23,9 @@ use test_utils::random::Seed;
 
 use crate::{
     message::{HeaderList, SyncMessage},
-    sync::tests::helpers::TestNode,
+    protocol::ProtocolVersion,
+    protocol::SupportedProtocolVersion,
+    sync::tests::helpers::{for_each_protocol_version, TestNode},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
 };
@@ -31,32 +33,43 @@ use crate::{
 // Check that the header list request is sent to a newly connected peer.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn connect_peer() {
-    let mut node = TestNode::start().await;
+    for_each_protocol_version(|protocol_version| async move {
+        let mut node = TestNode::start(protocol_version).await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer).await;
+        let peer = PeerId::new();
+        node.connect_peer(peer, protocol_version).await;
 
-    node.join_subsystem_manager().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
 }
 
 // Check that the attempt to connect the peer twice results in an error.
+#[rstest::rstest]
+#[trace]
+#[case(SupportedProtocolVersion::V1.into())]
+#[case(SupportedProtocolVersion::V2.into())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Registered duplicated peer"]
-async fn connect_peer_twice() {
-    let mut node = TestNode::start().await;
+async fn connect_peer_twice(#[case] protocol_version: ProtocolVersion) {
+    let mut node = TestNode::start(protocol_version).await;
 
     let peer = PeerId::new();
-    node.connect_peer(peer).await;
+    node.connect_peer(peer, protocol_version).await;
 
-    node.try_connect_peer(peer);
+    node.try_connect_peer(peer, protocol_version);
 
     node.resume_panic().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(SupportedProtocolVersion::V1.into())]
+#[case(SupportedProtocolVersion::V2.into())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Unregistering unknown peer:"]
-async fn disconnect_nonexistent_peer() {
-    let mut node = TestNode::start().await;
+async fn disconnect_nonexistent_peer(#[case] protocol_version: ProtocolVersion) {
+    let mut node = TestNode::start(protocol_version).await;
 
     let peer = PeerId::new();
     node.disconnect_peer(peer);
@@ -66,14 +79,17 @@ async fn disconnect_nonexistent_peer() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_peer() {
-    let mut node = TestNode::start().await;
+    for_each_protocol_version(|protocol_version| async move {
+        let mut node = TestNode::start(protocol_version).await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer).await;
-    node.disconnect_peer(peer);
-    node.assert_no_error().await;
+        let peer = PeerId::new();
+        node.connect_peer(peer, protocol_version).await;
+        node.disconnect_peer(peer);
+        node.assert_no_error().await;
 
-    node.join_subsystem_manager().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
 }
 
 #[rstest::rstest]
@@ -81,59 +97,62 @@ async fn disconnect_peer() {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: Seed) {
-    // Original bug description:
-    //
-    // There are two connected and fully synchronized nodes: Node1 and Node2.
-    // Node1 generates a new block and sends a header notification to the Node2.
-    // Node2 sends a header list message to all connected peers.
-    // Node1 receives the headers list messages but does nothing because the specific block is already known.
-    // Node1 unexpectedly disconnects Node2.
-    //
-    // Test case based on a simplified scenario:
-    //
-    // t = 0                     | Node has block; connects to a peer; peer sends a header list with the same block
-    // t = sync_stalling_timeout | Node checks for peer timeout; should not disconnect
+    for_each_protocol_version(|protocol_version| async move {
+        // Original bug description:
+        //
+        // There are two connected and fully synchronized nodes: Node1 and Node2.
+        // Node1 generates a new block and sends a header notification to the Node2.
+        // Node2 sends a header list message to all connected peers.
+        // Node1 receives the headers list messages but does nothing because the specific block is already known.
+        // Node1 unexpectedly disconnects Node2.
+        //
+        // Test case based on a simplified scenario:
+        //
+        // t = 0                     | Node has block; connects to a peer; peer sends a header list with the same block
+        // t = sync_stalling_timeout | Node checks for peer timeout; should not disconnect
 
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-    let time = P2pBasicTestTimeGetter::new();
-    let chain_config = Arc::new(create_unit_test_config());
-    let p2p_config = Arc::new(test_p2p_config());
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let time = P2pBasicTestTimeGetter::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let p2p_config = Arc::new(test_p2p_config());
 
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .with_time_getter(time.get_time_getter())
-        .build();
-    let block = tf
-        .make_block_builder()
-        .with_timestamp(BlockTimestamp::from_duration_since_epoch(
-            time.get_time_getter().get_time(),
-        ))
-        .build();
-    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config.as_ref().clone())
+            .with_time_getter(time.get_time_getter())
+            .build();
+        let block = tf
+            .make_block_builder()
+            .with_timestamp(BlockTimestamp::from_duration_since_epoch(
+                time.get_time_getter().get_time(),
+            ))
+            .build();
+        tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
-    let mut node = TestNode::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
-        .with_time_getter(time.get_time_getter())
-        .with_chainstate(tf.into_chainstate())
-        .build()
-        .await;
+        let mut node = TestNode::builder(protocol_version)
+            .with_chain_config(Arc::clone(&chain_config))
+            .with_p2p_config(Arc::clone(&p2p_config))
+            .with_time_getter(time.get_time_getter())
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
 
-    // Connect peer and assume we requested a header list.
-    let peer = PeerId::new();
-    node.connect_peer(peer).await;
+        // Connect peer and assume we requested a header list.
+        let peer = PeerId::new();
+        node.connect_peer(peer, protocol_version).await;
 
-    // Peer sends us a header list but we already know the containing block.
-    let msg = SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
-    node.send_message(peer, msg).await;
+        // Peer sends us a header list but we already know the containing block.
+        let msg = SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
+        node.send_message(peer, msg).await;
 
-    // Advance time across the timeout boundary. This would trigger a disconnect in a scenario
-    // where we expect additional data from the peer. However, in this case we don't expect
-    // additional data and therefore no disconnection should take place.
-    time.advance_time(*p2p_config.sync_stalling_timeout);
+        // Advance time across the timeout boundary. This would trigger a disconnect in a scenario
+        // where we expect additional data from the peer. However, in this case we don't expect
+        // additional data and therefore no disconnection should take place.
+        time.advance_time(*p2p_config.sync_stalling_timeout);
 
-    // Ensure the peer does not get disconnected.
-    node.assert_no_disconnect_peer_event(peer).await;
+        // Ensure the peer does not get disconnected.
+        node.assert_no_disconnect_peer_event(peer).await;
 
-    node.join_subsystem_manager().await;
+        node.join_subsystem_manager().await;
+    })
+    .await;
 }

@@ -25,14 +25,14 @@ use common::{
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 
-use crate::protocol::NetworkProtocolVersion;
+use crate::protocol::ProtocolVersion;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     #[error("Peer has an unsupported network protocol: {0:?}")]
-    UnsupportedProtocol(NetworkProtocolVersion),
+    UnsupportedProtocol(ProtocolVersion),
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer is unresponsive")]

@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use super::{transport::NoiseTcpTransport, *};
-use crate::config::NodeType;
-use crate::error::DialError;
-use crate::protocol::NETWORK_PROTOCOL_CURRENT;
-use crate::testing_utils::{
-    test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportTcp,
-};
 use crate::{
+    config::NodeType,
+    error::DialError,
     net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
-    testing_utils::TestTransportNoise,
+    protocol::{SupportedProtocolVersion, CURRENT_PROTOCOL_VERSION},
+    testing_utils::{
+        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    },
 };
 use std::fmt::Debug;
 use std::time::Duration;
@@ -307,7 +307,7 @@ where
     }) = conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
-        assert_eq!(peer_info.protocol_version, NETWORK_PROTOCOL_CURRENT);
+        assert_eq!(peer_info.protocol_version, CURRENT_PROTOCOL_VERSION);
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
@@ -390,4 +390,127 @@ async fn invalid_outbound_peer_connect_channels() {
 #[tokio::test]
 async fn invalid_outbound_peer_connect_noise() {
     invalid_outbound_peer_connect::<TestTransportNoise, NoiseTcpTransport>().await;
+}
+
+async fn protocol_version_selection_impl<A, T>(
+    protocol_version1: ProtocolVersion,
+    protocol_version2: ProtocolVersion,
+    expected_common_protocol_version: ProtocolVersion,
+) where
+    A: TestTransportMaker<Transport = T>,
+    T: TransportSocket + Debug,
+{
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(SeqCstAtomicBool::new(false));
+    let time_getter = TimeGetter::default();
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        A::make_transport(),
+        vec![A::make_address()],
+        Arc::clone(&config),
+        Arc::clone(&p2p_config),
+        time_getter.clone(),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
+        subscribers_receiver,
+        protocol_version1,
+    )
+    .await
+    .unwrap();
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
+    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
+        A::make_transport(),
+        vec![A::make_address()],
+        Arc::clone(&config),
+        Arc::clone(&p2p_config),
+        time_getter,
+        shutdown,
+        shutdown_receiver,
+        subscribers_receiver,
+        protocol_version2,
+    )
+    .await
+    .unwrap();
+
+    let addr = conn2.local_addresses();
+    conn1.connect(addr[0], None).unwrap();
+
+    let res1 = conn1.poll_next().await;
+    match res1.unwrap() {
+        ConnectivityEvent::OutboundAccepted {
+            address,
+            peer_info,
+            receiver_address: _,
+        } => {
+            assert_eq!(address, conn2.local_addresses()[0]);
+            let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
+            assert_eq!(protocol_version, expected_common_protocol_version);
+            assert_eq!(peer_info.network, *config.magic_bytes());
+            assert_eq!(peer_info.software_version, *config.software_version());
+            assert_eq!(peer_info.user_agent, p2p_config.user_agent);
+            assert_eq!(peer_info.common_services, NodeType::Full.into());
+        }
+        _ => panic!("invalid event received, expected outgoing connection"),
+    }
+
+    let res2 = conn2.poll_next().await;
+    match res2.unwrap() {
+        ConnectivityEvent::InboundAccepted {
+            address: _,
+            peer_info,
+            receiver_address: _,
+        } => {
+            let protocol_version: ProtocolVersion = peer_info.protocol_version.into();
+            assert_eq!(protocol_version, expected_common_protocol_version);
+            assert_eq!(peer_info.network, *config.magic_bytes());
+            assert_eq!(peer_info.software_version, *config.software_version());
+            assert_eq!(peer_info.user_agent, p2p_config.user_agent);
+        }
+        _ => panic!("invalid event received, expected incoming connection"),
+    }
+}
+
+async fn protocol_version_selection<A, T>()
+where
+    A: TestTransportMaker<Transport = T>,
+    T: TransportSocket + Debug,
+{
+    protocol_version_selection_impl::<A, T>(
+        SupportedProtocolVersion::V1.into(),
+        SupportedProtocolVersion::V2.into(),
+        SupportedProtocolVersion::V1.into(),
+    )
+    .await;
+    protocol_version_selection_impl::<A, T>(
+        SupportedProtocolVersion::V2.into(),
+        SupportedProtocolVersion::V1.into(),
+        SupportedProtocolVersion::V1.into(),
+    )
+    .await;
+    protocol_version_selection_impl::<A, T>(
+        SupportedProtocolVersion::V2.into(),
+        SupportedProtocolVersion::V2.into(),
+        SupportedProtocolVersion::V2.into(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn protocol_version_selection_tcp() {
+    protocol_version_selection::<TestTransportTcp, TcpTransportSocket>().await;
+}
+
+#[tokio::test]
+async fn protocol_version_selection_channels() {
+    protocol_version_selection::<TestTransportChannel, MpscChannelTransport>().await;
+}
+
+#[tokio::test]
+async fn protocol_version_selection_noise() {
+    protocol_version_selection::<TestTransportNoise, NoiseTcpTransport>().await;
 }
