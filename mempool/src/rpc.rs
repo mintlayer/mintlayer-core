@@ -107,7 +107,7 @@ impl MempoolRpcServer for super::MempoolHandle {
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<TxStatus> {
         let res = self
-            .call_mut(move |this| this.add_transaction(tx.take(), TxOrigin::LocalMempool))
+            .call_mut(move |this| this.add_transaction(tx.take(), TxOrigin::local_mempool()))
             .await
             .log_err();
         rpc::handle_result(res)

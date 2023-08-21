@@ -229,31 +229,31 @@ where
         let origin = tx_proc_event.origin();
 
         match tx_proc_event.result() {
-            Ok(()) => match origin {
-                TxOrigin::Peer(_) | TxOrigin::LocalP2p => {
+            Ok(()) => {
+                if origin.should_propagate() {
                     log::info!("Broadcasting transaction {tx_id} originating in {origin}");
                     for peer in self.peers.values_mut() {
                         let _ = peer.local_event_tx.send(LocalEvent::MempoolNewTx(tx_id));
                     }
-                }
-                TxOrigin::LocalMempool | TxOrigin::PastBlock => {
+                } else {
                     log::trace!("Not propagating transaction {tx_id} originating in {origin}");
                 }
-            },
+            }
             Err(_) => match origin {
-                TxOrigin::Peer(peer_id) => {
+                TxOrigin::Remote(remote_origin) => {
                     // Punish the original peer for submitting an invalid transaction according
                     // to mempool ban score.
                     let ban_score = tx_proc_event.ban_score();
                     if ban_score > 0 {
                         let (sx, _rx) = crate::utils::oneshot_nofail::channel();
+                        let peer_id = remote_origin.peer_id();
                         let event = PeerManagerEvent::AdjustPeerScore(peer_id, ban_score, sx);
                         self.peer_manager_sender
                             .send(event)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                 }
-                TxOrigin::PastBlock | TxOrigin::LocalMempool | TxOrigin::LocalP2p => (),
+                TxOrigin::Local(_) => (),
             },
         }
         Ok(())

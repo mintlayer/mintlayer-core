@@ -121,7 +121,7 @@ where
     ) -> crate::Result<mempool::TxStatus> {
         let res = self
             .mempool_handle
-            .call_mut(move |mempool| mempool.add_transaction(tx, TxOrigin::LocalP2p))
+            .call_mut(move |mempool| mempool.add_transaction(tx, TxOrigin::local_p2p()))
             .await??;
         Ok(res)
     }
