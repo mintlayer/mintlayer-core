@@ -71,7 +71,8 @@ pub struct RunOptions {
     /// check and start producing blocks immediately. This option
     /// should only be used once, when the node is starting from
     /// Genesis. If used on a node that is not starting from Genesis,
-    /// the node may produce invalid blocks.
+    /// the node may produce blocks from the past, which will lead
+    /// to being banned by the network.
     #[clap(long)]
     pub blockprod_skip_ibd_check: Option<bool>,
 
