@@ -190,19 +190,29 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(wallet)
     }
 
+    fn serializable_seed_phrase_to_vec(
+        serializable_seed_phrase: wallet_types::seed_phrase::SerializedSeedPhrase,
+    ) -> Vec<String> {
+        match serializable_seed_phrase {
+            wallet_types::seed_phrase::SerializedSeedPhrase::V0(_, words) => {
+                words.mnemonic().to_vec()
+            }
+        }
+    }
+
     /// Retrieve the seed phrase if stored in the database
-    pub fn seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
+    pub fn seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
         self.wallet
             .seed_phrase()
-            .map(|opt| opt.map(|phrase| phrase.to_string()))
+            .map(|opt| opt.map(|phrase| Self::serializable_seed_phrase_to_vec(phrase)))
             .map_err(ControllerError::WalletError)
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<String>, ControllerError<T>> {
+    pub fn delete_seed_phrase(&self) -> Result<Option<Vec<String>>, ControllerError<T>> {
         self.wallet
             .delete_seed_phrase()
-            .map(|opt| opt.map(|phrase| phrase.to_string()))
+            .map(|opt| opt.map(|phrase| Self::serializable_seed_phrase_to_vec(phrase)))
             .map_err(ControllerError::WalletError)
     }
 

@@ -1128,7 +1128,7 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
 
                 let msg = if let Some(phrase) = phrase {
-                    format!("The saved seed phrase is \"{}\"", phrase)
+                    format!("The saved seed phrase is \"{}\"", phrase.join(" "))
                 } else {
                     "No saved seed phrase for this wallet. This was your choice when you created the wallet as a security option. Make sure not to lose this wallet file if you don't have the seed-phrase saved elsewhere when you created the wallet.".into()
                 };
@@ -1144,7 +1144,7 @@ impl CommandHandler {
                     .map_err(WalletCliError::Controller)?;
 
                 let msg = if let Some(phrase) = phrase {
-                    format!("The seed phrase has been deleted, you can save it if you haven't do so yet: \"{}\"", phrase)
+                    format!("The seed phrase has been deleted, you can save it if you haven't do so yet: \"{}\"", phrase.join(" "))
                 } else {
                     "No saved seed phrase for this wallet.".into()
                 };

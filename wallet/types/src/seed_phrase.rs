@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use serialization::{Decode, Encode};
-use std::fmt::Display;
 
 pub enum SaveSeedPhrase {
     Save,
@@ -70,15 +69,6 @@ impl SerializedSeedPhrase {
             SeedPhraseLanguage::new(mnemonic.language()),
             SeedPhrase::new(mnemonic),
         )
-    }
-}
-
-impl Display for SerializedSeedPhrase {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            //FIXME write language as well
-            Self::V0(_, words) => f.write_str(words.mnemonic.join(" ").as_str()),
-        }
     }
 }
 
