@@ -83,6 +83,7 @@ fn read_config_override_values() {
     assert!(config_path.is_file());
 
     let blockprod_min_peers_to_produce_blocks = 10;
+    let blockprod_skip_ibd_check = true;
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
@@ -108,6 +109,7 @@ fn read_config_override_values() {
 
     let options = RunOptions {
         blockprod_min_peers_to_produce_blocks: Some(blockprod_min_peers_to_produce_blocks),
+        blockprod_skip_ibd_check: Some(blockprod_skip_ibd_check),
         storage_backend: Some(backend_type.clone()),
         node_type: Some(node_type),
         mock_time: None,
@@ -141,6 +143,11 @@ fn read_config_override_values() {
     assert_eq!(
         config.blockprod.clone().unwrap().min_peers_to_produce_blocks,
         Some(blockprod_min_peers_to_produce_blocks),
+    );
+
+    assert_eq!(
+        config.blockprod.clone().unwrap().skip_ibd_check,
+        Some(blockprod_skip_ibd_check)
     );
 
     assert_eq!(

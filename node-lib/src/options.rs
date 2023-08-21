@@ -61,6 +61,20 @@ pub struct RunOptions {
     #[clap(long)]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
 
+    /// Skip the initial block download check for block production.
+    ///
+    /// When a node starts, it checks if it has the latest block. If
+    /// not, it downloads the missing blocks from its peers. This is
+    /// called the initial block download (IBD).
+    ///
+    /// If this option is set to true, the node will skip the IBD
+    /// check and start producing blocks immediately. This option
+    /// should only be used once, when the node is starting from
+    /// Genesis. If used on a node that is not starting from Genesis,
+    /// the node may produce invalid blocks.
+    #[clap(long)]
+    pub blockprod_skip_ibd_check: Option<bool>,
+
     /// Storage backend to use.
     #[clap(long)]
     pub storage_backend: Option<StorageBackendConfigFile>,

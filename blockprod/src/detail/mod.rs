@@ -322,14 +322,16 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id_maybe: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let is_initial_block_download = self
-            .chainstate_handle
-            .call(|this| this.is_initial_block_download())
-            .await
-            .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
+        if !self.blockprod_config.skip_ibd_check {
+            let is_initial_block_download = self
+                .chainstate_handle
+                .call(|this| this.is_initial_block_download())
+                .await
+                .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
 
-        if is_initial_block_download {
-            return Err(BlockProductionError::ChainstateWaitForSync);
+            if is_initial_block_download {
+                return Err(BlockProductionError::ChainstateWaitForSync);
+            }
         }
 
         let current_peer_count = self
