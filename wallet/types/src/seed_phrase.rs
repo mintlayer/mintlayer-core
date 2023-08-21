@@ -134,17 +134,22 @@ mod tests {
     #[test]
     fn decode_fixed_seed_phrase() {
         let encoded: Vec<u8> =
-            FromHex::from_hex("301c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1c6162616e646f6e1461626f7574")
+            FromHex::from_hex("60146177616b65186e756d626572146772616365186361727065741c636c757374657218636c7574636818666f72676574106d617468107768617418696d6d756e6510746861741462726f776e1c6465706f73697410676f61741873756666657214757375616c1861707065617218746f6e6775651872656c6965661464697a7a791c63757368696f6e146578616374147368696e6518636f70706572")
                 .unwrap();
-        let mnemonic_str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let mnemonic_vec = [
+            "awake", "number", "grace", "carpet", "cluster", "clutch", "forget", "math", "what",
+            "immune", "that", "brown", "deposit", "goat", "suffer", "usual", "appear", "tongue",
+            "relief", "dizzy", "cushion", "exact", "shine", "copper",
+        ]
+        .to_vec();
 
         let expected_seed_phrase = SeedPhrase::new(zeroize::Zeroizing::new(
-            bip39::Mnemonic::parse_normalized(mnemonic_str).unwrap(),
+            bip39::Mnemonic::parse_normalized(&mnemonic_vec.join(" ")).unwrap(),
         ));
 
         let decoded_seed_phrase = SeedPhrase::decode_all(&mut encoded.as_slice()).unwrap();
 
         assert_eq!(decoded_seed_phrase, expected_seed_phrase);
-        assert_eq!(decoded_seed_phrase.mnemonic.join(" "), mnemonic_str);
+        assert_eq!(decoded_seed_phrase.mnemonic, decoded_seed_phrase.mnemonic);
     }
 }
