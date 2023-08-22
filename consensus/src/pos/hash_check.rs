@@ -24,68 +24,77 @@ use common::{
     Uint256, Uint512,
 };
 use crypto::vrf::VRFPublicKey;
-use num::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
 use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
 type Rational128 = num::rational::Ratio<u128>;
 
-const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, 1000);
+const K: u128 = 1000;
+const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, K);
 const PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789, 1000);
 
-fn pool_balance_power(
+fn pool_balance_power_integer(
     pledge_amount: Amount,
     pool_balance: Amount,
     total_supply: Amount,
-) -> Option<Rational128> {
-    //println!(
-    //    "pledge: {:?}, balance: {:?}, total_supply: {:?}",
-    //    pledge_amount, pool_balance, total_supply
-    //);
+) -> (Uint256, Uint256) {
+    assert!(
+        pool_balance < total_supply,
+        "Pool balance cannot be greater than total supply"
+    );
+    assert!(
+        pledge_amount <= pool_balance,
+        "Pledge cannot be greater than pool balance"
+    );
 
     let relative_pool_stake =
         Rational128::new(pool_balance.into_atoms(), total_supply.into_atoms());
     let relative_pledge_amount =
         Rational128::new(pledge_amount.into_atoms(), total_supply.into_atoms());
 
-    let z = POOL_SATURATION_LEVEL;
     let a = PLEDGE_INFLUENCE_PARAMETER;
-    let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
+    let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL); // FIXME: multiplication inside
     let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
+    let m = Uint256::from_u128(u128::MAX);
 
-    assert!(
-        sigma <= z,
-        "Relative stake cannot be greater then saturation level"
-    );
-    assert!(
-        s <= sigma,
-        "Relative pledge cannot be greater then relative stake"
-    );
-
+    // Given that z = 1/k, scale the original formula by the factor of m
+    //
     //                 ⎛            ⎛z - sigma⎞⎞
     //                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
-    //                 ⎜            ⎝    z    ⎠⎟
-    // sigma + s ⋅ a ⋅ ⎜───────────────────────⎟
-    //                 ⎝            z          ⎠
-    // ─────────────────────────────────────────
-    //                a + 1
+    //                 ⎜            ⎝    z    ⎠⎟                     ⎛ m sigma - (m sigma - m s sigma k)⎞
+    // sigma + s ⋅ a ⋅ ⎜───────────────────────⎟       m sigma + s a ⎜──────────────────────────────────⎟
+    //                 ⎝            z          ⎠                     ⎝               z                  ⎠
+    // ─────────────────────────────────────────  =>   ──────────────────────────────────────────────────
+    //                a + 1                                                 m a + m
 
-    // t1 = (z - sigma) / z * s
-    let t1 = z
-        .checked_sub(&sigma)
-        .and_then(|v| v.checked_div(&z))
-        .and_then(|v| v.checked_mul(&s))?;
-    // t2 = (sigma - t1) / z * a * s
-    let t2 = sigma
-        .checked_sub(&t1)
-        .and_then(|v| v.checked_div(&z))
-        .and_then(|v| v.checked_mul(&a))
-        .and_then(|v| v.checked_mul(&s))?;
-    // t3 = a + 1
-    let t3 = a.checked_add(&1.into())?;
-    let result = sigma.checked_add(&t2).and_then(|v| v.checked_div(&t3));
-    result
+    // Break it into terms for simplicity
+
+    // term1 = m s - m s sigma k
+    let term1 = {
+        let temp1 = m * (*s.numer()).into() / (*s.denom()).into();
+        let temp2 = m * (*s.numer()).into() / (*s.denom()).into() * (*sigma.numer()).into()
+            / (*sigma.denom()).into()
+            * K.into();
+        temp1 - temp2
+    };
+
+    // term2 = (m sigma - term1) k
+    let term2 = {
+        let temp = m * (*sigma.numer()).into() / (*sigma.denom()).into();
+        (temp - term1) * K.into()
+    };
+
+    // result = (m sigma + s a term) / (m + m a)
+    let result_numer = {
+        let temp1 = m * (*sigma.numer()).into() / (*sigma.denom()).into();
+        let temp2 = term2 * (*a.numer()).into() / (*a.denom()).into() * (*s.numer()).into()
+            / (*s.denom()).into();
+        temp1 + temp2
+    };
+    let result_denom = { m + m * (*a.numer()).into() / (*a.denom()).into() };
+
+    (result_numer, result_denom)
 }
 
 fn check_pos_hash_v1(
@@ -102,6 +111,7 @@ fn check_pos_hash_v1(
         .compact_target()
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
+    let target: Uint512 = target.into();
 
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
@@ -112,16 +122,13 @@ fn check_pos_hash_v1(
     )?
     .value()
     .into();
-
     let hash: Uint512 = hash.into();
-    let pool_balance_power = pool_balance_power(pledge_amount, pool_balance, total_supply)
-        .ok_or(ConsensusPoSError::PoolBalancePowerArithmeticsFailed)?;
-    // FIXME: multiplication can overflow
-    let pool_balance: Uint512 =
-        (pool_balance_power * pool_balance.into_atoms()).to_integer().into();
+
+    let pool_balance_power = pool_balance_power_integer(pledge_amount, pool_balance, total_supply);
+    let adjusted_target = target * pool_balance_power.0.into() / pool_balance_power.1.into();
 
     ensure!(
-        hash <= pool_balance * target.into(),
+        hash <= adjusted_target,
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
@@ -196,4 +203,111 @@ pub fn check_pos_hash(
     }
 }
 
-// FIXME: test with netupgrade
+// FIXME: functional test with netupgrade
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use common::{chain::Mlt, primitives::Amount};
+    use crypto::random::Rng;
+    use num::ToPrimitive;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    // Note: use with caution because it can overflow for big Amounts
+    fn pool_balance_power_float(
+        pledge_amount: Amount,
+        pool_balance: Amount,
+        total_supply: Amount,
+    ) -> f64 {
+        let relative_pool_stake =
+            pool_balance.into_atoms() as f64 / total_supply.into_atoms() as f64;
+        let relative_pledge_amount =
+            pledge_amount.into_atoms() as f64 / total_supply.into_atoms() as f64;
+
+        let z = POOL_SATURATION_LEVEL.to_f64().unwrap();
+        let a = PLEDGE_INFLUENCE_PARAMETER.to_f64().unwrap();
+        let sigma = f64::min(relative_pool_stake, z);
+        let s = f64::min(relative_pledge_amount, z);
+
+        let result = (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1.0);
+        result
+    }
+
+    fn to_float(numer: Uint256, denom: Uint256, precision: u32) -> f64 {
+        let m = 10u128.pow(precision);
+        let t = numer * Uint256::from_u128(m) / denom;
+        let t = u128::try_from(t).unwrap();
+        t as f64 / m as f64
+    }
+
+    #[rstest]
+    #[trace]
+    //#[case(Seed::from_entropy())]
+    #[case(17060523886728314668.into())]
+    fn calculate_pool_balance_power_not_saturated(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let total_supply = Amount::from_atoms(600_000_000);
+        let pool_balance = Amount::from_atoms(rng.gen_range(2..(total_supply.into_atoms() / K)));
+        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+
+        println!(
+            "pledge: {:?}, balance: {:?}, total_supply: {:?}",
+            pledge_amount, pool_balance, total_supply
+        );
+
+        let (e, d) = pool_balance_power_integer(pledge_amount, pool_balance, total_supply);
+        println!("result as float: {}", to_float(e, d, 11));
+
+        let f = pool_balance_power_float(pledge_amount, pool_balance, total_supply);
+        println!("floating: {}", f);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_pool_balance_power_capped(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let total_supply = Amount::from_atoms(600_000_000);
+        let pool_balance = Amount::from_atoms(
+            rng.gen_range((total_supply.into_atoms() / K)..total_supply.into_atoms()),
+        );
+        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+
+        println!(
+            "pledge: {:?}, balance: {:?}, total_supply: {:?}",
+            pledge_amount, pool_balance, total_supply
+        );
+
+        let (e, d) = pool_balance_power_integer(pledge_amount, pool_balance, total_supply);
+        println!("result as float: {}", to_float(e, d, 6));
+
+        let f = pool_balance_power_float(pledge_amount, pool_balance, total_supply);
+        println!("floating: {}", f);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_pool_balance_power_real_supply_under_k(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let total_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let pool_balance = Amount::from_atoms(rng.gen_range(2..(total_supply.into_atoms() / K)));
+        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+
+        println!(
+            "pledge: {:?}, balance: {:?}, total_supply: {:?}",
+            pledge_amount, pool_balance, total_supply
+        );
+
+        let (e, d) = pool_balance_power_integer(pledge_amount, pool_balance, total_supply);
+        println!("result as float: {}", to_float(e, d, 6));
+
+        let f = pool_balance_power_float(pledge_amount, pool_balance, total_supply);
+        println!("floating: {}", f);
+    }
+}
