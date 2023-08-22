@@ -9,6 +9,10 @@ stages:
   - test_functional
   - test_sighash
 
+variables:
+  # Create a random path to avoid collisions
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
+
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
