@@ -3,8 +3,10 @@ image: "rust:latest"
 stages:
   - test_cargo
   - build_cargo
+  - test_clippy
+  - test_cargo_deny
   - test_fmt
-  - test_func
+  - test_functional
   - test_sighash
 
 workflow:
