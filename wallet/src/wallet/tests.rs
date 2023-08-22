@@ -19,6 +19,7 @@ use crate::{
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
+use serialization::Encode;
 use std::collections::BTreeSet;
 
 use super::*;
@@ -33,7 +34,7 @@ use common::{
         tokens::{TokenData, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
-    primitives::{per_thousand::PerThousand, Idable},
+    primitives::{per_thousand::PerThousand, Idable, H256},
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
@@ -42,13 +43,14 @@ use crypto::{
 use itertools::Itertools;
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
+use storage::raw::DbMapId;
 use test_utils::random::{make_seedable_rng, Seed};
-use wallet_storage::WalletStorageEncryptionRead;
-use wallet_types::seed_phrase::SeedPhraseLanguage;
+use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoType},
 };
+use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
 
 // TODO: Many of these tests require randomization...
 
@@ -246,6 +248,62 @@ fn wallet_creation_in_memory() {
 
     // successfully load a wallet from initialized db
     let _wallet = Wallet::load_wallet(chain_config, initialized_db).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_migration_to_v2(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+    let db = create_wallet_in_memory().unwrap();
+    let wallet = Wallet::new_wallet(
+        Arc::clone(&chain_config),
+        db,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+    let default_acc_id = wallet.accounts.get(&DEFAULT_ACCOUNT_INDEX).unwrap().get_account_id();
+    let db = wallet.db;
+
+    // set version back to v1
+    let mut db_tx = db.transaction_rw(None).unwrap();
+    db_tx.set_storage_version(WALLET_VERSION_V1).unwrap();
+    db_tx.commit().unwrap();
+
+    let mut raw_db = db.dump_raw().unwrap();
+    // remove the counters
+    raw_db.remove(&DbMapId::new::<schema::DBUnconfirmedTxCounters, _>());
+    // remove config
+    let values = raw_db.get_mut(&DbMapId::new::<schema::DBValue, _>()).unwrap();
+    values.remove(stringify!(StoreChainInfo).as_bytes());
+    // insert some old txs that can't be deserialized to the new tx structure
+    let txs = raw_db.get_mut(&DbMapId::new::<schema::DBTxs, _>()).unwrap();
+    for idx in 0..10 {
+        let id = AccountWalletTxId::new(
+            default_acc_id.clone(),
+            OutPointSourceId::Transaction(Id::<Transaction>::new(H256::from_low_u64_ne(idx))),
+        );
+        txs.insert(
+            id.encode(),
+            (0..rng.gen_range(1..10)).map(|_| rng.gen::<u8>()).collect(),
+        );
+    }
+
+    let new_db = Store::new_from_dump(DefaultBackend::new_in_memory(), raw_db).unwrap();
+
+    let wallet = Wallet::load_wallet(Arc::clone(&chain_config), new_db).unwrap();
+
+    // Migration has been done and new version is v2
+    assert_eq!(wallet.db.get_storage_version().unwrap(), WALLET_VERSION_V2);
+
+    // accounts have been reset back to genesis to rescan the blockchain
+    assert_eq!(
+        wallet.get_best_block_for_account(DEFAULT_ACCOUNT_INDEX).unwrap(),
+        (chain_config.genesis_block_id(), BlockHeight::new(0))
+    );
 }
 
 #[rstest]
