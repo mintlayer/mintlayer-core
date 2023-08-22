@@ -4,7 +4,7 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool};
+use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments};
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -16,7 +16,7 @@ pub struct QueryFromConnection<'a, D: Database> {
 }
 
 impl<'a, D: Database> QueryFromConnection<'a, D> {
-    pub fn new(conn: &'a mut <D as sqlx::Database>::Connection) -> Self {
+    pub fn new(conn: &'a mut D::Connection) -> Self {
         Self { conn }
     }
 
@@ -31,9 +31,8 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
@@ -67,7 +66,6 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
         D: Database,
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         usize: ColumnIndex<D::Row>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -99,7 +97,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
@@ -124,7 +122,6 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     pub async fn create_tables(&mut self) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as Database>::Connection: Executor<'e>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
     {
         sqlx::query(
@@ -185,7 +182,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
@@ -211,7 +208,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
@@ -251,7 +248,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
@@ -282,7 +279,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> i64: sqlx::Encode<'e, D>,
         i64: sqlx::Type<D>,
     {
@@ -307,7 +304,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -344,7 +341,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
@@ -371,7 +368,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -420,7 +417,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
@@ -453,7 +450,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -491,7 +488,7 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
