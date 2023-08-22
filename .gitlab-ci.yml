@@ -11,7 +11,7 @@ stages:
 
 variables:
   # Create a random path to avoid collisions
-  GIT_CLONE_PATH: $CI_BUILDS_DIR/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PIPELINE_ID/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
 
 workflow:
   rules:
