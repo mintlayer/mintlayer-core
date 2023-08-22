@@ -27,6 +27,7 @@ const IN_TOP_N_MB: usize = 5;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -168,6 +169,28 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         Ok(wallet)
     }
+    fn make_backup_wallet_file(file_path: impl AsRef<Path>) -> Result<(), ControllerError<T>> {
+        let backup_name = file_path
+            .as_ref()
+            .file_name()
+            .map(|file_name| {
+                let mut file_name = file_name.to_os_string();
+                file_name.push("_backup");
+                file_name
+            })
+            .ok_or(ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File path is not a file".to_owned(),
+            ))?;
+        let backup_file_path = file_path.as_ref().with_file_name(backup_name);
+        fs::copy(&file_path, backup_file_path).map_err(|_| {
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "Could not make a backup of the file before migrating it".to_owned(),
+            )
+        })?;
+        Ok(())
+    }
 
     pub fn open_wallet(
         chain_config: Arc<ChainConfig>,
@@ -181,8 +204,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )
         );
 
-        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+        let db = wallet::wallet::open_or_create_wallet_file(&file_path)
             .map_err(ControllerError::WalletError)?;
+        let wallet_needs_migration =
+            wallet::Wallet::check_db_needs_migration(&db).map_err(ControllerError::WalletError)?;
+
+        if wallet_needs_migration {
+            Self::make_backup_wallet_file(file_path)?;
+        }
         let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db)
             .map_err(ControllerError::WalletError)?;
 
