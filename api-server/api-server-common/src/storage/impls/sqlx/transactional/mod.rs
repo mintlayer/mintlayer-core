@@ -13,9 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sqlx::Database;
+use common::{
+    chain::GenBlock,
+    primitives::{BlockHeight, Id},
+};
+use sqlx::{database::HasArguments, Acquire, ColumnIndex, Database, Executor, IntoArguments, Pool};
 
-use super::SqlxStorage;
+use crate::storage::storage_api::ApiServerStorageError;
+
+use super::{queries::QueryFromConnection, SqlxStorage};
 
 pub struct TransactionalSqlxStorage<D: Database> {
     storage: SqlxStorage<D>,
@@ -28,7 +34,7 @@ impl<D: Database> TransactionalSqlxStorage<D> {
 
     pub async fn transaction_ro(&self) -> Result<SqlxTransactionRo<'_, D>, sqlx::Error> {
         let tx = self.storage.db_pool.begin().await?;
-        let result = SqlxTransactionRo::new(tx, &self.storage);
+        let result = SqlxTransactionRo::new(tx);
         Ok(result)
     }
 
@@ -36,7 +42,7 @@ impl<D: Database> TransactionalSqlxStorage<D> {
         &self,
     ) -> Result<Option<SqlxTransactionRo<'_, D>>, sqlx::Error> {
         let tx = self.storage.db_pool.try_begin().await?;
-        let result = tx.map(|t| SqlxTransactionRo::new(t, &self.storage));
+        let result = tx.map(|t| SqlxTransactionRo::new(t));
         Ok(result)
     }
 
@@ -56,17 +62,30 @@ impl<D: Database> TransactionalSqlxStorage<D> {
 }
 
 pub struct SqlxTransactionRo<'a, D: Database> {
-    _tx: sqlx::Transaction<'a, D>,
-    storage: &'a SqlxStorage<D>,
+    tx: sqlx::Transaction<'a, D>,
 }
 
 impl<'a, D: Database> SqlxTransactionRo<'a, D> {
-    pub fn new(tx: sqlx::Transaction<'a, D>, storage: &'a SqlxStorage<D>) -> Self {
-        Self { _tx: tx, storage }
+    pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
+        Self { tx }
     }
 
-    pub fn storage(&self) -> &SqlxStorage<D> {
-        self.storage
+    pub async fn get_best_block(
+        &mut self,
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self.tx.acquire().await.unwrap();
+
+        let best = QueryFromConnection::new(conn).get_best_block().await?;
+
+        Ok(best)
     }
 }
 

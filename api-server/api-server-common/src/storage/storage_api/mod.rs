@@ -32,6 +32,8 @@ pub enum ApiServerStorageError {
     InitializationError(String),
     #[error("Invalid initialized state")]
     InvalidInitializedState(String),
+    #[error("Acquiring connection from the pool/transaction failed with error: {0}")]
+    AcquiringConnectionFailed(String),
 }
 
 pub trait ApiServerStorageRead {

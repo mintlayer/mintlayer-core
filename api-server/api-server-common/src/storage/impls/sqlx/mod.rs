@@ -15,18 +15,20 @@
 
 pub mod transactional;
 
+mod queries;
+
 use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use serialization::{DecodeAll, Encode};
 use sqlx::{
     database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Pool, Postgres, Sqlite,
 };
 
-use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
-
-use super::CURRENT_STORAGE_VERSION;
+use crate::storage::{
+    impls::sqlx::queries::QueryFromConnection,
+    storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError},
+};
 
 pub struct SqlxStorage<D: Database> {
     db_pool: Pool<D>,
@@ -93,6 +95,7 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> i64: sqlx::Decode<'e, D>,
         i64: sqlx::Type<D>,
@@ -125,89 +128,39 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
-        let data: Option<(Vec<u8>,)> =
-            sqlx::query_as::<_, _>("SELECT value FROM ml_misc_data WHERE name = 'version';")
-                .fetch_optional(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let data = match data {
-            Some(d) => d,
-            None => return Ok(None),
-        };
+        let version = QueryFromConnection::new(conn).get_storage_version().await?;
 
-        let version = u32::decode_all(&mut data.0.as_slice()).map_err(|e| {
-            ApiServerStorageError::InvalidInitializedState(format!(
-                "Version deserialization failed: {}",
-                e
-            ))
-        })?;
-
-        Ok(Some(version))
+        Ok(version)
     }
 
+    #[allow(dead_code)]
     async fn create_tables(&self) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
     {
-        sqlx::query(
-            "CREATE TABLE ml_misc_data (
-                name TEXT PRIMARY KEY,
-                value BLOB NOT NULL
-            );",
-        )
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        sqlx::query(
-            "CREATE TABLE ml_main_chain_blocks (
-                block_height bigint PRIMARY KEY,
-                block_id BLOB NOT NULL
-            );",
-        )
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        sqlx::query(
-            "CREATE TABLE ml_blocks (
-                block_id BLOB PRIMARY KEY,
-                block_data BLOB NOT NULL
-            );",
-        )
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        sqlx::query(
-            "CREATE TABLE ml_transactions (
-                transaction_id BLOB PRIMARY KEY,
-                owning_block_id BLOB,
-                transaction_data BLOB NOT NULL
-            );", // block_id can be null if the transaction is not in the main chain
-        )
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        sqlx::query(
-            "CREATE TABLE ml_block_aux_data (
-                block_id BLOB PRIMARY KEY,
-                aux_data BLOB NOT NULL
-            );",
-        )
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        QueryFromConnection::new(conn).create_tables().await?;
 
         Ok(())
     }
@@ -217,31 +170,23 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
         for<'e> &'e str: sqlx::Type<D>,
     {
-        self.create_tables().await?;
-
-        // Insert row to the table
-        sqlx::query("INSERT INTO ml_misc_data (name, value) VALUES (?, ?)")
-            .bind("version")
-            .bind(CURRENT_STORAGE_VERSION.encode())
-            .execute(&self.db_pool)
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
             .await
-            .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
+
+        QueryFromConnection::new(conn).initialize_database().await?;
 
         Ok(())
-    }
-
-    fn block_height_to_sqlx_friendly(block_height: BlockHeight) -> i64 {
-        // sqlx doesn't like u64, so we have to convert it to i64, and given BlockDistance limitations, it's OK.
-        block_height
-            .into_int()
-            .try_into()
-            .unwrap_or_else(|e| panic!("Invalid block height: {e}"))
     }
 
     pub async fn get_main_chain_block_id(
@@ -252,36 +197,23 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
         i64: sqlx::Type<D>,
     {
-        let height = Self::block_height_to_sqlx_friendly(block_height);
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT block_id FROM ml_main_chain_blocks WHERE block_height = ?;")
-                .bind(height)
-                .fetch_optional(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let block_id = QueryFromConnection::new(conn).get_main_chain_block_id(block_height).await?;
 
-        let data = match row {
-            Some(d) => d.0,
-            None => return Ok(None),
-        };
-
-        let block_id = Id::<Block>::decode_all(&mut data.as_slice()).map_err(|e| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Block id deserialization failed: {}",
-                e
-            ))
-        })?;
-
-        Ok(Some(block_id))
+        Ok(block_id)
     }
 
     pub async fn set_main_chain_block_id(
@@ -293,26 +225,23 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
         i64: sqlx::Type<D>,
     {
-        let height = Self::block_height_to_sqlx_friendly(block_height);
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        logging::log::debug!("Inserting block id: {:?} for height: {}", block_id, height);
-
-        sqlx::query(
-            "INSERT INTO ml_main_chain_blocks (block_height, block_id) VALUES ($1, $2)
-                ON CONFLICT (block_height) DO UPDATE
-                SET block_id = $2;",
-        )
-        .bind(height)
-        .bind(block_id.encode())
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        QueryFromConnection::new(conn)
+            .set_main_chain_block_id(block_height, block_id)
+            .await?;
 
         Ok(())
     }
@@ -325,20 +254,19 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> i64: sqlx::Encode<'e, D>,
         i64: sqlx::Type<D>,
     {
-        let height = Self::block_height_to_sqlx_friendly(block_height);
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        sqlx::query(
-            "DELETE FROM ml_main_chain_blocks
-            WHERE block_height = $1;",
-        )
-        .bind(height)
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        QueryFromConnection::new(conn).del_main_chain_block_id(block_height).await?;
 
         Ok(())
     }
@@ -351,33 +279,22 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
-        let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT block_data FROM ml_blocks WHERE block_id = ?;")
-                .bind(block_id.encode())
-                .fetch_optional(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let data = match row {
-            Some(d) => d.0,
-            None => return Ok(None),
-        };
+        let block = QueryFromConnection::new(conn).get_block(block_id).await?;
 
-        let block = Block::decode_all(&mut data.as_slice()).map_err(|e| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Block {} deserialization failed: {}",
-                block_id, e
-            ))
-        })?;
-
-        Ok(Some(block))
+        Ok(block)
     }
 
     pub async fn set_block(
@@ -389,22 +306,21 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
 
-        sqlx::query(
-            "INSERT INTO ml_blocks (block_id, block_data) VALUES ($1, $2)
-                ON CONFLICT (block_id) DO UPDATE
-                SET block_data = $2;",
-        )
-        .bind(block_id.encode())
-        .bind(block.encode())
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
+
+        QueryFromConnection::new(conn).set_block(block_id, block).await?;
 
         Ok(())
     }
@@ -417,44 +333,22 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
-        let row: Option<(Option<Vec<u8>>, Vec<u8>)> = sqlx::query_as(
-            "SELECT owning_block_id, transaction_data FROM ml_transactions WHERE transaction_id = ?;",
-        )
-        .bind(transaction_id.encode())
-        .fetch_optional(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let (block_id_data, transaction_data) = match row {
-            Some(d) => d,
-            None => return Ok(None),
-        };
+        let result = QueryFromConnection::new(conn).get_transaction(transaction_id).await?;
 
-        let block_id = {
-            let deserialized_block_id =
-                block_id_data.map(|d| Id::<Block>::decode_all(&mut d.as_slice())).transpose();
-            deserialized_block_id.map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Block deserialization failed: {}",
-                    e
-                ))
-            })?
-        };
-
-        let transaction =
-            SignedTransaction::decode_all(&mut transaction_data.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Transaction {} deserialization failed: {}",
-                    transaction_id, e
-                ))
-            })?;
-
-        Ok(Some((block_id, transaction)))
+        Ok(result)
     }
 
     pub async fn set_transaction(
@@ -467,6 +361,7 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
@@ -478,17 +373,16 @@ where
             owning_block
         );
 
-        sqlx::query(
-            "INSERT INTO ml_transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
-                ON CONFLICT (transaction_id) DO UPDATE
-                SET owning_block_id = $2, transaction_data = $3;",
-        )
-        .bind(transaction_id.encode())
-        .bind(owning_block.map(|v|v.encode()))
-        .bind(transaction.encode())
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
+
+        QueryFromConnection::new(conn)
+            .set_transaction(transaction_id, owning_block, transaction)
+            .await?;
 
         Ok(())
     }
@@ -501,34 +395,22 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
-        let row: Option<(Vec<u8>,)> =
-            sqlx::query_as("SELECT aux_data FROM ml_block_aux_data WHERE block_id = ?;")
-                .bind(block_id.encode())
-                .fetch_optional(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let serialized_data = match row {
-            Some(d) => d.0,
-            None => return Ok(None),
-        };
+        let block_aux_data = QueryFromConnection::new(conn).get_block_aux_data(block_id).await?;
 
-        let block_aux_data =
-            BlockAuxData::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Block aux data of block id {} deserialization failed: {}",
-                    block_id, e
-                ))
-            })?;
-
-        Ok(Some(block_aux_data))
+        Ok(block_aux_data)
     }
 
     pub async fn set_block_aux_data(
@@ -540,22 +422,23 @@ where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
         logging::log::debug!("Inserting block aux data with block_id {}", block_id);
 
-        sqlx::query(
-            "INSERT INTO ml_block_aux_data (block_id, aux_data) VALUES ($1, $2)
-                ON CONFLICT (block_id) DO UPDATE
-                SET aux_data = $2;",
-        )
-        .bind(block_id.encode())
-        .bind(block_aux_data.encode())
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
+
+        QueryFromConnection::new(conn)
+            .set_block_aux_data(block_id, block_aux_data)
+            .await?;
 
         Ok(())
     }
@@ -564,26 +447,20 @@ where
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
-        let data: (Vec<u8>,) =
-            sqlx::query_as("SELECT value FROM ml_misc_data WHERE name = 'best_block';")
-                .fetch_one(&self.db_pool)
-                .await
-                .map_err(|e: sqlx::Error| {
-                    ApiServerStorageError::LowLevelStorageError(e.to_string())
-                })?;
+        let mut pool = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        let best =
-            <(BlockHeight, Id<GenBlock>)>::decode_all(&mut data.0.as_slice()).map_err(|e| {
-                ApiServerStorageError::InvalidInitializedState(format!(
-                    "Version deserialization failed: {}",
-                    e
-                ))
-            })?;
+        let best = QueryFromConnection::new(conn).get_best_block().await?;
 
         Ok(best)
     }
@@ -596,7 +473,7 @@ where
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
         usize: ColumnIndex<<D as sqlx::Database>::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
@@ -605,16 +482,14 @@ where
     {
         logging::log::debug!("Inserting best block with block_id {}", block_id);
 
-        sqlx::query(
-            "INSERT INTO ml_misc_data (name, value) VALUES (?, ?)
-                ON CONFLICT (name) DO UPDATE
-                SET value = $2;",
-        )
-        .bind("best_block")
-        .bind((block_height, block_id).encode())
-        .execute(&self.db_pool)
-        .await
-        .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
+
+        QueryFromConnection::new(conn).set_best_block(block_height, block_id).await?;
 
         Ok(())
     }
@@ -627,6 +502,8 @@ mod tests {
         chain::{signature::inputsig::InputWitness, OutPointSourceId, TxInput, UtxoOutPoint},
         primitives::{Idable, H256},
     };
+
+    use crate::storage::impls::CURRENT_STORAGE_VERSION;
 
     use super::*;
     use crypto::random::Rng;
