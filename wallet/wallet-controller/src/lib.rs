@@ -147,6 +147,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -164,6 +166,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &mnemonic.to_string(),
             passphrase,
             save_seed_phrase,
+            best_block_height,
+            best_block_id,
         )
         .map_err(ControllerError::WalletError)?;
 

@@ -500,12 +500,16 @@ impl CommandHandler {
                 };
 
                 let wallet = if newly_generated_mnemonic {
+                    let info =
+                        rpc_client.chainstate_info().await.map_err(WalletCliError::RpcError)?;
                     CliController::create_wallet(
                         Arc::clone(chain_config),
                         wallet_path,
                         mnemonic.clone(),
                         None,
                         save_seed_phrase.to_walet_type(),
+                        info.best_block_height,
+                        info.best_block_id,
                     )
                 } else {
                     CliController::recover_wallet(

@@ -33,12 +33,6 @@ const MAX_FETCH_BLOCK_COUNT: usize = 100;
 pub trait SyncingWallet {
     fn syncing_state(&self) -> WalletSyncingState;
 
-    fn fast_forward_to_latest_block(
-        &mut self,
-        best_block_height: BlockHeight,
-        best_block_id: Id<GenBlock>,
-    ) -> WalletResult<()>;
-
     fn scan_blocks(
         &mut self,
         account: U31,
@@ -60,14 +54,6 @@ pub trait SyncingWallet {
 impl SyncingWallet for DefaultWallet {
     fn syncing_state(&self) -> WalletSyncingState {
         self.get_syncing_state()
-    }
-
-    fn fast_forward_to_latest_block(
-        &mut self,
-        best_block_height: BlockHeight,
-        best_block_id: Id<GenBlock>,
-    ) -> WalletResult<()> {
-        self.set_best_block(best_block_height, best_block_id)
     }
 
     fn scan_blocks(
@@ -124,67 +110,53 @@ pub async fn sync_once<T: NodeInterface>(
         let chain_info =
             rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
 
-        match wallet.syncing_state() {
-            WalletSyncingState::NewlyCreated => {
-                wallet
-                    .fast_forward_to_latest_block(
-                        chain_info.best_block_height,
-                        chain_info.best_block_id,
-                    )
-                    .map_err(ControllerError::WalletError)?;
-                wallet
-                    .update_median_time(chain_info.median_time)
-                    .map_err(ControllerError::WalletError)?;
-            }
-            WalletSyncingState::Syncing {
-                account_best_blocks,
-                unused_account_best_block,
-            } => {
-                if account_best_blocks.iter().all(|(_account, wallet_best_block)| {
-                    chain_info.best_block_id == wallet_best_block.0
-                }) {
-                    return Ok(());
-                }
-
-                wallet
-                    .update_median_time(chain_info.median_time)
-                    .map_err(ControllerError::WalletError)?;
-
-                // Group accounts in the same state
-                let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<U31>> =
-                    BTreeMap::new();
-                for (account, best_block) in account_best_blocks.iter() {
-                    accounts_grouped.entry(*best_block).or_default().push(*account);
-                }
-
-                // sync all account groups
-                for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
-                    .iter()
-                    .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
-                {
-                    sync_account_group(
-                        &chain_info,
-                        (*wallet_block_id, *wallet_block_height),
-                        chain_config,
-                        rpc_client,
-                        accounts,
-                        wallet,
-                        wallet_events,
-                    )
-                    .await?;
-                }
-
-                sync_next_unused_account(
-                    chain_info,
-                    unused_account_best_block,
-                    chain_config,
-                    rpc_client,
-                    wallet,
-                    wallet_events,
-                )
-                .await?;
-            }
+        let WalletSyncingState {
+            account_best_blocks,
+            unused_account_best_block,
+        } = wallet.syncing_state();
+        if account_best_blocks
+            .iter()
+            .all(|(_account, wallet_best_block)| chain_info.best_block_id == wallet_best_block.0)
+        {
+            return Ok(());
         }
+
+        wallet
+            .update_median_time(chain_info.median_time)
+            .map_err(ControllerError::WalletError)?;
+
+        // Group accounts in the same state
+        let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<U31>> = BTreeMap::new();
+        for (account, best_block) in account_best_blocks.iter() {
+            accounts_grouped.entry(*best_block).or_default().push(*account);
+        }
+
+        // sync all account groups
+        for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
+            .iter()
+            .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
+        {
+            sync_account_group(
+                &chain_info,
+                (*wallet_block_id, *wallet_block_height),
+                chain_config,
+                rpc_client,
+                accounts,
+                wallet,
+                wallet_events,
+            )
+            .await?;
+        }
+
+        sync_next_unused_account(
+            chain_info,
+            unused_account_best_block,
+            chain_config,
+            rpc_client,
+            wallet,
+            wallet_events,
+        )
+        .await?;
     }
 }
 

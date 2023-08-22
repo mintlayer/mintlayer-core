@@ -148,18 +148,10 @@ pub enum WalletError {
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
     UnknownPoolId(PoolId),
-    #[error("Wallet not in initial creation state")]
-    NotInInitialCreation,
 }
 
 /// Result type used for the wallet
 pub type WalletResult<T> = Result<T, WalletError>;
-
-#[derive(PartialEq, Eq)]
-enum WalletState {
-    InitialCreation,
-    Syncing,
-}
 
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
@@ -167,17 +159,13 @@ pub struct Wallet<B: storage::Backend> {
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
-    state: WalletState,
     next_unused_account: (U31, Account),
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub enum WalletSyncingState {
-    NewlyCreated,
-    Syncing {
-        account_best_blocks: BTreeMap<U31, (Id<GenBlock>, BlockHeight)>,
-        unused_account_best_block: (Id<GenBlock>, BlockHeight),
-    },
+pub struct WalletSyncingState {
+    pub account_best_blocks: BTreeMap<U31, (Id<GenBlock>, BlockHeight)>,
+    pub unused_account_best_block: (Id<GenBlock>, BlockHeight),
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
@@ -195,15 +183,15 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
     ) -> WalletResult<Self> {
-        Self::new_wallet(
-            chain_config,
-            db,
-            mnemonic,
-            passphrase,
-            save_seed_phrase,
-            WalletState::InitialCreation,
-        )
+        let mut wallet =
+            Self::new_wallet(chain_config, db, mnemonic, passphrase, save_seed_phrase)?;
+
+        wallet.set_best_block(best_block_height, best_block_id)?;
+
+        Ok(wallet)
     }
 
     pub fn recover_wallet(
@@ -213,14 +201,7 @@ impl<B: storage::Backend> Wallet<B> {
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
     ) -> WalletResult<Self> {
-        Self::new_wallet(
-            chain_config,
-            db,
-            mnemonic,
-            passphrase,
-            save_seed_phrase,
-            WalletState::Syncing,
-        )
+        Self::new_wallet(chain_config, db, mnemonic, passphrase, save_seed_phrase)
     }
 
     fn new_wallet(
@@ -229,7 +210,6 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
-        state: WalletState,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
@@ -269,7 +249,6 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts: [default_account].into(),
             latest_median_time,
-            state,
             next_unused_account,
         };
 
@@ -437,7 +416,6 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts,
             latest_median_time,
-            state: WalletState::Syncing,
             next_unused_account,
         })
     }
@@ -904,12 +882,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// includes the last scanned block hash and height for each account and the next unused one
     /// if in syncing state else NewlyCreated if this is the first sync after creating a new wallet
     pub fn get_syncing_state(&self) -> WalletSyncingState {
-        match self.state {
-            WalletState::InitialCreation => WalletSyncingState::NewlyCreated,
-            WalletState::Syncing => WalletSyncingState::Syncing {
-                account_best_blocks: self.get_best_block(),
-                unused_account_best_block: self.next_unused_account.1.best_block(),
-            },
+        WalletSyncingState {
+            account_best_blocks: self.get_best_block(),
+            unused_account_best_block: self.next_unused_account.1.best_block(),
         }
     }
 
@@ -969,17 +944,12 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     /// Sets the best block for all accounts
-    /// Should be called on the first sync for a newly created wallet
-    pub fn set_best_block(
+    /// Should be called after creating a new wallet
+    fn set_best_block(
         &mut self,
         best_block_height: BlockHeight,
         best_block_id: Id<GenBlock>,
     ) -> WalletResult<()> {
-        ensure!(
-            self.state == WalletState::InitialCreation,
-            WalletError::NotInInitialCreation
-        );
-
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
@@ -994,7 +964,6 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        self.state = WalletState::Syncing;
         Ok(())
     }
 
