@@ -93,10 +93,8 @@ where
     async fn is_initialized_internal(&self, query_str: &str) -> Result<bool, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> i64: sqlx::Decode<'e, D>,
         i64: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -126,10 +124,10 @@ where
     pub async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
+        for<'e> &'e mut D::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
@@ -168,10 +166,8 @@ where
     pub async fn initialize_database(&self) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
@@ -195,10 +191,8 @@ where
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
@@ -223,10 +217,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
@@ -252,10 +244,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> i64: sqlx::Encode<'e, D>,
         i64: sqlx::Type<D>,
     {
@@ -277,10 +267,8 @@ where
     ) -> Result<Option<Block>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -304,10 +292,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
@@ -331,10 +317,8 @@ where
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -359,10 +343,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
@@ -393,10 +375,8 @@ where
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
@@ -420,10 +400,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
@@ -446,10 +424,8 @@ where
     pub async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
@@ -472,9 +448,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
