@@ -38,7 +38,7 @@ pub type DelegationId = Id<Delegation>;
 pub struct PoSConsensusVersion(u32);
 
 impl PoSConsensusVersion {
-    // FIXME: add versions description
+    // FIXME: add versions descriptions
     pub const V0: Self = Self(0);
     pub const V1: Self = Self(1);
 
@@ -59,6 +59,7 @@ pub struct PoSChainConfig {
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
     difficulty_change_limit: PerThousand,
+    /// Version of the consensus protocol
     consensus_version: PoSConsensusVersion,
 }
 

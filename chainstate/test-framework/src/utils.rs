@@ -421,7 +421,7 @@ pub fn pos_mine(
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
-    total_supply: Mlt,
+    final_supply: Mlt,
     epoch_index: EpochIndex,
     target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {
@@ -449,7 +449,7 @@ pub fn pos_mine(
 
         let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
         if consensus::check_pos_hash(
-            pos_config,
+            pos_config.consensus_version(),
             epoch_index,
             &sealed_epoch_randomness,
             &pos_data,
@@ -457,7 +457,7 @@ pub fn pos_mine(
             timestamp,
             pledge_amount,
             pool_balance,
-            total_supply.to_amount_atoms(),
+            final_supply.to_amount_atoms(),
         )
         .is_ok()
         {

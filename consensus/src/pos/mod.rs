@@ -172,12 +172,12 @@ where
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
         .pledge_amount();
-    let total_supply = chain_config
+    let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
     hash_check::check_pos_hash(
-        pos_status.get_chain_config(),
+        pos_status.get_chain_config().consensus_version(),
         current_epoch_index,
         &random_seed,
         pos_data,
@@ -185,7 +185,7 @@ where
         header.timestamp(),
         pledge_amount,
         pool_balance,
-        total_supply.to_amount_atoms(),
+        final_supply.to_amount_atoms(),
     )?;
 
     Ok(())
@@ -202,7 +202,7 @@ pub fn stake(
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
-    let total_supply = chain_config
+    let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
@@ -235,7 +235,7 @@ pub fn stake(
         pos_data.update_vrf_data(vrf_data);
 
         if hash_check::check_pos_hash(
-            pos_config,
+            pos_config.consensus_version(),
             finalize_pos_data.epoch_index(),
             sealed_epoch_randomness,
             pos_data,
@@ -243,7 +243,7 @@ pub fn stake(
             block_timestamp,
             finalize_pos_data.pledge_amount(),
             finalize_pos_data.pool_balance(),
-            total_supply.to_amount_atoms(),
+            final_supply.to_amount_atoms(),
         )
         .is_ok()
         {
