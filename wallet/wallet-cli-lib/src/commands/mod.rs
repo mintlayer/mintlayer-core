@@ -1054,8 +1054,7 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
                 let address = parse_address(chain_config, &address)?;
-                // TODO: Take status into account
-                let _status = controller_opt
+                controller_opt
                     .as_mut()
                     .ok_or(WalletCliError::NoWallet)?
                     .send_to_address_from_delegation(
