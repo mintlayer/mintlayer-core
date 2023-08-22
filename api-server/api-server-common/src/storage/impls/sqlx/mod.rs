@@ -100,25 +100,17 @@ where
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
         Vec<u8>: sqlx::Type<D>,
     {
-        let rows: (i64,) = sqlx::query_as(query_str)
-            .fetch_one(&self.db_pool)
+        let mut pool: sqlx::pool::PoolConnection<D> = self
+            .db_pool
+            .acquire()
             .await
-            .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+        let conn = pool.as_mut();
 
-        if rows.0 == 0 {
-            return Ok(false);
-        }
+        let is_initialized =
+            QueryFromConnection::new(conn).is_initialized_internal(query_str).await?;
 
-        let version = self.get_storage_version().await?;
-
-        let version = match version {
-            Some(v) => v,
-            None => return Ok(false),
-        };
-
-        logging::log::info!("Found database version: {version}");
-
-        Ok(true)
+        Ok(is_initialized)
     }
 
     pub async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>

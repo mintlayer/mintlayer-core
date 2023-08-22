@@ -43,6 +43,40 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
             .unwrap_or_else(|e| panic!("Invalid block height: {e}"))
     }
 
+    pub async fn is_initialized_internal(
+        &mut self,
+        query_str: &str,
+    ) -> Result<bool, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> i64: sqlx::Decode<'e, D>,
+        i64: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+    {
+        let rows: (i64,) = sqlx::query_as(query_str)
+            .fetch_one(&mut *self.conn)
+            .await
+            .map_err(|e: sqlx::Error| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        if rows.0 == 0 {
+            return Ok(false);
+        }
+
+        let version = self.get_storage_version().await?;
+
+        let version = match version {
+            Some(v) => v,
+            None => return Ok(false),
+        };
+
+        logging::log::info!("Found database version: {version}");
+
+        Ok(true)
+    }
+
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
