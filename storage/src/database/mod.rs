@@ -25,7 +25,10 @@ use utils::shallow_clone::ShallowClone;
 
 use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
-use storage_core::{backend, Backend, DbMapId};
+use storage_core::{
+    backend::{self, TxRw, WriteOps},
+    Backend, DbMapId,
+};
 
 /// The main storage type
 pub struct Storage<B: Backend, Sch> {
@@ -62,6 +65,22 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     pub fn new(backend: B) -> crate::Result<Self> {
         let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
         let _schema = std::marker::PhantomData;
+        Ok(Self { backend, _schema })
+    }
+
+    /// Create new storage with given backend and raw dump
+    pub fn new_from_dump(backend: B, dump: raw::StorageContents<Sch>) -> crate::Result<Self> {
+        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
+        let _schema = std::marker::PhantomData;
+        let mut dbtx = backend::BackendImpl::transaction_rw(&backend, None)?;
+
+        for (map_id, map_values) in dump {
+            for (key, val) in map_values {
+                dbtx.put(map_id.idx(), key, val)?;
+            }
+        }
+
+        dbtx.commit()?;
         Ok(Self { backend, _schema })
     }
 

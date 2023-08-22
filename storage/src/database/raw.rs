@@ -46,6 +46,10 @@ impl<Sch> DbMapId<Sch> {
     pub fn as_usize(&self) -> usize {
         self.idx.as_usize()
     }
+
+    pub fn idx(&self) -> storage_core::DbMapId {
+        self.idx
+    }
 }
 
 impl<Sch: Schema> DbMapId<Sch> {

@@ -20,6 +20,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::key::extended::ExtendedPublicKey;
+use storage::raw;
 
 use crate::{
     schema::Schema, TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorage,
@@ -50,6 +51,24 @@ impl<B: storage::Backend> Store<B> {
     pub fn new(backend: B) -> crate::Result<Self> {
         let storage: storage::Storage<B, Schema> =
             storage::Storage::new(backend).map_err(crate::Error::from)?;
+
+        let mut storage = Self {
+            storage,
+            encryption_state: EncryptionState::Locked,
+        };
+
+        let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        if challenge.is_none() {
+            storage.encryption_state = EncryptionState::Unlocked(None);
+        }
+
+        Ok(storage)
+    }
+
+    /// Create a new wallet storage
+    pub fn new_from_dump(backend: B, dump: raw::StorageContents<Schema>) -> crate::Result<Self> {
+        let storage: storage::Storage<B, Schema> =
+            storage::Storage::new_from_dump(backend, dump).map_err(crate::Error::from)?;
 
         let mut storage = Self {
             storage,
