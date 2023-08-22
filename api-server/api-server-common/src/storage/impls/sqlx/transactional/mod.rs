@@ -81,7 +81,11 @@ impl<'a, D: Database> SqlxTransactionRo<'a, D> {
         Vec<u8>: sqlx::Type<D>,
         for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
-        let conn = self.tx.acquire().await.unwrap();
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
 
         let best = QueryFromConnection::new(conn).get_best_block().await?;
 
