@@ -596,9 +596,8 @@ fn generate_finalize_block_data(
             let pledge_amount = chainstate_handle
                 .get_stake_pool_data(pos_input_data.pool_id())
                 .map_err(|_| {
-                    // FIXME
                     ConsensusPoSError::PropertyQueryError(
-                        PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
+                        PropertyQueryError::StakePoolDataReadError(pos_input_data.pool_id()),
                     )
                 })?
                 .ok_or(ConsensusPoSError::PropertyQueryError(

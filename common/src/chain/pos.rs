@@ -38,8 +38,9 @@ pub type DelegationId = Id<Delegation>;
 pub struct PoSConsensusVersion(u32);
 
 impl PoSConsensusVersion {
-    // FIXME: add versions descriptions
+    /// Initial PoS implementation
     pub const V0: Self = Self(0);
+    /// Incentivize pledging and prevent centralization with capped probability
     pub const V1: Self = Self(1);
 
     pub const CURRENT: Self = Self::V1;

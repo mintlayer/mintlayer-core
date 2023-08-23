@@ -20,7 +20,7 @@ pub mod input_data;
 pub mod kernel;
 pub mod target;
 
-mod balance_power;
+mod pool_weight;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},

@@ -689,7 +689,7 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
     });
 }
 
-// Create a pool, create delegation id and delegate staking in different transaction in the same blocks
+// Create a pool, create delegation id and delegate staking in different transactions in the same blocks
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -724,7 +724,7 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
             ))
             .build();
         let tx1_source_id = OutPointSourceId::Transaction(tx1.transaction().get_id());
-        let tx_1_kernel0_outpoint = UtxoOutPoint::new(tx1_source_id.clone(), 1);
+        let tx_1_kernel0_outpoint = UtxoOutPoint::new(tx1_source_id, 1);
 
         let delegation_id = pos_accounting::make_delegation_id(&tx_1_kernel0_outpoint);
         let tx2 = TransactionBuilder::new()

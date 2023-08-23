@@ -87,8 +87,6 @@ pub enum ConsensusPoSError {
     FailedToSignKernel,
     #[error("Proof of stake block time ordering error in block: `{0}`")]
     PoSBlockTimeStrictOrderInvalid(Id<Block>),
-    #[error("Pool balance power arithmetics failed")]
-    PoolBalancePowerArithmeticsFailed,
     #[error("Finite total supply is required")]
     FiniteTotalSupplyIsRequired,
     #[error("Unsupported PoS consensus version")]

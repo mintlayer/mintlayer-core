@@ -16,7 +16,7 @@
 use common::{primitives::Amount, Uint256};
 
 // Note: rational is used as a convenient representation type and must not be used
-//       for actual calculation because the result predictable and reliable
+//       for actual calculation because the result has to be predictable and reliable
 type Rational128 = num::rational::Ratio<u128>;
 
 /// Decentralization parameter which ensures that no pool is more powerful than 1/k of the whole network
@@ -28,15 +28,18 @@ const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, K);
 /// If the minimum pledge changes it should be recalculated.
 const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789, 1000);
 
-/// FIXME: description
+/// The function determines pool's weight based on its balance and pledge. In the simplest case
+/// pool's weight is proportional to its balance but we want to incentivize pool's operators to
+/// pledge, so this function takes pledge into account. The weight of a pool grows until the
+/// proportion of pledge to delegated amount reaches 1:1.
 ///
-/// The result is a pair thar represents a ratio: (numerator, denominator)
-pub fn pool_balance_power(
+/// The result is a pair thar represents a ratio: (numerator, denominator), which is always < 1
+pub fn pool_weight(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
 ) -> (Uint256, Uint256) {
-    pool_balance_power_impl(
+    pool_weight_impl(
         pledge_amount,
         pool_balance,
         final_supply,
@@ -44,7 +47,7 @@ pub fn pool_balance_power(
     )
 }
 
-fn pool_balance_power_impl(
+fn pool_weight_impl(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
@@ -117,7 +120,7 @@ mod tests {
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    fn pool_balance_power_float(
+    fn pool_weight_float_impl(
         pledge_amount: Amount,
         pool_balance: Amount,
         final_supply: Amount,
@@ -133,8 +136,7 @@ mod tests {
         let sigma = f64::min(relative_pool_stake, z);
         let s = f64::min(relative_pledge_amount, z);
 
-        let result = (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1.0);
-        result
+        (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1.0)
     }
 
     fn to_float(numer: Uint256, denom: Uint256, precision: u32) -> f64 {
@@ -155,25 +157,25 @@ mod tests {
     }
 
     #[test]
-    fn calculate_pool_balance_power_zero_balance() {
+    fn calculate_pool_weight_zero_balance() {
         let final_supply = Amount::from_atoms(600_000_000);
         let pool_balance = Amount::ZERO;
         let pledge_amount = Amount::ZERO;
 
-        let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
         assert_eq!(actual.0, Uint256::ZERO);
         assert_ne!(actual.1, Uint256::ZERO);
     }
 
     #[test]
-    fn calculate_pool_balance_power_fixed_values() {
+    fn calculate_pool_weight_fixed_values() {
         let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
 
         {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = Mlt::from_mlt(40_000).to_amount_atoms();
 
-            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
             compare_results(actual, 0.000194818);
         }
 
@@ -181,7 +183,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = Mlt::from_mlt(80_000).to_amount_atoms();
 
-            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
             compare_results(actual, 0.000200698);
         }
 
@@ -189,7 +191,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = pool_balance;
 
-            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
             compare_results(actual, 0.000202658);
         }
 
@@ -197,7 +199,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = pool_balance;
 
-            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
             compare_results(actual, 0.000202658);
         }
     }
@@ -207,14 +209,14 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn calculate_pool_balance_power_a_zero(#[case] seed: Seed) {
+    fn calculate_pool_weight_a_zero(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let final_supply = Amount::from_atoms(600_000_000);
         let pool_balance = Amount::from_atoms(rng.gen_range(2..final_supply.into_atoms()));
         let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
 
-        let actual = pool_balance_power_impl(
+        let actual = pool_weight_impl(
             pledge_amount,
             pool_balance,
             final_supply,
@@ -234,17 +236,14 @@ mod tests {
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
     #[trace]
     #[case(Seed::from_entropy(), Mlt::from_mlt(600_000_000).to_amount_atoms())]
-    fn calculate_pool_balance_power_not_saturated(
-        #[case] seed: Seed,
-        #[case] final_supply: Amount,
-    ) {
+    fn calculate_pool_weight_not_saturated(#[case] seed: Seed, #[case] final_supply: Amount) {
         let mut rng = make_seedable_rng(seed);
 
         let pool_balance = Amount::from_atoms(rng.gen_range(2..(final_supply.into_atoms() / K)));
         let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
 
-        let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
-        let expected = pool_balance_power_float(
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+        let expected = pool_weight_float_impl(
             pledge_amount,
             pool_balance,
             final_supply,
@@ -258,7 +257,7 @@ mod tests {
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
     #[trace]
     #[case(Seed::from_entropy(), Mlt::from_mlt(600_000_000).to_amount_atoms())]
-    fn calculate_pool_balance_power_capped(#[case] seed: Seed, #[case] final_supply: Amount) {
+    fn calculate_pool_weight_capped(#[case] seed: Seed, #[case] final_supply: Amount) {
         let mut rng = make_seedable_rng(seed);
 
         let pool_balance = Amount::from_atoms(
@@ -266,8 +265,8 @@ mod tests {
         );
         let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
 
-        let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
-        let expected = pool_balance_power_float(
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+        let expected = pool_weight_float_impl(
             pledge_amount,
             pool_balance,
             final_supply,
