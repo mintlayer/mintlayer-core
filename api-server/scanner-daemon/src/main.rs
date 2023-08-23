@@ -50,6 +50,10 @@ pub async fn run(
                 .await
                 .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
         }
+        db_tx
+            .commit()
+            .await
+            .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
     }
 
     let mut local_block = BlockchainState::new(storage);
