@@ -3,9 +3,19 @@ image: "rust:latest"
 stages:
   - test_cargo
   - build_cargo
+  - test_clippy
+  - test_cargo_deny
   - test_fmt
-  - test_func
+  - test_functional
   - test_sighash
+
+variables:
+  RUST_LOG: debug
+  RUST_BACKTRACE: full
+
+  # To be enabled after gitlab runners have the configuration of custom build dir to avoid conflicts: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscustom_build_dir-section
+  # Create a random path to avoid collisions
+  # GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PIPELINE_ID/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
 
 workflow:
   rules:
@@ -13,8 +23,8 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 before_script:
-   - apt-get update -yqq
-   - apt-get install -yqq --no-install-recommends build-essential
+  - apt-get update -yqq
+  - apt-get install -yqq --no-install-recommends build-essential
 
 test:cargo:
   stage: test_cargo
@@ -30,6 +40,19 @@ build:cargo:
     - rm -rf target
     - cargo build --release --locked
 
+test:clippy:
+  stage: test_clippy
+  script:
+    - rm -rf target
+    - cargo clippy --all-features --workspace --all-targets -- -D warnings -A clippy::new_without_default -W clippy::implicit_saturating_sub -W clippy::implicit_clone -W clippy::map_unwrap_or -W clippy::unnested_or_patterns -W clippy::manual_assert -W clippy::unused_async -W clippy::mut_mut -W clippy::todo
+    - cargo clippy --all-features --workspace --lib --bins --examples -- -A clippy::all -D clippy::float_arithmetic -W clippy::unwrap_used -W clippy::dbg_macro -W clippy::items_after_statements -W clippy::fallible_impl_from -W clippy::string_slice
+
+test:cargo_deny:
+  stage: test_cargo_deny
+  script:
+    - cargo install cargo-deny
+    - cargo deny check advisories licenses
+
 test:fmt:
   stage: test_fmt
   script:
@@ -37,7 +60,7 @@ test:fmt:
     - cargo fmt --all -- --check
 
 test:func:
-  stage: test_func
+  stage: test_functional
   script:
     - rm -rf target
     - cargo test --release -p mintlayer-test --test functional -- --ignored
