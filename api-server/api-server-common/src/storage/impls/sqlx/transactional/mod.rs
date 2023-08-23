@@ -651,11 +651,16 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
 
 #[cfg(test)]
 mod tests {
+    use common::primitives::H256;
+    use crypto::random::Rng;
+
     use crate::storage::impls::CURRENT_STORAGE_VERSION;
 
     use super::*;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
-    async fn raw_init(db_tx: &mut SqlxTransactionRw<'_, Sqlite>) {
+    async fn init_ops(db_tx: &mut SqlxTransactionRw<'_, Sqlite>) {
         let is_initialized = db_tx.is_initialized().await.unwrap();
         assert!(!is_initialized);
 
@@ -674,7 +679,7 @@ mod tests {
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        raw_init(&mut db_tx).await;
+        init_ops(&mut db_tx).await;
 
         db_tx.rollback().await.unwrap();
 
@@ -689,7 +694,7 @@ mod tests {
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        raw_init(&mut db_tx).await;
+        init_ops(&mut db_tx).await;
 
         db_tx.commit().await.unwrap();
 
@@ -697,4 +702,68 @@ mod tests {
         let version_option = db_tx.get_storage_version().await.unwrap();
         assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
     }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn block_height_id_commit(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        db_tx.initialize_database().await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        // Test setting mainchain block id and getting it back
+        let height_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
+        let height = height_u64.into();
+        let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
+
+        // Set then roll back
+        {
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert!(block_id.is_none());
+
+            db_tx.set_main_chain_block_id(height, random_block_id1).await.unwrap();
+
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, Some(random_block_id1));
+        }
+
+        db_tx.rollback().await.unwrap();
+
+        // We read, and it's not there because of the roll back
+        {
+            let mut db_tx = storage.transaction_ro().await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, None);
+        }
+
+        // Set then commit
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        {
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert!(block_id.is_none());
+
+            db_tx.set_main_chain_block_id(height, random_block_id1).await.unwrap();
+
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, Some(random_block_id1));
+        }
+        db_tx.commit().await.unwrap();
+
+        // We read, and it's there because we committed
+        {
+            let mut db_tx = storage.transaction_ro().await.unwrap();
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
+            assert_eq!(block_id, Some(random_block_id1));
+        }
+    }
+
+    // TODO: test the remaining set/get functions
 }
