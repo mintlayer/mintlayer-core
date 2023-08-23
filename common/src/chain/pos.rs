@@ -203,32 +203,66 @@ pub fn create_regtest_pos_config() -> PoSChainConfig {
     }
 }
 
-pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
-    match chain_type {
-        // TODO: Decide what to use on Mainnet.
-        ChainType::Mainnet => unimplemented!(),
-        // Note: Assuming that there is 1 initial staking pool in testnet the value for difficulty equals to
-        // U256::MAX / min_stake_pool_pledge / block_time, dropping the least significant bytes for simplicity
-        ChainType::Testnet => Uint256([
-            0x0000000000000000,
-            0x0000000000000000,
-            0x0000000000000000,
-            0x0000000000000026,
-        ]),
-        ChainType::Signet => Uint256([
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0x00000000FFFFFFFF,
-        ]),
-        // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
-        // It's hardcoded because division for Uint256 is not const
-        ChainType::Regtest => Uint256([
-            0x0000000000000000,
-            0x0000000000000000,
-            0xCCCCCCCCCCCCCCCC,
-            0x0000000000000003,
-        ]),
+pub const fn pos_initial_difficulty(
+    chain_type: ChainType,
+    consensus_version: PoSConsensusVersion,
+) -> Uint256 {
+    match consensus_version {
+        PoSConsensusVersion::V0 => {
+            match chain_type {
+                // TODO: Decide what to use on Mainnet.
+                ChainType::Mainnet => unimplemented!(),
+                // Note: Assuming that there is 1 initial staking pool in testnet the value for difficulty equals to
+                // U256::MAX / min_stake_pool_pledge / block_time, dropping the least significant bytes for simplicity
+                ChainType::Testnet => Uint256([
+                    0x0000000000000000,
+                    0x0000000000000000,
+                    0x0000000000000000,
+                    0x0000000000000026,
+                ]),
+                ChainType::Signet => Uint256([
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                    0xFFFFFFFFFFFFFFFF,
+                    0x00000000FFFFFFFF,
+                ]),
+                // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
+                // It's hardcoded because division for Uint256 is not const
+                ChainType::Regtest => Uint256([
+                    0x0000000000000000,
+                    0x0000000000000000,
+                    0xCCCCCCCCCCCCCCCC,
+                    0x0000000000000003,
+                ]),
+            }
+        }
+        PoSConsensusVersion::V1 => match chain_type {
+            // TODO: Decide what to use on Mainnet.
+            ChainType::Mainnet => unimplemented!(),
+            // TODO: reconsider this before launching upgrade because it depends on total stake of the network
+            ChainType::Testnet => Uint256([
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x000003BDFFFFFFFF,
+            ]),
+            ChainType::Signet => Uint256([
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0x00000000FFFFFFFF,
+            ]),
+            // Note: the value is Uint256::MAX / target_block_time / adjusted_balance_power, where
+            // adjusted_balance_power is the balance power for a pool with a minimum pledge and no delegations
+            // multiplied by constant factor of 1_000_000_000.
+            ChainType::Regtest => Uint256([
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x000003BDFFFFFFFF,
+            ]),
+        },
+        _ => panic!("Unsupported PoS consensus version"),
     }
 }
 

@@ -585,6 +585,8 @@ fn pos_block_signature(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let upgrades = vec![
         (
@@ -600,20 +602,15 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-    let chain_config = ConfigBuilder::test_chain()
+    let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk);
+    let chain_config = ConfigBuilder::new(ChainType::Testnet)
         .net_upgrades(net_upgrades)
-        .epoch_length(NonZeroU64::new(1).unwrap())
-        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .genesis_custom(genesis)
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let genesis_id = tf.genesis().get_id();
-    let (staking_sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(genesis_id.into()),
-        0,
-    ));
+    let pool_id = H256::zero().into();
 
     let invalid_kernel_input =
         UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);

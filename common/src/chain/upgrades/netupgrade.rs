@@ -17,7 +17,9 @@ use std::ops::Range;
 
 use crate::chain::config::ChainType;
 use crate::chain::pow::limit;
-use crate::chain::{create_regtest_pos_config, initial_difficulty, PoSChainConfig};
+use crate::chain::{
+    create_regtest_pos_config, pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion,
+};
 use crate::primitives::{BlockHeight, Compact};
 
 #[derive(Debug, Clone)]
@@ -49,7 +51,11 @@ impl NetUpgrades<UpgradeVersion> {
             (
                 BlockHeight::new(1),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
+                    initial_difficulty: pos_initial_difficulty(
+                        ChainType::Regtest,
+                        PoSConsensusVersion::CURRENT,
+                    )
+                    .into(),
                     config: create_regtest_pos_config(),
                 }),
             ),

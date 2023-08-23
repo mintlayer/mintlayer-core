@@ -36,8 +36,8 @@ pub use genesis::Genesis;
 pub use mlt::Mlt;
 pub use pos::{
     create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
-    get_initial_randomness, initial_difficulty, DelegationId, PoSChainConfig, PoSConsensusVersion,
-    PoolId,
+    get_initial_randomness, pos_initial_difficulty, DelegationId, PoSChainConfig,
+    PoSConsensusVersion, PoolId,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

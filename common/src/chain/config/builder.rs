@@ -21,10 +21,10 @@ use crate::{
             create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
             emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        pos::get_initial_randomness,
+        get_initial_randomness, pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
-        UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoSConsensusVersion,
+        PoWChainConfig, UpgradeVersion,
     },
     primitives::{
         id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, Id, Idable, H256,
@@ -70,13 +70,26 @@ impl ChainType {
                     (
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: crate::chain::pos::initial_difficulty(
+                            initial_difficulty: pos_initial_difficulty(
                                 ChainType::Testnet,
+                                PoSConsensusVersion::V0,
                             )
                             .into(),
                             config: pos_config,
                         }),
                     ),
+                    // TODO: Add upgrade to PoSConsensusVersion::V1
+                    // (
+                    //     BlockHeight::new(X),
+                    //     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    //         initial_difficulty: pos_initial_difficulty(
+                    //             ChainType::Testnet,
+                    //             PoSConsensusVersion::V1,
+                    //         )
+                    //         .into(),
+                    //         config: pos_config,
+                    //     }),
+                    // ),
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }

@@ -146,7 +146,12 @@ mod tests {
     fn compare_results(actual: (Uint256, Uint256), expected: f64) {
         let tolerance: f64 = 1e-9;
         let actual_f64 = to_float(actual.0, actual.1, 10);
-        assert!((actual_f64 - expected).abs() < tolerance);
+        assert!(
+            (actual_f64 - expected).abs() < tolerance,
+            "actual: {}; expected: {}",
+            actual_f64,
+            expected
+        );
     }
 
     #[test]
@@ -161,13 +166,40 @@ mod tests {
     }
 
     #[test]
-    fn calculate_pool_balance_power_minimum_pledge() {
+    fn calculate_pool_balance_power_fixed_values() {
         let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
-        let pool_balance = Mlt::from_mlt(40_000).to_amount_atoms();
-        let pledge_amount = pool_balance;
 
-        let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
-        compare_results(actual, 0.000037395);
+        {
+            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
+            let pledge_amount = Mlt::from_mlt(40_000).to_amount_atoms();
+
+            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            compare_results(actual, 0.000194818);
+        }
+
+        {
+            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
+            let pledge_amount = Mlt::from_mlt(80_000).to_amount_atoms();
+
+            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            compare_results(actual, 0.000200698);
+        }
+
+        {
+            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
+            let pledge_amount = pool_balance;
+
+            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            compare_results(actual, 0.000202658);
+        }
+
+        {
+            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
+            let pledge_amount = pool_balance;
+
+            let actual = pool_balance_power(pledge_amount, pool_balance, final_supply);
+            compare_results(actual, 0.000202658);
+        }
     }
 
     // If `a` parameter is 0 then the result is simply proportional to the relative stake balance
@@ -242,6 +274,6 @@ mod tests {
             DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
         );
         compare_results(actual, expected);
-        compare_results(actual, 0.000999999);
+        assert!(to_float(actual.0, actual.1, 10) < 0.1);
     }
 }
