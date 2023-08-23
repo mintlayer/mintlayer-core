@@ -18,7 +18,7 @@ pub mod transactional;
 mod queries;
 
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use sqlx::{
@@ -155,7 +155,10 @@ where
         Ok(())
     }
 
-    pub async fn initialize_database(&self) -> Result<(), ApiServerStorageError>
+    pub async fn initialize_database(
+        &self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
@@ -172,7 +175,7 @@ where
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
         let conn = pool.as_mut();
 
-        QueryFromConnection::new(conn).initialize_database().await?;
+        QueryFromConnection::new(conn).initialize_database(chain_config).await?;
 
         Ok(())
     }
@@ -466,7 +469,10 @@ where
 mod tests {
     use chainstate_test_framework::{TestFramework, TransactionBuilder};
     use common::{
-        chain::{signature::inputsig::InputWitness, OutPointSourceId, TxInput, UtxoOutPoint},
+        chain::{
+            config::create_regtest, signature::inputsig::InputWitness, OutPointSourceId, TxInput,
+            UtxoOutPoint,
+        },
         primitives::{Idable, H256},
     };
 
@@ -486,6 +492,8 @@ mod tests {
 
     #[tokio::test]
     async fn initialization() {
+        let chain_config = create_regtest();
+
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(5)
             .connect("sqlite::memory:")
@@ -499,7 +507,7 @@ mod tests {
         let is_initialized = storage.is_initialized().await.unwrap();
         assert!(!is_initialized);
 
-        storage.initialize_database().await.unwrap();
+        storage.initialize_database(&chain_config).await.unwrap();
 
         let is_initialized = storage.is_initialized().await.unwrap();
         assert!(is_initialized);
@@ -515,6 +523,8 @@ mod tests {
     async fn set_get(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
+        let chain_config = create_regtest();
+
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(5)
             .connect("sqlite::memory:")
@@ -528,7 +538,7 @@ mod tests {
         let is_initialized = storage.is_initialized().await.unwrap();
         assert!(!is_initialized);
 
-        storage.initialize_database().await.unwrap();
+        storage.initialize_database(&chain_config).await.unwrap();
 
         let is_initialized = storage.is_initialized().await.unwrap();
         assert!(is_initialized);

@@ -16,7 +16,7 @@
 use serialization::{DecodeAll, Encode};
 
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use sqlx::{
@@ -263,7 +263,10 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
         Ok(())
     }
 
-    pub async fn initialize_database(&mut self) -> Result<(), ApiServerStorageError>
+    pub async fn initialize_database(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
@@ -282,6 +285,8 @@ impl<'a, D: Database> QueryFromConnection<'a, D> {
             .execute(&mut *self.conn)
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+
+        self.set_best_block(0.into(), chain_config.genesis_block_id()).await?;
 
         Ok(())
     }

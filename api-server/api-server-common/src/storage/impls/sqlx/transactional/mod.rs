@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction},
+    chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use sqlx::{
@@ -335,7 +335,10 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
         Ok(())
     }
 
-    pub async fn initialize_database(&mut self) -> Result<(), ApiServerStorageError>
+    pub async fn initialize_database(
+        &mut self,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
@@ -351,7 +354,7 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
 
-        QueryFromConnection::new(conn).initialize_database().await?;
+        QueryFromConnection::new(conn).initialize_database(chain_config).await?;
 
         Ok(())
     }
@@ -682,7 +685,7 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
 
 #[cfg(test)]
 mod tests {
-    use common::primitives::H256;
+    use common::{chain::config::create_regtest, primitives::H256};
     use crypto::random::Rng;
 
     use crate::storage::impls::CURRENT_STORAGE_VERSION;
@@ -692,10 +695,12 @@ mod tests {
     use test_utils::random::{make_seedable_rng, Seed};
 
     async fn init_ops(db_tx: &mut SqlxTransactionRw<'_, Sqlite>) {
+        let chain_config = create_regtest();
+
         let is_initialized = db_tx.is_initialized().await.unwrap();
         assert!(!is_initialized);
 
-        db_tx.initialize_database().await.unwrap();
+        db_tx.initialize_database(&chain_config).await.unwrap();
 
         let is_initialized = db_tx.is_initialized().await.unwrap();
         assert!(is_initialized);
@@ -741,11 +746,13 @@ mod tests {
     async fn block_height_id_commit(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
+        let chain_config = create_regtest();
+
         let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        db_tx.initialize_database().await.unwrap();
+        db_tx.initialize_database(&chain_config).await.unwrap();
         db_tx.commit().await.unwrap();
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
