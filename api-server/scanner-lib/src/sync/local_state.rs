@@ -20,11 +20,12 @@ use common::{
 
 /// An abstraction that represents the state of the API server locally.
 /// This state is updated by the sync process, which uses a RemoteNode to fetch new blocks.
+#[async_trait::async_trait]
 pub trait LocalBlockchainState {
     type Error: std::error::Error;
 
     /// Returns the current best known block (may be genesis)
-    fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error>;
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error>;
 
     /// Scan new blocks:
     /// 1. Reset local blocks to the common block height
@@ -32,7 +33,7 @@ pub trait LocalBlockchainState {
     /// 2. Append new blocks.
     ///
     /// The height of the blocks must be contiguous, starting from the common_block_height + 1.
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,

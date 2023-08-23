@@ -35,30 +35,55 @@ impl<D: Database> TransactionalSqlxStorage<D> {
         Self { storage }
     }
 
-    pub async fn transaction_ro(&self) -> Result<SqlxTransactionRo<'_, D>, sqlx::Error> {
-        let tx = self.storage.db_pool.begin().await?;
+    pub async fn transaction_ro(&self) -> Result<SqlxTransactionRo<'_, D>, ApiServerStorageError> {
+        let tx = self
+            .storage
+            .db_pool
+            .begin()
+            .await
+            .map_err(|e| ApiServerStorageError::RoTxBeginFailed(e.to_string()))?;
         let result = SqlxTransactionRo::new(tx);
         Ok(result)
     }
 
     pub async fn try_transaction_ro(
         &self,
-    ) -> Result<Option<SqlxTransactionRo<'_, D>>, sqlx::Error> {
-        let tx = self.storage.db_pool.try_begin().await?;
+    ) -> Result<Option<SqlxTransactionRo<'_, D>>, ApiServerStorageError> {
+        let tx = self
+            .storage
+            .db_pool
+            .try_begin()
+            .await
+            .map_err(|e| ApiServerStorageError::RoTxBeginFailed(e.to_string()))?;
+
         let result = tx.map(|t| SqlxTransactionRo::new(t));
         Ok(result)
     }
 
-    pub async fn transaction_rw(&mut self) -> Result<SqlxTransactionRw<'_, D>, sqlx::Error> {
-        let tx = self.storage.db_pool.begin().await?;
+    pub async fn transaction_rw(
+        &mut self,
+    ) -> Result<SqlxTransactionRw<'_, D>, ApiServerStorageError> {
+        let tx = self
+            .storage
+            .db_pool
+            .begin()
+            .await
+            .map_err(|e| ApiServerStorageError::RwTxBeginFailed(e.to_string()))?;
+
         let result = SqlxTransactionRw::new(tx);
         Ok(result)
     }
 
     pub async fn try_transaction_rw(
         &mut self,
-    ) -> Result<Option<SqlxTransactionRw<'_, D>>, sqlx::Error> {
-        let tx = self.storage.db_pool.try_begin().await?;
+    ) -> Result<Option<SqlxTransactionRw<'_, D>>, ApiServerStorageError> {
+        let tx = self
+            .storage
+            .db_pool
+            .try_begin()
+            .await
+            .map_err(|e| ApiServerStorageError::RwTxBeginFailed(e.to_string()))?;
+
         let result = tx.map(|t| SqlxTransactionRw::new(t));
         Ok(result)
     }
@@ -277,12 +302,18 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
         Self { tx }
     }
 
-    pub async fn commit(self) -> Result<(), sqlx::Error> {
-        self.tx.commit().await
+    pub async fn commit(self) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .commit()
+            .await
+            .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))
     }
 
-    pub async fn rollback(self) -> Result<(), sqlx::Error> {
-        self.tx.rollback().await
+    pub async fn rollback(self) -> Result<(), ApiServerStorageError> {
+        self.tx
+            .rollback()
+            .await
+            .map_err(|e| ApiServerStorageError::TxRwRollbackFailed(e.to_string()))
     }
 
     #[allow(dead_code)]

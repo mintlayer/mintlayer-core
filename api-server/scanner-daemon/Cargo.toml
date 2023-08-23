@@ -20,3 +20,4 @@ clap = { version = "4", features = ["derive"] }
 
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+sqlx = { workspace = true, features = [ "runtime-tokio", "macros", "sqlite", "postgres" ] }

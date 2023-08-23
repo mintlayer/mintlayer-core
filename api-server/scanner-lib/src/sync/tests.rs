@@ -53,14 +53,15 @@ impl MockLocalState {
     }
 }
 
+#[async_trait::async_trait]
 impl LocalBlockchainState for MockLocalState {
     type Error = Infallible;
 
-    fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
         Ok((self.get_block_height(), self.get_best_block_id()))
     }
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,

@@ -36,7 +36,7 @@ pub enum SyncError {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
     #[error("Attempted to sync the API server to a height that doesn't exist")]
     NotEnoughBlockHeight,
-    #[error("Best block retrieval error")]
+    #[error("Best block retrieval error {0}")]
     BestBlockRetrievalError(String),
 }
 
@@ -65,6 +65,7 @@ pub async fn sync_once(
 
         let (best_block_height, best_block_id) = local_state
             .best_block()
+            .await
             .map_err(|e| SyncError::BestBlockRetrievalError(e.to_string()))?;
 
         if chain_info.best_block_id == best_block_id {
@@ -117,6 +118,7 @@ async fn fetch_and_sync(
 
     local_node
         .scan_blocks(common_block_height, blocks)
+        .await
         .map_err(|e| SyncError::LocalNode(e.to_string()))
 }
 

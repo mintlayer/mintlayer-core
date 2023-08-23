@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use crate::sync::local_state::LocalBlockchainState;
-use api_server_common::storage::storage_api::{
-    ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiTransactionRw,
+use api_server_common::storage::{
+    impls::sqlx::transactional::TransactionalSqlxStorage, storage_api::ApiServerStorageError,
 };
 use common::{
     chain::{Block, GenBlock},
     primitives::{id::WithId, BlockHeight, Id, Idable},
 };
+use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -29,55 +29,71 @@ pub enum BlockchainStateError {
     StorageError(#[from] ApiServerStorageError),
 }
 
-pub struct BlockchainState<B> {
-    storage: B,
+pub struct BlockchainState<D: Database> {
+    storage: TransactionalSqlxStorage<D>,
 }
 
-impl<B: ApiServerStorage> BlockchainState<B> {
-    pub fn new(storage: B) -> Self {
+impl<D: Database> BlockchainState<D> {
+    pub fn new(storage: TransactionalSqlxStorage<D>) -> Self {
         Self { storage }
     }
 }
 
-impl<B: ApiServerStorage> LocalBlockchainState for BlockchainState<B> {
+#[async_trait::async_trait]
+impl<D: Database> LocalBlockchainState for BlockchainState<D>
+where
+    for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+    for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
+    usize: ColumnIndex<<D as sqlx::Database>::Row>,
+    Vec<u8>: sqlx::Type<D>,
+    for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    for<'e> i64: sqlx::Encode<'e, D>,
+    i64: sqlx::Type<D>,
+    for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+    for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
+    for<'e> &'e str: sqlx::Encode<'e, D>,
+    for<'e> &'e str: sqlx::Type<D>,
+{
     type Error = BlockchainStateError;
 
-    fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let db_tx = self.storage.transaction_ro()?;
-        let best_block = db_tx.get_best_block()?;
+    async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
+        let mut db_tx = self.storage.transaction_ro().await?;
+        let best_block = db_tx.get_best_block().await?;
         Ok(best_block)
     }
 
-    fn scan_blocks(
+    async fn scan_blocks(
         &mut self,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw()?;
+        let mut db_tx = self.storage.transaction_rw().await?;
 
         // Disconnect blocks from main-chain
-        while db_tx.get_best_block()?.0 > common_block_height {
-            let current_best = db_tx.get_best_block()?;
+        while db_tx.get_best_block().await?.0 > common_block_height {
+            let current_best = db_tx.get_best_block().await?;
             logging::log::info!("Disconnecting block: {:?}", current_best);
-            db_tx.del_main_chain_block_id(current_best.0)?;
+            db_tx.del_main_chain_block_id(current_best.0).await?;
         }
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
-            db_tx.set_main_chain_block_id(block_height, block.get_id())?;
+            db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
             for tx in block.transactions() {
-                db_tx.set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)?;
+                db_tx
+                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
+                    .await?;
             }
 
-            db_tx.set_block(block.get_id(), &block)?;
-            db_tx.set_best_block(block_height, block.get_id().into())?;
+            db_tx.set_block(block.get_id(), &block).await?;
+            db_tx.set_best_block(block_height, block.get_id().into()).await?;
         }
 
-        db_tx.commit()?;
+        db_tx.commit().await?;
 
         logging::log::info!("Database commit completed successfully");
 

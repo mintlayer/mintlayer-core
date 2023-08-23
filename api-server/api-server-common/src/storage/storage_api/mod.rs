@@ -34,6 +34,14 @@ pub enum ApiServerStorageError {
     InvalidInitializedState(String),
     #[error("Acquiring connection from the pool/transaction failed with error: {0}")]
     AcquiringConnectionFailed(String),
+    #[error("Read-only tx begin failed: {0}")]
+    RoTxBeginFailed(String),
+    #[error("Read/write tx begin failed: {0}")]
+    RwTxBeginFailed(String),
+    #[error("Transaction commit failed: {0}")]
+    TxCommitFailed(String),
+    #[error("Transaction rw rollback failed: {0}")]
+    TxRwRollbackFailed(String),
 }
 
 pub trait ApiServerStorageRead {
