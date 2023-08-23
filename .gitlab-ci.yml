@@ -9,10 +9,13 @@ stages:
   - test_functional
   - test_sighash
 
-# To be enabled after gitlab runners have the configuration of custom build dir to avoid conflicts: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscustom_build_dir-section
-# variables:
-#   # Create a random path to avoid collisions
-#   GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PIPELINE_ID/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
+variables:
+  RUST_LOG: debug
+  RUST_BACKTRACE: full
+
+  # To be enabled after gitlab runners have the configuration of custom build dir to avoid conflicts: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runnerscustom_build_dir-section
+  # Create a random path to avoid collisions
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PIPELINE_ID/mintlayer-core-$(xxd -l 16 -c 16 -p < /dev/random)
 
 workflow:
   rules:
