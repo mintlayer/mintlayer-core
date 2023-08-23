@@ -17,7 +17,10 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use sqlx::{database::HasArguments, Acquire, ColumnIndex, Database, Executor, IntoArguments, Pool};
+use sqlx::{
+    database::HasArguments, Acquire, ColumnIndex, Database, Executor, IntoArguments, Pool,
+    Postgres, Sqlite,
+};
 
 use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
 
@@ -65,35 +68,67 @@ pub struct SqlxTransactionRo<'a, D: Database> {
     tx: sqlx::Transaction<'a, D>,
 }
 
-impl<'a, D: Database> SqlxTransactionRo<'a, D> {
-    pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
-        Self { tx }
-    }
+// TODO: the definitions here are repeated for R/O and R/W. We should find a way to factor them out.
 
-    #[allow(dead_code)]
-    async fn is_initialized_internal(
-        &mut self,
-        query_str: &str,
-    ) -> Result<bool, ApiServerStorageError>
-    where
-        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> i64: sqlx::Decode<'e, D>,
-        i64: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
-    {
+impl<'a> SqlxTransactionRo<'a, Postgres> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
         let conn = self
             .tx
             .acquire()
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
 
-        let is_initialized =
-            QueryFromConnection::new(conn).is_initialized_internal(query_str).await?;
+        let is_initialized = QueryFromConnection::<Postgres>::new(conn).is_initialized().await?;
 
         Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRo<'a, Sqlite> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Sqlite>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRw<'a, Postgres> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Postgres>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRw<'a, Sqlite> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Sqlite>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a, D: Database> SqlxTransactionRo<'a, D> {
+    pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
+        Self { tx }
     }
 
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>
@@ -616,25 +651,50 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
 
 #[cfg(test)]
 mod tests {
-    // use crate::storage::impls::CURRENT_STORAGE_VERSION;
+    use crate::storage::impls::CURRENT_STORAGE_VERSION;
 
-    // use super::*;
+    use super::*;
 
-    // #[tokio::test]
-    // async fn initialization() {
-    //     let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
+    async fn raw_init(db_tx: &mut SqlxTransactionRw<'_, Sqlite>) {
+        let is_initialized = db_tx.is_initialized().await.unwrap();
+        assert!(!is_initialized);
 
-    //     let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.initialize_database().await.unwrap();
 
-    //     let is_initialized = db_tx.is_initialized().await.unwrap();
-    //     assert!(!is_initialized);
+        let is_initialized = db_tx.is_initialized().await.unwrap();
+        assert!(is_initialized);
 
-    //     db_tx.storage_mut().initialize_database().await.unwrap();
+        let version_option = db_tx.get_storage_version().await.unwrap();
+        assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
+    }
 
-    //     let is_initialized = db_tx.storage().is_initialized().await.unwrap();
-    //     assert!(is_initialized);
+    #[tokio::test]
+    async fn initialization_commit() {
+        let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
 
-    //     let version_option = db_tx.storage().get_storage_version().await.unwrap();
-    //     assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
-    // }
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        raw_init(&mut db_tx).await;
+
+        db_tx.rollback().await.unwrap();
+
+        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let is_initialized = db_tx.is_initialized().await.unwrap();
+        assert!(!is_initialized);
+    }
+
+    #[tokio::test]
+    async fn initialization_rollback() {
+        let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        raw_init(&mut db_tx).await;
+
+        db_tx.commit().await.unwrap();
+
+        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let version_option = db_tx.get_storage_version().await.unwrap();
+        assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
+    }
 }

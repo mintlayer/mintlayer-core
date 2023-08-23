@@ -19,7 +19,9 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
-use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments};
+use sqlx::{
+    database::HasArguments, ColumnIndex, Database, Executor, IntoArguments, Postgres, Sqlite,
+};
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -28,6 +30,40 @@ use crate::storage::{
 
 pub struct QueryFromConnection<'a, D: Database> {
     conn: &'a mut <D as Database>::Connection,
+}
+
+impl<'a> QueryFromConnection<'a, Sqlite> {
+    fn get_table_exists_query(table_name: &str) -> String {
+        format!(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{}'",
+            table_name
+        )
+    }
+
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let query_str = Self::get_table_exists_query("ml_misc_data");
+        let is_initialized = self.is_initialized_internal(&query_str).await?;
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> QueryFromConnection<'a, Postgres> {
+    fn get_table_exists_query(table_name: &str) -> String {
+        format!(
+            "SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_name = '{}'
+        ) THEN 1 ELSE 0 END AS count;",
+            table_name
+        )
+    }
+
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let query_str = Self::get_table_exists_query("ml_misc_data");
+        let is_initialized = self.is_initialized_internal(&query_str).await?;
+        Ok(is_initialized)
+    }
 }
 
 impl<'a, D: Database> QueryFromConnection<'a, D> {
