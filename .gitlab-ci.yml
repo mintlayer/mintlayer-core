@@ -50,7 +50,8 @@ test:clippy:
 test:cargo_deny:
   stage: test_cargo_deny
   script:
-    - cargo deny check
+    - cargo install cargo-deny
+    - cargo deny check advisories licenses
 
 test:fmt:
   stage: test_fmt
