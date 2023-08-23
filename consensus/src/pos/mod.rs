@@ -20,6 +20,8 @@ pub mod input_data;
 pub mod kernel;
 pub mod target;
 
+mod balance_power;
+
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
