@@ -14,6 +14,7 @@ variables:
   RUST_LOG: debug
   RUST_BACKTRACE: full
 
+  # Create a random path to avoid collisions
   GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PIPELINE_ID/mintlayer-core
 
 workflow:
