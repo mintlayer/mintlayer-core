@@ -65,7 +65,7 @@ impl TestTransportMaker for TestTransportTcp {
     }
 
     fn make_address() -> SocketAddress {
-        "[::1]:0".parse().unwrap()
+        "127.0.0.1:0".parse().unwrap()
     }
 }
 
