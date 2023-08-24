@@ -23,8 +23,8 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 before_script:
-  - apt-get update -yqq
-  - apt-get install -yqq --no-install-recommends build-essential
+  - sudo apt-get update -yqq
+  - sudo apt-get install -yqq --no-install-recommends build-essential
 
 test:cargo:
   stage: test_cargo
