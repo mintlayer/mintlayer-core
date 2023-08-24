@@ -27,7 +27,7 @@ before_script:
   - apt-get install -yqq --no-install-recommends build-essential
 
 build:clean:
-  stage: build_cargo
+  stage: build_clean
   script:
     - rm -rf target
 
