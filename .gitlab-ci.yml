@@ -59,6 +59,7 @@ test:cargo_deny:
 test:fmt:
   stage: test_fmt
   script:
+    - rustup component add rustfmt
     - cargo fmt --all -- --check
 
 test:func:
