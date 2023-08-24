@@ -710,7 +710,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initialization_commit() {
+    async fn initialization_rollback() {
         let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
@@ -725,7 +725,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initialization_rollback() {
+    async fn initialization_commit() {
         let mut storage = SqlxStorage::from_sqlite_inmemory(5).await.unwrap().into_transactional();
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
