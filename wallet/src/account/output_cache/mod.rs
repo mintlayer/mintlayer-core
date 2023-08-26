@@ -166,6 +166,10 @@ impl OutputCache {
             .ok_or(WalletError::DelegationNotFound(delegation_id))
     }
 
+    pub fn owns_delegation(&self, delegation_id: &DelegationId) -> bool {
+        self.delegations.contains_key(delegation_id)
+    }
+
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let already_present = self.txs.contains_key(&tx_id);
         let is_unconfirmed = match tx.state() {

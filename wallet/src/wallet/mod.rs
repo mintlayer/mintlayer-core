@@ -258,19 +258,24 @@ impl<B: storage::Backend> Wallet<B> {
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
-    fn migration_v2(
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-        chain_config: Arc<ChainConfig>,
-    ) -> WalletResult<()> {
+    fn migration_v2(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
         // set new chain info to the one provided by the user assuming it is the correct one
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
 
         // reset wallet transaction as now we will need to rescan the blockchain to store the
         // correct order of the transactions to avoid bugs in loading them in the wrong order
-        Self::reset_wallet_transactions(chain_config.as_ref(), db_tx)?;
+        Self::reset_wallet_transactions(chain_config.as_ref(), &mut db_tx)?;
 
         // Create the next unused account
-        Self::migrate_next_unused_account(chain_config, db_tx)?;
+        Self::migrate_next_unused_account(chain_config, &mut db_tx)?;
+
+        db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
+        db_tx.commit()?;
+        logging::log::info!(
+            "Successfully migrated wallet database to latest version {}",
+            CURRENT_WALLET_VERSION
+        );
 
         Ok(())
     }
@@ -289,23 +294,14 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Check the wallet DB version and perform any migrations needed
     fn check_and_migrate_db(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
-
-        match db_tx.get_storage_version()? {
+        match db.get_storage_version()? {
             WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
-            WALLET_VERSION_V1 => Self::migration_v2(&mut db_tx, chain_config)?,
+            WALLET_VERSION_V1 => Self::migration_v2(db, chain_config)?,
             CURRENT_WALLET_VERSION => return Ok(()),
             unsupported_version => {
                 return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
             }
         }
-
-        db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
-        db_tx.commit()?;
-        logging::log::info!(
-            "Successfully migrated wallet database to latest version {}",
-            CURRENT_WALLET_VERSION
-        );
 
         Ok(())
     }

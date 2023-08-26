@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::AccountSpending::Delegation;
+use common::chain::AccountSpending::{self, Delegation};
 use common::primitives::id::WithId;
 use common::primitives::Idable;
 use common::Uint256;
@@ -702,11 +702,10 @@ impl Account {
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        // TODO: Should we really report `AnyoneCanSpend` as own?
         Self::get_tx_output_destination(txo).map_or(false, |d| match d {
             Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
-            Destination::AnyoneCanSpend => true,
+            Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
         })
     }
@@ -743,7 +742,7 @@ impl Account {
                         return Ok(true);
                     }
                 }
-                Destination::AnyoneCanSpend => return Ok(true),
+                Destination::AnyoneCanSpend => return Ok(false),
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             }
         }
@@ -841,7 +840,11 @@ impl Account {
                 .output_cache
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
-            TxInput::Account(_) => false,
+            TxInput::Account(outpoint) => match outpoint.account() {
+                AccountSpending::Delegation(delegation_id, _) => {
+                    self.output_cache.owns_delegation(delegation_id)
+                }
+            },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {

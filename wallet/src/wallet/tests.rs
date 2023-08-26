@@ -259,12 +259,15 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
     let db = create_wallet_in_memory().unwrap();
+    let genesis_block_id = chain_config.genesis_block_id();
     let wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
         MNEMONIC,
         None,
         StoreSeedPhrase::DoNotStore,
+        BlockHeight::new(0),
+        genesis_block_id,
     )
     .unwrap();
     let default_acc_id = wallet.accounts.get(&DEFAULT_ACCOUNT_INDEX).unwrap().get_account_id();
@@ -392,9 +395,17 @@ fn wallet_balance_genesis() {
     let chain_type = ChainType::Mainnet;
 
     let genesis_amount = Amount::from_atoms(12345);
+    let chain_config = Arc::new(Builder::new(chain_type).build());
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
     let genesis_output = TxOutput::Transfer(
         OutputValue::Coin(genesis_amount),
-        Destination::AnyoneCanSpend,
+        address.decode_object(chain_config.as_ref()).unwrap(),
     );
 
     test_balance_from_genesis(chain_type, vec![genesis_output.clone()], genesis_amount);
@@ -402,7 +413,7 @@ fn wallet_balance_genesis() {
     let genesis_amount_2 = Amount::from_atoms(54321);
     let genesis_output_2 = TxOutput::LockThenTransfer(
         OutputValue::Coin(genesis_amount_2),
-        Destination::AnyoneCanSpend,
+        address.decode_object(chain_config.as_ref()).unwrap(),
         OutputTimeLock::UntilHeight(BlockHeight::zero()),
     );
 
@@ -413,7 +424,6 @@ fn wallet_balance_genesis() {
     );
 
     let address_indexes = [0, LOOKAHEAD_SIZE - 1, LOOKAHEAD_SIZE];
-    let chain_config = Arc::new(Builder::new(chain_type).build());
     for purpose in KeyPurpose::ALL {
         for address_index in address_indexes {
             let address_index: U31 = address_index.try_into().unwrap();
@@ -445,9 +455,17 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_type = ChainType::Mainnet;
     let genesis_amount = Amount::from_atoms(rng.gen_range(1..10000));
+    let chain_config = Arc::new(create_mainnet());
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
     let genesis_output = TxOutput::Transfer(
         OutputValue::Coin(genesis_amount),
-        Destination::AnyoneCanSpend,
+        address.decode_object(chain_config.as_ref()).unwrap(),
     );
     let genesis = Genesis::new(
         String::new(),
