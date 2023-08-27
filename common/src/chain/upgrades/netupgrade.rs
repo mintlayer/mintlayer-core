@@ -56,7 +56,7 @@ impl NetUpgrades<UpgradeVersion> {
                         PoSConsensusVersion::CURRENT,
                     )
                     .into(),
-                    config: create_regtest_pos_config(),
+                    config: create_regtest_pos_config(PoSConsensusVersion::CURRENT),
                 }),
             ),
         ])

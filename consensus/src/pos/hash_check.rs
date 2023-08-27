@@ -143,5 +143,3 @@ pub fn check_pos_hash(
         _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
     }
 }
-
-// FIXME: functional test with netupgrade

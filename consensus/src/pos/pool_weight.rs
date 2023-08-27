@@ -33,7 +33,7 @@ const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789
 /// pledge, so this function takes pledge into account. The weight of a pool grows until the
 /// proportion of pledge to delegated amount reaches 1:1.
 ///
-/// The result is a pair thar represents a ratio: (numerator, denominator), which is always < 1
+/// The result is a pair that represents a ratio: (numerator, denominator), which is always < 1
 pub fn pool_weight(
     pledge_amount: Amount,
     pool_balance: Amount,
@@ -189,10 +189,10 @@ mod tests {
 
         {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
-            let pledge_amount = pool_balance;
+            let pledge_amount = Mlt::from_mlt(150_000).to_amount_atoms();
 
             let actual = pool_weight(pledge_amount, pool_balance, final_supply);
-            compare_results(actual, 0.000202658);
+            compare_results(actual, 0.0002047);
         }
 
         {

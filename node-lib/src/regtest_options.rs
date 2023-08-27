@@ -67,6 +67,10 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
 
+    /// PoS NetUpgrade override after Genesis with upgrade of consensus version from V0 to V1
+    #[clap(long)]
+    pub chain_pos_netupgrades_v0_to_v1: Option<bool>,
+
     /// Genesis block timestamp in seconds since UNIX epoch.
     #[clap(long)]
     pub chain_genesis_block_timestamp: Option<u64>,
