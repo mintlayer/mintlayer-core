@@ -275,4 +275,60 @@ mod tests {
         compare_results(actual, expected);
         assert!(to_float(actual.0, actual.1, 10) < 0.1);
     }
+
+    // If a pool is saturated (balance == supply/k) then the result is directly proportional to the pledge
+    #[test]
+    fn saturated_pool_result_prop() {
+        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let pool_balance = (final_supply / K).unwrap();
+
+        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+
+        let weights: Vec<f64> = (0..(pool_balance.into_atoms() / 2))
+            .step_by(step as usize)
+            .map(|pledge| {
+                let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
+                to_float(w.0, w.1, 10)
+            })
+            .collect();
+
+        assert!(weights.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    // If a pool is not saturated (balance != supply/k), specifically if balance == supply/k^2,
+    // then then result is a concave down parabola to the pledge. The maximum point is exactly
+    // at pool_balance/2.
+    #[test]
+    fn non_saturated_pool_result_curve() {
+        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let pool_balance = (final_supply / K).and_then(|f| f / K).unwrap();
+
+        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+
+        // check that the result increases for the first half of possible pledge values
+        {
+            let weights: Vec<f64> = (0..(pool_balance.into_atoms() / 2))
+                .step_by(step as usize)
+                .map(|pledge| {
+                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
+                    to_float(w.0, w.1, 10)
+                })
+                .collect();
+
+            assert!(weights.windows(2).all(|w| w[0] < w[1]));
+        }
+
+        // check that the result decreases for the second half of possible pledge values
+        {
+            let weights: Vec<f64> = ((pool_balance.into_atoms() / 2)..=pool_balance.into_atoms())
+                .step_by(step as usize)
+                .map(|pledge| {
+                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
+                    to_float(w.0, w.1, 10)
+                })
+                .collect();
+
+            assert!(weights.windows(2).all(|w| w[0] > w[1]));
+        }
+    }
 }

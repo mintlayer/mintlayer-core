@@ -64,6 +64,22 @@ fn check_pos_hash_v0(
     Ok(())
 }
 
+fn adjust_target(
+    target: Uint512,
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    final_supply: Amount,
+) -> Uint512 {
+    let pool_weight = pool_weight(pledge_amount, pool_balance, final_supply);
+    // Constant factor is here to compensate small values of pool's weight and allow target to fit into 256 bits.
+    // Let's consider an example with a single pool staking. `hash` is uniformly distributed so adjusted_target
+    // must be <= U256::MAX/block_time to produce blocks.
+    // Given that pool_weight << 1 for real balances, target would've overflowed U256.
+    // To mitigate that weight is multiplied by constant factor which is also accounted when initial difficulty is calculated.
+    let constant_factor = Uint512::from_u64(1_000_000_000);
+    (target * pool_weight.0.into() / pool_weight.1.into()) * constant_factor
+}
+
 #[allow(clippy::too_many_arguments)]
 fn check_pos_hash_v1(
     epoch_index: EpochIndex,
@@ -79,7 +95,7 @@ fn check_pos_hash_v1(
         .compact_target()
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-    let target: Uint512 = target.into();
+    let adjusted_target = adjust_target(target.into(), pledge_amount, pool_balance, final_supply);
 
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
@@ -91,15 +107,6 @@ fn check_pos_hash_v1(
     .value()
     .into();
     let hash: Uint512 = hash.into();
-
-    let pool_weight = pool_weight(pledge_amount, pool_balance, final_supply);
-    // Constant factor is here to compensate small values of pool's weight and allow target to fit into 256 bits.
-    // Let's consider an example with a single pool staking. `hash` is uniformly distributed so adjusted_target
-    // must be <= U256::MAX/block_time to produce blocks.
-    // Given that pool_weight << 1 for real balances, target would've overflowed U256.
-    // To mitigate that weight is multiplied by constant factor which is also accounted when initial difficulty is calculated.
-    let constant_factor = Uint512::from_u64(1_000_000_000);
-    let adjusted_target = (target * pool_weight.0.into() / pool_weight.1.into()) * constant_factor;
 
     ensure!(
         hash <= adjusted_target,
@@ -141,5 +148,83 @@ pub fn check_pos_hash(
             final_supply,
         ),
         _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use common::{chain::Mlt, primitives::Amount};
+
+    // If a pool is saturated (balance == supply/k) then the target is directly proportional to the pledge
+    #[test]
+    fn adjust_target_proportional() {
+        let target = Uint512([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]);
+        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let pool_balance = (final_supply / 1000).unwrap();
+
+        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+
+        let targets: Vec<Uint512> = (0..pool_balance.into_atoms())
+            .step_by(step as usize)
+            .map(|pledge| {
+                adjust_target(
+                    target,
+                    Amount::from_atoms(pledge),
+                    pool_balance,
+                    final_supply,
+                )
+            })
+            .collect();
+
+        assert!(targets.windows(2).all(|t| t[0] < t[1]));
+    }
+
+    // If a pool is not saturated (balance != supply/k), specifically if balance == supply/k^2,
+    // then then result is a concave down parabola to the pledge. The maximum point is exactly
+    // at pool_balance/2.
+    #[test]
+    fn adjust_target_curve() {
+        let target = Uint512([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]);
+        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let pool_balance = (final_supply / 1000).and_then(|f| f / 1000).unwrap();
+
+        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+
+        // check that the result increases for the first half of possible pledge values
+        {
+            let targets: Vec<Uint512> = (0..(pool_balance.into_atoms() / 2))
+                .step_by(step as usize)
+                .map(|pledge| {
+                    adjust_target(
+                        target,
+                        Amount::from_atoms(pledge),
+                        pool_balance,
+                        final_supply,
+                    )
+                })
+                .collect();
+
+            assert!(targets.windows(2).all(|t| t[0] < t[1]));
+        }
+
+        // check that the result decreases for the second half of possible pledge values
+        {
+            let targets: Vec<Uint512> = ((pool_balance.into_atoms() / 2)
+                ..=pool_balance.into_atoms())
+                .step_by(step as usize)
+                .map(|pledge| {
+                    adjust_target(
+                        target,
+                        Amount::from_atoms(pledge),
+                        pool_balance,
+                        final_supply,
+                    )
+                })
+                .collect();
+
+            assert!(targets.windows(2).all(|t| t[0] > t[1]));
+        }
     }
 }
