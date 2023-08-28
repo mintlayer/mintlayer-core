@@ -1,7 +1,14 @@
 image: "rust:latest"
 
 stages:
-  - build_and_test_all
+  - build_clean
+  - test_cargo
+  - build_cargo
+  - test_clippy
+  - test_cargo_deny
+  - test_fmt
+  - test_functional
+  - test_sighash
 
 variables:
   RUST_LOG: debug
@@ -19,25 +26,47 @@ before_script:
   - apt-get update -yqq
   - apt-get install -yqq --no-install-recommends build-essential
 
-build:cargo:
-  stage: build_and_test_all
+build:clean:
+  stage: build_clean
   script:
     - rm -rf target
-    # build and test
+
+test:cargo:
+  stage: test_cargo
+  script:
     - rustc --version && cargo --version
     - cargo test --release --all --workspace --verbose
+
+build:cargo:
+  stage: build_cargo
+  script:
     - cargo build --release --all --locked
-    # clippy
+
+test:clippy:
+  stage: test_clippy
+  script:
     - rustup component add clippy
     - cargo clippy --all-features --workspace --all-targets -- -D warnings -A clippy::unnecessary_literal_unwrap -A clippy::new_without_default -W clippy::implicit_saturating_sub -W clippy::implicit_clone -W clippy::map_unwrap_or -W clippy::unnested_or_patterns -W clippy::manual_assert -W clippy::unused_async -W clippy::mut_mut -W clippy::todo
     - cargo clippy --all-features --workspace --lib --bins --examples -- -A clippy::all -D clippy::float_arithmetic -W clippy::unwrap_used -W clippy::dbg_macro -W clippy::items_after_statements -W clippy::fallible_impl_from -W clippy::string_slice
-    # cargo-deny
+
+test:cargo_deny:
+  stage: test_cargo_deny
+  script:
     - cargo install cargo-deny
     - cargo deny check advisories licenses
-    # fmt
+
+test:fmt:
+  stage: test_fmt
+  script:
     - rustup component add rustfmt
     - cargo fmt --all -- --check
-    # functional tests
+
+test:func:
+  stage: test_functional
+  script:
     - cargo test --release -p mintlayer-test --test functional -- --ignored
-    # sighash tests
+
+test:sighash:
+  stage: test_sighash
+  script:
     - cargo test --release -p common mixed_sighash_types -- --ignored
