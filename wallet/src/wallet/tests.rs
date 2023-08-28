@@ -20,7 +20,7 @@ use crate::{
     DefaultWallet,
 };
 use serialization::Encode;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, num::NonZeroUsize};
 
 use super::*;
 use common::{
@@ -1140,6 +1140,32 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, block1_amount);
 
+    // Check that if the feerate is too high UTXOs will be filtered out
+    // if their value is < the fee needed to spend that input
+    {
+        // feerate such that the fee for the input is larger than the input amount
+        // 103 is the size of the signature required for the input
+        let very_big_feerate =
+            FeeRate::from_total_tx_fee(block1_amount.into(), NonZeroUsize::new(103).unwrap())
+                .unwrap();
+        let err = wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                vec![gen_random_transfer(&mut rng, Amount::from_atoms(1))],
+                very_big_feerate,
+                very_big_feerate,
+            )
+            .unwrap_err();
+
+        match err {
+            WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(
+                Amount::ZERO,
+                amount,
+            )) => assert!(amount > Amount::from_atoms(1)),
+            _ => panic!("wrong error"),
+        }
+    }
+
     let num_outputs = rng.gen_range(1..10);
     let amount_to_transfer = Amount::from_atoms(
         rng.gen_range(1..=(block1_amount.into_atoms() / num_outputs - NETWORK_FEE)),
@@ -1153,11 +1179,12 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
     let transaction = wallet
         .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, feerate, feerate)
         .unwrap();
-    wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
     let fee = feerate.compute_fee(tx_size).unwrap();
 
+    // register the successful transaction and check the balance
+    wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,

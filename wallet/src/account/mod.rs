@@ -164,21 +164,11 @@ impl Account {
         let (coin_change_fee, token_change_fee) =
             coin_and_token_output_change_fees(current_fee_rate)?;
 
-        let utxos_by_currency = group_utxos_for_input(
-            self.get_utxos(
-                UtxoType::Transfer | UtxoType::LockThenTransfer,
-                median_time,
-                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                WithLocked::Unlocked,
-            )
-            .into_iter(),
-            |(_, (tx_output, _))| tx_output,
-            |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
-                grouped.push((element.0.clone(), element.1 .0.clone()));
-                Ok(())
-            },
-            |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
-            vec![],
+        let mut utxos_by_currency = self.utxo_output_groups_by_currency(
+            current_fee_rate,
+            consolidate_fee_rate,
+            median_time,
+            &pay_fee_with_currency,
         )?;
 
         let amount_to_be_paid_in_currency_with_fees =
@@ -186,47 +176,10 @@ impl Account {
 
         let mut total_fees_not_paid = network_fee;
 
-        let utxo_to_output_group =
-            |(outpoint, txo): &(UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
-                let tx_input: TxInput = outpoint.clone().into();
-                let input_size = serialization::Encode::encoded_size(&tx_input);
-
-                let destination = Self::get_tx_output_destination(txo).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                })?;
-
-                let inp_sig_size = input_signature_size(destination)?;
-
-                let fee = current_fee_rate
-                    .compute_fee(input_size + inp_sig_size)
-                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
-                let consolidate_fee = consolidate_fee_rate
-                    .compute_fee(input_size + inp_sig_size)
-                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
-
-                // TODO: calculate weight from the size of the input
-                let weight = 0;
-                let out_group = OutputGroup::new(
-                    (tx_input, txo.clone()),
-                    fee.into(),
-                    consolidate_fee.into(),
-                    weight,
-                )?;
-
-                Ok(out_group)
-            };
-
         let mut selected_inputs: BTreeMap<_, _> = output_currency_amounts
             .iter()
             .map(|(currency, output_amount)| -> WalletResult<_> {
-                let utxos = utxos_by_currency
-                    .get(currency)
-                    .unwrap_or(&vec![])
-                    .iter()
-                    // TODO: group outputs by destination
-                    .map(utxo_to_output_group)
-                    .filter(|group| group.as_ref().map_or(true, |group| group.value > group.fee))
-                    .try_collect()?;
+                let utxos = utxos_by_currency.remove(currency).unwrap_or(vec![]);
 
                 let cost_of_change = match currency {
                     Currency::Coin => coin_change_fee,
@@ -252,13 +205,7 @@ impl Account {
             })
             .try_collect()?;
 
-        let utxos = utxos_by_currency
-            .get(&pay_fee_with_currency)
-            .unwrap_or(&vec![])
-            .iter()
-            // TODO: group outputs by destination
-            .map(utxo_to_output_group)
-            .try_collect()?;
+        let utxos = utxos_by_currency.remove(&pay_fee_with_currency).unwrap_or(vec![]);
 
         let mut amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
             + total_fees_not_paid)
@@ -316,6 +263,75 @@ impl Account {
         let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
 
         Ok(request.with_inputs(selected_inputs))
+    }
+
+    fn utxo_output_groups_by_currency(
+        &self,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        median_time: BlockTimestamp,
+        pay_fee_with_currency: &Currency,
+    ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
+        let utxo_to_output_group =
+            |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
+                let tx_input: TxInput = outpoint.into();
+                let input_size = serialization::Encode::encoded_size(&tx_input);
+
+                let destination = Self::get_tx_output_destination(&txo).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                })?;
+
+                let inp_sig_size = input_signature_size(destination)?;
+
+                let fee = current_fee_rate
+                    .compute_fee(input_size + inp_sig_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
+                let consolidate_fee = consolidate_fee_rate
+                    .compute_fee(input_size + inp_sig_size)
+                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
+
+                // TODO-#1120: calculate weight from the size of the input
+                let weight = 0;
+                let out_group =
+                    OutputGroup::new((tx_input, txo), fee.into(), consolidate_fee.into(), weight)?;
+
+                Ok(out_group)
+            };
+
+        group_utxos_for_input(
+            self.get_utxos(
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                median_time,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
+            )
+            .into_iter(),
+            |(_, (tx_output, _))| tx_output,
+            |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
+                grouped.push((element.0.clone(), element.1 .0.clone()));
+                Ok(())
+            },
+            |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
+            vec![],
+        )?
+        .into_iter()
+        .map(
+            |(currency, utxos)| -> WalletResult<(Currency, Vec<OutputGroup>)> {
+                let utxo_groups = utxos
+                    .into_iter()
+                    // TODO: group outputs by destination
+                    .map(utxo_to_output_group)
+                    .filter(|group| {
+                        group.as_ref().map_or(true, |group| {
+                            currency != *pay_fee_with_currency || group.value > group.fee
+                        })
+                    })
+                    .try_collect()?;
+
+                Ok((currency, utxo_groups))
+            },
+        )
+        .try_collect()
     }
 
     pub fn process_send_request(
