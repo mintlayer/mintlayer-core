@@ -39,7 +39,7 @@ async fn transaction_order_respects_deps(#[case] seed: Seed) {
     let tx2 = make_tx(&mut rng, &[(tx1_id.into(), 0)], &[500_000_000_000]);
     let tx2_id = tx2.transaction().get_id();
 
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     assert_eq!(
         mempool.add_transaction(tx0, TxOrigin::TEST),
         Ok(TxStatus::InMempool)
@@ -80,7 +80,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
         .take(15)
         .collect();
 
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
 
     for tx in &txs {
         let res = mempool.add_transaction(tx.transaction().clone(), TxOrigin::TEST);
@@ -119,7 +119,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
 
     let size_limit: usize = 1_000;
     let tx_accumulator =
@@ -255,7 +255,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     };
     let tx0_id = tx0.transaction().get_id();
 
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     mempool.clock = mocked_time_getter_seconds(Arc::new(block1_time.as_int_seconds().into()));
     let chainstate = mempool.chainstate_handle().shallow_clone();
 

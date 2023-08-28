@@ -74,7 +74,7 @@ mod test {
         let children = |n: &i32| {
             let children = match n {
                 0 => &[1, 2, 3][..],
-                1 | 2 | 3 => &[4][..],
+                1..=3 => &[4][..],
                 4 => &[][..],
                 _ => panic!("unreachable graph node"),
             };

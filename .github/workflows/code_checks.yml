@@ -27,6 +27,7 @@ jobs:
           args: >
             --all-features --workspace --all-targets --
             -D warnings
+            -A clippy::unnecessary_literal_unwrap
             -A clippy::new_without_default
             -A unknown_lints
             -W clippy::implicit_saturating_sub

@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: consider removing this in the future when fixed-hash fixes this problem
+#![allow(clippy::incorrect_clone_impl_on_copy_type)]
+
 mod with_id;
 
 use crypto::hash::StreamHasher;
@@ -106,7 +109,7 @@ impl<T: TypeName> Debug for Id<T> {
 // Implementing Clone manually to avoid the Clone constraint on T
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
-        Self::new(self.id)
+        *self
     }
 }
 

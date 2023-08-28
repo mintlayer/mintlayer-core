@@ -266,7 +266,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
             // Apply another set of changes but abort the transaction
             let tx_model = {
                 let mut tx_model = model.clone();
-                tx_model.extend(to_abort.clone().into_iter());
+                tx_model.extend(to_abort.clone());
                 tx_model
             };
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -278,7 +278,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
             // Apply a different set of operations, commit, check they have been performed
             let model = {
                 let mut model = model;
-                model.extend(to_commit.clone().into_iter());
+                model.extend(to_commit.clone());
                 model
             };
             let mut dbtx = store.transaction_rw(None).unwrap();

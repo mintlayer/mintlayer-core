@@ -68,7 +68,7 @@ async fn two_transactions_in_sequence(
         .build();
     let tx1_id = tx1.transaction().get_id();
 
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
 
     // Add the second transaction first
     let res = mempool.add_transaction(tx1, TxOrigin::TEST);
@@ -158,7 +158,7 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
     let tx_ids: Vec<_> = txs.iter().map(|tx| tx.transaction().get_id()).collect();
 
     // Set up mempool and execute the insertion plan
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
 
     for (tx_no, expected_mempool, expected_orphans) in insertion_plan {
         let _ = mempool.add_transaction(txs[tx_no].clone(), TxOrigin::TEST).expect("tx add");
@@ -196,7 +196,7 @@ async fn orphan_conflicts_with_mempool_tx(#[case] seed: Seed) {
     let tx1b = make_tx(&mut rng, &[(dangling, 0), (tx0_outpt, 0)], &[30_000_000]);
 
     // Add the first two transactions into mempool
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     mempool.add_transaction(tx0, TxOrigin::TEST).unwrap().assert_in_mempool();
     mempool.add_transaction(tx1a, TxOrigin::TEST).unwrap().assert_in_mempool();
 
@@ -238,7 +238,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mut results: Vec<Vec<Option<TxStatus>>> = Vec::new();
     for tx_subseq in [tx_subseq_0, tx_subseq_1] {
         let tf = TestFramework::builder(&mut rng).build();
-        let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+        let mut mempool = setup_with_chainstate(tf.chainstate());
 
         // Now add each transaction in the subsequence
         tx_subseq.iter().for_each(|tx| {
@@ -289,7 +289,7 @@ async fn local_origins_rejected(#[case] seed: Seed, #[case] origin: LocalTxOrigi
     let tx1 = make_tx(&mut rng, &[(tx0_outpt, 0)], &[80_000_000]);
 
     // Check the second transaction gets rejected by mempool
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let res = mempool.add_transaction(tx1, origin.into());
     assert_eq!(
         res,

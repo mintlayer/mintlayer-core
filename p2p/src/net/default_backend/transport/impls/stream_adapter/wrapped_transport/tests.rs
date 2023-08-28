@@ -255,7 +255,7 @@ async fn pending_handshakes() {
 
     // Noise connection will fail because of too many connected idle TCP clients
     let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr[0])).await;
-    assert!(matches!(pending_fut, Err(_)));
+    assert!(pending_fut.is_err());
 
     // Disconnect one idle client
     sockets.pop();

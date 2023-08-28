@@ -51,7 +51,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let chainstate = tf.chainstate();
     let mut mempool = Mempool::new(
         Arc::clone(chainstate.get_chain_config()),
-        start_chainstate(chainstate).await,
+        start_chainstate(chainstate),
         mock_clock,
         StoreMemoryUsageEstimator,
     );
@@ -107,7 +107,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let chainstate = tf.chainstate();
     let config = Arc::clone(chainstate.get_chain_config());
-    let chainstate_interface = start_chainstate(chainstate).await;
+    let chainstate_interface = start_chainstate(chainstate);
 
     let mut mempool = Mempool::new(
         config,

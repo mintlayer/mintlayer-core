@@ -26,7 +26,7 @@ async fn basic_reorg(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let chainstate = mempool.chainstate_handle().shallow_clone();
 
     // Add the first transaction
@@ -117,7 +117,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let chainstate = mempool.chainstate_handle().shallow_clone();
 
     // Add the first transaction
@@ -195,7 +195,7 @@ async fn reject_txs_during_ibd(#[case] seed: Seed) {
     let genesis_id = tf.genesis().get_id();
     let mock_time = tf.time_value.unwrap().shallow_clone();
     let mock_clock = tf.time_getter.clone();
-    let mut mempool = setup_with_chainstate(tf.chainstate).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate);
     mempool.clock = mock_clock;
     let chainstate = mempool.chainstate_handle().shallow_clone();
 

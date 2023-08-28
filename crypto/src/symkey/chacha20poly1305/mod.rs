@@ -63,7 +63,7 @@ impl Chacha20poly1305Key {
             .map_err(|e| Error::EncryptionError(e.to_string()))?;
         let nonce: [u8; Self::NONCE_LEN] = (*nonce).into();
         // concatenate the nonce + cipher as the result
-        let result = nonce.into_iter().chain(cipher_text.into_iter()).collect::<Vec<_>>();
+        let result = nonce.into_iter().chain(cipher_text).collect::<Vec<_>>();
         Ok(result)
     }
 

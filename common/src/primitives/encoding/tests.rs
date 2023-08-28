@@ -221,7 +221,7 @@ fn check_invalid_addresses() {
 
 #[test]
 fn check_valid_strings() {
-    vec!(
+    [
             "A1LQFN3A",
             "a1lqfn3a",
             "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
@@ -229,7 +229,7 @@ fn check_valid_strings() {
             "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
-        ).iter().for_each(|s| {
+    ].iter().for_each(|s| {
             match super::bech32m::bech32m_to_base32(s) {
                Ok(decoded) => {
                    match super::bech32m::base32_to_bech32m(decoded.hrp(), <&[bech32::u5]>::clone(&decoded.data())) {
@@ -301,7 +301,7 @@ fn check_arbitraty_data_convertion() {
 #[test]
 fn check_bech32m_convertion_to_arbitraty_chosen_data() {
     let test_hrp = "hrp";
-    let dataset = vec![
+    let dataset = [
         "hrp1g9pyx3z9ger5sj22fdxy6nj02pg4y56524t9wkzetgqqazk6",
         "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc",
         "hrp1xyerxdp4xcmnswfs3y3n8w",
@@ -309,7 +309,7 @@ fn check_bech32m_convertion_to_arbitraty_chosen_data() {
         "hrp1etsu3g",
     ];
 
-    let expected_results =vec![
+    let expected_results = [
         "4142434445464748494a4b4c4d4e4f505152535455565758595a",
         "7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061",
         "31323334353637383930",
