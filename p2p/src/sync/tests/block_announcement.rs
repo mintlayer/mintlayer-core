@@ -39,7 +39,7 @@ use crate::{
     P2pError,
 };
 
-use super::helpers::{make_new_top_blocks, make_new_top_blocks_return_headers};
+use super::helpers::{make_new_blocks, make_new_top_blocks_return_headers};
 
 // The header list request is sent if the parent of the singular announced block is unknown.
 // However, if max_singular_unconnected_headers is exceeded, the DisconnectedHeaders error
@@ -385,20 +385,22 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
     logging::init_logging::<&std::path::Path>(None);
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
-
     let chain_config = Arc::new(create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
-    let mut node = TestNode::builder().with_chain_config(Arc::clone(&chain_config)).build().await;
 
     // Create some initial blocks.
-    make_new_top_blocks(
-        node.chainstate(),
-        time_getter.get_time_getter(),
-        &mut rng,
-        0,
+    let blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
         1,
-    )
-    .await;
+        &mut rng,
+    );
+    let mut node = TestNode::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_blocks(blocks)
+        .build()
+        .await;
 
     let peer = PeerId::new();
     node.connect_peer(peer).await;
@@ -450,7 +452,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         node.assert_no_event().await;
     }
 
-    // Note: since best_sent_block_header is currently not taken onto account by
+    // Note: since best_sent_block_header is currently not taken into account by
     // the implementation, this portion of the test has to be disabled.
     // TODO: it should be re-enabled when we switch to the protocol V2. See the issue #1110.
     if false {
