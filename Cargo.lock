@@ -1480,6 +1480,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossterm"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+dependencies = [
+ "bitflags 2.3.3",
+ "crossterm_winapi",
+ "libc",
+ "mio",
+ "parking_lot 0.12.1",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi",
+]
+
+[[package]]
 name = "crossterm_winapi"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3406,9 +3422,9 @@ dependencies = [
 
 [[package]]
 name = "loom"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce9394216e2be01e607cf9e9e2b64c387506df1e768b14cbd2854a3650c3c03e"
+checksum = "86a17963e5073acf8d3e2637402657c6b467218f36fe10d696b3e1095ae019bf"
 dependencies = [
  "cfg-if",
  "generator",
@@ -4294,7 +4310,7 @@ dependencies = [
  "rstest",
  "serde",
  "serialization",
- "siphasher",
+ "siphasher 1.0.0",
  "snowstorm",
  "socket2 0.5.3",
  "sscanf",
@@ -4533,7 +4549,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90fcb95eef784c2ac79119d1dd819e162b5da872ce6f3c3abe1e8ca1c082f72b"
 dependencies = [
- "siphasher",
+ "siphasher 0.3.10",
 ]
 
 [[package]]
@@ -4761,7 +4777,7 @@ dependencies = [
  "byteorder",
  "rand 0.7.3",
  "rand_xorshift 0.2.0",
- "siphasher",
+ "siphasher 0.3.10",
 ]
 
 [[package]]
@@ -5043,13 +5059,13 @@ dependencies = [
 
 [[package]]
 name = "reedline"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2fde955d11817fdcb79d703932fb6b473192cb36b6a92ba21f7f4ac0513374e"
+checksum = "3defc4467a8909614bcb02cb304a3e8472c31f7a44e6c6c287eb9575b212bc4d"
 dependencies = [
  "chrono",
  "crossbeam",
- "crossterm",
+ "crossterm 0.26.1",
  "fd-lock",
  "itertools 0.10.5",
  "nu-ansi-term 0.49.0",
@@ -5813,6 +5829,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
 
 [[package]]
+name = "siphasher"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54ac45299ccbd390721be55b412d41931911f654fa99e2cb8bfb57184b2061fe"
+
+[[package]]
 name = "slab"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6071,9 +6093,9 @@ checksum = "9e08d8363704e6c71fc928674353e6b7c23dcea9d82d7012c8faf2a3a025f8d0"
 
 [[package]]
 name = "strip-ansi-escapes"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
+checksum = "55ff8ef943b384c414f54aefa961dd2bd853add74ec75e7ac74cf91dba62bcfa"
 dependencies = [
  "vte",
 ]
@@ -6833,7 +6855,7 @@ dependencies = [
  "crypto",
  "directories",
  "logging",
- "loom 0.6.1",
+ "loom 0.7.0",
  "num-traits",
  "parity-scale-codec",
  "probabilistic-collections",
@@ -6905,11 +6927,10 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "vte"
-version = "0.10.1"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
+checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
 dependencies = [
- "arrayvec 0.5.2",
  "utf8parse",
  "vte_generate_state_changes",
 ]
@@ -6998,7 +7019,7 @@ dependencies = [
  "clap",
  "common",
  "consensus",
- "crossterm",
+ "crossterm 0.27.0",
  "crypto",
  "directories",
  "hex",
