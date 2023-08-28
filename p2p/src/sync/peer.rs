@@ -411,7 +411,7 @@ where
     }
 
     async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
-        log::debug!(
+        log::trace!(
             "[peer id = {}] Handling message from the peer: {message:?}",
             self.id()
         );

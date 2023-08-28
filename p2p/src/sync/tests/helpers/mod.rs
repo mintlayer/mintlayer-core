@@ -541,6 +541,7 @@ pub fn make_new_blocks(
 }
 
 /// Create the specified number of blocks on top of the current best block asynchronously.
+///
 /// Note: normally, this function should not be used to create initial blocks, because there is
 /// no guarantee on how fast the "new tip" event will reach the p2p subsystem. So, your test
 /// will be expecting the test node not to be in the initial block download state, while it
@@ -592,6 +593,7 @@ pub async fn make_new_top_blocks_return_headers(
 }
 
 /// A wrapper for make_new_top_blocks_return_headers.
+///
 /// Avoid using this function to create initial blocks.
 // TODO: need better naming to distinguish between make_new_top_blocks..., which are async,
 // and the synchronous make_new_blocks.
