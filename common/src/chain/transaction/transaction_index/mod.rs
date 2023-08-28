@@ -168,7 +168,7 @@ pub fn calculate_tx_offsets_in_block(
     block
         .transactions()
         .iter()
-        .zip(offsets.into_iter())
+        .zip(offsets)
         .map(|(tx, offset)| {
             let tx_position = TxMainChainPosition::new(block.get_id(), offset);
 

@@ -36,7 +36,7 @@ async fn test_replace_tx(
     let input = TxInput::from_utxo(outpoint_source_id, 0);
     let flags = 1;
 
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let original = tx_spend_input(
         &mempool,
         input.clone(),
@@ -89,7 +89,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     let flags = 0;
     let original_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let original = tx_spend_input(
         &mempool,
         input.clone(),
@@ -189,7 +189,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         ))
         .with_flags(1)
         .build();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     mempool.add_transaction(tx.clone(), TxOrigin::TEST)?.assert_in_mempool();
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
@@ -242,7 +242,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         ))
         .with_flags(1)
         .build();
-    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate());
     let tx_id = tx.transaction().get_id();
     mempool.add_transaction(tx, TxOrigin::TEST)?.assert_in_mempool();
 

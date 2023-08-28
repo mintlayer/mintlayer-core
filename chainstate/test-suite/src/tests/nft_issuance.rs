@@ -1226,7 +1226,7 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
 
         // Media hash is too short
         for i in 0..min_hash_len {
-            let media_hash = vec![rng.gen::<u8>()].repeat(i);
+            let media_hash = [rng.gen::<u8>()].repeat(i);
 
             let block =
                 new_block_with_media_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
@@ -1261,7 +1261,7 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
 
         // Media hash is too long
         for i in (max_hash_len + 1)..=(u8::MAX as usize) {
-            let media_hash = vec![rng.gen::<u8>()].repeat(i);
+            let media_hash = [rng.gen::<u8>()].repeat(i);
 
             let block =
                 new_block_with_media_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
@@ -1306,7 +1306,7 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
             min_hash_len + 20,
             max_hash_len,
         ] {
-            let media_hash = vec![rng.gen::<u8>()].repeat(hash_size);
+            let media_hash = [rng.gen::<u8>()].repeat(hash_size);
 
             let block = new_block_with_media_hash(
                 &mut rng,

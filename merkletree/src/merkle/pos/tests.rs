@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This helps to make tests more readable
+#![allow(clippy::single_range_in_vec_init)]
+
 use rstest::rstest;
 use std::ops::Range;
 

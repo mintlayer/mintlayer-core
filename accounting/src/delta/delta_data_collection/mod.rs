@@ -152,7 +152,7 @@ impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
 impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataCollection<K, T> {
     fn from_iter<I: IntoIterator<Item = (K, DataDelta<T>)>>(iter: I) -> Self {
         DeltaDataCollection {
-            data: BTreeMap::<K, DataDelta<T>>::from_iter(iter.into_iter()),
+            data: BTreeMap::<K, DataDelta<T>>::from_iter(iter),
         }
     }
 }

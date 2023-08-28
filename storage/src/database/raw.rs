@@ -105,7 +105,7 @@ impl<Sch> Eq for DbMapId<Sch> {}
 
 impl<Sch> Clone for DbMapId<Sch> {
     fn clone(&self) -> Self {
-        Self::from_idx_unchecked(self.idx)
+        *self
     }
 }
 

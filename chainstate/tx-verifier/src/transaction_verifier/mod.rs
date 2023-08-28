@@ -574,8 +574,8 @@ where
         {
             let tx_undos = inputs_undos
                 .into_iter()
-                .chain(outputs_undos.into_iter())
-                .chain(delete_delegation_undo.into_iter())
+                .chain(outputs_undos)
+                .chain(delete_delegation_undo)
                 .collect();
             self.accounting_block_undo
                 .get_or_create_block_undo(&tx_source)

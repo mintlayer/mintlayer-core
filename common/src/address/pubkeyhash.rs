@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: consider removing this in the future when fixed-hash fixes this problem
+#![allow(clippy::incorrect_clone_impl_on_copy_type)]
+
 use crypto::key::PublicKey;
 use generic_array::sequence::Split;
 use serialization::{Decode, Encode};
