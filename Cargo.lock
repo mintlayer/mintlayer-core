@@ -3684,10 +3684,13 @@ dependencies = [
 name = "mintlayer-test"
 version = "0.1.1"
 dependencies = [
+ "clap",
  "libtest-mimic",
  "node-lib",
  "thiserror",
  "tokio",
+ "utils",
+ "wallet-cli-lib",
 ]
 
 [[package]]
