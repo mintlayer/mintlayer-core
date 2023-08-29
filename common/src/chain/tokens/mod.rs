@@ -13,59 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::random::{CryptoRng, Rng};
-use serialization::{Decode, DecodeAll, Encode};
-use typename::TypeName;
-
-#[derive(Eq, PartialEq, TypeName)]
-pub enum Token {}
-
-pub type TokenId = Id<Token>;
-pub type NftDataHash = Vec<u8>;
-use crate::{
-    address::{traits::Addressable, AddressError},
-    primitives::{Amount, Id, H256},
-};
-
-impl TokenId {
-    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        Self::new(H256::random_using(rng))
-    }
-
-    pub const fn zero() -> Self {
-        Self::new(H256::zero())
-    }
-}
-
-impl Addressable for TokenId {
-    type Error = AddressError;
-
-    fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.token_id_address_prefix()
-    }
-
-    fn encode_to_bytes_for_address(&self) -> Vec<u8> {
-        self.encode()
-    }
-
-    fn decode_from_bytes_from_address<T: AsRef<[u8]>>(address_bytes: T) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        Self::decode_all(&mut address_bytes.as_ref())
-            .map_err(|e| AddressError::DecodingError(e.to_string()))
-    }
-}
+use super::{Block, Transaction};
+use crate::primitives::{Amount, Id};
+use serialization::{Decode, Encode};
 
 mod nft;
 mod rpc;
+mod token_id;
 mod tokens_utils;
 
 pub use nft::*;
 pub use rpc::*;
+pub use token_id::TokenId;
 pub use tokens_utils::*;
-
-use super::{Block, ChainConfig, Transaction};
 
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
