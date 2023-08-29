@@ -53,6 +53,7 @@ pub async fn run(
     let WalletCliArgs {
         network,
         wallet_file,
+        wallet_password,
         start_staking,
         rpc_address,
         rpc_cookie_file,
@@ -112,7 +113,10 @@ pub async fn run(
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::OpenWallet { wallet_path },
+                command: WalletCommand::OpenWallet {
+                    wallet_path,
+                    password: wallet_password,
+                },
                 res_tx,
             })
             .expect("should not fail");

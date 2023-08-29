@@ -184,7 +184,7 @@ fn verify_wallet_balance(
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
     let db_copy = wallet.db.clone();
-    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy).unwrap();
+    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy, None).unwrap();
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
@@ -239,7 +239,7 @@ fn wallet_creation_in_memory() {
     let empty_db = create_wallet_in_memory().unwrap();
 
     // fail to load an empty wallet
-    match Wallet::load_wallet(Arc::clone(&chain_config), empty_db) {
+    match Wallet::load_wallet(Arc::clone(&chain_config), empty_db, None) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
     }
@@ -249,7 +249,7 @@ fn wallet_creation_in_memory() {
     let initialized_db = wallet.db;
 
     // successfully load a wallet from initialized db
-    let _wallet = Wallet::load_wallet(chain_config, initialized_db).unwrap();
+    let _wallet = Wallet::load_wallet(chain_config, initialized_db, None).unwrap();
 }
 
 #[rstest]
@@ -260,7 +260,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let chain_config = Arc::new(create_regtest());
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
-    let wallet = Wallet::create_new_wallet(
+    let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
         MNEMONIC,
@@ -270,6 +270,9 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         genesis_block_id,
     )
     .unwrap();
+    let password = Some("password".into());
+    wallet.encrypt_wallet(&password).unwrap();
+    wallet.lock_wallet().unwrap();
     let default_acc_id = wallet.accounts.get(&DEFAULT_ACCOUNT_INDEX).unwrap().get_account_id();
     let db = wallet.db;
 
@@ -306,7 +309,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
 
     let new_db = Store::new_from_dump(DefaultBackend::new_in_memory(), raw_db).unwrap();
 
-    let wallet = Wallet::load_wallet(Arc::clone(&chain_config), new_db).unwrap();
+    let wallet = Wallet::load_wallet(Arc::clone(&chain_config), new_db, password).unwrap();
 
     // Migration has been done and new version is v2
     assert_eq!(wallet.db.get_storage_version().unwrap(), WALLET_VERSION_V2);
@@ -736,7 +739,7 @@ fn test_wallet_accounts(
     assert_eq!(accounts, expected_accounts);
 
     let db_copy = wallet.db.clone();
-    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy).unwrap();
+    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy, None).unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
 }

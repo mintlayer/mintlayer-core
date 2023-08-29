@@ -36,6 +36,10 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub wallet_file: Option<PathBuf>,
 
+    /// Optional path to the wallet file
+    #[clap(long)]
+    pub wallet_password: Option<String>,
+
     /// Start staking after the start
     #[clap(long)]
     pub start_staking: bool,

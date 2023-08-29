@@ -376,7 +376,14 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
-    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
+    pub fn load_wallet(
+        chain_config: Arc<ChainConfig>,
+        mut db: Store<B>,
+        password: Option<String>,
+    ) -> WalletResult<Self> {
+        if let Some(password) = password {
+            db.unlock_private_keys(&password)?;
+        }
         Self::check_and_migrate_db(&db, chain_config.clone())?;
 
         // Please continue to use read-only transaction here.

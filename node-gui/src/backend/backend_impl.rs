@@ -102,8 +102,9 @@ impl Backend {
     async fn open_wallet(&mut self, file_path: PathBuf) -> Result<WalletInfo, BackendError> {
         log::debug!("Try to open wallet file {file_path:?}...");
 
-        let wallet = GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone())
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+        let wallet =
+            GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone(), None)
+                .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         self.add_wallet(file_path, wallet).await
     }

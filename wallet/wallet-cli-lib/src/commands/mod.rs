@@ -62,6 +62,8 @@ pub enum WalletCommand {
     OpenWallet {
         /// File path
         wallet_path: PathBuf,
+        // The existing password.
+        password: Option<String>,
     },
 
     /// Close wallet file
@@ -530,11 +532,15 @@ impl CommandHandler {
                 })
             }
 
-            WalletCommand::OpenWallet { wallet_path } => {
+            WalletCommand::OpenWallet {
+                wallet_path,
+                password,
+            } => {
                 utils::ensure!(self.state.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
-                let wallet = CliController::open_wallet(Arc::clone(chain_config), wallet_path)
-                    .map_err(WalletCliError::Controller)?;
+                let wallet =
+                    CliController::open_wallet(Arc::clone(chain_config), wallet_path, password)
+                        .map_err(WalletCliError::Controller)?;
 
                 self.state = Some((
                     CliController::new(

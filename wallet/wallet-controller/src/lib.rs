@@ -216,6 +216,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 "File path is not a file".to_owned(),
             ))?;
         let backup_file_path = file_path.as_ref().with_file_name(backup_name);
+        logging::log::info!(
+            "The wallet DB requires a migration, creating a backup file: {}",
+            backup_file_path.to_string_lossy()
+        );
         fs::copy(&file_path, backup_file_path).map_err(|_| {
             ControllerError::WalletFileError(
                 file_path.as_ref().to_owned(),
@@ -228,6 +232,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
+        password: Option<String>,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -245,7 +250,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         if wallet_needs_migration {
             Self::make_backup_wallet_file(file_path)?;
         }
-        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db)
+        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db, password)
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
