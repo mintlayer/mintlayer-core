@@ -231,6 +231,17 @@ fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
+            TokenData::TokenIssuanceV2(issuance) => match include_issuance {
+                Some(tx) => {
+                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
+                }
+                None => None,
+            },
+            TokenData::TokenReissuanceV1(reissuance) => Some((
+                CoinOrTokenId::TokenId(reissuance.token_id),
+                reissuance.amount_to_issue,
+            )),
         },
     })
 }
@@ -259,6 +270,15 @@ where
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
+            TokenData::TokenIssuanceV2(issuance) => issuance_token_id_getter()?
+                .map(|token_id| (CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
+                .ok_or(ConnectTransactionError::TokensError(
+                    TokensError::TokenIdCantBeCalculated,
+                ))?,
+            TokenData::TokenReissuanceV1(reissuance) => (
+                CoinOrTokenId::TokenId(reissuance.token_id),
+                reissuance.amount_to_issue,
+            ),
         },
     })
 }

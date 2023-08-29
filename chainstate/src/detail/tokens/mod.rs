@@ -31,14 +31,14 @@ mod check_utils;
 pub use check_utils::is_rfc3986_valid_symbol;
 use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_uri_valid};
 
-pub fn check_tokens_transfer_data(
+pub fn check_positive_amount(
     source_block_id: Id<Block>,
     tx: &Transaction,
     amount: &Amount,
 ) -> Result<(), TokensError> {
     // Check amount
     ensure!(
-        amount > &Amount::from_atoms(0),
+        amount > &Amount::ZERO,
         TokensError::TransferZeroTokens(tx.get_id(), source_block_id)
     );
 
@@ -107,14 +107,16 @@ pub fn check_tokens_issuance_data(
     check_token_ticker(chain_config, token_ticker)?;
 
     // Check amount
-    if amount_to_issue == &Amount::from_atoms(0) {
-        return Err(TokenIssuanceError::IssueAmountIsZero);
-    }
+    ensure!(
+        amount_to_issue > &Amount::ZERO,
+        TokenIssuanceError::IssueAmountIsZero
+    );
 
     // Check decimals
-    if number_of_decimals > &chain_config.token_max_dec_count() {
-        return Err(TokenIssuanceError::IssueErrorTooManyDecimals);
-    }
+    ensure!(
+        number_of_decimals <= &chain_config.token_max_dec_count(),
+        TokenIssuanceError::IssueErrorTooManyDecimals
+    );
 
     // Check URI
     ensure!(
@@ -137,7 +139,7 @@ pub fn check_tokens_data(
 ) -> Result<(), TokensError> {
     match token_data {
         TokenData::TokenTransfer(transfer) => {
-            check_tokens_transfer_data(source_block_id, tx, &transfer.amount)
+            check_positive_amount(source_block_id, tx, &transfer.amount)
         }
         TokenData::TokenIssuance(issuance) => check_tokens_issuance_data(
             chain_config,
@@ -149,5 +151,16 @@ pub fn check_tokens_data(
         .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
         TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
             .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
+        TokenData::TokenIssuanceV2(issuance) => check_tokens_issuance_data(
+            chain_config,
+            &issuance.token_ticker,
+            &issuance.amount_to_issue,
+            &issuance.number_of_decimals,
+            &issuance.metadata_uri,
+        )
+        .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
+        TokenData::TokenReissuanceV1(reissuance) => {
+            check_positive_amount(source_block_id, tx, &reissuance.amount_to_issue)
+        }
     }
 }

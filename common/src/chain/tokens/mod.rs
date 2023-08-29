@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Block, Transaction};
+use super::{Block, Destination, Transaction};
 use crate::primitives::{Amount, Id};
 use serialization::{Decode, Encode};
 
@@ -65,6 +65,27 @@ pub struct TokenIssuance {
     pub metadata_uri: Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub enum TokenSupply {
+    Fixed,
+    Increasable(Destination),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub struct TokenIssuanceV2 {
+    pub token_ticker: Vec<u8>,
+    pub amount_to_issue: Amount,
+    pub number_of_decimals: u8,
+    pub metadata_uri: Vec<u8>,
+    pub supply: TokenSupply,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+pub struct TokenReissuanceV1 {
+    pub token_id: TokenId,
+    pub amount_to_issue: Amount,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
@@ -76,13 +97,12 @@ pub enum TokenData {
     // A new NFT creation
     #[codec(index = 3)]
     NftIssuance(Box<NftIssuance>),
-    // TODO: These types will be implemented in the future PRs
-    // // Increase amount of tokens
-    // #[codec(index = 4)]
-    // TokenReissueV1 {
-    //     token_id: TokenId,
-    //     amount_to_issue: Amount,
-    // },
+    /// New token creation V2
+    #[codec(index = 4)]
+    TokenIssuanceV2(Box<TokenIssuanceV2>),
+    // Increase amount of tokens
+    #[codec(index = 5)]
+    TokenReissuanceV1(TokenReissuanceV1),
 }
 
 impl From<NftIssuance> for TokenData {

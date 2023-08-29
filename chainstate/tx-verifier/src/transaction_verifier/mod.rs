@@ -219,32 +219,29 @@ where
     ) -> Result<(), ConnectTransactionError> {
         // Check if the fee is enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if issuance_count == 0 {
-            return Ok(());
-        }
+        if issuance_count > 0 {
+            let total_burned = tx
+                .outputs()
+                .iter()
+                .filter_map(|output| match output {
+                    TxOutput::Burn(v) => v.coin_amount(),
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => None,
+                })
+                .sum::<Option<Amount>>()
+                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
-        let total_burned = tx
-            .outputs()
-            .iter()
-            .filter_map(|output| match output {
-                TxOutput::Burn(v) => v.coin_amount(),
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateStakePool(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => None,
-            })
-            .sum::<Option<Amount>>()
-            .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
-
-        if total_burned < self.chain_config.as_ref().token_min_issuance_fee() {
-            return Err(ConnectTransactionError::TokensError(
-                TokensError::InsufficientTokenFees(
+            ensure!(
+                total_burned >= self.chain_config.as_ref().token_min_issuance_fee(),
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
                     tx.get_id(),
                     block_id.unwrap_or_else(|| H256::zero().into()),
-                ),
-            ));
+                ))
+            );
         }
 
         Ok(())
