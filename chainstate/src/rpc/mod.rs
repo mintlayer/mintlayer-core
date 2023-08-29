@@ -76,6 +76,14 @@ trait ChainstateRpc {
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
 
+    /// Invalidate the specified block and its descendants.
+    #[method(name = "invalidate_block")]
+    async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()>;
+
+    /// Reset failure flags for the specified block and its descendants.
+    #[method(name = "reset_block_failure_flags")]
+    async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()>;
+
     /// Get block height in main chain
     #[method(name = "block_height_in_main_chain")]
     async fn block_height_in_main_chain(
@@ -190,6 +198,14 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
         rpc::handle_result(res)
+    }
+
+    async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()> {
+        rpc::handle_result(self.call_mut(move |this| this.invalidate_block(&id)).await)
+    }
+
+    async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()> {
+        rpc::handle_result(self.call_mut(move |this| this.reset_block_failure_flags(&id)).await)
     }
 
     async fn block_height_in_main_chain(

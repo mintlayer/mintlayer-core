@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+mod epoch_seal;
+mod in_memory_reorg;
+mod tx_verifier_storage;
+
+use std::{cmp::max, collections::BTreeSet};
 use thiserror::Error;
 
 use chainstate_storage::{
@@ -58,10 +62,7 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
 };
 
-mod epoch_seal;
 pub use epoch_seal::EpochSealError;
-mod in_memory_reorg;
-mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
@@ -185,12 +186,37 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block_index(block_id).map_err(PropertyQueryError::from)
     }
 
+    pub fn get_existing_block_index(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<BlockIndex, PropertyQueryError> {
+        self.get_block_index(block_id)?
+            .ok_or_else(|| PropertyQueryError::BlockIndexNotFound((*block_id).into()))
+    }
+
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
             .map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_best_block_index(&self) -> Result<GenBlockIndex, PropertyQueryError> {
+        self.get_gen_block_index(&self.get_best_block_id().log_err()?)
+            .log_err()?
+            .ok_or(PropertyQueryError::BestBlockIndexNotFound)
+    }
+
+    /// Return BlockIndex of the previous block.
+    fn get_previous_block_index(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        let prev_block_id = block_index.prev_block_id();
+        self.get_gen_block_index(prev_block_id)
+            .log_err()?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
     }
 
     pub fn get_mainchain_tx_index(
@@ -230,7 +256,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
-        self.db_tx.get_block_id_by_height(height).map_err(PropertyQueryError::from)
+        self.db_tx
+            .get_block_id_by_height(height)
+            .map_err(PropertyQueryError::from)
+            .log_err()
+    }
+
+    pub fn get_existing_block_id_by_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Id<GenBlock>, PropertyQueryError> {
+        self.get_block_id_by_height(height)?
+            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))
+            .log_err()
     }
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
@@ -251,15 +289,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.get_block_height_in_main_chain(block_id).log_err().map(|ht| ht.is_some())
     }
 
-    /// Read previous block from storage and return its BlockIndex.
-    fn get_previous_block_index(
-        &self,
-        block_index: &BlockIndex,
-    ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let prev_block_id = block_index.prev_block_id();
-        self.get_gen_block_index(prev_block_id)
-            .log_err()?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
+    pub fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, PropertyQueryError> {
+        Ok(self.db_tx.get_min_height_with_allowed_reorg().log_err()?.unwrap_or(0.into()))
     }
 
     pub fn get_ancestor(
@@ -276,6 +307,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         )
     }
 
+    /// Obtain the last common ancestor between the specified blocks.
     pub fn last_common_ancestor(
         &self,
         first_block_index: &GenBlockIndex,
@@ -311,17 +343,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    /// Obtain the last common ancestor between the specified block and the tip of the main chain.
+    // TODO: unlike its generic counterpart above, this function may be optimized by taking jumps
+    // via get_ancestor instead of the block-by-block iteration (because here the other chain is
+    // the main chain and we can always check whether we've reached it).
     pub fn last_common_ancestor_in_main_chain(
         &self,
         block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let best_block_index =
-            self.get_best_block_index()?.ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
+        let best_block_index = self.get_best_block_index().log_err()?;
         self.last_common_ancestor(block_index, &best_block_index)
-    }
-
-    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        self.get_gen_block_index(&self.get_best_block_id().log_err()?)
     }
 
     pub fn get_token_aux_data(
@@ -342,11 +373,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         height: &BlockHeight,
     ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
-        let id = self
-            .get_block_id_by_height(height)
-            .log_err()?
-            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))
-            .log_err()?;
+        let id = self.get_existing_block_id_by_height(height).log_err()?;
         let id = id
             .classify(self.chain_config)
             .chain_block_id()
@@ -428,7 +455,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         if let Some(e) =
             self.chain_config.height_checkpoints().checkpoint_at_height(&current_height)
         {
-            let expected_id = Id::<Block>::new(e.get());
+            let expected_id = Id::<Block>::new(e.to_hash());
             if expected_id != header.get_id() {
                 return Err(CheckBlockError::CheckpointMismatch(
                     expected_id,
@@ -463,18 +490,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_gen_block_index(header.prev_block_id())?.ok_or(
-            PropertyQueryError::PrevBlockIndexNotFound(*header.prev_block_id()),
-        )?;
+        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
         let common_ancestor_height =
             self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
-
-        let tip_block_height =
-            self.get_best_block_index()?.expect("Best block to exist").block_height();
-
-        let min_allowed_height = self.chain_config.min_height_with_allowed_reorg(tip_block_height);
+        let min_allowed_height = self.get_min_height_with_allowed_reorg()?;
 
         if common_ancestor_height < min_allowed_height {
+            let tip_block_height = self.get_best_block_index()?.block_height();
+
             return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
                 common_ancestor_height,
                 tip_block_height,
@@ -485,7 +508,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    /// Read previous block from storage and return its BlockIndex.
+    /// Return BlockIndex of the previous block.
     fn get_previous_block_index_for_check_block(
         &self,
         block_header: &SignedBlockHeader,
@@ -854,8 +877,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             Ok(block_id)
         };
 
-        let best_block_index =
-            self.get_best_block_index().log_err()?.expect("Failed to get best block index");
+        let best_block_index = self.get_best_block_index().log_err()?;
         let best_height = best_block_index.block_height();
         let best_height_int: u64 = best_height.into();
         let mut result = Vec::with_capacity(best_height_int as usize);
@@ -865,7 +887,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    pub fn get_block_id_tree_top_as_list(
+    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        self.get_higher_block_ids_sorted_by_height(0.into())
+    }
+
+    /// Return ids of all blocks with height bigger than the specified one,
+    /// sorted by height (lower first).
+    // TODO: this function iterates over all block indices in the DB, which is too expensive
+    // for places where it's currently used (such as block invalidation or best chain selection).
+    // We need either to optimize it or replace it with some other solution.
+    // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
+    pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
     ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
@@ -877,8 +909,39 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        self.get_block_id_tree_top_as_list(0.into())
+    /// Collect block indices corresponding to the branch starting at root_block_id.
+    /// The first block index in the result will correspond to root_block_id.
+    pub fn collect_block_indices_in_branch(
+        &self,
+        root_block_id: &Id<Block>,
+    ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
+        let root_block_index = self.get_existing_block_index(root_block_id).log_err()?;
+
+        let next_block_height = root_block_index.block_height().next_height();
+        let maybe_descendant_block_ids =
+            self.get_higher_block_ids_sorted_by_height(next_block_height)?;
+
+        let mut result = Vec::new();
+        let mut seen_block_ids = BTreeSet::new();
+        seen_block_ids.insert(*root_block_index.block_id());
+        result.push(root_block_index);
+
+        for cur_block_id in maybe_descendant_block_ids {
+            let cur_block_index = self.get_existing_block_index(&cur_block_id).log_err()?;
+
+            let prev_block_id = cur_block_index
+                .prev_block_id()
+                .classify(self.chain_config)
+                .chain_block_id()
+                .expect("Genesis at non-zero height");
+
+            if seen_block_ids.contains(&prev_block_id) {
+                result.push(cur_block_index);
+                seen_block_ids.insert(cur_block_id);
+            }
+        }
+
+        Ok(result)
     }
 
     pub fn create_block_index_for_new_block(
@@ -889,7 +952,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let prev_block_id = block.header().prev_block_id();
         let prev_block_index = self
             .get_gen_block_index(prev_block_id)
-            .map_err(|err| BlockError::BlockIndexQueryError(err, *prev_block_id))?
+            .map_err(|err| BlockError::BlockIndexQueryError(*prev_block_id, err))?
             .ok_or(BlockError::PrevBlockNotFoundForNewBlock(block.get_id()))?;
 
         // Set the block height
@@ -923,19 +986,21 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 }
 
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
-    fn disconnect_until(
+    pub fn disconnect_until(
         &mut self,
-        to_disconnect: &BlockIndex,
+        cur_tip_block_id: &Id<Block>,
         last_to_remain_connected: &Id<GenBlock>,
     ) -> Result<(), BlockError> {
-        let mut to_disconnect = GenBlockIndex::Block(to_disconnect.clone());
-        while to_disconnect.block_id() != *last_to_remain_connected {
-            let to_disconnect_block = match to_disconnect {
-                GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
-                GenBlockIndex::Block(block_index) => block_index,
+        let mut block_id_to_disconnect: Id<GenBlock> = (*cur_tip_block_id).into();
+
+        while block_id_to_disconnect != *last_to_remain_connected {
+            let cur_block_id = match block_id_to_disconnect.classify(self.chain_config) {
+                GenBlockId::Genesis(_) => panic!("Attempt to disconnect genesis"),
+                GenBlockId::Block(id) => id,
             };
-            to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
-            self.post_disconnect_tip(to_disconnect.block_height()).log_err()?;
+
+            let previous_block_index = self.disconnect_tip(Some(&cur_block_id)).log_err()?;
+            block_id_to_disconnect = previous_block_index.block_id();
         }
         Ok(())
     }
@@ -965,17 +1030,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // Disconnect the current chain if it is not a genesis
         if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            let mainchain_tip = self
-                .get_block_index(&best_block_id)
-                .map_err(|err| BlockError::BlockIndexQueryError(err, best_block_id.into()))
-                .log_err()?
-                .ok_or(BlockError::InvariantErrorBestBlockIndexNotFound(
-                    best_block_id.into(),
-                ))
-                .log_err()?;
-
             // Disconnect blocks
-            self.disconnect_until(&mainchain_tip, common_ancestor_id).log_err()?;
+            self.disconnect_until(&best_block_id, common_ancestor_id).log_err()?;
         }
 
         // Connect the new chain
@@ -983,18 +1039,34 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             let block: WithId<Block> = self
                 .get_block_from_index(&block_index)
                 .map_err(BlockError::StorageError)
-                .and_then(|opt| {
-                    opt.ok_or(BlockError::InvariantErrorBlockNotFoundAfterConnect(
-                        (*block_index.block_id()).into(),
-                    ))
+                .log_err()?
+                .ok_or_else(|| {
+                    // Note: missing block data is an expected situation; it can happen if
+                    // the block was initially considered invalid, so its block data was never
+                    // saved, but later its bad status flags were reset.
+                    // TODO:
+                    // 1) Block data existence check should be moved into connect_tip,
+                    // so that it happens after check_block (or we should move the call
+                    // of check_block out of connect_tip). The caller code will then be able
+                    // to determine that block data is missing for a potentially valid block,
+                    // and trigger its re-download.
+                    // 2) Right now, all callers handle BlockDataMissing by invalidating the
+                    // corresponding block subtree, because currently there is no way of getting
+                    // the missing block data again. But once we have a mechanism for triggering
+                    // block re-downloading, this behavior must be changed: instead, we should
+                    // trigger the re-downloading and completely ignore the subtree during
+                    // the current operation.
+                    // Alternatively, we can just remove the previously invalid block indices
+                    // instead of resetting their statuses.
+                    // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #4.
+                    ReorgError::BlockDataMissing(*block_index.block_id())
                 })
                 .log_err()?
                 .into();
 
             self.connect_tip(&block_index, &block)
-                .map_err(|err| ReorgError::ConnectBlockError(*block_index.block_id(), err))
+                .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
                 .log_err()?;
-            self.post_connect_tip(&block_index, block.as_ref()).log_err()?;
         }
 
         Ok(())
@@ -1053,12 +1125,20 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         new_tip_block_index: &BlockIndex,
         new_tip: &WithId<Block>,
     ) -> Result<(), BlockError> {
-        ensure!(
-            new_tip_block_index.status().is_ok()
-                && new_tip_block_index.status().last_valid_stage()
-                    >= BlockValidationStage::CheckBlockOk,
-            BlockError::InvariantErrorAttemptToConnectInvalidBlock(new_tip.get_id().into())
-        );
+        let new_tip_status = {
+            let mut new_tip_status = new_tip_block_index.status();
+            ensure!(
+                new_tip_status.is_ok(),
+                BlockError::InvariantErrorAttemptToConnectInvalidBlock(new_tip.get_id().into())
+            );
+
+            if new_tip_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
+                self.check_block(new_tip)?;
+                new_tip_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
+            }
+
+            new_tip_status
+        };
 
         let best_block_id =
             self.get_best_block_id().map_err(BlockError::BestBlockIdQueryError).log_err()?;
@@ -1080,13 +1160,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .log_err()?;
 
         if new_tip_block_index.status().last_valid_stage() != BlockValidationStage::FullyChecked {
-            let mut new_status = new_tip_block_index.status();
-            new_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
-            let new_block_index = new_tip_block_index.clone().with_status(new_status);
+            let mut new_tip_status = new_tip_status;
+            new_tip_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+            let new_block_index = new_tip_block_index.clone().with_status(new_tip_status);
             self.set_block_index(&new_block_index)?;
         }
 
-        Ok(())
+        self.post_connect_tip(new_tip_block_index, new_tip.as_ref()).log_err()
     }
 
     /// Does a read-modify-write operation on the database and disconnects a block
@@ -1122,6 +1202,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         let prev_block_index = self
             .get_previous_block_index(&block_index)
             .expect("Previous block index retrieval failed");
+
+        self.post_disconnect_tip(prev_block_index.block_height()).log_err()?;
         Ok(prev_block_index)
     }
 
@@ -1131,20 +1213,15 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &mut self,
         new_block_index: &BlockIndex,
     ) -> Result<bool, ReorgError> {
-        let best_block_id = self.get_best_block_id().map_err(BlockError::BestBlockIdQueryError)?;
-
-        // Chain trust is higher than the best block
         let current_best_block_index = self
-            .get_gen_block_index(&best_block_id)
-            .map_err(|err| BlockError::BlockIndexQueryError(err, best_block_id))
-            .log_err()?
-            .ok_or(BlockError::InvariantErrorBestBlockIndexNotFound(
-                best_block_id,
-            ))
+            .get_best_block_index()
+            .map_err(BlockError::BestBlockIndexQueryError)
             .log_err()?;
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
-            self.reorganize(&best_block_id, new_block_index).log_err()?;
+            // Chain trust is higher than the best block
+            self.reorganize(&current_best_block_index.block_id(), new_block_index)
+                .log_err()?;
             return Ok(true);
         }
 
@@ -1170,18 +1247,40 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.set_block_index(block_index).log_err()
     }
 
-    /// Save the passed BlockIndex assuming that only its status part has changed.
-    /// I.e. if a BlockIndex already exists for the block, it must be equal to `block_index`.
-    pub fn set_block_status(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+    /// Update the status of the passed `block_index`.
+    /// If a BlockIndex already exists for this block, it must be equal to `block_index`.
+    pub fn update_block_status(
+        &mut self,
+        block_index: BlockIndex,
+        block_status: BlockStatus,
+    ) -> Result<(), BlockError> {
         #[cfg(debug_assertions)]
-        if let Some(mut existing_block_index) =
+        if let Some(existing_block_index) =
             self.db_tx.get_block_index(block_index.block_id()).log_err()?
         {
-            existing_block_index.set_status(block_index.status());
-            assert!(&existing_block_index == block_index);
+            assert!(existing_block_index == block_index);
         }
 
-        self.db_tx.set_block_index(block_index).map_err(BlockError::from).log_err()
+        self.set_block_index(&block_index.with_status(block_status)).log_err()
+    }
+
+    fn calc_min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
+        let result = current_tip_height - self.chain_config.max_depth_for_reorg();
+        result.unwrap_or(0.into())
+    }
+
+    pub fn update_min_height_with_allowed_reorg(&mut self) -> Result<(), BlockError> {
+        let stored_min_height = self
+            .get_min_height_with_allowed_reorg()
+            .map_err(BlockError::MinHeightForReorgQueryError)?;
+        let current_tip_height = self
+            .get_best_block_index()
+            .map_err(BlockError::BestBlockIndexQueryError)?
+            .block_height();
+        let calculated_min_height = self.calc_min_height_with_allowed_reorg(current_tip_height);
+        self.db_tx
+            .set_min_height_with_allowed_reorg(max(stored_min_height, calculated_min_height))?;
+        Ok(())
     }
 
     fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {
@@ -1230,7 +1329,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ReorgError {
     #[error("Error connecting block {0}: {1}")]
-    ConnectBlockError(Id<Block>, BlockError),
+    ConnectTipFailed(Id<Block>, BlockError),
+    #[error("Block data missing for block {0}")]
+    BlockDataMissing(Id<Block>),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
 }

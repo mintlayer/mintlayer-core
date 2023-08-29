@@ -1865,7 +1865,7 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0x4ee0ff57394428ef6d740e9634bf8a10caed48e6b8a2ba9630f46f14e44a3aa6
         "#]]
-    .assert_debug_eq(&Id::<TokenIssuance>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<TokenIssuance>::new(hash_stream.finalize().into()).to_hash());
 
     // NFT issuance
     let nft_issuance = NftIssuance {
@@ -1886,7 +1886,7 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0x5ab12d01286027603a6483405b9a970c094c16f3f51be2fa98f8c936edd76abe
         "#]]
-    .assert_debug_eq(&Id::<NftIssuance>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<NftIssuance>::new(hash_stream.finalize().into()).to_hash());
 
     // Token Transfer
     let token_data = TokenData::TokenTransfer(TokenTransfer {
@@ -1897,7 +1897,7 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0x4f4de86926d24333f82952bf98c170f37b4c53b9c2249c607d30fd34c0b68f98
         "#]]
-    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).to_hash());
 }
 
 #[rstest]

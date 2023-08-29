@@ -16,25 +16,22 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::detail::BlockSource;
-use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
-
+use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
-
-use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::{AccountNonce, AccountType, SignedTransaction};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
-
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
@@ -44,10 +41,13 @@ pub trait ChainstateInterface: Send {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError>;
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;
     fn get_block_height_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,

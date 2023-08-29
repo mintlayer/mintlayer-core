@@ -15,6 +15,12 @@
 
 use std::sync::Arc;
 
+use crate::{
+    tx_verification_strategy::{
+        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
+    },
+    TestFramework, TestStore,
+};
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
     chain::{
@@ -25,13 +31,6 @@ use common::{
 };
 use crypto::random::{CryptoRng, Rng};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
-
-use crate::{
-    tx_verification_strategy::{
-        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
-    },
-    TestFramework, TestStore,
-};
 use utils::atomics::SeqCstAtomicU64;
 
 pub enum TxVerificationStrategy {
@@ -48,6 +47,7 @@ pub struct TestFrameworkBuilder {
     chainstate_storage: TestStore,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     time_getter: Option<TimeGetter>,
+    time_value: Option<Arc<SeqCstAtomicU64>>,
     tx_verification_strategy: TxVerificationStrategy,
     initial_time_since_genesis: u64,
 }
@@ -68,6 +68,7 @@ impl TestFrameworkBuilder {
         };
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
+        let time_value = None;
         let tx_verification_strategy = TxVerificationStrategy::Default;
         let initial_time_since_genesis = 0;
 
@@ -77,6 +78,28 @@ impl TestFrameworkBuilder {
             chainstate_storage,
             custom_orphan_error_hook: None,
             time_getter,
+            time_value,
+            tx_verification_strategy,
+            initial_time_since_genesis,
+        }
+    }
+
+    pub fn from_existing_framework(tf: TestFramework) -> Self {
+        let chain_config = (**tf.chainstate.get_chain_config()).clone();
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+        let chainstate_storage = tf.storage;
+        let time_getter = Some(tf.time_getter);
+        let time_value = tf.time_value;
+        let tx_verification_strategy = TxVerificationStrategy::Default;
+        let initial_time_since_genesis = 0;
+
+        TestFrameworkBuilder {
+            chain_config,
+            chainstate_config,
+            chainstate_storage,
+            custom_orphan_error_hook: None,
+            time_getter,
+            time_value,
             tx_verification_strategy,
             initial_time_since_genesis,
         }
@@ -110,6 +133,13 @@ impl TestFrameworkBuilder {
 
     pub fn with_time_getter(mut self, time_getter: TimeGetter) -> Self {
         self.time_getter = Some(time_getter);
+        self.time_value = None;
+        self
+    }
+
+    pub fn with_time_value(mut self, time_value: Arc<SeqCstAtomicU64>) -> Self {
+        self.time_getter = None;
+        self.time_value = Some(time_value);
         self
     }
 
@@ -124,10 +154,16 @@ impl TestFrameworkBuilder {
         self
     }
 
-    /// Create the TimeGetter of the TestFramework, with the following logic:
+    /// If self.time_getter and self.time_value both exist, which means that they were obtained
+    /// from an already constructed TestFramework, just return them.
+    /// Otherwise, create the TimeGetter of the TestFramework, with the following logic:
     /// The default TimeGetter of the TestFramework simply loads the value of time from an atomic u64
     /// If a custom TimeGetter is supplied, then this value won't exist
     fn create_time_getter_and_value(&self) -> (TimeGetter, Option<Arc<SeqCstAtomicU64>>) {
+        if self.time_getter.is_some() && self.time_value.is_some() {
+            return (self.time_getter.clone().unwrap(), self.time_value.clone());
+        }
+
         let time_value = Arc::new(SeqCstAtomicU64::new(
             self.chain_config.genesis_block().timestamp().as_int_seconds(),
         ));
