@@ -86,12 +86,16 @@ class WalletCliController:
         return self._read_available_output()
 
     def recover_wallet(self, mnemonic: str):
-        wallet_file = os.path.join(self.node.datadir, "wallet")
+        wallet_file = os.path.join(self.node.datadir, "recovered_wallet")
         self._write_command(f"createwallet {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
         return self._read_available_output()
 
     def close_wallet(self):
         self._write_command("closewallet\n")
+        return self._read_available_output()
+
+    def show_seed_phrase(self):
+        self._write_command("showseedphrase\n")
         return self._read_available_output()
 
     def encrypt_private_keys(self, password: str):
