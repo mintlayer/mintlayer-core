@@ -17,7 +17,7 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        tokens::{token_id, TokenId},
+        tokens::{is_token_or_nft_issuance, token_id, TokenId},
         AccountNonce,
         AccountSpending::Delegation,
         DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
@@ -439,11 +439,9 @@ impl OutputCache {
                             outpoint,
                             (
                                 output,
-                                if output.is_token_or_nft_issuance() {
-                                    token_id
-                                } else {
-                                    None
-                                },
+                                token_id.and_then(|token_id| {
+                                    is_token_or_nft_issuance(output).then_some(token_id)
+                                }),
                             ),
                         )
                     })

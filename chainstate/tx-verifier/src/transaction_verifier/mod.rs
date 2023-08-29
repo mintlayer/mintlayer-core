@@ -67,7 +67,7 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_tokens_issuance_count, TokenId},
+        tokens::{get_tokens_issuance_count, get_tokens_reissuance_count, TokenId},
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
         TxOutput, UtxoOutPoint,
@@ -237,6 +237,36 @@ where
 
             ensure!(
                 total_burned >= self.chain_config.as_ref().token_min_issuance_fee(),
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
+                    tx.get_id(),
+                    block_id.unwrap_or_else(|| H256::zero().into()),
+                ))
+            );
+        }
+
+        // Check if the fee is enough for reissuance
+        let reissuance_count = get_tokens_reissuance_count(tx.outputs());
+        if reissuance_count > 0 {
+            let total_burned = tx
+                .outputs()
+                .iter()
+                .filter_map(|output| match output {
+                    TxOutput::Burn(v) => v.coin_amount(),
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => None,
+                })
+                .sum::<Option<Amount>>()
+                .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
+
+            let required_fee = (self.chain_config.as_ref().token_min_reissuance_fee()
+                * reissuance_count as u128)
+                .expect("overflow");
+            ensure!(
+                total_burned >= required_fee,
                 ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
                     tx.get_id(),
                     block_id.unwrap_or_else(|| H256::zero().into()),
