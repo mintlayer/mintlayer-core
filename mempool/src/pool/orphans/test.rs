@@ -104,7 +104,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
     check_integrity(&orphans);
 
-    assert!(orphans.remove(tx_id).is_some());
+    assert!(orphans.remove(&tx_id).is_some());
 
     assert!(orphans.transactions.is_empty());
     assert!(orphans.maps.by_tx_id.is_empty());
@@ -162,7 +162,7 @@ fn simulation(#[case] seed: Seed) {
                 }
                 let i = rng.gen_range(0..orphans.transactions.len());
                 let id = *orphans.transactions[i].tx_id();
-                assert!(orphans.remove(id).is_some(), "Removal of {id:?} failed");
+                assert!(orphans.remove(&id).is_some(), "Removal of {id:?} failed");
                 assert_eq!(orphans.len(), len_before - 1);
             }
 
@@ -170,7 +170,7 @@ fn simulation(#[case] seed: Seed) {
             3..=3 => {
                 let id: Id<Transaction> = H256(rng.gen::<[u8; 32]>()).into();
                 assert_eq!(
-                    orphans.remove(id),
+                    orphans.remove(&id),
                     None,
                     "Removal of non-existent {id:?} failed"
                 );

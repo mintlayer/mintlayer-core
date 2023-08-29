@@ -38,13 +38,23 @@ mockall::mock! {
     }
 }
 
-pub trait TxOriginExt {
-    /// Origin that serves as a reasonable default for testing
-    const TEST: Self;
-}
+impl<M: MemoryUsageEstimator> Mempool<M> {
+    /// Add transaction method with some default values for testing.
+    ///
+    /// Origin is set to a default value and work queue is set to be temporary one and the orphans
+    /// are immediately processed. If the test needs to adjust the origin or a different orphan
+    /// behavior it should use [Mempool::add_transaction] directly.
+    pub fn add_transaction_test(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
+        let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
+        let mut work_queue = WorkQueue::new();
+        let result = self.add_transaction(tx, origin, &mut work_queue);
 
-impl TxOriginExt for TxOrigin {
-    const TEST: Self = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
+        while !work_queue.is_empty() {
+            self.perform_work_unit(&mut work_queue);
+        }
+
+        result
+    }
 }
 
 pub trait TxStatusExt: Sized {
@@ -253,7 +263,8 @@ pub fn generate_transaction_graph(
                 .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
         );
 
-        let entry = TxEntry::new(tx, time, TxOrigin::TEST);
+        let origin = RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
+        let entry = TxEntry::new(tx, time, origin);
         TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
     })
 }

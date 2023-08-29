@@ -50,14 +50,14 @@ class MempoolLocalOrphanSubmissionTest(BitcoinTestFramework):
         # Submit tx2 first, check it is rejected since local txs should not be orphans
         assert_raises_rpc_error(None, 'originating at local node', node.mempool_submit_transaction, tx2)
         assert not node.mempool_contains_tx(tx2_id)
-        assert not node.mempool_contains_orphan_tx(tx2_id)
+        self.wait_until(lambda: not node.mempool_contains_orphan_tx(tx2_id), timeout = 5)
 
         # Submit the first transaction now
         node.mempool_submit_transaction(tx1)
         assert node.mempool_contains_tx(tx1_id)
         assert not node.mempool_contains_tx(tx2_id)
-        assert not node.mempool_contains_orphan_tx(tx1_id)
-        assert not node.mempool_contains_orphan_tx(tx2_id)
+        self.wait_until(lambda: not node.mempool_contains_orphan_tx(tx1_id), timeout = 5)
+        self.wait_until(lambda: not node.mempool_contains_orphan_tx(tx2_id), timeout = 5)
 
         # Check local submission of the second transaction has not been blocked
         node.mempool_submit_transaction(tx2)

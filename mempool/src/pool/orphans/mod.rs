@@ -148,24 +148,21 @@ impl TxOrphanPool {
     }
 
     /// Get IDs of children of given transaction that are as candidates to be promoted to mempool.
-    ///
-    /// By ready, we mean it has no remaining dependencies in orphan pool. That means they can be
-    /// considered for verification and, if the verification passes, moved to mempool.
-    pub fn ready_children_of<'a, R: crate::tx_origin::IsOrigin>(
+    pub fn children_of<'a, R: crate::tx_origin::IsOrigin>(
         &'a self,
         entry: &'a super::TxEntry<R>,
-    ) -> impl Iterator<Item = Id<Transaction>> + 'a {
+    ) -> impl Iterator<Item = &'a TxEntry> + 'a {
         entry.provides().flat_map(move |dep| {
             self.maps
                 .by_deps
                 .range((dep.clone(), InternalId::ZERO)..=(dep, InternalId::MAX))
-                .filter_map(|(_, iid)| self.is_ready(*iid).then(|| *self.get_at(*iid).tx_id()))
+                .map(|(_, iid)| self.get_at(*iid))
         })
     }
 
     /// Check no dependencies of given transaction are still in orphan pool so it can be considered
     /// as a candidate to move out.
-    fn is_ready(&self, iid: InternalId) -> bool {
+    fn is_ready_at(&self, iid: InternalId) -> bool {
         let entry = self.get_at(iid);
         !entry.requires().any(|dep| match dep {
             // Always consider account deps. TODO: can be optimized in the future
@@ -215,9 +212,25 @@ impl TxOrphanPool {
         Ok(())
     }
 
+    /// Remove given transaction if it's ready
+    pub fn remove_ready(&mut self, id: &Id<Transaction>) -> Option<TxEntry> {
+        self.remove_if(id, |this, iid| this.is_ready_at(iid))
+    }
+
     /// Remove given transaction
-    pub fn remove(&mut self, id: Id<Transaction>) -> Option<TxEntry> {
-        self.maps.by_tx_id.get(&id).copied().map(|iid| self.remove_at(iid))
+    #[allow(unused)]
+    pub fn remove(&mut self, id: &Id<Transaction>) -> Option<TxEntry> {
+        self.remove_if(id, |_, _| true)
+    }
+
+    /// Remove given transaction if it exists and given condition is satisfied
+    fn remove_if(
+        &mut self,
+        id: &Id<Transaction>,
+        cond: impl FnOnce(&Self, InternalId) -> bool,
+    ) -> Option<TxEntry> {
+        let iid = self.maps.by_tx_id.get(id).copied()?;
+        cond(self, iid).then(|| self.remove_at(iid))
     }
 
     /// Remove transaction by its internal ID

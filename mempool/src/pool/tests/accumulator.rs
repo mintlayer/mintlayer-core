@@ -40,18 +40,9 @@ async fn transaction_order_respects_deps(#[case] seed: Seed) {
     let tx2_id = tx2.transaction().get_id();
 
     let mut mempool = setup_with_chainstate(tf.chainstate());
-    assert_eq!(
-        mempool.add_transaction(tx0, TxOrigin::TEST),
-        Ok(TxStatus::InMempool)
-    );
-    assert_eq!(
-        mempool.add_transaction(tx1, TxOrigin::TEST),
-        Ok(TxStatus::InMempool)
-    );
-    assert_eq!(
-        mempool.add_transaction(tx2, TxOrigin::TEST),
-        Ok(TxStatus::InMempool)
-    );
+    assert_eq!(mempool.add_transaction_test(tx0), Ok(TxStatus::InMempool));
+    assert_eq!(mempool.add_transaction_test(tx1), Ok(TxStatus::InMempool));
+    assert_eq!(mempool.add_transaction_test(tx2), Ok(TxStatus::InMempool));
     assert!(mempool.contains_transaction(&tx2_id));
 
     let accumulator = Box::new(DefaultTxAccumulator::new(
@@ -83,7 +74,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
     let mut mempool = setup_with_chainstate(tf.chainstate());
 
     for tx in &txs {
-        let res = mempool.add_transaction(tx.transaction().clone(), TxOrigin::TEST);
+        let res = mempool.add_transaction_test(tx.transaction().clone());
         assert_eq!(res, Ok(TxStatus::InMempool));
     }
 
@@ -143,7 +134,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     }
     let initial_tx = tx_builder.build();
     let initial_tx_id = initial_tx.transaction().get_id();
-    mempool.add_transaction(initial_tx, TxOrigin::TEST)?.assert_in_mempool();
+    mempool.add_transaction_test(initial_tx)?.assert_in_mempool();
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
@@ -155,7 +146,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        mempool.add_transaction(tx.clone(), TxOrigin::TEST)?.assert_in_mempool();
+        mempool.add_transaction_test(tx.clone())?.assert_in_mempool();
     }
 
     let size_limit = 1_000;
@@ -259,13 +250,13 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     mempool.clock = mocked_time_getter_seconds(Arc::new(block1_time.as_int_seconds().into()));
     let chainstate = mempool.chainstate_handle().shallow_clone();
 
-    let res = mempool.add_transaction(tx0.clone(), TxOrigin::TEST);
+    let res = mempool.add_transaction_test(tx0.clone());
     assert_eq!(res, Ok(TxStatus::InMempool));
 
     let tx1 = make_tx(&mut rng, &[(tx0_id.into(), 0)], &[800_000_000]);
     let tx1_id = tx1.transaction().get_id();
 
-    let res = mempool.add_transaction(tx1.clone(), TxOrigin::TEST);
+    let res = mempool.add_transaction_test(tx1.clone());
     assert_eq!(
         res.is_ok(),
         in_mempool_at0,
@@ -292,10 +283,12 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
         .await
         .unwrap()
         .expect("block1");
-    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
+    mempool
+        .on_new_tip(block1_id, BlockHeight::new(1), &mut WorkQueue::new())
+        .unwrap();
 
     let in_mempool = if !in_mempool_at0 {
-        mempool.add_transaction(tx1.clone(), TxOrigin::TEST).is_ok()
+        mempool.add_transaction_test(tx1.clone()).is_ok()
     } else {
         mempool.contains_transaction(&tx1_id)
     };

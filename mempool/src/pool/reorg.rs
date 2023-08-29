@@ -26,7 +26,7 @@ use logging::log;
 use utils::tap_error_log::LogError;
 use utxo::UtxosStorageRead;
 
-use super::{MemoryUsageEstimator, Mempool};
+use super::{MemoryUsageEstimator, Mempool, WorkQueue};
 use crate::tx_origin::LocalTxOrigin;
 
 /// An error that can happen in mempool on chain reorg
@@ -131,6 +131,7 @@ fn fetch_disconnected_txs<M>(
 pub fn handle_new_tip<M: MemoryUsageEstimator>(
     mempool: &mut Mempool<M>,
     new_tip: Id<Block>,
+    work_queue: &mut WorkQueue,
 ) -> Result<(), ReorgError> {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
@@ -150,22 +151,24 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
         .log_err_pfx("Fetching disconnected transactions on a reorg");
 
     match disconnected_txs {
-        Ok(to_insert) => refresh_mempool(mempool, to_insert),
-        Err(_) => refresh_mempool(mempool, std::iter::empty()),
+        Ok(to_insert) => reorg_mempool_transactions(mempool, to_insert, work_queue),
+        Err(_) => refresh_mempool(mempool),
     }
 
     Ok(())
 }
 
-pub fn refresh_mempool<M: MemoryUsageEstimator>(
+fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     mempool: &mut Mempool<M>,
     txs_to_insert: impl Iterator<Item = SignedTransaction>,
+    work_queue: &mut WorkQueue,
 ) {
     let old_transactions = mempool.reset();
 
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
-        if let Err(e) = mempool.add_transaction(tx, LocalTxOrigin::PastBlock.into()) {
+        let origin = LocalTxOrigin::PastBlock.into();
+        if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
@@ -177,4 +180,8 @@ pub fn refresh_mempool<M: MemoryUsageEstimator>(
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }
     }
+}
+
+pub fn refresh_mempool<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>) {
+    reorg_mempool_transactions(mempool, std::iter::empty(), &mut WorkQueue::new())
 }
