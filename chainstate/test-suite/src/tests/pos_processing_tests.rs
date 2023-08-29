@@ -48,6 +48,7 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
+        tokens::TokenIssuanceVersion,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
         GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSConsensusVersion, PoolId,
         RequiredConsensus, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
@@ -1536,6 +1537,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),
@@ -1552,6 +1554,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),

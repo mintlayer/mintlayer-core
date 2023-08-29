@@ -83,6 +83,7 @@ impl ChainType {
                             config: create_testnet_pos_config(PoSConsensusVersion::V1),
                         }),
                     ),
+                    // TODO: Add upgrade to TokenIssuanceVersion::V1
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }

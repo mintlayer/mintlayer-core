@@ -27,6 +27,18 @@ pub use rpc::*;
 pub use token_id::TokenId;
 pub use tokens_utils::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub struct TokenIssuanceVersion(u32);
+
+impl TokenIssuanceVersion {
+    /// Initial issuance implementation
+    pub const V0: Self = Self(0);
+    /// Add reissuance support
+    pub const V1: Self = Self(1);
+
+    pub const CURRENT: Self = Self::V1;
+}
+
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct TokenAuxiliaryData {
@@ -72,7 +84,7 @@ pub enum TokenSupply {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub struct TokenIssuanceV2 {
+pub struct TokenIssuanceV1 {
     pub token_ticker: Vec<u8>,
     pub amount_to_issue: Amount,
     pub number_of_decimals: u8,
@@ -97,9 +109,9 @@ pub enum TokenData {
     // A new NFT creation
     #[codec(index = 3)]
     NftIssuance(Box<NftIssuance>),
-    /// New token creation V2
+    /// New token creation V!
     #[codec(index = 4)]
-    TokenIssuanceV2(Box<TokenIssuanceV2>),
+    TokenIssuanceV1(Box<TokenIssuanceV1>),
     // Increase amount of tokens
     #[codec(index = 5)]
     TokenReissuanceV1(TokenReissuanceV1),

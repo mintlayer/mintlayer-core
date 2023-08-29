@@ -215,8 +215,10 @@ mod tests {
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::Builder as ConfigBuilder,
-            create_unittest_pos_config, Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades,
-            PoSConsensusVersion, PoolId, UpgradeVersion,
+            create_unittest_pos_config,
+            tokens::TokenIssuanceVersion,
+            Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoSConsensusVersion, PoolId,
+            UpgradeVersion,
         },
         primitives::{per_thousand::PerThousand, Idable, H256},
     };
@@ -410,6 +412,7 @@ mod tests {
                 2,
                 PerThousand::new(100).unwrap(),
                 PoSConsensusVersion::V1,
+                TokenIssuanceVersion::CURRENT,
             )
             .unwrap();
             let new_target =
@@ -432,6 +435,7 @@ mod tests {
                 2,
                 PerThousand::new(100).unwrap(),
                 PoSConsensusVersion::V1,
+                TokenIssuanceVersion::CURRENT,
             )
             .unwrap();
             let new_target =
@@ -453,6 +457,7 @@ mod tests {
             2,
             PerThousand::new(100).unwrap(),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let prev_target = H256::random_using(&mut rng).into();
@@ -472,6 +477,7 @@ mod tests {
             2,
             PerThousand::new(100).unwrap(),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let prev_target = Uint256::MAX;
@@ -493,6 +499,7 @@ mod tests {
             5,
             PerThousand::new(100).expect("must be valid"),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let upgrades = vec![(
@@ -569,6 +576,7 @@ mod tests {
             2, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let upgrades = vec![(
@@ -618,6 +626,7 @@ mod tests {
             3, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let upgrades = vec![(
@@ -713,6 +722,7 @@ mod tests {
             2,
             PerThousand::new(100).unwrap(),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let pos_config_2 = PoSChainConfig::new(
@@ -723,6 +733,7 @@ mod tests {
             5,
             PerThousand::new(100).unwrap(),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let upgrades = vec![
@@ -874,6 +885,7 @@ mod tests {
             3,
             PerThousand::new(100).unwrap(),
             PoSConsensusVersion::V1,
+            TokenIssuanceVersion::CURRENT,
         )
         .unwrap();
         let upgrades = vec![

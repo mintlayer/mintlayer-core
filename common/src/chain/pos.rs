@@ -24,7 +24,7 @@ use crate::{
     Uint256,
 };
 
-use super::{config::ChainType, ChainConfig};
+use super::{config::ChainType, tokens::TokenIssuanceVersion, ChainConfig};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
@@ -60,6 +60,7 @@ pub struct PoSChainConfig {
     difficulty_change_limit: PerThousand,
     /// Version of the consensus protocol
     consensus_version: PoSConsensusVersion,
+    token_issuance_version: TokenIssuanceVersion,
 }
 
 impl Addressable for PoolId {
@@ -111,6 +112,7 @@ impl PoSChainConfig {
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
         consensus_version: PoSConsensusVersion,
+        token_issuance_version: TokenIssuanceVersion,
     ) -> Option<Self> {
         let target_block_time = NonZeroU64::new(target_block_time)?;
         if block_count_to_average_for_blocktime < 2 {
@@ -125,6 +127,7 @@ impl PoSChainConfig {
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
             consensus_version,
+            token_issuance_version,
         })
     }
 
@@ -155,6 +158,10 @@ impl PoSChainConfig {
     pub fn consensus_version(&self) -> PoSConsensusVersion {
         self.consensus_version
     }
+
+    pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
+        self.token_issuance_version
+    }
 }
 
 const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
@@ -172,6 +179,7 @@ pub fn create_testnet_pos_config(consensus_version: PoSConsensusVersion) -> PoSC
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version,
+        token_issuance_version: TokenIssuanceVersion::CURRENT,
     }
 }
 
@@ -184,6 +192,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version: PoSConsensusVersion::V1,
+        token_issuance_version: TokenIssuanceVersion::CURRENT,
     }
 }
 
@@ -199,6 +208,7 @@ pub fn create_regtest_pos_config(consensus_version: PoSConsensusVersion) -> PoSC
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version,
+        token_issuance_version: TokenIssuanceVersion::CURRENT,
     }
 }
 

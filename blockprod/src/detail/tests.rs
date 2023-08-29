@@ -21,6 +21,7 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
         stakelock::StakePoolData,
+        tokens::TokenIssuanceVersion,
         transaction::TxInput,
         ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
         PoSChainConfig, PoSConsensusVersion, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
@@ -1249,6 +1250,7 @@ mod produce_block {
                 5,
                 PerThousand::new(1).expect("must be valid"),
                 PoSConsensusVersion::V1,
+                TokenIssuanceVersion::CURRENT,
             )
             .expect("Valid PoS config values");
 

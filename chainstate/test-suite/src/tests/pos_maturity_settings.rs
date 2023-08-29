@@ -20,9 +20,9 @@ use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder
 use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSConsensusVersion, TxInput,
-        TxOutput, UpgradeVersion, UtxoOutPoint,
+        timelock::OutputTimeLock, tokens::TokenIssuanceVersion, AccountNonce, AccountOutPoint,
+        AccountSpending, ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId,
+        PoSChainConfig, PoSConsensusVersion, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable},
     Uint256,
@@ -59,6 +59,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),
@@ -75,6 +76,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),
@@ -209,6 +211,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),
@@ -225,6 +228,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
+                    TokenIssuanceVersion::CURRENT,
                 )
                 .unwrap(),
             }),

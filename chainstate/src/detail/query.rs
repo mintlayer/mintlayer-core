@@ -311,7 +311,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         &nft.metadata,
                     )))
                 }
-                TokenData::TokenIssuanceV2(_) => todo!(),
+                TokenData::TokenIssuanceV1(_) => todo!(),
                 TokenData::TokenTransfer(_) | TokenData::TokenReissuanceV1(_) => None,
             }))
     }
