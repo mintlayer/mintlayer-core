@@ -188,6 +188,7 @@ pub struct ChainConfig {
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
     token_min_issuance_fee: Amount,
+    token_min_reissuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
@@ -423,6 +424,11 @@ impl ChainConfig {
         self.token_min_issuance_fee
     }
 
+    /// The fee for reissuing a token
+    pub fn token_min_reissuance_fee(&self) -> Amount {
+        self.token_min_reissuance_fee
+    }
+
     /// The maximum length of a URI contained in a token
     #[must_use]
     pub fn token_max_uri_len(&self) -> usize {
@@ -534,7 +540,8 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
-const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(100 * CoinUnit::ATOMS_PER_COIN);
+const TOKEN_MIN_ISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const TOKEN_MIN_REISSUANCE_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
 const TOKEN_MIN_HASH_LEN: usize = 4;
