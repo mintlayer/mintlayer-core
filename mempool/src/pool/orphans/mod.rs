@@ -147,6 +147,10 @@ impl TxOrphanPool {
         self.maps.by_tx_id.contains_key(id)
     }
 
+    pub fn entry(&mut self, id: &Id<Transaction>) -> Option<PoolEntry<'_>> {
+        self.maps.by_tx_id.get(id).copied().map(|iid| PoolEntry::new(self, iid))
+    }
+
     /// Get IDs of children of given transaction that are as candidates to be promoted to mempool.
     pub fn children_of<'a, R: crate::tx_origin::IsOrigin>(
         &'a self,
@@ -157,17 +161,6 @@ impl TxOrphanPool {
                 .by_deps
                 .range((dep.clone(), InternalId::ZERO)..=(dep, InternalId::MAX))
                 .map(|(_, iid)| self.get_at(*iid))
-        })
-    }
-
-    /// Check no dependencies of given transaction are still in orphan pool so it can be considered
-    /// as a candidate to move out.
-    fn is_ready_at(&self, iid: InternalId) -> bool {
-        let entry = self.get_at(iid);
-        !entry.requires().any(|dep| match dep {
-            // Always consider account deps. TODO: can be optimized in the future
-            TxDependency::DelegationAccount(_) => false,
-            TxDependency::TxOutput(tx_id, _) => self.maps.by_tx_id.contains_key(&tx_id),
         })
     }
 
@@ -210,27 +203,6 @@ impl TxOrphanPool {
         ensure!(self.contains(&tx_id), OrphanPoolError::Full);
 
         Ok(())
-    }
-
-    /// Remove given transaction if it's ready
-    pub fn remove_ready(&mut self, id: &Id<Transaction>) -> Option<TxEntry> {
-        self.remove_if(id, |this, iid| this.is_ready_at(iid))
-    }
-
-    /// Remove given transaction
-    #[allow(unused)]
-    pub fn remove(&mut self, id: &Id<Transaction>) -> Option<TxEntry> {
-        self.remove_if(id, |_, _| true)
-    }
-
-    /// Remove given transaction if it exists and given condition is satisfied
-    fn remove_if(
-        &mut self,
-        id: &Id<Transaction>,
-        cond: impl FnOnce(&Self, InternalId) -> bool,
-    ) -> Option<TxEntry> {
-        let iid = self.maps.by_tx_id.get(id).copied()?;
-        cond(self, iid).then(|| self.remove_at(iid))
     }
 
     /// Remove transaction by its internal ID
@@ -309,6 +281,39 @@ impl TxOrphanPool {
             .range((origin, InternalId::ZERO)..=(origin, InternalId::MAX))
             .map(|(_origin, iid)| *iid)
             .next()
+    }
+}
+
+/// Entry-like access to orphans in the pool (somewhat similar to `btree_map::OccupiedEntry`)
+pub struct PoolEntry<'p> {
+    pool: &'p mut TxOrphanPool,
+    iid: InternalId,
+}
+
+impl<'p> PoolEntry<'p> {
+    fn new(pool: &'p mut TxOrphanPool, iid: InternalId) -> Self {
+        Self { pool, iid }
+    }
+
+    /// Get a reference to the entry in the orphan pool
+    pub fn get(&'p self) -> &'p TxEntry {
+        self.pool.transactions.get(self.iid.get()).expect("entry to exist")
+    }
+
+    /// Check no dependencies of given transaction are still in orphan pool so it can be considered
+    /// as a candidate to move out.
+    pub fn is_ready(&self) -> bool {
+        let entry = self.get();
+        !entry.requires().any(|dep| match dep {
+            // Always consider account deps. TODO: can be optimized in the future
+            TxDependency::DelegationAccount(_) => false,
+            TxDependency::TxOutput(tx_id, _) => self.pool.maps.by_tx_id.contains_key(&tx_id),
+        })
+    }
+
+    /// Take the entry, removing it from the orphan pool
+    pub fn take(self) -> TxEntry {
+        self.pool.remove_at(self.iid)
     }
 }
 

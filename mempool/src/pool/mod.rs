@@ -884,7 +884,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     /// Enqueue children of a transaction if it's been included in the mempool
     fn enqueue_children(&mut self, tx_id: &Id<Transaction>, work_queue: &mut WorkQueue) {
-        if let Some(entry) = self.store.get_entry(&tx_id) {
+        if let Some(entry) = self.store.get_entry(tx_id) {
             for orphan in self.orphans.children_of(entry.tx_entry()) {
                 let orphan_id = *orphan.tx_id();
                 let peer_id = orphan.origin().peer_id();
@@ -1151,18 +1151,25 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let orphan_id = work_queue.perform(|peer, orphan_id| {
             log::debug!("Processing orphan tx {orphan_id:?} coming from peer{peer}");
 
-            let orphan = match self.orphans.remove_ready(&orphan_id) {
+            let orphan = match self.orphans.entry(&orphan_id) {
                 Some(orphan) => orphan,
                 None => {
                     // The orphan may have been kicked out of the pool in the meantime.
                     // Return with `None` in that case to indicate we've not really done any work.
-                    log::debug!("Orphan tx {orphan_id} dismissed");
+                    log::debug!("Orphan tx {orphan_id:?} no longer in the pool");
                     return None;
                 }
             };
 
-            // TODO(PR) Should status be take into account here?
-            let _result = self.add_transaction_entry(orphan.map_origin(TxOrigin::from));
+            if orphan.is_ready() {
+                // Take the transaction out of orphan pool and pass it to mempool processing code.
+                let orphan = orphan.take().map_origin(TxOrigin::from);
+                let result = self.add_transaction_entry(orphan);
+                log::debug!("Orphan tx {orphan_id:?} processed: {result:?}");
+            } else {
+                // Not all prerequisites are satisfied. The tx stays in the orphan pool.
+                log::debug!("Orphan tx {orphan_id:?} not ready");
+            }
 
             Some(orphan_id)
         });
