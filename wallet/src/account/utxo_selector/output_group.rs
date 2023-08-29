@@ -74,6 +74,8 @@ impl OutputGroup {
                     TokenData::TokenTransfer(token_transfer) => token_transfer.amount,
                     TokenData::TokenIssuance(token_issuance) => token_issuance.amount_to_issue,
                     TokenData::NftIssuance(_) => Amount::from_atoms(1),
+                    TokenData::TokenIssuanceV2(token_issuance) => token_issuance.amount_to_issue,
+                    TokenData::TokenReissuanceV1(reissuance) => reissuance.amount_to_issue,
                 }
             }
         };
