@@ -24,7 +24,6 @@ use emission_schedule::Mlt;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
-use serialization::{Decode, Encode};
 
 use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::transaction::Destination;
@@ -66,7 +65,7 @@ pub const MINTLAYER_COIN_TYPE_TEST: ChildNumber =
 
 pub type EpochIndex = u64;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
     Testnet,

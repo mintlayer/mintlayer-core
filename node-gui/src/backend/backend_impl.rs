@@ -394,7 +394,7 @@ impl Backend {
                 amount,
                 None,
                 // TODO: get value from gui
-                PerThousand::new(1000).expect("Must not fail"),
+                PerThousand::new(10).expect("Must not fail"),
                 Amount::ZERO,
             )
             .await

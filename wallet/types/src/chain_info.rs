@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use common::{
-    chain::{config::ChainType, ChainConfig, GenBlock},
+    chain::{ChainConfig, GenBlock},
     primitives::Id,
 };
 use serialization::{Decode, Encode};
 
 #[derive(Clone, Encode, Decode)]
 pub struct ChainInfo {
-    chain_type: ChainType,
+    chain_type: String,
     genesis_block_id: Id<GenBlock>,
     magic_bytes: [u8; 4],
 }
@@ -29,14 +29,14 @@ pub struct ChainInfo {
 impl ChainInfo {
     pub fn new(config: &ChainConfig) -> Self {
         Self {
-            chain_type: *config.chain_type(),
+            chain_type: config.chain_type().name().to_string(),
             genesis_block_id: config.genesis_block_id(),
             magic_bytes: *config.magic_bytes(),
         }
     }
 
-    pub fn chain_type(&self) -> ChainType {
-        self.chain_type
+    pub fn chain_type(&self) -> &String {
+        &self.chain_type
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
@@ -48,7 +48,7 @@ impl ChainInfo {
     }
 
     pub fn is_same(&self, chain_config: &ChainConfig) -> bool {
-        self.chain_type() == *chain_config.chain_type()
+        self.chain_type() == chain_config.chain_type().name()
             && self.genesis_block_id() == chain_config.genesis_block_id()
             && self.magic_bytes() == *chain_config.magic_bytes()
     }
