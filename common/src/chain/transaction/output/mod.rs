@@ -120,8 +120,10 @@ impl TxOutput {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 match v {
                     OutputValue::Token(data) => match data.as_ref() {
-                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
-                        TokenData::TokenTransfer(_) => false,
+                        TokenData::TokenIssuance(_)
+                        | TokenData::NftIssuance(_)
+                        | TokenData::TokenIssuanceV2(_) => true,
+                        TokenData::TokenTransfer(_) | TokenData::TokenReissuanceV1(_) => false,
                     },
                     OutputValue::Coin(_) => false,
                 }
