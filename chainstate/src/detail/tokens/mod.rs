@@ -151,7 +151,7 @@ pub fn check_tokens_data(
         .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
         TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
             .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
-        TokenData::TokenIssuanceV2(issuance) => check_tokens_issuance_data(
+        TokenData::TokenIssuanceV1(issuance) => check_tokens_issuance_data(
             chain_config,
             &issuance.token_ticker,
             &issuance.amount_to_issue,

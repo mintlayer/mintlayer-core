@@ -231,7 +231,7 @@ fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
-            TokenData::TokenIssuanceV2(issuance) => match include_issuance {
+            TokenData::TokenIssuanceV1(issuance) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
@@ -270,7 +270,7 @@ where
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
-            TokenData::TokenIssuanceV2(issuance) => issuance_token_id_getter()?
+            TokenData::TokenIssuanceV1(issuance) => issuance_token_id_getter()?
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,

@@ -106,7 +106,7 @@ pub fn create_utxo_data(
             TokenData::NftIssuance(_issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
             }
-            TokenData::TokenIssuanceV2(issuance) => {
+            TokenData::TokenIssuanceV1(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
             }
             TokenData::TokenReissuanceV1(_) => {
@@ -239,7 +239,7 @@ pub fn create_multiple_utxo_data(
                     vec![new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))]
                 }
             }
-            TokenData::TokenIssuanceV2(_) => todo!(),
+            TokenData::TokenIssuanceV1(_) => todo!(),
             TokenData::TokenReissuanceV1(_) => todo!(),
         },
     };

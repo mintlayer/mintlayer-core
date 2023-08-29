@@ -27,6 +27,7 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
+        tokens::TokenIssuanceVersion,
         CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, PoSChainConfig,
         PoSConsensusVersion, PoWChainConfig, UpgradeVersion,
     },
@@ -90,6 +91,7 @@ impl ChainType {
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V0,
+                                TokenIssuanceVersion::V0,
                             ),
                         }),
                     ),
@@ -106,9 +108,11 @@ impl ChainType {
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V1,
+                                TokenIssuanceVersion::V1,
                             ),
                         }),
                     ),
+                    // TODO: Add upgrade to TokenIssuanceVersion::V1
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }

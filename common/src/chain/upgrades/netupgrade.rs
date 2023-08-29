@@ -20,6 +20,7 @@ use crate::chain::pos::{
     DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
 };
 use crate::chain::pow::limit;
+use crate::chain::tokens::TokenIssuanceVersion;
 use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::{BlockHeight, Compact};
@@ -81,6 +82,7 @@ impl NetUpgrades<UpgradeVersion> {
                         DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                         PerThousand::new(1).expect("must be valid"),
                         PoSConsensusVersion::V1,
+                        TokenIssuanceVersion::V1,
                     ),
                 }),
             ),
