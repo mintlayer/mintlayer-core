@@ -1231,7 +1231,7 @@ fn group_outputs<T, Grouped: Clone>(
                         combiner(total_token_amount, &output, token_transfer.amount)?;
                     }
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
-                    TokenData::TokenIssuanceV2(_) => todo!(),
+                    TokenData::TokenIssuanceV1(_) => todo!(),
                     TokenData::TokenReissuanceV1(_) => todo!(),
                 }
             }
@@ -1298,7 +1298,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
 
                         combiner(total_token_amount, &output, Amount::from_atoms(1))?;
                     }
-                    TokenData::TokenIssuanceV2(_) => todo!(),
+                    TokenData::TokenIssuanceV1(_) => todo!(),
                     TokenData::TokenReissuanceV1(_) => todo!(),
                 }
             }

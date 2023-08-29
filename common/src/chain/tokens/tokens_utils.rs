@@ -38,7 +38,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
                 OutputValue::Token(data) => match data.as_ref() {
                     TokenData::TokenIssuance(_)
                     | TokenData::NftIssuance(_)
-                    | TokenData::TokenIssuanceV2(_) => true,
+                    | TokenData::TokenIssuanceV1(_) => true,
                     TokenData::TokenTransfer(_) | TokenData::TokenReissuanceV1(_) => false,
                 },
                 OutputValue::Coin(_) => false,
@@ -60,7 +60,7 @@ pub fn is_token_reissuance(output: &TxOutput) -> bool {
                     TokenData::TokenTransfer(_)
                     | TokenData::TokenIssuance(_)
                     | TokenData::NftIssuance(_)
-                    | TokenData::TokenIssuanceV2(_) => false,
+                    | TokenData::TokenIssuanceV1(_) => false,
                 },
                 OutputValue::Coin(_) => false,
             }
