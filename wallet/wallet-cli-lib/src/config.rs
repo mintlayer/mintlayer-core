@@ -36,7 +36,7 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub wallet_file: Option<PathBuf>,
 
-    /// Optional path to the wallet file
+    /// Optional password for a locked wallet
     #[clap(long)]
     pub wallet_password: Option<String>,
 

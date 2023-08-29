@@ -94,9 +94,14 @@ class WalletCliController:
         self._write_command("closewallet\n")
         return self._read_available_output()
 
-    def show_seed_phrase(self):
+    def show_seed_phrase(self) -> Optional[str]:
         self._write_command("showseedphrase\n")
-        return self._read_available_output()
+        output = self._read_available_output()
+        if output.startswith("The saved seed phrase is"):
+            mnemonic = output[output.find("\"") + 1:-1]
+            return mnemonic
+        # wallet doesn't have the seed phrase stored
+        return None
 
     def encrypt_private_keys(self, password: str):
         self._write_command(f"encryptprivatekeys {password}\n")

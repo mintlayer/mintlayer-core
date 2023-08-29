@@ -35,7 +35,7 @@ from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
 
-class WalletSubmitTransaction(BitcoinTestFramework):
+class WalletRecoverAccounts(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -81,7 +81,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
-            self.log.debug('Tip: {}'.format(tip_id))
+            self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
             output = {
@@ -89,14 +89,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
-            self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
-
             node.mempool_submit_transaction(encoded_tx)
             assert node.mempool_contains_tx(tx_id)
 
             block_id = self.generate_block() # Block 1
             assert not node.mempool_contains_tx(tx_id)
-
 
             # sync the wallet
             output = wallet.sync()
@@ -121,15 +118,21 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 address = wallet.new_address()
                 assert "Success" in wallet.select_account(DEFAULT_ACCOUNT_INDEX)
                 assert "The transaction was submitted successfully" in wallet.send_to_address(address, idx+1)
-                block_id = self.generate_block() # Block 1
+                self.generate_block()
                 assert "Success" in wallet.sync()
-                assert '{}'.format(idx+2) == wallet.get_best_block_height()
+                assert f"{idx+2}" == wallet.get_best_block_height()
 
             # try to recover the wallet
-            output = wallet.show_seed_phrase()
-            mnemonic = output[output.find("\"") + 1:-1]
+            mnemonic = wallet.show_seed_phrase()
+            assert mnemonic is not None
             assert "Successfully closed the wallet" in wallet.close_wallet()
             assert "New wallet created successfully" in wallet.recover_wallet(mnemonic)
+            # check that balance is 0 and accounts are not present
+            assert "Coins amount: 0" in wallet.get_balance()
+            for idx in range(num_accounts):
+                assert f"Account not found for index: {idx+1}" in wallet.select_account(idx+1)
+
+            # sync and check that accounts are now present and with correct balances
             assert "Success" in wallet.sync()
 
             for idx in range(num_accounts):
@@ -138,6 +141,6 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
 
 if __name__ == '__main__':
-    WalletSubmitTransaction().main()
+    WalletRecoverAccounts().main()
 
 
