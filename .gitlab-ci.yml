@@ -24,7 +24,7 @@ workflow:
 
 before_script:
   - apt-get update -yqq
-  - apt-get install -yqq --no-install-recommends build-essential
+  - apt-get install -yqq --no-install-recommends build-essential libgtk-3-dev
 
 build:clean:
   stage: build_clean
