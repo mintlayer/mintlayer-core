@@ -266,7 +266,7 @@ fn test_addr_list_handling_outbound() {
     match cmd_rx.try_recv() {
         Ok(Command::Connect {
             address,
-            local_services: _,
+            local_services_override: _,
         }) if address == peer_address => {}
         v => panic!("unexpected command: {v:?}"),
     }
@@ -369,7 +369,7 @@ async fn resend_own_addresses() {
             cmd_rx.try_recv().unwrap(),
             Command::Connect {
                 address: _,
-                local_services: _
+                local_services_override: _
             }
         ) {}
 

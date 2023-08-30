@@ -91,7 +91,7 @@ struct PendingPeerContext {
 
     address: SocketAddress,
 
-    peer_role: ConnectionInfo,
+    connection_info: ConnectionInfo,
 
     backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
 }
@@ -188,7 +188,7 @@ where
     fn handle_connect_res(
         &mut self,
         address: SocketAddress,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
         connection_res: crate::Result<T::Stream>,
     ) -> crate::Result<()> {
         match connection_res {
@@ -200,7 +200,7 @@ where
                     PeerId::new(),
                     ConnectionInfo::Outbound {
                         handshake_nonce,
-                        local_services,
+                        local_services_override,
                     },
                     address,
                 )
@@ -325,7 +325,7 @@ where
         &mut self,
         socket: T::Stream,
         remote_peer_id: PeerId,
-        peer_role: ConnectionInfo,
+        connection_info: ConnectionInfo,
         address: SocketAddress,
     ) -> crate::Result<()> {
         let (backend_event_tx, backend_event_rx) = mpsc::unbounded_channel();
@@ -343,7 +343,7 @@ where
 
         let peer = peer::Peer::<T>::new(
             remote_peer_id,
-            peer_role,
+            connection_info,
             Arc::clone(&self.chain_config),
             Arc::clone(&self.p2p_config),
             socket,
@@ -366,7 +366,7 @@ where
             PendingPeerContext {
                 handle,
                 address,
-                peer_role,
+                connection_info,
                 backend_event_tx,
             },
         );
@@ -387,7 +387,7 @@ where
         let PendingPeerContext {
             handle,
             address,
-            peer_role,
+            connection_info,
             backend_event_tx,
         } = match self.pending.remove(&peer_id) {
             Some(pending) => pending,
@@ -395,19 +395,19 @@ where
             None => return Ok(()),
         };
 
-        if self.is_connection_from_self(peer_role, handshake_nonce)? {
+        if self.is_connection_from_self(connection_info, handshake_nonce)? {
             return Ok(());
         }
 
         let common_services = peer_info.common_services;
-        let inbound = peer_role == ConnectionInfo::Inbound;
+        let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
 
-        match peer_role {
+        match connection_info {
             ConnectionInfo::Outbound {
                 handshake_nonce: _,
-                local_services: _,
+                local_services_override: _,
             } => {
                 self.conn_event_tx.send(ConnectivityEvent::OutboundAccepted {
                     address,
@@ -470,19 +470,19 @@ where
 
     fn is_connection_from_self(
         &mut self,
-        peer_role: ConnectionInfo,
+        connection_info: ConnectionInfo,
         incoming_nonce: HandshakeNonce,
     ) -> crate::Result<bool> {
-        if peer_role == ConnectionInfo::Inbound {
+        if connection_info == ConnectionInfo::Inbound {
             // Look for own outbound connection with same nonce
             let outbound_peer_id = self
                 .pending
                 .iter()
-                .find(|(_peer_id, pending)| match pending.peer_role {
+                .find(|(_peer_id, pending)| match pending.connection_info {
                     ConnectionInfo::Inbound => false,
                     ConnectionInfo::Outbound {
                         handshake_nonce,
-                        local_services: _,
+                        local_services_override: _,
                     } => handshake_nonce == incoming_nonce,
                 })
                 .map(|(peer_id, _pending)| *peer_id);
@@ -538,14 +538,14 @@ where
 
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {
-                    match pending_peer.peer_role {
+                    match pending_peer.connection_info {
                         ConnectionInfo::Inbound => {
                             // Just log the error
                             log::warn!("inbound pending connection closed unexpectedly");
                         }
                         ConnectionInfo::Outbound {
                             handshake_nonce: _,
-                            local_services: _,
+                            local_services_override: _,
                         } => {
                             log::warn!("outbound pending connection closed unexpectedly");
 
@@ -594,7 +594,7 @@ where
         match command {
             Command::Connect {
                 address,
-                local_services,
+                local_services_override,
             } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
@@ -607,7 +607,7 @@ where
                     )));
 
                     boxed_cb(move |this| {
-                        this.handle_connect_res(address, local_services, connection_res)
+                        this.handle_connect_res(address, local_services_override, connection_res)
                     })
                 }
                 .boxed();

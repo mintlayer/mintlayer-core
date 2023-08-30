@@ -51,7 +51,7 @@ pub enum ConnectionInfo {
     Inbound,
     Outbound {
         handshake_nonce: HandshakeNonce,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
     },
 }
 
@@ -61,7 +61,7 @@ impl From<ConnectionInfo> for Role {
             ConnectionInfo::Inbound => Role::Inbound,
             ConnectionInfo::Outbound {
                 handshake_nonce: _,
-                local_services: _,
+                local_services_override: _,
             } => Role::Outbound,
         }
     }
@@ -76,8 +76,7 @@ pub struct Peer<T: TransportSocket> {
 
     p2p_config: Arc<P2pConfig>,
 
-    /// Is the connection inbound or outbound
-    peer_role: ConnectionInfo,
+    connection_info: ConnectionInfo,
 
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
@@ -99,7 +98,7 @@ where
     #![allow(clippy::too_many_arguments)]
     pub fn new(
         peer_id: PeerId,
-        peer_role: ConnectionInfo,
+        connection_info: ConnectionInfo,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
@@ -111,7 +110,7 @@ where
 
         Self {
             peer_id,
-            peer_role,
+            connection_info,
             chain_config,
             p2p_config,
             socket,
@@ -140,7 +139,7 @@ where
     }
 
     async fn handshake(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
-        match self.peer_role {
+        match self.connection_info {
             ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
                     protocol_version,
@@ -196,10 +195,10 @@ where
             }
             ConnectionInfo::Outbound {
                 handshake_nonce,
-                local_services,
+                local_services_override,
             } => {
                 let local_services =
-                    local_services.unwrap_or_else(|| (*self.p2p_config.node_type).into());
+                    local_services_override.unwrap_or_else(|| (*self.p2p_config.node_type).into());
 
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::Hello {
@@ -475,7 +474,7 @@ mod tests {
             peer_id3,
             ConnectionInfo::Outbound {
                 handshake_nonce: 1,
-                local_services: None,
+                local_services_override: None,
             },
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),

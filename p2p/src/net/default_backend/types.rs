@@ -38,7 +38,7 @@ use crate::{
 pub enum Command {
     Connect {
         address: SocketAddress,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
     },
     Accept {
         peer_id: PeerId,

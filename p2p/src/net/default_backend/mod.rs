@@ -170,7 +170,7 @@ where
     fn connect(
         &mut self,
         address: SocketAddress,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
     ) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
@@ -179,7 +179,7 @@ where
 
         Ok(self.cmd_tx.send(types::Command::Connect {
             address,
-            local_services,
+            local_services_override,
         })?)
     }
 

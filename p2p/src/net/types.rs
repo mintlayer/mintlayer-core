@@ -33,6 +33,7 @@ use crate::{
 
 use self::services::Services;
 
+// TODO: Rename to ConnectionDirection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Inbound,
@@ -48,6 +49,7 @@ pub enum PeerRole {
     OutboundManual,
 }
 
+// TODO: Use something like enum_iterator
 impl PeerRole {
     pub const ALL: [PeerRole; 4] = [
         PeerRole::Inbound,

@@ -401,7 +401,7 @@ where
     fn try_connect(
         &mut self,
         address: SocketAddress,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
     ) -> crate::Result<()> {
         ensure!(
             !self.pending_outbound_connects.contains_key(&address),
@@ -419,7 +419,7 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        self.peer_connectivity_handle.connect(address, local_services)?;
+        self.peer_connectivity_handle.connect(address, local_services_override)?;
 
         Ok(())
     }
@@ -433,14 +433,14 @@ where
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,
         };
 
-        let local_services: Option<Services> = if block_relay_only {
+        let local_services_override: Option<Services> = if block_relay_only {
             Some([Service::Blocks].as_slice().into())
         } else {
             None
         };
 
-        log::debug!("try to establish outbound connection to peer at address {address:?}, local_services: {local_services:?}");
-        let res = self.try_connect(address, local_services);
+        log::debug!("try to establish outbound connection to peer at address {address:?}, local_services_override: {local_services_override:?}");
+        let res = self.try_connect(address, local_services_override);
 
         match res {
             Ok(()) => {

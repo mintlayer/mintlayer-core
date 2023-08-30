@@ -90,10 +90,11 @@ where
     ///
     /// # Arguments
     /// `address` - socket address of the peer
+    /// `local_services_override` - what services are enabled for the peer
     fn connect(
         &mut self,
         address: SocketAddress,
-        local_services: Option<Services>,
+        local_services_override: Option<Services>,
     ) -> crate::Result<()>;
 
     /// Accept the peer as valid and allow reading of network messages

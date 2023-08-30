@@ -305,7 +305,7 @@ impl TestNodeGroup {
         self.prevent_peer_manager_events = set;
     }
 
-    /// NewBlockReceived/NewTransactionReceived messages are ignored
+    /// NewTipReceived/NewValidTransactionReceived messages are ignored
     // TODO: Rename the function
     fn assert_no_peer_manager_events_if_needed(&mut self) {
         if self.prevent_peer_manager_events {
