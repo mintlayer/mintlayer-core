@@ -15,9 +15,9 @@
 
 pub mod error;
 
-pub use error::APIServerDaemonError;
+pub use error::APIServerWebServerError;
 
 #[derive(Debug, Clone)]
-pub struct APIServerState {
+pub struct APIServerWebServerState {
     pub example_shared_value: String,
 }

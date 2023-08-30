@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use api_server_daemon::{error::APIServerDaemonError, APIServerState};
+use web_server::{error::APIServerWebServerError, APIServerWebServerState};
 use axum::{extract::Path, response::IntoResponse, routing::get, Json, Router};
 use common::{
     chain::{Block, Genesis, Transaction},
@@ -24,7 +24,7 @@ use serde_json::json;
 
 pub const API_VERSION: &str = "1.0.0";
 
-pub fn routes() -> Router<APIServerState> {
+pub fn routes() -> Router<APIServerWebServerState> {
     let mut router = Router::new();
 
     router = router
@@ -72,7 +72,7 @@ pub fn routes() -> Router<APIServerState> {
 #[allow(clippy::unused_async)]
 pub async fn block(
     Path(_block_id): Path<Id<String>>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -96,7 +96,7 @@ pub async fn block(
 #[allow(clippy::unused_async)]
 pub async fn block_header(
     Path(_block_id): Path<Id<String>>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -112,7 +112,7 @@ pub async fn block_header(
 #[allow(clippy::unused_async)]
 pub async fn block_reward(
     Path(_block_id): Path<Id<String>>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -130,7 +130,7 @@ pub async fn block_reward(
 #[allow(clippy::unused_async)]
 pub async fn block_transaction_ids(
     Path(_block_id): Path<Id<String>>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -145,7 +145,7 @@ pub async fn block_transaction_ids(
 //
 
 #[allow(clippy::unused_async)]
-pub async fn chain_genesis() -> Result<impl IntoResponse, APIServerDaemonError> {
+pub async fn chain_genesis() -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -162,7 +162,7 @@ pub async fn chain_genesis() -> Result<impl IntoResponse, APIServerDaemonError> 
 #[allow(clippy::unused_async)]
 pub async fn chain_at_height(
     Path(_block_height): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -171,7 +171,7 @@ pub async fn chain_at_height(
 }
 
 #[allow(clippy::unused_async)]
-pub async fn chain_tip() -> Result<impl IntoResponse, APIServerDaemonError> {
+pub async fn chain_tip() -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -189,7 +189,7 @@ pub async fn chain_tip() -> Result<impl IntoResponse, APIServerDaemonError> {
 #[allow(clippy::unused_async)]
 pub async fn transaction(
     Path(_transaction_id): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -210,7 +210,7 @@ pub async fn transaction(
 #[allow(clippy::unused_async)]
 pub async fn transaction_merkle_path(
     Path(_transaction_id): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -227,7 +227,7 @@ pub async fn transaction_merkle_path(
 #[allow(clippy::unused_async)]
 pub async fn destination_address(
     Path(_public_key_hash): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -250,7 +250,7 @@ pub async fn destination_address(
 #[allow(clippy::unused_async)]
 pub async fn destination_multisig(
     Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -273,7 +273,7 @@ pub async fn destination_multisig(
 #[allow(clippy::unused_async)]
 pub async fn destination_public_key(
     Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -296,7 +296,7 @@ pub async fn destination_public_key(
 #[allow(clippy::unused_async)]
 pub async fn destination_script_hash(
     Path(_script_hash): Path<String>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -321,7 +321,7 @@ pub async fn destination_script_hash(
 //
 
 #[allow(clippy::unused_async)]
-pub async fn pool(Path(_pool_id): Path<String>) -> Result<impl IntoResponse, APIServerDaemonError> {
+pub async fn pool(Path(_pool_id): Path<String>) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();

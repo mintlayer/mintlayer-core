@@ -8,34 +8,34 @@ use serde_json::json;
 use thiserror::Error;
 
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerDaemonError {
+pub enum APIServerWebServerError {
     #[error("Client error: {0}")]
-    ClientError(#[from] APIServerDaemonClientError),
+    ClientError(#[from] APIServerWebServerClientError),
     #[error("Server error: {0}")]
-    ServerError(#[from] APIServerDaemonServerError),
+    ServerError(#[from] APIServerWebServerServerError),
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerDaemonClientError {
+pub enum APIServerWebServerClientError {
     #[error("Bad request")]
     BadRequest,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerDaemonServerError {
+pub enum APIServerWebServerServerError {
     #[error("Internal server error")]
     InternalServerError,
 }
 
-impl IntoResponse for APIServerDaemonError {
+impl IntoResponse for APIServerWebServerError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            APIServerDaemonError::ClientError(error) => {
+            APIServerWebServerError::ClientError(error) => {
                 (StatusCode::BAD_REQUEST, error.to_string())
             }
-            APIServerDaemonError::ServerError(error) => {
+            APIServerWebServerError::ServerError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }
         };

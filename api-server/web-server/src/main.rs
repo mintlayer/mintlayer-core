@@ -17,10 +17,10 @@ mod api;
 mod config;
 mod error;
 
-use api_server_daemon::{error::APIServerDaemonClientError, APIServerDaemonError, APIServerState};
+use web_server::{error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState};
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
-use config::ApiServerDaemonConfig;
+use config::ApiServerWebServerConfig;
 use logging::{init_logging, log::info};
 use serde_json::json;
 
@@ -32,10 +32,10 @@ async fn main() {
 
     init_logging::<&std::path::Path>(None);
 
-    let args = ApiServerDaemonConfig::parse();
+    let args = ApiServerWebServerConfig::parse();
     info!("Command line options: {args:?}");
 
-    let state = APIServerState {
+    let state = APIServerWebServerState {
         example_shared_value: "test value".to_string(),
     };
 
@@ -48,13 +48,13 @@ async fn main() {
     axum::Server::bind(&args.address.unwrap_or_default())
         .serve(routes.into_make_service())
         .await
-        .expect("API Server Daemon failed")
+        .expect("API Server Web Server failed")
 }
 
 #[allow(clippy::unused_async)]
 async fn server_status(
-    State(_state): State<APIServerState>,
-) -> Result<impl IntoResponse, APIServerDaemonError> {
+    State(_state): State<APIServerWebServerState>,
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     Ok(Json(json!({
         "versions": [api::v1::API_VERSION]
         //"network": "testnet",
@@ -62,6 +62,6 @@ async fn server_status(
 }
 
 #[allow(clippy::unused_async)]
-pub async fn bad_request() -> Result<(), APIServerDaemonError> {
-    Err(APIServerDaemonClientError::BadRequest)?
+pub async fn bad_request() -> Result<(), APIServerWebServerError> {
+    Err(APIServerWebServerClientError::BadRequest)?
 }

@@ -234,22 +234,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-server-daemon"
-version = "0.1.1"
-dependencies = [
- "api-server-common",
- "axum",
- "clap",
- "common",
- "crypto",
- "logging",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7865,6 +7849,22 @@ dependencies = [
  "dlib",
  "lazy_static",
  "pkg-config",
+]
+
+[[package]]
+name = "web-server"
+version = "0.1.1"
+dependencies = [
+ "api-server-common",
+ "axum",
+ "clap",
+ "common",
+ "crypto",
+ "logging",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
