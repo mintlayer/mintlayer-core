@@ -53,6 +53,7 @@ pub async fn run(
     let WalletCliArgs {
         network,
         wallet_file,
+        wallet_password,
         start_staking,
         rpc_address,
         rpc_cookie_file,
@@ -105,8 +106,6 @@ pub async fn run(
         .await
         .map_err(WalletCliError::RpcError)?;
 
-    let controller_opt = None;
-
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     let mut startup_command_futures = vec![];
@@ -114,7 +113,10 @@ pub async fn run(
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::OpenWallet { wallet_path },
+                command: WalletCommand::OpenWallet {
+                    wallet_path,
+                    password: wallet_password,
+                },
                 res_tx,
             })
             .expect("should not fail");
@@ -159,7 +161,7 @@ pub async fn run(
         ),
     });
 
-    cli_event_loop::run(&chain_config, &rpc_client, controller_opt, event_rx).await;
+    cli_event_loop::run(&chain_config, &rpc_client, event_rx).await;
 
     repl_handle.join().expect("Should not panic")
 }

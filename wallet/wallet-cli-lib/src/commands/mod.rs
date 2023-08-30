@@ -62,6 +62,8 @@ pub enum WalletCommand {
     OpenWallet {
         /// File path
         wallet_path: PathBuf,
+        // The existing password.
+        password: Option<String>,
     },
 
     /// Close wallet file
@@ -381,14 +383,13 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
-struct CLIWalletState {
+struct CliWalletState {
     selected_account: U31,
-    accounts: Vec<Option<String>>,
 }
 
 pub struct CommandHandler {
-    // the CLIWalletState if there is a loaded wallet
-    state: Option<CLIWalletState>,
+    // the CliController if there is a loaded wallet
+    state: Option<(CliController, CliWalletState)>,
 }
 
 impl CommandHandler {
@@ -396,42 +397,11 @@ impl CommandHandler {
         CommandHandler { state: None }
     }
 
-    fn set_accounts(&mut self, new_accounts: Vec<Option<String>>) {
-        if let Some(CLIWalletState {
-            selected_account: _,
-            accounts,
-        }) = self.state.as_mut()
-        {
-            *accounts = new_accounts;
-        } else {
-            self.state.replace(CLIWalletState {
-                selected_account: DEFAULT_ACCOUNT_INDEX,
-                accounts: new_accounts,
-            });
-        }
-    }
-    fn add_account(&mut self, new_account: Option<String>) {
-        if let Some(CLIWalletState {
-            selected_account: _,
-            accounts,
-        }) = self.state.as_mut()
-        {
-            accounts.push(new_account);
-        } else {
-            self.state.replace(CLIWalletState {
-                selected_account: DEFAULT_ACCOUNT_INDEX,
-                accounts: vec![new_account],
-            });
-        }
-    }
-
     fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
-        let CLIWalletState {
-            selected_account,
-            accounts,
-        } = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
+        let (controller, CliWalletState { selected_account }) =
+            self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
 
-        if account_index.into_u32() as usize >= accounts.len() {
+        if account_index.into_u32() as usize >= controller.account_names().count() {
             return Err(WalletCliError::AccountNotFound(account_index));
         }
 
@@ -439,21 +409,41 @@ impl CommandHandler {
         Ok(())
     }
 
-    fn selected_account(&self) -> Option<U31> {
-        self.state.as_ref().map(|state| state.selected_account)
-    }
-
     fn repl_status(&mut self) -> String {
         match self.state.as_ref() {
-            Some(CLIWalletState {
-                selected_account,
-                accounts,
-            }) if accounts.len() > 1 => match accounts.get(selected_account.into_u32() as usize) {
-                Some(Some(name)) => format!("(Account {})", name),
-                _ => format!("(Account No. {})", selected_account),
-            },
+            Some((controller, CliWalletState { selected_account })) => {
+                let accounts: Vec<&Option<String>> = controller.account_names().collect();
+                if accounts.len() > 1 {
+                    match accounts.get(selected_account.into_u32() as usize) {
+                        Some(Some(name)) => format!("(Account {})", name),
+                        _ => format!("(Account No. {})", selected_account),
+                    }
+                } else {
+                    String::new()
+                }
+            }
             _ => String::new(),
         }
+    }
+
+    pub fn controller_opt(&mut self) -> Option<&mut CliController> {
+        self.state.as_mut().map(|(controller, _)| controller)
+    }
+
+    pub fn controller(&mut self) -> Result<&mut CliController, WalletCliError> {
+        self.state
+            .as_mut()
+            .map(|(controller, _)| controller)
+            .ok_or(WalletCliError::NoWallet)
+    }
+
+    fn get_controller_and_selected_acc(
+        &mut self,
+    ) -> Result<(&mut CliController, U31), WalletCliError> {
+        self.state
+            .as_mut()
+            .map(|(controller, state)| (controller, state.selected_account))
+            .ok_or(WalletCliError::NoWallet)
     }
 
     pub fn tx_submitted_command() -> ConsoleCommand {
@@ -473,24 +463,19 @@ impl CommandHandler {
         &mut self,
         chain_config: &Arc<ChainConfig>,
         rpc_client: &NodeRpcClient,
-        controller_opt: &mut Option<CliController>,
         command: WalletCommand,
     ) -> Result<ConsoleCommand, WalletCliError> {
-        let selected_account = self.selected_account();
         match command {
             WalletCommand::CreateWallet {
                 wallet_path,
                 mnemonic,
                 save_seed_phrase,
             } => {
-                utils::ensure!(
-                    controller_opt.is_none(),
-                    WalletCliError::WalletFileAlreadyOpen
-                );
+                utils::ensure!(self.state.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
                 // TODO: Support other languages
                 let language = wallet::wallet::Language::English;
-                let need_mnemonic_backup = mnemonic.is_none();
+                let newly_generated_mnemonic = mnemonic.is_none();
                 let mnemonic = match &mnemonic {
                     Some(mnemonic) => {
                         wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
@@ -499,55 +484,76 @@ impl CommandHandler {
                     None => wallet_controller::mnemonic::generate_new_mnemonic(language),
                 };
 
-                let wallet = CliController::create_wallet(
-                    Arc::clone(chain_config),
-                    wallet_path,
-                    mnemonic.clone(),
-                    None,
-                    save_seed_phrase.to_walet_type(),
-                )
+                let wallet = if newly_generated_mnemonic {
+                    let info =
+                        rpc_client.chainstate_info().await.map_err(WalletCliError::RpcError)?;
+                    CliController::create_wallet(
+                        Arc::clone(chain_config),
+                        wallet_path,
+                        mnemonic.clone(),
+                        None,
+                        save_seed_phrase.to_walet_type(),
+                        info.best_block_height,
+                        info.best_block_id,
+                    )
+                } else {
+                    CliController::recover_wallet(
+                        Arc::clone(chain_config),
+                        wallet_path,
+                        mnemonic.clone(),
+                        None,
+                        save_seed_phrase.to_walet_type(),
+                    )
+                }
                 .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names().cloned().collect();
-                *controller_opt = Some(CliController::new(
-                    Arc::clone(chain_config),
-                    rpc_client.clone(),
-                    wallet,
-                    WalletEventsNoOp,
+                self.state = Some((
+                    CliController::new(
+                        Arc::clone(chain_config),
+                        rpc_client.clone(),
+                        wallet,
+                        WalletEventsNoOp,
+                    ),
+                    CliWalletState {
+                        selected_account: DEFAULT_ACCOUNT_INDEX,
+                    },
                 ));
 
-                let msg = if need_mnemonic_backup {
+                let msg = if newly_generated_mnemonic {
                     format!(
                     "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
                 , mnemonic)
                 } else {
                     "New wallet created successfully".to_owned()
                 };
-                self.set_accounts(account_names);
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
                     print_message: msg,
                 })
             }
 
-            WalletCommand::OpenWallet { wallet_path } => {
-                utils::ensure!(
-                    controller_opt.is_none(),
-                    WalletCliError::WalletFileAlreadyOpen
-                );
+            WalletCommand::OpenWallet {
+                wallet_path,
+                password,
+            } => {
+                utils::ensure!(self.state.is_none(), WalletCliError::WalletFileAlreadyOpen);
 
-                let wallet = CliController::open_wallet(Arc::clone(chain_config), wallet_path)
-                    .map_err(WalletCliError::Controller)?;
+                let wallet =
+                    CliController::open_wallet(Arc::clone(chain_config), wallet_path, password)
+                        .map_err(WalletCliError::Controller)?;
 
-                let account_names = wallet.account_names().cloned().collect();
-                *controller_opt = Some(CliController::new(
-                    Arc::clone(chain_config),
-                    rpc_client.clone(),
-                    wallet,
-                    WalletEventsNoOp,
+                self.state = Some((
+                    CliController::new(
+                        Arc::clone(chain_config),
+                        rpc_client.clone(),
+                        wallet,
+                        WalletEventsNoOp,
+                    ),
+                    CliWalletState {
+                        selected_account: DEFAULT_ACCOUNT_INDEX,
+                    },
                 ));
 
-                self.set_accounts(account_names);
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
                     print_message: "Wallet loaded successfully".to_owned(),
@@ -555,11 +561,10 @@ impl CommandHandler {
             }
 
             WalletCommand::CloseWallet => {
-                utils::ensure!(controller_opt.is_some(), WalletCliError::NoWallet);
-
-                *controller_opt = None;
+                utils::ensure!(self.state.is_some(), WalletCliError::NoWallet);
 
                 self.state = None;
+
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
                     print_message: "Successfully closed the wallet.".to_owned(),
@@ -567,16 +572,9 @@ impl CommandHandler {
             }
 
             WalletCommand::EncryptPrivateKeys { password } => {
-                match controller_opt.as_mut() {
-                    None => {
-                        return Err(WalletCliError::NoWallet);
-                    }
-                    Some(controller) => {
-                        controller
-                            .encrypt_wallet(&Some(password))
-                            .map_err(WalletCliError::Controller)?;
-                    }
-                }
+                self.controller()?
+                    .encrypt_wallet(&Some(password))
+                    .map_err(WalletCliError::Controller)?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully encrypted the private keys of the wallet.".to_owned(),
@@ -584,14 +582,7 @@ impl CommandHandler {
             }
 
             WalletCommand::RemovePrivateKeysEncryption => {
-                match controller_opt.as_mut() {
-                    None => {
-                        return Err(WalletCliError::NoWallet);
-                    }
-                    Some(controller) => {
-                        controller.encrypt_wallet(&None).map_err(WalletCliError::Controller)?;
-                    }
-                }
+                self.controller()?.encrypt_wallet(&None).map_err(WalletCliError::Controller)?;
 
                 Ok(ConsoleCommand::Print(
                     "Successfully removed the encryption from the private keys.".to_owned(),
@@ -599,14 +590,9 @@ impl CommandHandler {
             }
 
             WalletCommand::UnlockPrivateKeys { password } => {
-                match controller_opt.as_mut() {
-                    None => {
-                        return Err(WalletCliError::NoWallet);
-                    }
-                    Some(controller) => {
-                        controller.unlock_wallet(&password).map_err(WalletCliError::Controller)?;
-                    }
-                }
+                self.controller()?
+                    .unlock_wallet(&password)
+                    .map_err(WalletCliError::Controller)?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now unlocked.".to_owned(),
@@ -614,14 +600,7 @@ impl CommandHandler {
             }
 
             WalletCommand::LockPrivateKeys => {
-                match controller_opt.as_mut() {
-                    None => {
-                        return Err(WalletCliError::NoWallet);
-                    }
-                    Some(controller) => {
-                        controller.lock_wallet().map_err(WalletCliError::Controller)?;
-                    }
-                }
+                self.controller()?.lock_wallet().map_err(WalletCliError::Controller)?;
 
                 Ok(ConsoleCommand::Print(
                     "Success. The wallet is now locked.".to_owned(),
@@ -669,13 +648,9 @@ impl CommandHandler {
             WalletCommand::GenerateBlock { transactions } => {
                 let transactions_opt =
                     transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
-                let block = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .generate_block(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        transactions_opt,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let block = controller
+                    .generate_block(selected_account, transactions_opt)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -683,26 +658,18 @@ impl CommandHandler {
             }
 
             WalletCommand::GenerateBlocks { block_count } => {
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .generate_blocks(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        block_count,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
+                    .generate_blocks(selected_account, block_count)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::CreateNewAccount { name } => {
-                let (new_account_index, name) = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .create_account(name)
-                    .map_err(WalletCliError::Controller)?;
+                let (new_account_index, _name) =
+                    self.controller()?.create_account(name).map_err(WalletCliError::Controller)?;
 
-                self.add_account(name);
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status(),
                     print_message: format!(
@@ -720,22 +687,14 @@ impl CommandHandler {
             }
 
             WalletCommand::StartStaking => {
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .start_staking(
-                        self.selected_account().ok_or(WalletCliError::NoSelectedAccount)?,
-                    )
-                    .map_err(WalletCliError::Controller)?;
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller.start_staking(selected_account).map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
             WalletCommand::StopStaking => {
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .stop_staking(self.selected_account().ok_or(WalletCliError::NoSelectedAccount)?)
-                    .map_err(WalletCliError::Controller)?;
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller.stop_staking(selected_account).map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
@@ -766,13 +725,9 @@ impl CommandHandler {
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .abandon_transaction(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        transaction_id.take(),
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
+                    .abandon_transaction(selected_account, transaction_id.take())
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(
                     "The transaction was marked as abandoned successfully".to_owned(),
@@ -789,11 +744,10 @@ impl CommandHandler {
                 let amount_to_issue = parse_coin_amount(chain_config, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
-                let token_id = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let token_id = controller
                     .issue_new_token(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         destination_address,
                         token_ticker.into_bytes(),
                         amount_to_issue,
@@ -835,14 +789,9 @@ impl CommandHandler {
                     media_hash: media_hash.into_bytes(),
                 };
 
-                let token_id = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .issue_new_nft(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        destination_address,
-                        metadata,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let token_id = controller
+                    .issue_new_nft(selected_account, destination_address, metadata)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
@@ -855,12 +804,7 @@ impl CommandHandler {
             WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
             WalletCommand::SyncWallet => {
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .sync_once()
-                    .await
-                    .map_err(WalletCliError::Controller)?;
+                self.controller()?.sync_once().await.map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
@@ -868,11 +812,10 @@ impl CommandHandler {
                 utxo_states,
                 with_locked,
             } => {
-                let mut balances = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let mut balances = controller
                     .get_balance(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
@@ -905,11 +848,10 @@ impl CommandHandler {
                 utxo_states,
                 with_locked,
             } => {
-                let utxos = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let utxos = controller
                     .get_utxos(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         utxo_type.to_wallet_types(),
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
@@ -919,39 +861,32 @@ impl CommandHandler {
             }
 
             WalletCommand::ListPendingTransactions => {
-                let utxos = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .pending_transactions(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let utxos = controller
+                    .pending_transactions(selected_account)
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
             }
 
             WalletCommand::NewAddress => {
-                let address = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .new_address(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
-                    .map_err(WalletCliError::Controller)?;
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let address =
+                    controller.new_address(selected_account).map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(address.1.get().to_owned()))
             }
 
             WalletCommand::NewPublicKey => {
-                let public_key = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .new_public_key(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let public_key = controller
+                    .new_public_key(selected_account)
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(public_key.hex_encode()))
             }
 
             WalletCommand::GetVrfPublicKey => {
-                let vrf_public_key = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .get_vrf_public_key(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let vrf_public_key = controller
+                    .get_vrf_public_key(selected_account)
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
             }
@@ -959,14 +894,9 @@ impl CommandHandler {
             WalletCommand::SendToAddress { address, amount } => {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .send_to_address(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        address,
-                        amount,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
+                    .send_to_address(selected_account, address, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -980,24 +910,17 @@ impl CommandHandler {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
                 let address = parse_address(chain_config, &address)?;
                 let amount = {
-                    let token_number_of_decimals = controller_opt
-                        .as_mut()
-                        .ok_or(WalletCliError::NoWallet)?
+                    let token_number_of_decimals = self
+                        .controller()?
                         .get_token_number_of_decimals(token_id)
                         .await
                         .map_err(WalletCliError::Controller)?;
                     parse_token_amount(token_number_of_decimals, &amount)?
                 };
 
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .send_tokens_to_address(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        token_id,
-                        address,
-                        amount,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
+                    .send_tokens_to_address(selected_account, token_id, address, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -1007,11 +930,10 @@ impl CommandHandler {
                 let address = parse_address(chain_config, &address)?;
                 let pool_id_address = Address::from_str(chain_config, &pool_id)?;
 
-                let delegation_id = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let delegation_id = controller
                     .create_delegation(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         address,
                         pool_id_address.decode_object(chain_config)?,
                     )
@@ -1030,11 +952,10 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
 
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
                     .delegate_staking(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         amount,
                         delegation_id_address.decode_object(chain_config)?,
                     )
@@ -1054,11 +975,10 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
                 let address = parse_address(chain_config, &address)?;
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
                     .send_to_address_from_delegation(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         address,
                         amount,
                         delegation_id_address.decode_object(chain_config)?,
@@ -1081,11 +1001,10 @@ impl CommandHandler {
                 let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
                 let margin_ratio_per_thousand =
                     to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
                     .create_stake_pool_tx(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
+                        selected_account,
                         amount,
                         decommission_key,
                         margin_ratio_per_thousand,
@@ -1099,24 +1018,17 @@ impl CommandHandler {
 
             WalletCommand::DecommissionStakePool { pool_id } => {
                 let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .decommission_stake_pool(
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                        pool_id,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                controller
+                    .decommission_stake_pool(selected_account, pool_id)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::ShowSeedPhrase => {
-                let phrase = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .seed_phrase()
-                    .map_err(WalletCliError::Controller)?;
+                let phrase =
+                    self.controller()?.seed_phrase().map_err(WalletCliError::Controller)?;
 
                 let msg = if let Some(phrase) = phrase {
                     format!("The saved seed phrase is \"{}\"", phrase.join(" "))
@@ -1128,11 +1040,8 @@ impl CommandHandler {
             }
 
             WalletCommand::PurgeSeedPhrase => {
-                let phrase = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .delete_seed_phrase()
-                    .map_err(WalletCliError::Controller)?;
+                let phrase =
+                    self.controller()?.delete_seed_phrase().map_err(WalletCliError::Controller)?;
 
                 let msg = if let Some(phrase) = phrase {
                     format!("The seed phrase has been deleted, you can save it if you haven't do so yet: \"{}\"", phrase.join(" "))
@@ -1149,13 +1058,9 @@ impl CommandHandler {
             }
 
             WalletCommand::ListPoolIds => {
-                let pool_ids: Vec<_> = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .get_pool_ids(
-                        chain_config,
-                        selected_account.ok_or(WalletCliError::NoSelectedAccount)?,
-                    )
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let pool_ids: Vec<_> = controller
+                    .get_pool_ids(chain_config, selected_account)
                     .await
                     .map_err(WalletCliError::Controller)?
                     .into_iter()
@@ -1173,10 +1078,9 @@ impl CommandHandler {
             }
 
             WalletCommand::ListDelegationIds => {
-                let pool_ids: Vec<_> = controller_opt
-                    .as_mut()
-                    .ok_or(WalletCliError::NoWallet)?
-                    .get_delegations(selected_account.ok_or(WalletCliError::NoSelectedAccount)?)
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let pool_ids: Vec<_> = controller
+                    .get_delegations(selected_account)
                     .map_err(WalletCliError::Controller)?
                     .map(|(delegation_id, balance)| {
                         format_delegation_info(*delegation_id, balance, chain_config.as_ref())

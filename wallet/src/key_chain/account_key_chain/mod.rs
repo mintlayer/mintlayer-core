@@ -29,7 +29,9 @@ use crypto::vrf::ExtendedVRFPrivateKey;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
-use wallet_storage::{StoreTxRo, WalletStorageReadUnlocked, WalletStorageWriteLocked};
+use wallet_storage::{
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+};
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo};
 
@@ -124,9 +126,9 @@ impl AccountKeyChain {
     }
 
     /// Load the key chain from the database
-    pub fn load_from_database<B: storage::Backend>(
+    pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &StoreTxRo<B>,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
         account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {

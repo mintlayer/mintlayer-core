@@ -28,9 +28,9 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    keys::RootKeys, seed_phrase::SerializableSeedPhrase, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
-    KeychainUsageState, WalletTx,
+    chain_info::ChainInfo, keys::RootKeys, seed_phrase::SerializableSeedPhrase,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -52,6 +52,8 @@ pub enum Error {
     WalletSanityErrorInvalidRootKeyCount(usize),
     #[error("Cannot decode address from DB {0}")]
     CannotDecodeAddress(#[from] AddressError),
+    #[error("Wallet DB is not in a consistent state")]
+    WalletDbInconsistentState,
 }
 
 /// Possibly failing result of wallet storage query
@@ -61,12 +63,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait WalletStorageReadLocked {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
+    fn get_chain_info(&self) -> Result<ChainInfo>;
     fn get_transaction(&self, id: &AccountWalletTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(
         &self,
         account_id: &AccountId,
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
+    fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -106,8 +110,11 @@ pub trait WalletStorageEncryptionRead {
 pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_chain_info(&mut self, chain_info: &ChainInfo) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
+    fn clear_transactions(&mut self) -> Result<()>;
+    fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> Result<()>;
     fn set_user_transaction(
         &mut self,
         id: &AccountWalletCreatedTxId,

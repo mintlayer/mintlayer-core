@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::AccountSpending::Delegation;
+use common::chain::AccountSpending::{self, Delegation};
 use common::primitives::id::WithId;
 use common::primitives::Idable;
 use common::Uint256;
@@ -56,8 +56,8 @@ use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
-    StoreTxRo, StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
@@ -78,9 +78,9 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn load_from_database<B: storage::Backend>(
+    pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &StoreTxRo<B>,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;
@@ -119,6 +119,7 @@ impl Account {
         );
 
         db_tx.set_account(&account_id, &account_info)?;
+        db_tx.set_account_unconfirmed_tx_counter(&account_id, 0)?;
 
         let output_cache = OutputCache::empty();
 
@@ -701,11 +702,10 @@ impl Account {
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        // TODO: Should we really report `AnyoneCanSpend` as own?
         Self::get_tx_output_destination(txo).map_or(false, |d| match d {
             Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
-            Destination::AnyoneCanSpend => true,
+            Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
         })
     }
@@ -742,7 +742,7 @@ impl Account {
                         return Ok(true);
                     }
                 }
-                Destination::AnyoneCanSpend => return Ok(true),
+                Destination::AnyoneCanSpend => return Ok(false),
                 Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             }
         }
@@ -793,7 +793,7 @@ impl Account {
         get_transaction_list(&self.key_chain, &self.output_cache, skip, count)
     }
 
-    fn reset_to_height<B: storage::Backend>(
+    pub fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_events: &impl WalletEvents,
@@ -804,16 +804,16 @@ impl Account {
             .txs_with_unconfirmed()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height, _) => {
+                TxState::Confirmed(height, _, _) => {
                     if height > common_block_height {
                         Some(AccountWalletTxId::new(self.get_account_id(), id.clone()))
                     } else {
                         None
                     }
                 }
-                TxState::Inactive
+                TxState::Inactive(_)
                 | TxState::Conflicted(_)
-                | TxState::InMempool
+                | TxState::InMempool(_)
                 | TxState::Abandoned => None,
             })
             .collect::<Vec<_>>();
@@ -840,7 +840,11 @@ impl Account {
                 .output_cache
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
-            TxInput::Account(_) => false,
+            TxInput::Account(outpoint) => match outpoint.account() {
+                AccountSpending::Delegation(delegation_id, _) => {
+                    self.output_cache.owns_delegation(delegation_id)
+                }
+            },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
@@ -867,13 +871,15 @@ impl Account {
         Ok(())
     }
 
+    /// Scan the new blocks for relevant transactions and updates the state
+    /// Returns true if a new transaction was added else false
     pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
         blocks: &[Block],
-    ) -> WalletResult<()> {
+    ) -> WalletResult<bool> {
         assert!(!blocks.is_empty());
         assert!(
             common_block_height <= self.account_info.best_block_height(),
@@ -886,26 +892,37 @@ impl Account {
             self.reset_to_height(db_tx, wallet_events, common_block_height)?;
         }
 
-        for (index, block) in blocks.iter().enumerate() {
-            let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
-            let tx_state = TxState::Confirmed(block_height, block.timestamp());
+        let new_tx_was_added = blocks.iter().enumerate().try_fold(
+            false,
+            |mut new_tx_was_added, (index, block)| -> WalletResult<bool> {
+                let block_height =
+                    BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+                let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
 
-            let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
-            self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
+                new_tx_was_added |=
+                    self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)?;
 
-            for signed_tx in block.transactions() {
-                let wallet_tx = WalletTx::Tx(TxData::new(
-                    signed_tx.transaction().clone().into(),
-                    tx_state,
-                ));
-                self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                    db_tx,
-                    wallet_events,
-                    wallet_tx,
-                    signed_tx,
-                )?;
-            }
-        }
+                block.transactions().iter().enumerate().try_fold(
+                    new_tx_was_added,
+                    |mut new_tx_was_added, (idx, signed_tx)| {
+                        let tx_state =
+                            TxState::Confirmed(block_height, block.timestamp(), idx as u64);
+                        let wallet_tx = WalletTx::Tx(TxData::new(
+                            signed_tx.transaction().clone().into(),
+                            tx_state,
+                        ));
+                        new_tx_was_added |= self
+                            .add_wallet_tx_if_relevant_and_remove_from_user_txs(
+                                db_tx,
+                                wallet_events,
+                                wallet_tx,
+                                signed_tx,
+                            )?;
+                        Ok(new_tx_was_added)
+                    },
+                )
+            },
+        )?;
 
         // Update best_block_height and best_block_id only after successful commit call!
         let best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
@@ -914,7 +931,7 @@ impl Account {
         self.account_info.update_best_block(best_block_height, best_block_id);
         db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
 
-        Ok(())
+        Ok(new_tx_was_added)
     }
 
     /// Add a new wallet tx if relevant for this account and remove it from the user transactions
@@ -940,28 +957,67 @@ impl Account {
         )
     }
 
-    pub fn scan_new_unconfirmed_transactions(
+    pub fn update_best_block(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
+    ) -> WalletResult<()> {
+        self.account_info.update_best_block(best_block_height, best_block_id);
+        db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
+        Ok(())
+    }
+
+    pub fn scan_new_inmempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
-        tx_state: TxState,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.scan_new_unconfirmed_transactions(
+            transactions,
+            TxState::InMempool,
+            db_tx,
+            wallet_events,
+        )
+    }
+
+    pub fn scan_new_inactive_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        db_tx: &mut impl WalletStorageWriteLocked,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.scan_new_unconfirmed_transactions(
+            transactions,
+            TxState::Inactive,
+            db_tx,
+            wallet_events,
+        )
+    }
+
+    fn scan_new_unconfirmed_transactions(
+        &mut self,
+        transactions: &[SignedTransaction],
+        make_tx_state: fn(u64) -> TxState,
         db_tx: &mut impl WalletStorageWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let mut not_added = vec![];
+        let mut counter = db_tx
+            .get_account_unconfirmed_tx_counter(&self.get_account_id())?
+            .ok_or(WalletError::WalletNotInitialized)?;
 
         for signed_tx in transactions {
+            counter += 1;
+            let tx_state = make_tx_state(counter);
             let wallet_tx = WalletTx::Tx(TxData::new(
                 signed_tx.transaction().clone().into(),
                 tx_state,
             ));
 
-            if !self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                db_tx,
-                wallet_events,
-                wallet_tx,
-                signed_tx,
-            )? {
-                not_added.push(signed_tx);
+            if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                not_added.push((signed_tx, tx_state));
             }
         }
 
@@ -969,19 +1025,14 @@ impl Account {
         // and keep looping as long as we add a new tx
         loop {
             let mut not_added_next = vec![];
-            for signed_tx in not_added.iter() {
+            for (signed_tx, tx_state) in not_added.iter() {
                 let wallet_tx = WalletTx::Tx(TxData::new(
                     signed_tx.transaction().clone().into(),
-                    tx_state,
+                    *tx_state,
                 ));
 
-                if self.add_wallet_tx_if_relevant_and_remove_from_user_txs(
-                    db_tx,
-                    wallet_events,
-                    wallet_tx,
-                    signed_tx,
-                )? {
-                    not_added_next.push(*signed_tx);
+                if !self.add_wallet_tx_if_relevant(db_tx, wallet_events, wallet_tx)? {
+                    not_added_next.push((*signed_tx, *tx_state));
                 }
             }
 
@@ -992,6 +1043,9 @@ impl Account {
 
             not_added = not_added_next;
         }
+
+        // update the new counter in the DB
+        db_tx.set_account_unconfirmed_tx_counter(&self.get_account_id(), counter)?;
 
         Ok(())
     }
@@ -1004,7 +1058,7 @@ impl Account {
     }
 
     pub fn has_transactions(&self) -> bool {
-        !self.output_cache.txs_with_unconfirmed().is_empty()
+        self.output_cache.has_confirmed_transactions()
     }
 
     pub fn name(&self) -> &Option<String> {
@@ -1028,6 +1082,16 @@ impl Account {
             db_tx.del_user_transaction(&id)?;
         }
 
+        Ok(())
+    }
+
+    pub fn set_name(
+        &mut self,
+        name: Option<String>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<()> {
+        self.account_info.set_name(name);
+        db_tx.set_account(&self.get_account_id(), &self.account_info)?;
         Ok(())
     }
 }

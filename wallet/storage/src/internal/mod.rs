@@ -20,6 +20,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::key::extended::ExtendedPublicKey;
+use storage::raw;
 
 use crate::{
     schema::Schema, TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorage,
@@ -33,8 +34,8 @@ use password::{challenge_to_sym_key, password_to_sym_key};
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use wallet_types::{
-    wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
+    chain_info::ChainInfo, wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo,
+    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState,
 };
 
 use self::store_tx::EncryptionState;
@@ -50,6 +51,24 @@ impl<B: storage::Backend> Store<B> {
     pub fn new(backend: B) -> crate::Result<Self> {
         let storage: storage::Storage<B, Schema> =
             storage::Storage::new(backend).map_err(crate::Error::from)?;
+
+        let mut storage = Self {
+            storage,
+            encryption_state: EncryptionState::Locked,
+        };
+
+        let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        if challenge.is_none() {
+            storage.encryption_state = EncryptionState::Unlocked(None);
+        }
+
+        Ok(storage)
+    }
+
+    /// Create a new wallet storage
+    pub fn new_from_dump(backend: B, dump: raw::StorageContents<Schema>) -> crate::Result<Self> {
+        let storage: storage::Storage<B, Schema> =
+            storage::Storage::new_from_dump(backend, dump).map_err(crate::Error::from)?;
 
         let mut storage = Self {
             storage,
@@ -234,9 +253,11 @@ macro_rules! delegate_to_transaction {
 impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_chain_info(&self) -> crate::Result<ChainInfo>;
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self, account_id: &AccountId) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>>;
         fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>>;
+        fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> crate::Result<Option<u64>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, String>>;
@@ -252,8 +273,11 @@ impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
 impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+        fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
         fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
+        fn clear_transactions(&mut self) -> crate::Result<()>;
+        fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> crate::Result<()>;
         fn set_user_transaction(&mut self, id: &AccountWalletCreatedTxId, tx: &SignedTransaction) -> crate::Result<()>;
         fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;

@@ -27,6 +27,7 @@ const IN_TOP_N_MB: usize = 5;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -146,6 +147,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         mnemonic: mnemonic::Mnemonic,
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
+        best_block_height: BlockHeight,
+        best_block_id: Id<GenBlock>,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
@@ -157,8 +160,39 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::new_wallet(
-            chain_config.clone(),
+        let wallet = wallet::Wallet::create_new_wallet(
+            Arc::clone(&chain_config),
+            db,
+            &mnemonic.to_string(),
+            passphrase,
+            save_seed_phrase,
+            best_block_height,
+            best_block_id,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        Ok(wallet)
+    }
+
+    pub fn recover_wallet(
+        chain_config: Arc<ChainConfig>,
+        file_path: impl AsRef<Path>,
+        mnemonic: mnemonic::Mnemonic,
+        passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
+    ) -> Result<DefaultWallet, ControllerError<T>> {
+        utils::ensure!(
+            !file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File already exists".to_owned()
+            )
+        );
+
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::recover_wallet(
+            Arc::clone(&chain_config),
             db,
             &mnemonic.to_string(),
             passphrase,
@@ -168,10 +202,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         Ok(wallet)
     }
+    fn make_backup_wallet_file(file_path: impl AsRef<Path>) -> Result<(), ControllerError<T>> {
+        let backup_name = file_path
+            .as_ref()
+            .file_name()
+            .map(|file_name| {
+                let mut file_name = file_name.to_os_string();
+                file_name.push("_backup");
+                file_name
+            })
+            .ok_or(ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File path is not a file".to_owned(),
+            ))?;
+        let backup_file_path = file_path.as_ref().with_file_name(backup_name);
+        logging::log::info!(
+            "The wallet DB requires a migration, creating a backup file: {}",
+            backup_file_path.to_string_lossy()
+        );
+        fs::copy(&file_path, backup_file_path).map_err(|_| {
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "Could not make a backup of the file before migrating it".to_owned(),
+            )
+        })?;
+        Ok(())
+    }
 
     pub fn open_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
+        password: Option<String>,
     ) -> Result<DefaultWallet, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -181,9 +242,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             )
         );
 
-        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+        let db = wallet::wallet::open_or_create_wallet_file(&file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db)
+        let wallet_needs_migration =
+            wallet::Wallet::check_db_needs_migration(&db).map_err(ControllerError::WalletError)?;
+
+        if wallet_needs_migration {
+            Self::make_backup_wallet_file(file_path)?;
+        }
+        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db, password)
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
@@ -749,7 +816,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<T>> {
-        self.wallet.create_account(name).map_err(ControllerError::WalletError)
+        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
     }
 
     pub fn get_transaction_list(
