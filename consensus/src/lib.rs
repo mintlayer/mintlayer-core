@@ -93,7 +93,7 @@ pub enum GenerateBlockInputData {
     PoS(Box<PoSGenerateBlockInputData>),
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone)]
 pub enum FinalizeBlockInputData {
     PoW,
     PoS(PoSFinalizeBlockInputData),

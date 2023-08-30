@@ -124,7 +124,7 @@ impl PoSGenerateBlockInputData {
 /// This struct is an internal data structure that will be created by
 /// `blockprod`, and will be used when finalizing Proof-of-Stake consensus
 /// data (see ConsensusData::PoS for more info) during PoS block creation.
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone)]
 pub struct PoSFinalizeBlockInputData {
     /// The private key of the staker
     stake_private_key: PrivateKey,
