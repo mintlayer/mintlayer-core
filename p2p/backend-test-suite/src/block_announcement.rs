@@ -98,7 +98,7 @@ where
     let mut sync_msg_rx_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
-            services: _,
+            common_services: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
@@ -133,7 +133,7 @@ where
     let mut sync_msg_rx_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
-            services: _,
+            common_services: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
@@ -188,6 +188,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();

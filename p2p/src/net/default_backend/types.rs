@@ -36,10 +36,20 @@ use crate::{
 
 #[derive(Debug)]
 pub enum Command {
-    Connect { address: SocketAddress },
-    Accept { peer_id: PeerId },
-    Disconnect { peer_id: PeerId },
-    SendMessage { peer_id: PeerId, message: Message },
+    Connect {
+        address: SocketAddress,
+        local_services: Option<Services>,
+    },
+    Accept {
+        peer_id: PeerId,
+    },
+    Disconnect {
+        peer_id: PeerId,
+    },
+    SendMessage {
+        peer_id: PeerId,
+        message: Message,
+    },
 }
 
 /// Random nonce sent in outbound handshake.
@@ -71,7 +81,7 @@ pub enum PeerEvent {
     PeerInfoReceived {
         protocol_version: NetworkProtocolVersion,
         network: [u8; 4],
-        services: Services,
+        common_services: Services,
         user_agent: UserAgent,
         software_version: SemVer,
         receiver_address: Option<PeerAddress>,

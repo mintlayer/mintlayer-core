@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use p2p_types::services::Services;
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
@@ -77,6 +78,15 @@ pub enum PeerError {
     Pending(String),
     #[error("Time difference is too large: {0:?}")]
     TimeDiff(Duration),
+    #[error("Selected services are empty")]
+    EmptyServices,
+    #[error(
+        "Unexpected services, expected: {expected_services:?}, available: {available_services:?}"
+    )]
+    UnexpectedServices {
+        expected_services: Services,
+        available_services: Services,
+    },
 }
 
 /// Errors related to establishing a connection with a remote peer

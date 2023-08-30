@@ -20,7 +20,7 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::socket_address::SocketAddress;
 
 use crate::{
-    config::NodeType,
+    config::{NodeType, P2pConfig},
     message::AnnounceAddrRequest,
     net::{
         default_backend::{
@@ -31,7 +31,9 @@ use crate::{
         types::{PeerInfo, Role},
         ConnectivityService, NetworkingService,
     },
-    peer_manager::{tests::make_peer_manager_custom, PeerManager, MAX_OUTBOUND_CONNECTIONS},
+    peer_manager::{
+        tests::make_peer_manager_custom, OutboundConnectType, PeerManager, MAX_OUTBOUND_CONNECTIONS,
+    },
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
@@ -69,7 +71,7 @@ where
         network: *config.magic_bytes(),
         software_version: *config.software_version(),
         user_agent: mintlayer_core_user_agent(),
-        services: NodeType::Full.into(),
+        common_services: NodeType::Full.into(),
     };
     pm.accept_connection(address, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
@@ -144,7 +146,7 @@ fn test_addr_list_handling_inbound() {
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
-        services: NodeType::Full.into(),
+        common_services: NodeType::Full.into(),
     };
     pm.accept_connection(
         TestAddressMaker::new_random_address(),
@@ -201,10 +203,36 @@ fn test_addr_list_handling_inbound() {
 
 #[test]
 fn test_addr_list_handling_outbound() {
+    logging::init_logging::<std::path::PathBuf>(None);
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(test_p2p_config());
+    let p2p_config = Arc::new(P2pConfig {
+        block_relay_peer_count: 0.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    });
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
@@ -230,13 +258,16 @@ fn test_addr_list_handling_outbound() {
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
-        services: NodeType::Full.into(),
+        common_services: NodeType::Full.into(),
     };
-    pm.connect(peer_address, None);
+    pm.connect(peer_address, OutboundConnectType::Automatic);
 
     // New peer connection is requested
     match cmd_rx.try_recv() {
-        Ok(Command::Connect { address }) if address == peer_address => {}
+        Ok(Command::Connect {
+            address,
+            local_services: _,
+        }) if address == peer_address => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
@@ -329,12 +360,18 @@ async fn resend_own_addresses() {
             network: *chain_config.magic_bytes(),
             software_version: *chain_config.software_version(),
             user_agent: mintlayer_core_user_agent(),
-            services: NodeType::Full.into(),
+            common_services: NodeType::Full.into(),
         };
-        pm.connect(peer_address, None);
+        pm.connect(peer_address, OutboundConnectType::Reserved);
 
         // New peer connection is requested
-        while !matches!(cmd_rx.try_recv().unwrap(), Command::Connect { address: _ }) {}
+        while !matches!(
+            cmd_rx.try_recv().unwrap(),
+            Command::Connect {
+                address: _,
+                local_services: _
+            }
+        ) {}
 
         let own_ip = if peer_index % 2 == 0 {
             outbound_address_1

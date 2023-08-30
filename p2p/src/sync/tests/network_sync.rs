@@ -67,6 +67,7 @@ async fn basic(#[case] seed: Seed) {
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
 
     let blocks = make_new_blocks(
@@ -289,6 +290,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
 
     let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);

@@ -52,7 +52,7 @@ use crate::{
 };
 
 use super::{
-    peer::PeerRole,
+    peer::ConnectionInfo,
     types::{HandshakeNonce, P2pTimestamp},
 };
 
@@ -79,7 +79,10 @@ struct PeerContext {
 
     software_version: SemVer,
 
-    services: Services,
+    /// Intersection of requested (set by us) and available (set by the peer) services.
+    /// All services that will be enabled for this peer if it's accepted.
+    /// The Peer Manager can disconnect the peer if some required services are missing.
+    common_services: Services,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -88,7 +91,7 @@ struct PendingPeerContext {
 
     address: SocketAddress,
 
-    peer_role: PeerRole,
+    peer_role: ConnectionInfo,
 
     backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
 }
@@ -185,6 +188,7 @@ where
     fn handle_connect_res(
         &mut self,
         address: SocketAddress,
+        local_services: Option<Services>,
         connection_res: crate::Result<T::Stream>,
     ) -> crate::Result<()> {
         match connection_res {
@@ -194,7 +198,10 @@ where
                 self.create_pending_peer(
                     socket,
                     PeerId::new(),
-                    PeerRole::Outbound { handshake_nonce },
+                    ConnectionInfo::Outbound {
+                        handshake_nonce,
+                        local_services,
+                    },
                     address,
                 )
             }
@@ -227,14 +234,14 @@ where
             &self.syncing_event_tx,
             SyncingEvent::Connected {
                 peer_id,
-                services: peer.services,
+                common_services: peer.common_services,
                 sync_msg_rx,
             },
             &self.shutdown,
         );
         self.events_controller.broadcast(P2pEvent::PeerConnected {
             id: peer_id,
-            services: peer.services,
+            services: peer.common_services,
             address: peer.address.to_string(),
             inbound: peer.inbound,
             user_agent: peer.user_agent.clone(),
@@ -289,7 +296,7 @@ where
                             self.create_pending_peer(
                                 stream,
                                 PeerId::new(),
-                                PeerRole::Inbound,
+                                ConnectionInfo::Inbound,
                                 address,
                             )?;
                         },
@@ -318,7 +325,7 @@ where
         &mut self,
         socket: T::Stream,
         remote_peer_id: PeerId,
-        peer_role: PeerRole,
+        peer_role: ConnectionInfo,
         address: SocketAddress,
     ) -> crate::Result<()> {
         let (backend_event_tx, backend_event_rx) = mpsc::unbounded_channel();
@@ -392,20 +399,23 @@ where
             return Ok(());
         }
 
-        let services = peer_info.services;
-        let inbound = peer_role == PeerRole::Inbound;
+        let common_services = peer_info.common_services;
+        let inbound = peer_role == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
 
         match peer_role {
-            PeerRole::Outbound { handshake_nonce: _ } => {
+            ConnectionInfo::Outbound {
+                handshake_nonce: _,
+                local_services: _,
+            } => {
                 self.conn_event_tx.send(ConnectivityEvent::OutboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
                 })?;
             }
-            PeerRole::Inbound => {
+            ConnectionInfo::Inbound => {
                 self.conn_event_tx.send(ConnectivityEvent::InboundAccepted {
                     address,
                     peer_info,
@@ -422,7 +432,7 @@ where
                 inbound,
                 user_agent,
                 software_version,
-                services,
+                common_services,
                 backend_event_tx,
                 was_accepted: SetFlag::new(),
             },
@@ -460,19 +470,20 @@ where
 
     fn is_connection_from_self(
         &mut self,
-        peer_role: PeerRole,
+        peer_role: ConnectionInfo,
         incoming_nonce: HandshakeNonce,
     ) -> crate::Result<bool> {
-        if peer_role == PeerRole::Inbound {
+        if peer_role == ConnectionInfo::Inbound {
             // Look for own outbound connection with same nonce
             let outbound_peer_id = self
                 .pending
                 .iter()
-                .find(|(_peer_id, pending)| {
-                    pending.peer_role
-                        == PeerRole::Outbound {
-                            handshake_nonce: incoming_nonce,
-                        }
+                .find(|(_peer_id, pending)| match pending.peer_role {
+                    ConnectionInfo::Inbound => false,
+                    ConnectionInfo::Outbound {
+                        handshake_nonce,
+                        local_services: _,
+                    } => handshake_nonce == incoming_nonce,
                 })
                 .map(|(peer_id, _pending)| *peer_id);
 
@@ -504,7 +515,7 @@ where
             PeerEvent::PeerInfoReceived {
                 protocol_version,
                 network,
-                services,
+                common_services,
                 user_agent,
                 software_version,
                 receiver_address,
@@ -518,7 +529,7 @@ where
                     network,
                     software_version,
                     user_agent,
-                    services,
+                    common_services,
                 },
                 receiver_address,
             ),
@@ -528,11 +539,14 @@ where
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {
                     match pending_peer.peer_role {
-                        PeerRole::Inbound => {
+                        ConnectionInfo::Inbound => {
                             // Just log the error
                             log::warn!("inbound pending connection closed unexpectedly");
                         }
-                        PeerRole::Outbound { handshake_nonce: _ } => {
+                        ConnectionInfo::Outbound {
+                            handshake_nonce: _,
+                            local_services: _,
+                        } => {
                             log::warn!("outbound pending connection closed unexpectedly");
 
                             self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
@@ -578,7 +592,10 @@ where
         // Because the second part depends on result of the first part boxed closures are used.
 
         match command {
-            Command::Connect { address } => {
+            Command::Connect {
+                address,
+                local_services,
+            } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
                     self.transport.connect(address),
@@ -589,7 +606,9 @@ where
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
-                    boxed_cb(move |this| this.handle_connect_res(address, connection_res))
+                    boxed_cb(move |this| {
+                        this.handle_connect_res(address, local_services, connection_res)
+                    })
                 }
                 .boxed();
 

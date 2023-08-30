@@ -44,7 +44,8 @@ use p2p::{
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
     types::{
-        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, socket_address::SocketAddress,
+        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, services::Services,
+        socket_address::SocketAddress,
     },
     P2pEventHandler,
 };
@@ -141,7 +142,7 @@ impl NetworkingService for MockNetworkingService {
 
 #[async_trait]
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
-    fn connect(&mut self, address: SocketAddress) -> p2p::Result<()> {
+    fn connect(&mut self, address: SocketAddress, _services: Option<Services>) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
         if let Some(node) = self.state.online.lock().unwrap().get(&address) {
             let peer_id = PeerId::new();
@@ -151,7 +152,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 network: *node.chain_config.magic_bytes(),
                 software_version: SemVer::new(1, 2, 3),
                 user_agent: mintlayer_core_user_agent(),
-                services: NodeType::Full.into(),
+                common_services: NodeType::DnsServer.into(),
             };
             let old = self.state.connected.lock().unwrap().insert(address, peer_id);
             assert!(old.is_none());

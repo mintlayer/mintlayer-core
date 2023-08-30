@@ -45,18 +45,18 @@ use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set
 
 use crate::{
     config::P2pConfig,
-    error::{ConversionError, P2pError, PeerError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError},
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
         PingResponse,
     },
     net::{
-        types::PeerInfo,
         types::{
             services::{Service, Services},
-            ConnectivityEvent, Role,
+            ConnectivityEvent,
         },
+        types::{PeerInfo, PeerRole, Role},
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
@@ -76,7 +76,8 @@ use self::{
 
 /// Maximum number of outbound connections the [`PeerManager`] is allowed to have open.
 /// This value is constant because users should not change this.
-const MAX_OUTBOUND_CONNECTIONS: usize = 8;
+/// 8 regular peers + 2 block relay peers
+const MAX_OUTBOUND_CONNECTIONS: usize = 10;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -112,6 +113,20 @@ const DNS_SEEDS_TESTNET: [&str; 1] = ["testnet-seed.mintlayer.org"];
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
 
+enum OutboundConnectType {
+    /// OutboundBlockRelay or OutboundFullRelay
+    Automatic,
+    Reserved,
+    Manual {
+        response: oneshot_nofail::Sender<crate::Result<()>>,
+    },
+}
+
+struct PendingConnect {
+    outbound_connect_type: OutboundConnectType,
+    block_relay_only: bool,
+}
+
 struct PendingDisconnect {
     peerdb_action: PeerDisconnectionDbAction,
     response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
@@ -136,8 +151,7 @@ where
     peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
 
     /// Hashmap of pending outbound connections
-    pending_outbound_connects:
-        HashMap<SocketAddress, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+    pending_outbound_connects: HashMap<SocketAddress, PendingConnect>,
 
     /// Hashmap of pending disconnect requests
     pending_disconnects: HashMap<PeerId, PendingDisconnect>,
@@ -154,16 +168,12 @@ where
     peer_eviction_random_state: peers_eviction::RandomState,
 }
 
-/// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used).
-/// It will fail if the socket address uses port 0.
+/// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
 pub fn ip_or_socket_address_to_peer_address(
     address: &IpOrSocketAddress,
     chain_config: &ChainConfig,
-) -> crate::Result<SocketAddress> {
-    let peer_address: PeerAddress = address.to_socket_address(chain_config.p2p_port()).into();
-    SocketAddress::from_peer_address(&peer_address, true).ok_or_else(|| {
-        P2pError::ConversionError(ConversionError::InvalidAddress(address.to_string()))
-    })
+) -> SocketAddress {
+    SocketAddress::new(address.to_socket_address(chain_config.p2p_port()))
 }
 
 impl<T, S> PeerManager<T, S>
@@ -225,11 +235,17 @@ where
     /// This won't work for majority of nodes but that should be accepted.
     fn discover_own_address(
         &mut self,
-        role: Role,
-        remote_services: Services,
+        peer_role: PeerRole,
+        common_services: Services,
         receiver_address: Option<PeerAddress>,
     ) -> Option<SocketAddress> {
-        if !remote_services.has_service(Service::PeerAddresses) || role != Role::Outbound {
+        let discover = match peer_role {
+            PeerRole::Inbound | PeerRole::OutboundBlockRelay => false,
+            PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
+                common_services.has_service(Service::PeerAddresses)
+            }
+        };
+        if !discover {
             return None;
         }
 
@@ -327,12 +343,12 @@ where
             None => return,
         };
 
-        let whitelisted_node = match peer.role {
-            Role::Inbound => {
+        let whitelisted_node = match peer.peer_role {
+            PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => {
                 // TODO: Add whitelisted IPs option and check it here
                 false
             }
-            Role::Outbound => self.peerdb.is_reserved_node(&peer.address),
+            PeerRole::OutboundManual => true,
         };
 
         if whitelisted_node {
@@ -382,7 +398,11 @@ where
     /// This function doesn't block on the call but sends a command to the
     /// networking backend which then reports at some point in the future
     /// whether the connection failed or succeeded.
-    fn try_connect(&mut self, address: SocketAddress) -> crate::Result<()> {
+    fn try_connect(
+        &mut self,
+        address: SocketAddress,
+        local_services: Option<Services>,
+    ) -> crate::Result<()> {
         ensure!(
             !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
@@ -399,29 +419,47 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        self.peer_connectivity_handle.connect(address)?;
+        self.peer_connectivity_handle.connect(address, local_services)?;
 
         Ok(())
     }
 
     /// Initiate a new outbound connection or send error to `response` if it's not possible
-    fn connect(
-        &mut self,
-        address: SocketAddress,
-        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
-    ) {
-        log::debug!("try to establish outbound connection to peer at address {address:?}");
-        let res = self.try_connect(address);
+    fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
+        let block_relay_only = match &outbound_connect_type {
+            OutboundConnectType::Automatic => {
+                self.block_relay_peer_count() < *self.p2p_config.block_relay_peer_count
+            }
+            OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,
+        };
+
+        let local_services: Option<Services> = if block_relay_only {
+            Some([Service::Blocks].as_slice().into())
+        } else {
+            None
+        };
+
+        log::debug!("try to establish outbound connection to peer at address {address:?}, local_services: {local_services:?}");
+        let res = self.try_connect(address, local_services);
 
         match res {
             Ok(()) => {
-                let old_value = self.pending_outbound_connects.insert(address, response);
+                let old_value = self.pending_outbound_connects.insert(
+                    address,
+                    PendingConnect {
+                        outbound_connect_type,
+                        block_relay_only,
+                    },
+                );
                 assert!(old_value.is_none());
             }
             Err(e) => {
                 log::debug!("outbound connection to {address:?} failed: {e}");
-                if let Some(response) = response {
-                    response.send(Err(e));
+                match outbound_connect_type {
+                    OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
+                    OutboundConnectType::Manual { response } => {
+                        response.send(Err(e));
+                    }
                 }
             }
         }
@@ -486,7 +524,7 @@ where
     fn validate_connection(
         &mut self,
         address: &SocketAddress,
-        role: Role,
+        peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
         ensure!(
@@ -512,19 +550,48 @@ where
             !self.peerdb.is_address_banned(&address.as_bannable()),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
+        ensure!(
+            !info.common_services.is_empty(),
+            P2pError::PeerError(PeerError::EmptyServices),
+        );
 
-        // If the maximum number of inbound connections is reached,
-        // the new inbound connection cannot be accepted even if it's valid.
-        // Outbound peer count is not checked because the node initiates new connections
-        // only when needed or from RPC requests.
-        // TODO: Always allow connections from the whitelisted IPs
-        if role == Role::Inbound
-            && self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
-        {
-            let evicted = self.try_evict_random_connection();
-            if !evicted {
-                log::info!("no peer is selected for eviction, new connection is dropped");
-                return Err(P2pError::PeerError(PeerError::TooManyPeers));
+        match peer_role {
+            PeerRole::Inbound => {
+                // If the maximum number of inbound connections is reached,
+                // the new inbound connection cannot be accepted even if it's valid.
+                // Outbound peer count is not checked because the node initiates new connections
+                // only when needed or from RPC requests.
+                // TODO: Always allow connections from the whitelisted IPs
+                if self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
+                    && !self.try_evict_random_connection()
+                {
+                    log::info!("no peer is selected for eviction, new connection is dropped");
+                    return Err(P2pError::PeerError(PeerError::TooManyPeers));
+                }
+            }
+
+            PeerRole::OutboundManual => {}
+
+            PeerRole::OutboundFullRelay => {
+                let expected: Services = (*self.p2p_config.node_type).into();
+                utils::ensure!(
+                    info.common_services == expected,
+                    P2pError::PeerError(PeerError::UnexpectedServices {
+                        expected_services: expected,
+                        available_services: info.common_services,
+                    })
+                );
+            }
+
+            PeerRole::OutboundBlockRelay => {
+                let expected: Services = [Service::Blocks].as_slice().into();
+                utils::ensure!(
+                    info.common_services == expected,
+                    P2pError::PeerError(PeerError::UnexpectedServices {
+                        expected_services: expected,
+                        available_services: info.common_services,
+                    })
+                );
             }
         }
 
@@ -554,15 +621,23 @@ where
     }
 
     /// Should we load addresses from this peer?
-    fn should_load_addresses_from(role: Role) -> bool {
+    fn should_load_addresses_from(peer_role: PeerRole) -> bool {
         // Load addresses only from outbound peers, like it's done in Bitcoin Core
-        role == Role::Outbound
+        match peer_role {
+            PeerRole::OutboundFullRelay | PeerRole::OutboundManual => true,
+            PeerRole::Inbound | PeerRole::OutboundBlockRelay => false,
+        }
     }
 
     /// Should we send addresses to this peer if it requests them?
-    fn should_send_addresses_to(role: Role) -> bool {
+    fn should_send_addresses_to(peer_role: PeerRole) -> bool {
         // Send addresses only to inbound peers, like it's done in Bitcoin Core
-        role == Role::Inbound
+        match peer_role {
+            PeerRole::Inbound => true,
+            PeerRole::OutboundFullRelay
+            | PeerRole::OutboundBlockRelay
+            | PeerRole::OutboundManual => false,
+        }
     }
 
     /// Try accept new connection
@@ -573,23 +648,25 @@ where
     fn try_accept_connection(
         &mut self,
         address: SocketAddress,
-        role: Role,
+        peer_role: PeerRole,
         info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
 
-        self.validate_connection(&address, role, &info)?;
+        self.validate_connection(&address, peer_role, &info)?;
 
         self.peer_connectivity_handle.accept(peer_id)?;
 
-        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
+        log::info!(
+            "new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {peer_role:?}"
+        );
 
-        if info.services.has_service(Service::PeerAddresses) {
+        if info.common_services.has_service(Service::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
-        if Self::should_load_addresses_from(role) {
+        if Self::should_load_addresses_from(peer_role) {
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -611,12 +688,12 @@ where
         );
 
         let discovered_own_address =
-            self.discover_own_address(role, info.services, receiver_address);
+            self.discover_own_address(peer_role, info.common_services, receiver_address);
 
         let peer = PeerContext {
             info,
             address,
-            role,
+            peer_role,
             score: 0,
             sent_ping: None,
             ping_last: None,
@@ -626,6 +703,8 @@ where
             announced_addresses,
             address_rate_limiter,
             discovered_own_address,
+            last_tip_block_time: None,
+            last_tx_time: None,
         };
 
         Self::send_own_address_to_peer(&mut self.peer_connectivity_handle, &peer);
@@ -633,8 +712,13 @@ where
         let old_value = self.peers.insert(peer_id, peer);
         assert!(old_value.is_none());
 
-        if role == Role::Outbound {
-            self.peerdb.outbound_peer_connected(address);
+        match peer_role {
+            PeerRole::Inbound => {}
+            PeerRole::OutboundFullRelay
+            | PeerRole::OutboundBlockRelay
+            | PeerRole::OutboundManual => {
+                self.peerdb.outbound_peer_connected(address);
+            }
         }
 
         Ok(())
@@ -649,7 +733,32 @@ where
     ) {
         let peer_id = info.peer_id;
 
-        let accept_res = self.try_accept_connection(address, role, info, receiver_address);
+        let (peer_role, response) = match role {
+            Role::Inbound => (PeerRole::Inbound, None),
+            Role::Outbound => {
+                let PendingConnect {
+                    outbound_connect_type,
+                    block_relay_only,
+                } = self.pending_outbound_connects.remove(&address).expect(
+                    "the address must be present in pending_outbound_connects (accept_connection)",
+                );
+                match outbound_connect_type {
+                    OutboundConnectType::Automatic => {
+                        if block_relay_only {
+                            (PeerRole::OutboundBlockRelay, None)
+                        } else {
+                            (PeerRole::OutboundFullRelay, None)
+                        }
+                    }
+                    OutboundConnectType::Reserved => (PeerRole::OutboundManual, None),
+                    OutboundConnectType::Manual { response } => {
+                        (PeerRole::OutboundManual, Some(response))
+                    }
+                }
+            }
+        };
+
+        let accept_res = self.try_accept_connection(address, peer_role, info, receiver_address);
 
         if let Err(accept_err) = &accept_res {
             log::debug!("connection rejected for peer {peer_id}: {accept_err}");
@@ -660,19 +769,18 @@ where
                 .disconnect(peer_id)
                 .expect("disconnect failed unexpectedly");
 
-            if role == Role::Outbound {
-                self.peerdb.report_outbound_failure(address, accept_err);
+            match peer_role {
+                PeerRole::Inbound => {}
+                PeerRole::OutboundFullRelay
+                | PeerRole::OutboundBlockRelay
+                | PeerRole::OutboundManual => {
+                    self.peerdb.report_outbound_failure(address, accept_err);
+                }
             }
         }
 
-        if role == Role::Outbound {
-            let pending_connect = self
-                .pending_outbound_connects
-                .remove(&address)
-                .expect("pending_outbound_connects must exist (accept_connection)");
-            if let Some(channel) = pending_connect {
-                channel.send(accept_res);
-            }
+        if let Some(response) = response {
+            response.send(accept_res);
         }
     }
 
@@ -687,12 +795,17 @@ where
     fn handle_outbound_error(&mut self, address: SocketAddress, error: P2pError) {
         self.peerdb.report_outbound_failure(address, &error);
 
-        let pending_connect = self
-            .pending_outbound_connects
-            .remove(&address)
-            .expect("pending_outbound_connects must exist (handle_outbound_error)");
-        if let Some(channel) = pending_connect {
-            channel.send(Err(error));
+        let PendingConnect {
+            outbound_connect_type,
+            block_relay_only: _,
+        } = self.pending_outbound_connects.remove(&address).expect(
+            "the address must be present in pending_outbound_connects (handle_outbound_error)",
+        );
+        match outbound_connect_type {
+            OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
+            OutboundConnectType::Manual { response } => {
+                response.send(Err(error));
+            }
         }
     }
 
@@ -709,8 +822,13 @@ where
                 peer.address
             );
 
-            if peer.role == Role::Outbound {
-                self.peerdb.outbound_peer_disconnected(peer.address);
+            match peer.peer_role {
+                PeerRole::Inbound => {}
+                PeerRole::OutboundFullRelay
+                | PeerRole::OutboundBlockRelay
+                | PeerRole::OutboundManual => {
+                    self.peerdb.outbound_peer_disconnected(peer.address);
+                }
             }
 
             if let Some(PendingDisconnect {
@@ -720,11 +838,14 @@ where
             {
                 match peerdb_action {
                     PeerDisconnectionDbAction::Keep => {}
-                    PeerDisconnectionDbAction::RemoveIfOutbound => {
-                        if peer.role == Role::Outbound {
-                            self.peerdb.remove_outbound_address(&peer.address)
+                    PeerDisconnectionDbAction::RemoveIfOutbound => match peer.peer_role {
+                        PeerRole::Inbound => {}
+                        PeerRole::OutboundFullRelay
+                        | PeerRole::OutboundBlockRelay
+                        | PeerRole::OutboundManual => {
+                            self.peerdb.remove_outbound_address(&peer.address);
                         }
-                    }
+                    },
                 }
 
                 if let Some(response) = response {
@@ -805,9 +926,13 @@ where
         let connected_outbound = self
             .peers
             .values()
-            .filter(|peer| {
-                peer.role == Role::Outbound
-                    && self.peerdb.is_reserved_node(&peer.address) == reserved
+            .filter(|peer| match peer.peer_role {
+                PeerRole::Inbound => false,
+                PeerRole::OutboundFullRelay
+                | PeerRole::OutboundBlockRelay
+                | PeerRole::OutboundManual => {
+                    self.peerdb.is_reserved_node(&peer.address) == reserved
+                }
             })
             .map(|peer| peer.address);
         pending_outbound.chain(connected_outbound).collect()
@@ -834,31 +959,22 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    async fn heartbeat(&mut self) {
+    fn heartbeat(&mut self) {
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
         let all_normal_outbound = self.outbound_peers(false);
-        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
-
-        // Try to get some records from DNS servers if there are no addresses to connect.
-        // Do this only if no peers are currently connected.
-        let new_addresses = if new_addresses.is_empty()
-            && self.peers.is_empty()
-            && self.pending_outbound_connects.is_empty()
-        {
-            self.reload_dns_seed().await;
-            self.peerdb.select_new_outbound_addresses(&all_normal_outbound)
-        } else {
-            new_addresses
-        };
-
         let all_reserved_outbound = self.outbound_peers(true);
+
+        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
         let reserved_addresses =
             self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
 
-        for address in new_addresses.into_iter().chain(reserved_addresses.into_iter()) {
-            self.connect(address, None);
+        for address in new_addresses.into_iter() {
+            self.connect(address, OutboundConnectType::Automatic);
+        }
+        for address in reserved_addresses.into_iter() {
+            self.connect(address, OutboundConnectType::Reserved);
         }
     }
 
@@ -907,7 +1023,8 @@ where
     fn handle_addr_list_request(&mut self, peer_id: PeerId) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         // Only one request allowed to reduce load in case of DoS attacks
-        if !Self::should_send_addresses_to(peer.role) || peer.addr_list_req_received.test_and_set()
+        if !Self::should_send_addresses_to(peer.peer_role)
+            || peer.addr_list_req_received.test_and_set()
         {
             log::warn!("Ignore unexpected address list request from peer {peer_id}");
             return;
@@ -943,7 +1060,7 @@ where
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(
-            Self::should_load_addresses_from(peer.role)
+            Self::should_load_addresses_from(peer.peer_role)
                 && !peer.addr_list_resp_received.test_and_set(),
             P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "AddrListResponse".to_owned()
@@ -1017,12 +1134,8 @@ where
     fn handle_control_event(&mut self, event: PeerManagerEvent) {
         match event {
             PeerManagerEvent::Connect(address, response) => {
-                let address_res =
-                    ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                match address_res {
-                    Ok(addr) => self.connect(addr, Some(response)),
-                    Err(err) => response.send(Err(err)),
-                }
+                let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
+                self.connect(address, OutboundConnectType::Manual { response });
             }
             PeerManagerEvent::Disconnect(peer_id, peerdb_action, response) => {
                 self.disconnect(peer_id, peerdb_action, Some(response));
@@ -1031,6 +1144,18 @@ where
                 log::debug!("adjust peer {peer_id} score: {score}");
                 self.adjust_peer_score(peer_id, score);
                 response.send(Ok(()));
+            }
+            PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
+                if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    log::debug!("new tip {block_id} received from peer {peer_id}",);
+                    peer.last_tip_block_time = Some(self.time_getter.get_time());
+                }
+            }
+            PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
+                if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    log::debug!("new transaction {txid} received from peer {peer_id}",);
+                    peer.last_tx_time = Some(self.time_getter.get_time());
+                }
             }
             PeerManagerEvent::GetPeerCount(response) => {
                 response.send(self.active_peer_count());
@@ -1044,28 +1169,16 @@ where
                 response.send(peers);
             }
             PeerManagerEvent::AddReserved(address, response) => {
-                let address_res =
-                    ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                match address_res {
-                    Ok(addr) => {
-                        self.peerdb.add_reserved_node(addr);
-                        // Initiate new outbound connection without waiting for `heartbeat`
-                        self.connect(addr, None);
-                        response.send(Ok(()));
-                    }
-                    Err(err) => response.send(Err(err)),
-                }
+                let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
+                self.peerdb.add_reserved_node(address);
+                // Initiate new outbound connection without waiting for `heartbeat`
+                self.connect(address, OutboundConnectType::Reserved);
+                response.send(Ok(()));
             }
             PeerManagerEvent::RemoveReserved(address, response) => {
-                let address_res =
-                    ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                match address_res {
-                    Ok(addr) => {
-                        self.peerdb.remove_reserved_node(addr);
-                        response.send(Ok(()));
-                    }
-                    Err(err) => response.send(Err(err)),
-                }
+                let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
+                self.peerdb.remove_reserved_node(address);
+                response.send(Ok(()));
             }
             PeerManagerEvent::ListBanned(response) => {
                 response.send(self.peerdb.list_banned().cloned().collect())
@@ -1126,7 +1239,7 @@ where
             .map(|context| ConnectedPeer {
                 peer_id: context.info.peer_id,
                 address: context.address,
-                inbound: context.role == Role::Inbound,
+                peer_role: context.peer_role,
                 ban_score: context.score,
                 user_agent: context.info.user_agent.to_string(),
                 software_version: context.info.software_version.to_string(),
@@ -1157,10 +1270,31 @@ where
     fn inbound_peer_count(&self) -> usize {
         self.peers
             .iter()
-            .filter(|(peer_id, peer)| {
-                peer.role == Role::Inbound && !self.pending_disconnects.contains_key(peer_id)
+            .filter(|(peer_id, peer)| match peer.peer_role {
+                PeerRole::Inbound => !self.pending_disconnects.contains_key(peer_id),
+                PeerRole::OutboundFullRelay
+                | PeerRole::OutboundBlockRelay
+                | PeerRole::OutboundManual => false,
             })
             .count()
+    }
+
+    fn block_relay_peer_count(&self) -> usize {
+        self.pending_outbound_connects
+            .values()
+            .filter(|peer| peer.block_relay_only)
+            .count()
+            + self
+                .peers
+                .values()
+                .map(|peer| peer.peer_role)
+                .filter(|peer_role| match peer_role {
+                    PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
+                        false
+                    }
+                    PeerRole::OutboundBlockRelay => true,
+                })
+                .count()
     }
 
     /// Sends ping requests and disconnects peers that do not respond in time
@@ -1220,19 +1354,19 @@ where
         loop_started_tx: Option<oneshot_nofail::Sender<()>>,
     ) -> crate::Result<Never> {
         // Run heartbeat right away to start outbound connections
-        self.heartbeat().await;
+        self.heartbeat();
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
         let mut last_time = self.time_getter.get_time();
 
         let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
         let mut last_ping_check = self.time_getter.get_time();
+        let mut next_time_resend_own_address = self.time_getter.get_time();
+        let mut next_dns_reload = self.time_getter.get_time();
 
         let mut heartbeat_call_needed = false;
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
-
-        let mut next_time_resend_own_address = self.time_getter.get_time();
 
         if let Some(chan) = loop_started_tx {
             chan.send(());
@@ -1253,7 +1387,7 @@ where
                 _ = periodic_interval.tick() => {}
             }
 
-            // Update the peer manager state as needed
+            // Update the peer manager state as needed:
 
             // Changing the clock time can cause various problems, log such events to make it easier to find the source of the problems
             let now = self.time_getter.get_time();
@@ -1270,19 +1404,32 @@ where
             }
             last_time = now;
 
+            // Periodic heartbeat call where new outbound connections are made
             if (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN && heartbeat_call_needed)
                 || (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX)
             {
-                self.heartbeat().await;
+                self.heartbeat();
                 last_heartbeat = now;
                 heartbeat_call_needed = false;
             }
 
+            // Reload DNS if there are no outbound connections
+            if now >= next_dns_reload
+                && self.peers.is_empty()
+                && self.pending_outbound_connects.is_empty()
+            {
+                self.reload_dns_seed().await;
+                next_dns_reload = now + Duration::from_secs(60);
+                heartbeat_call_needed = true;
+            }
+
+            // Send ping requests and disconnect dead peers
             if ping_check_enabled && now >= last_ping_check + *self.p2p_config.ping_check_period {
                 self.ping_check();
                 last_ping_check = now;
             }
 
+            // Advertise local address regularly
             while next_time_resend_own_address < now {
                 self.resend_own_address_randomly();
 

@@ -90,12 +90,12 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .boot_nodes
             .iter()
             .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
-            .collect::<Result<BTreeSet<_>, _>>()?;
+            .collect::<BTreeSet<_>>();
         let reserved_nodes = p2p_config
             .reserved_nodes
             .iter()
             .map(|addr| ip_or_socket_address_to_peer_address(addr, chain_config))
-            .collect::<Result<BTreeSet<_>, _>>()?;
+            .collect::<BTreeSet<_>>();
 
         let now = time_getter.get_time();
         let addresses = loaded_storage

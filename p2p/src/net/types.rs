@@ -33,10 +33,28 @@ use crate::{
 
 use self::services::Services;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Inbound,
     Outbound,
+}
+
+// TODO: Rename to ConnectionType
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PeerRole {
+    Inbound,
+    OutboundFullRelay,
+    OutboundBlockRelay,
+    OutboundManual,
+}
+
+impl PeerRole {
+    pub const ALL: [PeerRole; 4] = [
+        PeerRole::Inbound,
+        PeerRole::OutboundFullRelay,
+        PeerRole::OutboundBlockRelay,
+        PeerRole::OutboundManual,
+    ];
 }
 
 /// Peer information learned during handshaking
@@ -64,8 +82,10 @@ pub struct PeerInfo {
     /// User agent of the peer
     pub user_agent: UserAgent,
 
-    /// The announcements list that a peer interested is.
-    pub services: Services,
+    /// Intersection of requested (set by us) and available (set by the peer) services.
+    /// All services that will be enabled for this peer if it's accepted.
+    /// The Peer Manager can disconnect the peer if some required services are missing.
+    pub common_services: Services,
 }
 
 impl PeerInfo {
@@ -150,7 +170,7 @@ pub enum SyncingEvent {
     /// Peer connected
     Connected {
         peer_id: PeerId,
-        services: Services,
+        common_services: Services,
         sync_msg_rx: Receiver<SyncMessage>,
     },
 

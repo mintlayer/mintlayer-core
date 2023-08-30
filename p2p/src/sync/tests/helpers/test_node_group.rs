@@ -23,6 +23,7 @@ use tokio::time;
 use crate::{
     message::{SyncMessage, TransactionResponse},
     sync::tests::helpers::LONG_TIMEOUT,
+    PeerManagerEvent,
 };
 
 use super::{get_random_hash, TestNode};
@@ -304,11 +305,31 @@ impl TestNodeGroup {
         self.prevent_peer_manager_events = set;
     }
 
+    /// NewBlockReceived/NewTransactionReceived messages are ignored
+    // TODO: Rename the function
     fn assert_no_peer_manager_events_if_needed(&mut self) {
         if self.prevent_peer_manager_events {
             for data_item in &mut self.data {
                 if let Ok(peer_event) = data_item.node.peer_manager_event_receiver.try_recv() {
-                    panic!("Unexpected peer manager event: {peer_event:?}");
+                    match peer_event {
+                        PeerManagerEvent::Connect(_, _)
+                        | PeerManagerEvent::Disconnect(_, _, _)
+                        | PeerManagerEvent::GetPeerCount(_)
+                        | PeerManagerEvent::GetBindAddresses(_)
+                        | PeerManagerEvent::GetConnectedPeers(_)
+                        | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                        | PeerManagerEvent::AddReserved(_, _)
+                        | PeerManagerEvent::RemoveReserved(_, _)
+                        | PeerManagerEvent::ListBanned(_)
+                        | PeerManagerEvent::Ban(_, _)
+                        | PeerManagerEvent::Unban(_, _) => {
+                            panic!("Unexpected peer manager event: {peer_event:?}");
+                        }
+                        PeerManagerEvent::NewTipReceived { .. }
+                        | PeerManagerEvent::NewValidTransactionReceived { .. } => {
+                            // Ignored
+                        }
+                    }
                 }
             }
         }

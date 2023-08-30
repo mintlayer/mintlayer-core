@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub mod backend;
-pub mod peer;
+mod peer;
 pub mod transport;
 pub mod types;
 
@@ -22,7 +22,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
 use common::time_getter::TimeGetter;
-use p2p_types::socket_address::SocketAddress;
+use p2p_types::{services::Services, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -167,13 +167,20 @@ impl<S> ConnectivityService<S> for ConnectivityHandle<S>
 where
     S: NetworkingService + Send,
 {
-    fn connect(&mut self, address: SocketAddress) -> crate::Result<()> {
+    fn connect(
+        &mut self,
+        address: SocketAddress,
+        local_services: Option<Services>,
+    ) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
         );
 
-        Ok(self.cmd_tx.send(types::Command::Connect { address })?)
+        Ok(self.cmd_tx.send(types::Command::Connect {
+            address,
+            local_services,
+        })?)
     }
 
     fn accept(&mut self, peer_id: PeerId) -> crate::Result<()> {

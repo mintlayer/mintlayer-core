@@ -27,7 +27,7 @@ use tokio::{
 
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
-    net::types::{services::Service, Role},
+    net::types::{services::Service, PeerRole},
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
@@ -71,7 +71,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.try_connect(remote_addr).unwrap();
+    peer_manager.try_connect(remote_addr, None).unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -137,7 +137,7 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
-    pm1.heartbeat().await;
+    pm1.heartbeat();
 
     assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(
@@ -277,7 +277,7 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    pm2.try_accept_connection(address, Role::Inbound, peer_info, None).unwrap();
+    pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None).unwrap();
 }
 
 #[tokio::test]
@@ -330,7 +330,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.try_accept_connection(address, Role::Inbound, peer_info, None),
+        pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -436,7 +436,7 @@ where
         make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.try_accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
+        pm1.try_accept_connection(peer.0, PeerRole::Inbound, peer.1, None).unwrap();
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
@@ -471,7 +471,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -497,7 +497,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -523,7 +523,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -561,7 +561,7 @@ where
     .unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
-    conn.connect(addr2).expect("dial to succeed");
+    conn.connect(addr2, None).expect("dial to succeed");
 
     match timeout(Duration::from_secs(1), conn.poll_next()).await {
         Ok(res) => assert!(std::matches!(
@@ -639,6 +639,7 @@ async fn connection_timeout_rpc_notified<T>(
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -752,6 +753,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -797,6 +799,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -852,6 +855,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    logging::init_logging::<std::path::PathBuf>(None);
     let chain_config = Arc::new(config::create_mainnet());
 
     let time_getter = P2pBasicTestTimeGetter::new();
@@ -881,6 +885,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -927,6 +932,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -967,6 +973,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),

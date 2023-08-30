@@ -131,7 +131,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0]).expect("dial to succeed");
+    conn1.connect(addr[0], None).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -252,6 +252,7 @@ pub fn test_p2p_config() -> P2pConfig {
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     }
 }
 
