@@ -48,12 +48,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
         let mut work_queue = WorkQueue::new();
         let result = self.add_transaction(tx, origin, &mut work_queue);
-
-        while !work_queue.is_empty() {
-            self.perform_work_unit(&mut work_queue);
-        }
-
+        self.process_queue(&mut work_queue);
         result
+    }
+
+    pub fn process_queue(&mut self, work_queue: &mut WorkQueue) {
+        while !work_queue.is_empty() {
+            self.perform_work_unit(work_queue);
+        }
     }
 }
 
@@ -63,10 +65,12 @@ pub trait TxStatusExt: Sized {
 
     /// Assert the status of the transaction that the tx is in mempool
     fn assert_in_mempool(&self);
+
+    /// Assert the status of the transaction that the tx is in orphan pool
+    fn assert_in_orphan_pool(&self);
 }
 
 impl TxStatusExt for TxStatus {
-    /// Fetch status of given instruction from mempool, doing some integrity checks
     fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
         let in_mempool = mempool.contains_transaction(tx_id);
         let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
@@ -78,9 +82,12 @@ impl TxStatusExt for TxStatus {
         }
     }
 
-    /// Assert the status of the transaction that the tx is in mempool
     fn assert_in_mempool(&self) {
         assert!(self.in_mempool());
+    }
+
+    fn assert_in_orphan_pool(&self) {
+        assert!(self.in_orphan_pool());
     }
 }
 

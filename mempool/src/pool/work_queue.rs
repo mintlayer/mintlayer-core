@@ -222,6 +222,11 @@ impl<W: Ord> WorkQueue<W> {
             self.scheduled.shuffle(&mut random::make_pseudo_rng());
         }
     }
+
+    #[cfg(test)]
+    pub fn total_len(&self) -> usize {
+        self.work_queue.values().map(|q| q.queue.len()).sum()
+    }
 }
 
 #[cfg(test)]
