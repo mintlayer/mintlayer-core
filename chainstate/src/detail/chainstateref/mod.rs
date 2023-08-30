@@ -344,7 +344,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Obtain the last common ancestor between the specified block and the tip of the main chain.
-    /// 
+    ///
     /// Note: if the block is itself on the main chain, its own index will be returned, not parent's.
     // TODO: unlike its generic counterpart above, this function may be optimized by taking jumps
     // via get_ancestor instead of the block-by-block iteration (because here the other chain is

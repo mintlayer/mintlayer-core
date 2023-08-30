@@ -370,15 +370,3 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     log::debug!("Joining subsystem managers");
     nodes.join_subsystem_managers().await;
 }
-
-// FIXME: write a test for block invalidation: send headers, but then invalidate blocks on
-// the main chain, so that it becomes shorter.
-// Test scenario, roughly:
-// 1) Send some blocks to the peer;
-// 2) Invalidate 2nd block from the top; add 1 new block instead (better be done in the opposite
-// order to avoid extra tip updates);
-// 3) send the tip update for the new block; the peer asks for blocks;
-// 4) In the meantime, invalidate the new block;
-// 5) Situation: the peer asks for a block at height less than best_sent_block.block_height();
-// handle_block_request checks that at least block ids are different from ones on the mainchain.
-// But there is no mainchain block at that height. Should not panic.
