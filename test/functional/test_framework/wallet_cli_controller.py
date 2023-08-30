@@ -117,13 +117,21 @@ class WalletCliController:
     async def send_to_address(self, address: str, amount: int) -> str:
         return await self._write_command(f"sendtoaddress {address} {amount}\n")
 
+    async def send_tokens_to_address(self, token_id: str, address: str, amount: float):
+        return await self._write_command(f"sendtokenstoaddress {token_id} {address} {amount}\n")
+
     async def issue_new_token(self,
                               token_ticker: str,
                               amount_to_issue: str,
                               number_of_decimals: int,
                               metadata_uri: str,
-                              destination_address: str) -> str:
-        return await self._write_command(f"issuenewtoken {token_ticker} {amount_to_issue} {number_of_decimals} {metadata_uri} {destination_address}\n")
+                              destination_address: str) -> Optional[str]:
+        output = await self._write_command(f"issuenewtoken {token_ticker} {amount_to_issue} {number_of_decimals} {metadata_uri} {destination_address}\n")
+        if output.startswith("A new token has been issued with ID"):
+            return output[output.find(':')+2:]
+
+        self.log.error(f"err: {output}")
+        return None
 
     async def issue_new_nft(self,
                             destination_address: str,
@@ -134,8 +142,13 @@ class WalletCliController:
                             creator: Optional[str] = '',
                             icon_uri: Optional[str] = '',
                             media_uri: Optional[str] = '',
-                            additional_metadata_uri: Optional[str] = '') -> str:
-        return await self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
+                            additional_metadata_uri: Optional[str] = ''):
+        output = await self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
+        if output.startswith("A new NFT has been issued with ID"):
+            return output[output.find(':')+2:]
+
+        self.log.error(f"err: {output}")
+        return None
 
     async def create_stake_pool(self,
                                 amount: str,

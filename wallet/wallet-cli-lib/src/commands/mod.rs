@@ -390,6 +390,10 @@ fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
     value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
+fn print_token_amount(token_number_of_decimals: u8, value: Amount) -> String {
+    value.into_fixedpoint_str(token_number_of_decimals)
+}
+
 struct CliWalletState {
     selected_account: U31,
 }
@@ -753,7 +757,7 @@ impl CommandHandler {
                 metadata_uri,
                 destination_address,
             } => {
-                let amount_to_issue = parse_coin_amount(chain_config, &amount_to_issue)?;
+                let amount_to_issue = parse_token_amount(number_of_decimals, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
@@ -833,24 +837,31 @@ impl CommandHandler {
                     )
                     .map_err(WalletCliError::Controller)?;
                 let coin_balance = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-
-                let output = std::iter::once((Currency::Coin, coin_balance))
-                    .chain(balances.into_iter())
-                    .map(|(currency, amount)| match currency {
+                let mut output = String::new();
+                for (currency, amount) in
+                    std::iter::once((Currency::Coin, coin_balance)).chain(balances.into_iter())
+                {
+                    let out = match currency {
                         Currency::Token(token_id) => {
+                            let token_number_of_decimals = controller
+                                .get_token_number_of_decimals(token_id)
+                                .await
+                                .map_err(WalletCliError::Controller)?;
                             format!(
                                 "Token: {} amount: {}",
                                 Address::new(chain_config, &token_id)
                                     .expect("Encoding token id should never fail"),
-                                print_coin_amount(chain_config, amount)
+                                print_token_amount(token_number_of_decimals, amount)
                             )
                         }
                         Currency::Coin => {
                             format!("Coins amount: {}", print_coin_amount(chain_config, amount))
                         }
-                    })
-                    .collect::<Vec<String>>()
-                    .join("\n");
+                    };
+                    output.push_str(&out);
+                    output.push('\n');
+                }
+                output.pop();
 
                 Ok(ConsoleCommand::Print(output))
             }
