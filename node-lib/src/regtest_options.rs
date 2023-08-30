@@ -36,9 +36,9 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_max_future_block_time_offset: Option<u64>,
 
-    /// The chain version (major.minor.path).
+    /// The software version (major.minor.path).
     #[clap(long)]
-    pub chain_version: Option<String>,
+    pub software_version: Option<String>,
 
     /// Target block spacing in seconds.
     #[clap(long)]

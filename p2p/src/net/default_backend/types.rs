@@ -30,7 +30,7 @@ use crate::{
         TransactionResponse,
     },
     net::types::services::Services,
-    protocol::NetworkProtocol,
+    protocol::NetworkProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -39,7 +39,7 @@ pub enum Command {
     Connect { address: SocketAddress },
     Accept { peer_id: PeerId },
     Disconnect { peer_id: PeerId },
-    SendMessage { peer: PeerId, message: Message },
+    SendMessage { peer_id: PeerId, message: Message },
 }
 
 /// Random nonce sent in outbound handshake.
@@ -64,15 +64,16 @@ impl P2pTimestamp {
     }
 }
 
+/// Events sent by Peer to Backend
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        protocol: NetworkProtocol,
+        protocol_version: NetworkProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
         receiver_address: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
@@ -87,21 +88,22 @@ pub enum PeerEvent {
     MessageReceived { message: PeerManagerMessage },
 }
 
-/// Events sent by the default_backend backend to peers
+/// Events sent by Backend to Peer
 #[derive(Debug)]
-pub enum Event {
-    Accepted { sync_tx: Sender<SyncMessage> },
+pub enum BackendEvent {
+    Accepted { sync_msg_tx: Sender<SyncMessage> },
     SendMessage(Box<Message>),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
+    #[codec(index = 0)]
     Hello {
-        protocol: NetworkProtocol,
+        protocol_version: NetworkProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -111,12 +113,13 @@ pub enum HandshakeMessage {
         /// Random nonce that is only used to detect and drop self-connects
         handshake_nonce: HandshakeNonce,
     },
+    #[codec(index = 1)]
     HelloAck {
-        protocol: NetworkProtocol,
+        protocol_version: NetworkProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,

@@ -24,14 +24,14 @@ use common::{
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 
-use crate::protocol::NetworkProtocol;
+use crate::protocol::NetworkProtocolVersion;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     #[error("Peer has an unsupported network protocol: {0:?}")]
-    UnsupportedProtocol(NetworkProtocol),
+    UnsupportedProtocol(NetworkProtocolVersion),
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer is unresponsive")]
@@ -88,7 +88,7 @@ pub enum DialError {
     NoAddresses,
     #[error("Connection refused or timed out")]
     ConnectionRefusedOrTimedOut,
-    #[error("I/O error: `{0:?}`")]
+    #[error("I/O error: {0:?}")]
     IoError(std::io::ErrorKind),
     #[error("Proxy error: {0}")]
     ProxyError(String),
@@ -97,29 +97,37 @@ pub enum DialError {
 /// Conversion errors
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConversionError {
-    #[error("Invalid address: `{0}`")]
+    #[error("Invalid address: {0}")]
     InvalidAddress(String),
-    #[error("Failed to decode data: `{0}`")]
+    #[error("Failed to decode data: {0}")]
     DecodeError(serialization::Error),
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum MessageCodecError {
+    #[error("Message size {actual_size} exceeds the maximum size {max_size}")]
+    MessageTooLarge { actual_size: usize, max_size: usize },
+    #[error("Cannot decode data: {0}")]
+    InvalidEncodedData(serialization::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum P2pError {
-    #[error("Protocol violation: `{0}`")]
+    #[error("Protocol violation: {0}")]
     ProtocolError(ProtocolError),
-    #[error("Failed to dial peer: `{0}`")]
+    #[error("Failed to dial peer: {0}")]
     DialError(DialError),
     #[error("Connection to other task lost")]
     ChannelClosed,
-    #[error("Peer-related error: `{0}`")]
+    #[error("Peer-related error: {0}")]
     PeerError(PeerError),
     #[error("SubsystemFailure")]
     SubsystemFailure,
-    #[error("ConsensusError: `{0}`")]
+    #[error("ConsensusError: {0}")]
     ChainstateError(ChainstateError),
     #[error("DatabaseFailure")]
     StorageFailure(#[from] storage::Error),
-    #[error("Failed to convert data `{0}`")]
+    #[error("Failed to convert data {0}")]
     ConversionError(ConversionError),
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
@@ -127,8 +135,10 @@ pub enum P2pError {
     InvalidConfigurationValue(String),
     #[error("The storage state is invalid: {0}")]
     InvalidStorageState(String),
-    #[error("Mempool error: `{0}`")]
+    #[error("Mempool error: {0}")]
     MempoolError(#[from] MempoolError),
+    #[error("Message codec error: {0}")]
+    MessageCodecError(#[from] MessageCodecError),
 }
 
 impl From<DialError> for P2pError {
@@ -189,6 +199,7 @@ impl BanScore for P2pError {
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
+            P2pError::MessageCodecError(_) => 0,
         }
     }
 }

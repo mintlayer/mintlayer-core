@@ -73,6 +73,7 @@ impl From<NodeType> for Services {
 // in tests. It might be better to separate these "settings" off into a separate struct and/or
 // make some of them constants (and the constant corresponding to msg_max_locator_count may
 // even be moved to chainstate, where locators are actually produced).
+// See the issue https://git.mintlayer.org/mintlayer/mintlayer-core/-/issues/1111
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.

@@ -60,7 +60,7 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    protocol::{NetworkProtocol, NETWORK_PROTOCOL_MIN},
+    protocol::{NetworkProtocolVersion, NETWORK_PROTOCOL_MIN},
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
@@ -132,8 +132,8 @@ where
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
 
-    /// RX channel for receiving control events
-    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent>,
+    /// Channel receiver for receiving control events
+    peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
 
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
@@ -176,7 +176,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent>,
+        peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
@@ -194,7 +194,7 @@ where
             p2p_config,
             time_getter,
             peer_connectivity_handle: handle,
-            rx_peer_manager,
+            peer_mgr_event_rx,
             pending_outbound_connects: HashMap::new(),
             pending_disconnects: HashMap::new(),
             peers: BTreeMap::new(),
@@ -207,7 +207,7 @@ where
     /// Verify network protocol compatibility
     ///
     /// Make sure that the local and remote peers have compatible network protocols
-    fn validate_network_protocol(&self, protocol: NetworkProtocol) -> bool {
+    fn validate_network_protocol(&self, protocol: NetworkProtocolVersion) -> bool {
         protocol >= NETWORK_PROTOCOL_MIN
     }
 
@@ -490,8 +490,8 @@ where
         info: &PeerInfo,
     ) -> crate::Result<()> {
         ensure!(
-            self.validate_network_protocol(info.protocol),
-            P2pError::ProtocolError(ProtocolError::UnsupportedProtocol(info.protocol))
+            self.validate_network_protocol(info.protocol_version),
+            P2pError::ProtocolError(ProtocolError::UnsupportedProtocol(info.protocol_version))
         );
         ensure!(
             info.is_compatible(&self.chain_config),
@@ -554,13 +554,13 @@ where
     }
 
     /// Should we load addresses from this peer?
-    fn load_addresses_from(role: Role) -> bool {
+    fn should_load_addresses_from(role: Role) -> bool {
         // Load addresses only from outbound peers, like it's done in Bitcoin Core
         role == Role::Outbound
     }
 
     /// Should we send addresses to this peer if it requests them?
-    fn send_addresses_to(role: Role) -> bool {
+    fn should_send_addresses_to(role: Role) -> bool {
         // Send addresses only to inbound peers, like it's done in Bitcoin Core
         role == Role::Inbound
     }
@@ -589,7 +589,7 @@ where
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
-        if Self::load_addresses_from(role) {
+        if Self::should_load_addresses_from(role) {
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -819,7 +819,7 @@ where
     /// or the heartbeat timer of the event loop expires. In other words, the peer manager state
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound. `PeerManager` will keep track of
-    /// when it last update its own state and if the time since last update is less than the
+    /// when it last updated its own state and if the time since last update is less than the
     /// configured lower bound, *heartbeat* won't be called.
     ///
     /// This function maintains the overall connectivity state of peers by culling
@@ -907,7 +907,8 @@ where
     fn handle_addr_list_request(&mut self, peer_id: PeerId) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         // Only one request allowed to reduce load in case of DoS attacks
-        if !Self::send_addresses_to(peer.role) || peer.addr_list_req_received.test_and_set() {
+        if !Self::should_send_addresses_to(peer.role) || peer.addr_list_req_received.test_and_set()
+        {
             log::warn!("Ignore unexpected address list request from peer {peer_id}");
             return;
         }
@@ -942,7 +943,8 @@ where
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(
-            Self::load_addresses_from(peer.role) && !peer.addr_list_resp_received.test_and_set(),
+            Self::should_load_addresses_from(peer.role)
+                && !peer.addr_list_resp_received.test_and_set(),
             P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "AddrListResponse".to_owned()
             ))
@@ -1082,8 +1084,8 @@ where
     /// Handle connectivity event
     fn handle_connectivity_event(&mut self, event: ConnectivityEvent) {
         match event {
-            ConnectivityEvent::Message { peer, message } => {
-                self.handle_incoming_message(peer, message);
+            ConnectivityEvent::Message { peer_id, message } => {
+                self.handle_incoming_message(peer_id, message);
             }
             ConnectivityEvent::InboundAccepted {
                 address,
@@ -1127,7 +1129,7 @@ where
                 inbound: context.role == Role::Inbound,
                 ban_score: context.score,
                 user_agent: context.info.user_agent.to_string(),
-                version: context.info.version.to_string(),
+                software_version: context.info.software_version.to_string(),
                 ping_wait: context.sent_ping.as_ref().map(|sent_ping| {
                     duration_to_int(&now.checked_sub(sent_ping.timestamp).unwrap_or_default())
                         .expect("valid timestamp expected (ping_wait)")
@@ -1238,7 +1240,7 @@ where
 
         loop {
             tokio::select! {
-                event_res = self.rx_peer_manager.recv() => {
+                event_res = self.peer_mgr_event_rx.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
                     heartbeat_call_needed = true;
                 }

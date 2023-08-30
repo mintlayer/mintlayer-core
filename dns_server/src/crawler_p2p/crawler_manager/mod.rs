@@ -192,8 +192,8 @@ where
 
     fn handle_conn_event(&mut self, event: ConnectivityEvent) {
         match event {
-            ConnectivityEvent::Message { peer, message } => {
-                self.handle_conn_message(peer, message);
+            ConnectivityEvent::Message { peer_id, message } => {
+                self.handle_conn_message(peer_id, message);
             }
             ConnectivityEvent::OutboundAccepted {
                 address,

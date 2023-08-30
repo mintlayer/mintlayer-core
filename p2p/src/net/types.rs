@@ -26,7 +26,7 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::{
     message::{PeerManagerMessage, SyncMessage},
-    protocol::NetworkProtocol,
+    protocol::NetworkProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
 };
@@ -53,13 +53,13 @@ pub struct PeerInfo {
     /// Unique ID of the peer
     pub peer_id: PeerId,
 
-    pub protocol: NetworkProtocol,
+    pub protocol_version: NetworkProtocolVersion,
 
     /// Peer network
     pub network: [u8; 4],
 
     /// Peer software version
-    pub version: SemVer,
+    pub software_version: SemVer,
 
     /// User agent of the peer
     pub user_agent: UserAgent,
@@ -79,9 +79,9 @@ impl Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
-        writeln!(f, "--> Protocol: {:?}", self.protocol)?;
+        writeln!(f, "--> Protocol version: {:?}", self.protocol_version)?;
         writeln!(f, "--> Network: {:x?}", self.network)?;
-        writeln!(f, "--> Software version: {}", self.version)?;
+        writeln!(f, "--> Software version: {}", self.software_version)?;
         writeln!(f, "--> User agent: {}", self.user_agent)?;
 
         Ok(())
@@ -92,7 +92,7 @@ impl Display for PeerInfo {
 #[derive(Debug)]
 pub enum ConnectivityEvent {
     Message {
-        peer: PeerId,
+        peer_id: PeerId,
         message: PeerManagerMessage,
     },
     /// Outbound connection accepted
@@ -151,7 +151,7 @@ pub enum SyncingEvent {
     Connected {
         peer_id: PeerId,
         services: Services,
-        sync_rx: Receiver<SyncMessage>,
+        sync_msg_rx: Receiver<SyncMessage>,
     },
 
     /// Peer disconnected

@@ -87,7 +87,7 @@ impl TestNodeGroup {
         // TODO: is there a better way to perform select_all on sync_event_receivers (i.e. without
         // extra allocations)?
 
-        let mut sync_event_receivers: Vec<_> = self
+        let mut sync_msg_receivers: Vec<_> = self
             .data
             .iter_mut()
             .enumerate()
@@ -95,14 +95,14 @@ impl TestNodeGroup {
                 if data_item.delay_sync_messages_from {
                     None
                 } else {
-                    Some((idx, &mut data_item.node.sync_event_receiver))
+                    Some((idx, &mut data_item.node.sync_msg_receiver))
                 }
             })
             .collect();
-        assert!(!sync_event_receivers.is_empty());
+        assert!(!sync_msg_receivers.is_empty());
 
         let combined_future = select_all(
-            sync_event_receivers
+            sync_msg_receivers
                 .iter_mut()
                 .map(|(_, recv)| recv.recv().boxed())
                 .collect::<Vec<_>>(),
@@ -110,7 +110,7 @@ impl TestNodeGroup {
 
         let (receiver_peer_id_msg, future_idx, _) =
             time::timeout(LONG_TIMEOUT, combined_future).await.unwrap();
-        let sender_node_idx = sync_event_receivers[future_idx].0;
+        let sender_node_idx = sync_msg_receivers[future_idx].0;
         let (receiver_peer_id, msg) = receiver_peer_id_msg.unwrap();
         let receiver_node_idx = self.node_idx_by_peer_id(receiver_peer_id);
 
@@ -226,11 +226,11 @@ impl TestNodeGroup {
             loop {
                 self.assert_no_peer_manager_events_if_needed();
 
-                let (dest_peer_id, sync_event) =
-                    self.data[i].node.sync_event_receiver.recv().await.unwrap();
+                let (dest_peer_id, sync_msg) =
+                    self.data[i].node.sync_msg_receiver.recv().await.unwrap();
 
                 // Send sync messages between peers
-                match &sync_event {
+                match &sync_msg {
                     SyncMessage::TransactionResponse(TransactionResponse::NotFound(tx_id))
                         if *tx_id == sentinel_tx_id =>
                     {

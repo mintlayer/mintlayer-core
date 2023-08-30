@@ -80,7 +80,7 @@ where
     {
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, *config.version());
+        assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(peer_info.services, NodeType::Full.into());
     } else {
@@ -153,7 +153,7 @@ where
             receiver_address: _,
         } => {
             assert_eq!(peer_info.network, *config.magic_bytes());
-            assert_eq!(peer_info.version, *config.version());
+            assert_eq!(peer_info.software_version, *config.software_version());
             assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         }
         _ => panic!("invalid event received, expected incoming connection"),
@@ -307,9 +307,9 @@ where
     }) = conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
-        assert_eq!(peer_info.protocol, NETWORK_PROTOCOL_CURRENT);
+        assert_eq!(peer_info.protocol_version, NETWORK_PROTOCOL_CURRENT);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, *config.version());
+        assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(peer_info.services, NodeType::Full.into());
     } else {

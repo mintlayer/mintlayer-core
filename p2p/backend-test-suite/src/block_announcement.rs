@@ -95,17 +95,17 @@ where
         )
         .unwrap();
 
-    let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
+    let mut sync_msg_rx_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-            sync_rx,
-        } => sync_rx,
+            sync_msg_rx,
+        } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
     // Poll an event from the network for server2.
-    let header = match sync_rx_2.recv().await.unwrap() {
+    let header = match sync_msg_rx_2.recv().await.unwrap() {
         SyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()
@@ -130,16 +130,16 @@ where
         )
         .unwrap();
 
-    let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
+    let mut sync_msg_rx_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
             services: _,
-            sync_rx,
-        } => sync_rx,
+            sync_msg_rx,
+        } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
-    let header = match sync_rx_1.recv().await.unwrap() {
+    let header = match sync_msg_rx_1.recv().await.unwrap() {
         SyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()

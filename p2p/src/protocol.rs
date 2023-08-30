@@ -17,13 +17,13 @@
 ///
 /// When two nodes connect, they exchange protocol versions,
 /// and the minimum version is selected as the negotiated network protocol version.
-pub type NetworkProtocol = u32;
+pub type NetworkProtocolVersion = u32;
 
 /// Initial protocol version
-pub const NETWORK_PROTOCOL_V1: NetworkProtocol = 1;
+pub const NETWORK_PROTOCOL_V1: NetworkProtocolVersion = 1;
 
 /// Latest known network protocol version
-pub const NETWORK_PROTOCOL_CURRENT: NetworkProtocol = NETWORK_PROTOCOL_V1;
+pub const NETWORK_PROTOCOL_CURRENT: NetworkProtocolVersion = NETWORK_PROTOCOL_V1;
 
 /// Minimum supported network protocol version
-pub const NETWORK_PROTOCOL_MIN: NetworkProtocol = NETWORK_PROTOCOL_V1;
+pub const NETWORK_PROTOCOL_MIN: NetworkProtocolVersion = NETWORK_PROTOCOL_V1;
