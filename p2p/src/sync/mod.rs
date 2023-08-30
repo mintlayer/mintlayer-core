@@ -158,7 +158,7 @@ where
         &mut self,
         peer_id: PeerId,
         remote_services: Services,
-        sync_rx: Receiver<SyncMessage>,
+        sync_msg_rx: Receiver<SyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
@@ -172,7 +172,7 @@ where
             self.chainstate_handle.clone(),
             self.mempool_handle.clone(),
             self.peer_manager_sender.clone(),
-            sync_rx,
+            sync_msg_rx,
             self.messaging_handle.clone(),
             local_event_rx,
             Arc::clone(&self.is_initial_block_download),
@@ -265,8 +265,8 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 services,
-                sync_rx,
-            } => self.register_peer(peer_id, services, sync_rx),
+                sync_msg_rx,
+            } => self.register_peer(peer_id, services, sync_msg_rx),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);

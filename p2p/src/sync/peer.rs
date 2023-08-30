@@ -93,7 +93,7 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
-    sync_rx: Receiver<SyncMessage>,
+    sync_msg_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
     // TODO: this is an optimization to avoid extra subsystem calls. But there is no need for it
     // to be an atomic; instead, we can receive it as a non-atomic bool during construction and
@@ -157,7 +157,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
-        sync_rx: Receiver<SyncMessage>,
+        sync_msg_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
         is_initial_block_download: Arc<AcqRelAtomicBool>,
@@ -181,7 +181,7 @@ where
             mempool_handle,
             peer_manager_sender,
             messaging_handle,
-            sync_rx,
+            sync_msg_rx,
             local_event_rx,
             is_initial_block_download,
             time_getter,
@@ -230,7 +230,7 @@ where
 
         loop {
             tokio::select! {
-                message = self.sync_rx.recv() => {
+                message = self.sync_msg_rx.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
@@ -254,11 +254,15 @@ where
         }
     }
 
+    fn send_message(&mut self, message: SyncMessage) -> Result<()> {
+        self.messaging_handle.send_message(self.id(), message)
+    }
+
     fn send_headers(&mut self, headers: HeaderList) -> Result<()> {
         if let Some(last_header) = headers.headers().last() {
             self.outgoing.best_sent_block_header = Some(last_header.block_id().into());
         }
-        self.messaging_handle.send_message(self.id(), SyncMessage::HeaderList(headers))
+        self.send_message(SyncMessage::HeaderList(headers))
     }
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
@@ -376,7 +380,7 @@ where
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
-                    self.messaging_handle.send_message(self.id(), SyncMessage::NewTransaction(txid))
+                    self.send_message(SyncMessage::NewTransaction(txid))
                 } else {
                     Ok(())
                 }
@@ -399,10 +403,9 @@ where
         }
 
         log::debug!("[peer id = {}] Sending header list request", self.id());
-        self.messaging_handle.send_message(
-            self.id(),
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )?;
+        self.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+            locator,
+        )))?;
 
         self.peer_activity
             .set_expecting_headers_since(Some(self.time_getter.get_time()));
@@ -850,8 +853,7 @@ where
             None => TransactionResponse::NotFound(id),
         };
 
-        self.messaging_handle
-            .send_message(self.id(), SyncMessage::TransactionResponse(res))?;
+        self.send_message(SyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
@@ -921,8 +923,7 @@ where
         }
 
         if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await?) {
-            self.messaging_handle
-                .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
+            self.send_message(SyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));
         }
 
@@ -993,7 +994,8 @@ where
             | P2pError::ConversionError(_)
             | P2pError::PeerError(_)
             | P2pError::NoiseHandshakeError(_)
-            | P2pError::InvalidConfigurationValue(_)) => panic!("Unexpected error {e:?}"),
+            | P2pError::InvalidConfigurationValue(_)
+            | P2pError::MessageCodecError(_)) => panic!("Unexpected error {e:?}"),
 
             // Fatal errors, simply propagate them to stop the sync manager.
             // Note/TODO: due to how error types are currently organized, a storage error can
@@ -1037,10 +1039,9 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-        self.messaging_handle.send_message(
-            self.id(),
-            SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
-        )?;
+        self.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(
+            block_ids.clone(),
+        )))?;
         self.incoming.requested_blocks.extend(block_ids);
 
         self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
@@ -1071,10 +1072,7 @@ where
             self.id(),
             block.get_id()
         );
-        self.messaging_handle.send_message(
-            self.id(),
-            SyncMessage::BlockResponse(BlockResponse::new(block)),
-        )
+        self.send_message(SyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
     async fn disconnect_if_stalling(&mut self) -> Result<()> {

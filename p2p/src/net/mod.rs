@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Note: this module is more like "the_backend" rather than "default_backend". I.e. it cannot
+// be replaced with some other "non-default" implementation, because its current implementation
+// defines the protocol.
 pub mod default_backend;
 pub mod types;
 

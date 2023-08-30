@@ -333,7 +333,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
     let ChainConfigOptions {
         chain_magic_bytes,
         chain_max_future_block_time_offset,
-        chain_version,
+        software_version: chain_software_version,
         chain_target_block_spacing,
         chain_coin_decimals,
         chain_emission_schedule,
@@ -377,7 +377,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
     };
     update_builder!(magic_bytes, magic_bytes_from_string, map_err);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
-    update_builder!(version, SemVer::try_from, map_err);
+    update_builder!(software_version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
     update_builder!(coin_decimals);
     if let Some(val) = chain_emission_schedule {

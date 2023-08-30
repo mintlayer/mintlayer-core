@@ -31,6 +31,7 @@ use crate::{
     net::{
         default_backend::transport::{
             MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+            TransportListener, TransportSocket,
         },
         types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
@@ -252,4 +253,18 @@ pub fn test_p2p_config() -> P2pConfig {
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     }
+}
+
+pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
+where
+    A: TestTransportMaker<Transport = T>,
+    T: TransportSocket,
+{
+    let transport = A::make_transport();
+    let addr = A::make_address();
+    let mut server = transport.bind(vec![addr]).await.unwrap();
+    let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
 }

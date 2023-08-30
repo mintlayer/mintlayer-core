@@ -29,7 +29,7 @@ pub enum P2pEvent {
         address: String,
         inbound: bool,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
     },
     PeerDisconnected(PeerId),
 }

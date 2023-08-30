@@ -243,9 +243,9 @@ where
             role,
             net::types::PeerInfo {
                 peer_id,
-                protocol: 0,
+                protocol_version: 0,
                 network: *config.magic_bytes(),
-                version: *config.version(),
+                software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
             },
@@ -261,9 +261,9 @@ where
             role,
             net::types::PeerInfo {
                 peer_id,
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: [1, 2, 3, 4],
-                version: *config.version(),
+                software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
             },
@@ -282,9 +282,9 @@ where
                 role,
                 net::types::PeerInfo {
                     peer_id,
-                    protocol,
+                    protocol_version: protocol,
                     network: *config.magic_bytes(),
-                    version: SemVer::new(123, 123, 12345),
+                    software_version: SemVer::new(123, 123, 12345),
                     user_agent: mintlayer_core_user_agent(),
                     services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
@@ -414,9 +414,9 @@ fn ban_and_disconnect() {
     let address_1 = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: NETWORK_PROTOCOL_CURRENT,
         network: *chain_config.magic_bytes(),
-        version: *chain_config.version(),
+        software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
         services: NodeType::Full.into(),
     };

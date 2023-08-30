@@ -65,9 +65,9 @@ where
     let peer_id = PeerId::new();
     let peer_info = PeerInfo {
         peer_id,
-        protocol: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: NETWORK_PROTOCOL_CURRENT,
         network: *config.magic_bytes(),
-        version: *config.version(),
+        software_version: *config.software_version(),
         user_agent: mintlayer_core_user_agent(),
         services: NodeType::Full.into(),
     };
@@ -140,9 +140,9 @@ fn test_addr_list_handling_inbound() {
     let peer_id_1 = PeerId::new();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: NETWORK_PROTOCOL_CURRENT,
         network: *chain_config.magic_bytes(),
-        version: *chain_config.version(),
+        software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
         services: NodeType::Full.into(),
     };
@@ -170,9 +170,9 @@ fn test_addr_list_handling_inbound() {
     pm.handle_addr_list_request(peer_id_1);
     match cmd_rx.try_recv() {
         Ok(Command::SendMessage {
-            peer,
+            peer_id,
             message: Message::AddrListResponse(_),
-        }) if peer == peer_id_1 => {}
+        }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
@@ -226,9 +226,9 @@ fn test_addr_list_handling_outbound() {
     let peer_address = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: NETWORK_PROTOCOL_CURRENT,
         network: *chain_config.magic_bytes(),
-        version: *chain_config.version(),
+        software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
         services: NodeType::Full.into(),
     };
@@ -252,9 +252,9 @@ fn test_addr_list_handling_outbound() {
     // Address list is requested from the connected peer
     match cmd_rx.try_recv() {
         Ok(Command::SendMessage {
-            peer,
+            peer_id,
             message: Message::AddrListRequest(_),
-        }) if peer == peer_id_1 => {}
+        }) if peer_id == peer_id_1 => {}
         v => panic!("unexpected command: {v:?}"),
     }
 
@@ -325,9 +325,9 @@ async fn resend_own_addresses() {
         let peer_address = TestAddressMaker::new_random_address();
         let peer_info = PeerInfo {
             peer_id: new_peer_id,
-            protocol: NETWORK_PROTOCOL_CURRENT,
+            protocol_version: NETWORK_PROTOCOL_CURRENT,
             network: *chain_config.magic_bytes(),
-            version: *chain_config.version(),
+            software_version: *chain_config.software_version(),
             user_agent: mintlayer_core_user_agent(),
             services: NodeType::Full.into(),
         };
@@ -365,7 +365,7 @@ async fn resend_own_addresses() {
             .unwrap();
 
         if let Command::SendMessage {
-            peer: _,
+            peer_id: _,
             message: Message::AnnounceAddrRequest(AnnounceAddrRequest { address }),
         } = event
         {

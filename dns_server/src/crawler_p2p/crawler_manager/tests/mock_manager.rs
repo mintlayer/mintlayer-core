@@ -91,10 +91,10 @@ impl MockStateRef {
     }
 
     pub fn announce_address(&self, from: SocketAddress, announced_ip: SocketAddress) {
-        let peer = *self.connected.lock().unwrap().get(&from).unwrap();
+        let peer_id = *self.connected.lock().unwrap().get(&from).unwrap();
         self.conn_tx
             .send(ConnectivityEvent::Message {
-                peer,
+                peer_id,
                 message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: announced_ip.as_peer_address(),
                 }),
@@ -147,9 +147,9 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
             let peer_id = PeerId::new();
             let peer_info = PeerInfo {
                 peer_id,
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *node.chain_config.magic_bytes(),
-                version: SemVer::new(1, 2, 3),
+                software_version: SemVer::new(1, 2, 3),
                 user_agent: mintlayer_core_user_agent(),
                 services: NodeType::Full.into(),
             };

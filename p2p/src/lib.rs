@@ -123,7 +123,7 @@ where
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
+        let (conn, messaging_handle, syncing_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -172,7 +172,7 @@ where
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver,
             chainstate_handle,
             mempool_handle.clone(),
             tx_peer_manager.clone(),

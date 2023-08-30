@@ -33,7 +33,7 @@ pub struct ConnectedPeer {
 
     pub user_agent: String,
 
-    pub version: String,
+    pub software_version: String,
 
     /// Time spent waiting for a current ping response, in milliseconds
     pub ping_wait: Option<u64>,

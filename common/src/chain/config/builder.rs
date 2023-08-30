@@ -117,7 +117,7 @@ pub struct Builder {
     magic_bytes: [u8; 4],
     p2p_port: u16,
     max_future_block_time_offset: Duration,
-    version: SemVer,
+    software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     coin_ticker: &'static str,
@@ -155,7 +155,7 @@ impl Builder {
             coin_ticker: Mlt::TICKER,
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
-            version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
+            software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
                 .expect("invalid CARGO_PKG_VERSION value"),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
@@ -200,7 +200,7 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
-            version,
+            software_version,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -278,7 +278,7 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
-            version,
+            software_version,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -326,7 +326,7 @@ impl Builder {
     builder_method!(magic_bytes: [u8; 4]);
     builder_method!(p2p_port: u16);
     builder_method!(max_future_block_time_offset: Duration);
-    builder_method!(version: SemVer);
+    builder_method!(software_version: SemVer);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
     builder_method!(max_block_header_size: usize);

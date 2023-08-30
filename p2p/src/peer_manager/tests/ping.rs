@@ -97,9 +97,9 @@ async fn ping_timeout() {
             address: "123.123.123.123:12345".parse().unwrap(),
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
-                version: *chain_config.version(),
+                software_version: *chain_config.software_version(),
                 user_agent: p2p_config.user_agent.clone(),
                 services: NodeType::Full.into(),
             },
@@ -120,11 +120,11 @@ async fn ping_timeout() {
         let event = expect_recv!(&mut cmd_rx);
         match event {
             Command::SendMessage {
-                peer,
+                peer_id,
                 message: Message::PingRequest(PingRequest { nonce }),
             } => {
                 send_and_sync(
-                    peer,
+                    peer_id,
                     PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     &conn_tx,
                     &mut cmd_rx,
@@ -140,7 +140,7 @@ async fn ping_timeout() {
     let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::SendMessage {
-            peer: _,
+            peer_id: _,
             message: Message::PingRequest(PingRequest { nonce: _ }),
         } => {}
         _ => panic!("unexpected event: {event:?}"),

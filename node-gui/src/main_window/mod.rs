@@ -306,7 +306,7 @@ impl MainWindow {
                     address,
                     inbound,
                     user_agent,
-                    version,
+                    software_version: version,
                 }) => {
                     self.node_state.connected_peers.insert(
                         id,

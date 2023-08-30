@@ -152,7 +152,7 @@ pub struct ChainConfig {
     p2p_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
-    version: SemVer,
+    software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     coin_ticker: &'static str,
@@ -246,10 +246,10 @@ impl ChainConfig {
         self.p2p_port
     }
 
-    /// The current version of the protocol that this chain is running
+    /// The current version of this software.
     #[must_use]
-    pub fn version(&self) -> &SemVer {
-        &self.version
+    pub fn software_version(&self) -> &SemVer {
+        &self.software_version
     }
 
     /// The chain of this config (mainnet, testnet, regtest, etc...)
