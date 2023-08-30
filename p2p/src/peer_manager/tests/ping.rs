@@ -66,6 +66,7 @@ async fn ping_timeout() {
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
@@ -101,7 +102,7 @@ async fn ping_timeout() {
                 network: *chain_config.magic_bytes(),
                 software_version: *chain_config.software_version(),
                 user_agent: p2p_config.user_agent.clone(),
-                services: NodeType::Full.into(),
+                common_services: NodeType::Full.into(),
             },
             receiver_address: None,
         })

@@ -115,7 +115,7 @@ where
             .reserved_nodes
             .iter()
             .map(|addr| ip_or_socket_address_to_peer_address(addr, &chain_config))
-            .collect::<Result<BTreeSet<SocketAddress>, _>>()?;
+            .collect::<BTreeSet<SocketAddress>>();
 
         assert!(conn.local_addresses().is_empty());
 
@@ -268,7 +268,7 @@ where
     ) {
         match cmd {
             CrawlerCommand::Connect { address } => {
-                conn.connect(address).expect("connect must succeed");
+                conn.connect(address, None).expect("connect must succeed");
             }
             CrawlerCommand::Disconnect { peer_id } => {
                 conn.disconnect(peer_id).expect("disconnect must succeed");

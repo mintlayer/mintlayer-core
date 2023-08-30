@@ -52,7 +52,6 @@ use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
-    config::NodeType,
     message::{HeaderList, SyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
@@ -75,6 +74,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 pub struct TestNode {
     /// This node's peer id, as seen by other nodes.
     peer_id: PeerId,
+    p2p_config: Arc<P2pConfig>,
     peer_manager_event_receiver: UnboundedReceiver<PeerManagerEvent>,
     syncing_event_sender: UnboundedSender<SyncingEvent>,
     sync_msg_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
@@ -120,7 +120,7 @@ impl TestNode {
 
         let sync_manager = BlockSyncManager::<NetworkingServiceStub>::new(
             chain_config,
-            p2p_config,
+            Arc::clone(&p2p_config),
             messaging_handle,
             syncing_event_receiver_mock,
             chainstate_handle.clone(),
@@ -139,6 +139,7 @@ impl TestNode {
 
         Self {
             peer_id: PeerId::new(),
+            p2p_config,
             peer_manager_event_receiver,
             syncing_event_sender,
             sync_msg_receiver,
@@ -167,7 +168,7 @@ impl TestNode {
         self.syncing_event_sender
             .send(SyncingEvent::Connected {
                 peer_id,
-                services: NodeType::Full.into(),
+                common_services: (*self.p2p_config.node_type).into(),
                 sync_msg_rx,
             })
             .unwrap();
@@ -266,11 +267,35 @@ impl TestNode {
         .unwrap_err();
     }
 
-    /// Panics if there is an event from the peer manager.
+    /// Panics if there is an event from the peer manager (except for the NewTipReceived/NewValidTransactionReceived messages)
+    // TODO: Rename the function
     pub async fn assert_no_peer_manager_event(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.peer_manager_event_receiver.recv())
-            .await
-            .unwrap_err();
+        time::timeout(SHORT_TIMEOUT, async {
+            loop {
+                let peer_event = self.peer_manager_event_receiver.recv().await.unwrap();
+                match peer_event {
+                    PeerManagerEvent::Connect(_, _)
+                    | PeerManagerEvent::Disconnect(_, _, _)
+                    | PeerManagerEvent::GetPeerCount(_)
+                    | PeerManagerEvent::GetBindAddresses(_)
+                    | PeerManagerEvent::GetConnectedPeers(_)
+                    | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                    | PeerManagerEvent::AddReserved(_, _)
+                    | PeerManagerEvent::RemoveReserved(_, _)
+                    | PeerManagerEvent::ListBanned(_)
+                    | PeerManagerEvent::Ban(_, _)
+                    | PeerManagerEvent::Unban(_, _) => {
+                        panic!("Unexpected peer manager event: {peer_event:?}");
+                    }
+                    PeerManagerEvent::NewTipReceived { .. }
+                    | PeerManagerEvent::NewValidTransactionReceived { .. } => {
+                        // Ignored
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap_err();
     }
 
     /// Panics if the sync manager sends an event (message or announcement).

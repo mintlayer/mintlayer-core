@@ -16,6 +16,7 @@
 mod addresses;
 mod ban;
 mod connections;
+mod peer_types;
 mod ping;
 
 use std::{sync::Arc, time::Duration};

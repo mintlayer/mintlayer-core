@@ -151,7 +151,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: PeerId,
-        remote_services: Services,
+        common_services: Services,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
@@ -163,9 +163,6 @@ where
         is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
-        let local_services: Services = (*p2p_config.node_type).into();
-        let common_services = local_services & remote_services;
-
         let known_transactions = RollingBloomFilter::new(
             KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE,
             KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP,
@@ -771,10 +768,11 @@ where
     }
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
+        let block_id = block.get_id();
         log::debug!(
             "[peer id = {}] Handling block response, block id = {}",
             self.id(),
-            block.get_id()
+            block_id
         );
 
         // Clear the block expectation time, because we've received a block.
@@ -792,24 +790,39 @@ where
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let peer_id = self.id();
         let old_peers_best_block_that_we_have = self.incoming.peers_best_block_that_we_have;
-        self.incoming.peers_best_block_that_we_have = self
+        let (best_block, new_tip_received) = self
             .chainstate_handle
             .call_mut(move |c| {
-                let block_id = block.get_id();
                 // If the block already exists in the block tree, skip it.
-                if c.get_block_index(&block.get_id())?.is_some() {
+                let new_tip_received = if c.get_block_index(&block.get_id())?.is_some() {
                     log::debug!(
                         "[peer id = {}] The peer sent a block that already exists ({})",
                         peer_id,
-                        block.get_id()
+                        block_id
                     );
+                    false
                 } else {
-                    c.process_block(block, BlockSource::Peer)?;
-                }
+                    let block_index = c.process_block(block, BlockSource::Peer)?;
+                    block_index.is_some()
+                };
 
-                choose_peers_best_block(c, old_peers_best_block_that_we_have, Some(block_id.into()))
+                let best_block = choose_peers_best_block(
+                    c,
+                    old_peers_best_block_that_we_have,
+                    Some(block_id.into()),
+                )?;
+
+                Result::Ok((best_block, new_tip_received))
             })
             .await??;
+        self.incoming.peers_best_block_that_we_have = best_block;
+
+        if new_tip_received {
+            self.peer_manager_sender.send(PeerManagerEvent::NewTipReceived {
+                peer_id: self.id(),
+                block_id,
+            })?;
+        }
 
         if self.incoming.requested_blocks.is_empty() {
             let headers = mem::take(&mut self.incoming.pending_headers);
@@ -872,10 +885,22 @@ where
 
         if let Some(transaction) = tx {
             let origin = mempool::tx_origin::RemoteTxOrigin::new(self.id());
-            let _tx_status = self
+            let txid = transaction.transaction().get_id();
+            let tx_status = self
                 .mempool_handle
                 .call_mut(move |m| m.add_transaction_remote(transaction, origin))
                 .await??;
+            match tx_status {
+                mempool::TxStatus::InMempool => {
+                    self.peer_manager_sender.send(
+                        PeerManagerEvent::NewValidTransactionReceived {
+                            peer_id: self.id(),
+                            txid,
+                        },
+                    )?;
+                }
+                mempool::TxStatus::InOrphanPool => {}
+            }
         }
 
         Ok(())

@@ -157,7 +157,7 @@ where
     pub fn register_peer(
         &mut self,
         peer_id: PeerId,
-        remote_services: Services,
+        common_services: Services,
         sync_msg_rx: Receiver<SyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
@@ -166,7 +166,7 @@ where
 
         let mut peer = Peer::<T>::new(
             peer_id,
-            remote_services,
+            common_services,
             Arc::clone(&self.chain_config),
             Arc::clone(&self.p2p_config),
             self.chainstate_handle.clone(),
@@ -264,9 +264,9 @@ where
         match event {
             SyncingEvent::Connected {
                 peer_id,
-                services,
+                common_services,
                 sync_msg_rx,
-            } => self.register_peer(peer_id, services, sync_msg_rx),
+            } => self.register_peer(peer_id, common_services, sync_msg_rx),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);

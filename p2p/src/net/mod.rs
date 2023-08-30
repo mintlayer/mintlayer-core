@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::time_getter::TimeGetter;
-use p2p_types::socket_address::SocketAddress;
+use p2p_types::{services::Services, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -90,7 +90,12 @@ where
     ///
     /// # Arguments
     /// `address` - socket address of the peer
-    fn connect(&mut self, address: SocketAddress) -> crate::Result<()>;
+    /// `local_services_override` - what services are enabled for the peer
+    fn connect(
+        &mut self,
+        address: SocketAddress,
+        local_services_override: Option<Services>,
+    ) -> crate::Result<()>;
 
     /// Accept the peer as valid and allow reading of network messages
     fn accept(&mut self, peer_id: PeerId) -> crate::Result<()>;

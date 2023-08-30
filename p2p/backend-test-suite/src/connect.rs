@@ -163,7 +163,7 @@ where
     .unwrap();
 
     let conn_addr = service1.local_addresses().to_vec();
-    service2.connect(conn_addr[0]).unwrap();
+    service2.connect(conn_addr[0], None).unwrap();
     service1.poll_next().await.unwrap();
 
     shutdown.store(true);

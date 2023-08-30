@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use p2p_types::services::Services;
 use tokio::{
     sync::mpsc::{self, Sender},
     time::timeout,
@@ -46,16 +47,22 @@ use super::{
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PeerRole {
+pub enum ConnectionInfo {
     Inbound,
-    Outbound { handshake_nonce: HandshakeNonce },
+    Outbound {
+        handshake_nonce: HandshakeNonce,
+        local_services_override: Option<Services>,
+    },
 }
 
-impl From<PeerRole> for Role {
-    fn from(role: PeerRole) -> Self {
+impl From<ConnectionInfo> for Role {
+    fn from(role: ConnectionInfo) -> Self {
         match role {
-            PeerRole::Inbound => Role::Inbound,
-            PeerRole::Outbound { handshake_nonce: _ } => Role::Outbound,
+            ConnectionInfo::Inbound => Role::Inbound,
+            ConnectionInfo::Outbound {
+                handshake_nonce: _,
+                local_services_override: _,
+            } => Role::Outbound,
         }
     }
 }
@@ -69,8 +76,7 @@ pub struct Peer<T: TransportSocket> {
 
     p2p_config: Arc<P2pConfig>,
 
-    /// Is the connection inbound or outbound
-    peer_role: PeerRole,
+    connection_info: ConnectionInfo,
 
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
@@ -92,7 +98,7 @@ where
     #![allow(clippy::too_many_arguments)]
     pub fn new(
         peer_id: PeerId,
-        peer_role: PeerRole,
+        connection_info: ConnectionInfo,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
@@ -104,7 +110,7 @@ where
 
         Self {
             peer_id,
-            peer_role,
+            connection_info,
             chain_config,
             p2p_config,
             socket,
@@ -133,12 +139,12 @@ where
     }
 
     async fn handshake(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
-        match self.peer_role {
-            PeerRole::Inbound => {
+        match self.connection_info {
+            ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
                     protocol_version,
                     network,
-                    services,
+                    services: remote_services,
                     user_agent,
                     software_version,
                     receiver_address,
@@ -155,6 +161,10 @@ where
                     remote_time.as_duration_since_epoch(),
                 )?;
 
+                let local_services: Services = (*self.p2p_config.node_type).into();
+
+                let common_services = local_services & remote_services;
+
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
                 // It's required to reliably detect self-connects.
@@ -163,7 +173,7 @@ where
                     PeerEvent::PeerInfoReceived {
                         protocol_version,
                         network,
-                        services,
+                        common_services,
                         user_agent,
                         software_version,
                         receiver_address,
@@ -183,12 +193,18 @@ where
                     }))
                     .await?;
             }
-            PeerRole::Outbound { handshake_nonce } => {
+            ConnectionInfo::Outbound {
+                handshake_nonce,
+                local_services_override,
+            } => {
+                let local_services =
+                    local_services_override.unwrap_or_else(|| (*self.p2p_config.node_type).into());
+
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::Hello {
                         protocol_version: NETWORK_PROTOCOL_CURRENT,
                         network: *self.chain_config.magic_bytes(),
-                        services: (*self.p2p_config.node_type).into(),
+                        services: local_services,
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
                         receiver_address: self.receiver_address.clone(),
@@ -202,7 +218,7 @@ where
                     network,
                     user_agent,
                     software_version,
-                    services,
+                    services: remote_services,
                     receiver_address,
                     current_time: remote_time,
                 }) = self.socket.recv().await?
@@ -216,12 +232,14 @@ where
                     remote_time.as_duration_since_epoch(),
                 )?;
 
+                let common_services = local_services & remote_services;
+
                 self.peer_event_tx.send((
                     self.peer_id,
                     PeerEvent::PeerInfoReceived {
                         protocol_version,
                         network,
-                        services,
+                        common_services,
                         user_agent,
                         software_version,
                         receiver_address,
@@ -380,7 +398,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -416,7 +434,7 @@ mod tests {
             PeerEvent::PeerInfoReceived {
                 protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
-                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
                 software_version: *chain_config.software_version(),
                 receiver_address: None,
@@ -454,7 +472,10 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            PeerRole::Outbound { handshake_nonce: 1 },
+            ConnectionInfo::Outbound {
+                handshake_nonce: 1,
+                local_services_override: None,
+            },
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -491,7 +512,7 @@ mod tests {
                 PeerEvent::PeerInfoReceived {
                     protocol_version: NETWORK_PROTOCOL_CURRENT,
                     network: *chain_config.magic_bytes(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     user_agent: p2p_config.user_agent.clone(),
                     software_version: *chain_config.software_version(),
                     receiver_address: None,
@@ -530,7 +551,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -590,7 +611,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             chain_config,
             Arc::clone(&p2p_config),
             socket1,

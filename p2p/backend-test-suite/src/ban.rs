@@ -120,7 +120,7 @@ where
         let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,
-                services: _,
+                common_services: _,
                 sync_msg_rx,
             } => (peer_id, sync_msg_rx),
             e => panic!("Unexpected event type: {e:?}"),

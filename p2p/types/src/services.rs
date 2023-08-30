@@ -23,12 +23,24 @@ pub enum Service {
     PeerAddresses = 1 << 2,
 }
 
+impl Service {
+    pub const ALL: [Service; 3] = [Service::Transactions, Service::Blocks, Service::PeerAddresses];
+}
+
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode)]
 pub struct Services(u64);
 
 impl Services {
+    pub fn from_u64(val: u64) -> Self {
+        Self(val)
+    }
+
     pub fn has_service(&self, flag: Service) -> bool {
         self.0 & flag as u64 != 0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
     }
 }
 

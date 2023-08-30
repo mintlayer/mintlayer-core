@@ -73,6 +73,7 @@ pub async fn start_subsystems(
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        block_relay_peer_count: Default::default(),
     };
 
     let chainstate = make_chainstate(

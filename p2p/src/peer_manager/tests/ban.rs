@@ -19,9 +19,9 @@ use crate::{
     config::NodeType,
     net::{
         default_backend::{types::Command, ConnectivityHandle},
-        types::{services::Service, PeerInfo, Role},
+        types::{services::Service, PeerInfo, PeerRole, Role},
     },
-    peer_manager::PeerManager,
+    peer_manager::{OutboundConnectType, PeerManager},
     protocol::{NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
@@ -197,7 +197,7 @@ where
     pm2.handle_connectivity_event(event.unwrap());
 
     let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(remote_addr, Some(tx));
+    pm2.connect(remote_addr, OutboundConnectType::Manual { response: tx });
     let res = rx.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
@@ -230,7 +230,7 @@ where
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
-    for role in [Role::Outbound, Role::Inbound] {
+    for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
         let config = Arc::new(config::create_mainnet());
         let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
@@ -240,14 +240,16 @@ where
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
             TestAddressMaker::new_random_address(),
-            role,
+            peer_role,
             net::types::PeerInfo {
                 peer_id,
                 protocol_version: 0,
                 network: *config.magic_bytes(),
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
-                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
+                    .as_slice()
+                    .into(),
             },
             None,
         );
@@ -258,14 +260,16 @@ where
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
             TestAddressMaker::new_random_address(),
-            role,
+            peer_role,
             net::types::PeerInfo {
                 peer_id,
                 protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: [1, 2, 3, 4],
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
-                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
+                    .as_slice()
+                    .into(),
             },
             None,
         );
@@ -279,14 +283,20 @@ where
             let peer_id = PeerId::new();
             let res = peer_manager.try_accept_connection(
                 address,
-                role,
+                peer_role,
                 net::types::PeerInfo {
                     peer_id,
                     protocol_version: protocol,
                     network: *config.magic_bytes(),
                     software_version: SemVer::new(123, 123, 12345),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [
+                        Service::Blocks,
+                        Service::Transactions,
+                        Service::PeerAddresses,
+                    ]
+                    .as_slice()
+                    .into(),
                 },
                 None,
             );
@@ -418,7 +428,7 @@ fn ban_and_disconnect() {
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
-        services: NodeType::Full.into(),
+        common_services: NodeType::Full.into(),
     };
     pm.accept_connection(address_1, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
