@@ -14,6 +14,8 @@
 // limitations under the License.
 
 mod best_chain_candidates;
+#[cfg(test)]
+mod best_chain_candidates_tests;
 
 use derive_more::Display;
 use thiserror::Error;

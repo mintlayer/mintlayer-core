@@ -19,8 +19,12 @@ use thiserror::Error;
 
 use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorageRead;
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::{chain::Block, primitives::Id, Uint256};
+use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{Block, GenBlock},
+    primitives::{BlockHeight, Id},
+    Uint256,
+};
 use utils::tap_error_log::LogError;
 
 #[derive(Eq, Copy, Clone, Debug)]
@@ -38,10 +42,10 @@ impl BestChainCandidatesItem {
         &self.block_id
     }
 
-    fn from_block_index(block_index: &BlockIndex) -> Self {
+    fn from_block_info<BI: BlockInfo>(block_info: &BI) -> Self {
         BestChainCandidatesItem {
-            block_id: *block_index.block_id(),
-            chain_trust: block_index.chain_trust(),
+            block_id: block_info.id(),
+            chain_trust: block_info.chain_trust(),
         }
     }
 }
@@ -74,21 +78,15 @@ impl BestChainCandidates {
     /// Collect candidates for the best chain that have chain trust bigger than or equal to
     /// the specified one.
     /// Only consider branches that start above the minimum height where reorgs are allowed.
-    // FIXME: abstract ChainstateRef away here (e.g. hide it behind a trait) so that
-    // BestChainCandidates can be unit-tested more easily. Then write the tests.
-    pub fn new<S, V>(
-        chainstate_ref: &ChainstateRef<S, V>,
+    pub fn new<Chs: ChainstateAccessor>(
+        chs: &Chs,
         min_chain_trust: Uint256,
-    ) -> Result<BestChainCandidates, BestChainCandidatesError>
-    where
-        S: BlockchainStorageRead,
-        V: TransactionVerificationStrategy,
-    {
-        let min_height_with_allowed_reorg = chainstate_ref.get_min_height_with_allowed_reorg()?;
+    ) -> Result<BestChainCandidates, BestChainCandidatesError> {
+        let min_height_with_allowed_reorg = chs.min_height_with_allowed_reorg()?;
 
         // Note: currently, this call has linear complexity with respect to the total number of
         // blocks, see the TODO near the function itself.
-        let block_ids_by_height = chainstate_ref
+        let block_ids_by_height = chs
             .get_higher_block_ids_sorted_by_height(min_height_with_allowed_reorg)
             .log_err()?;
 
@@ -103,25 +101,24 @@ impl BestChainCandidates {
         // optimizing last_common_ancestor_in_main_chain, see the comment below.
         // TODO: is there a way to make the complexity "more linear" in general?
         for block_id in block_ids_by_height.iter().rev() {
-            let block_index = chainstate_ref.get_existing_block_index(block_id).log_err()?;
+            let block_info = chs.get_block_info(block_id).log_err()?;
 
             // Only consider valid blocks with enough chain trust.
-            if block_index.status().is_ok() && block_index.chain_trust() >= min_chain_trust {
+            if block_info.status().is_ok() && block_info.chain_trust() >= min_chain_trust {
                 // Only add the tips of branches to the list of candidates.
                 if !seen_parents.contains(block_id.into()) {
-                    let gen_block_index: GenBlockIndex = block_index.clone().into();
+                    let gen_block_info = Chs::block_info_to_gen(block_info.clone());
                     // Note: this function can be optimized, see the TODO near it.
-                    let last_common_ancestor = chainstate_ref
-                        .last_common_ancestor_in_main_chain(&gen_block_index)
-                        .log_err()?;
+                    let last_common_ancestor =
+                        chs.last_common_ancestor_in_main_chain(&gen_block_info).log_err()?;
 
                     // Only consider chains that start above the minimum height that allows reorgs.
-                    if last_common_ancestor.block_height() >= min_height_with_allowed_reorg {
-                        let candidate = BestChainCandidatesItem::from_block_index(&block_index);
+                    if last_common_ancestor.height() >= min_height_with_allowed_reorg {
+                        let candidate = BestChainCandidatesItem::from_block_info(&block_info);
                         candidates.insert(candidate);
                     }
                 }
-                seen_parents.insert(*block_index.prev_block_id());
+                seen_parents.insert(block_info.parent_id());
             }
         }
 
@@ -130,30 +127,24 @@ impl BestChainCandidates {
 
     // Remove the block and its descendants, which must be specified in descendants_indices,
     // from the set and add the block's parent block to the set.
-    pub fn on_block_invalidated<S, V>(
+    pub fn on_block_invalidated<Chs: ChainstateAccessor>(
         &mut self,
-        chainstate_ref: &ChainstateRef<S, V>,
-        invalidated_block_index: &BlockIndex,
-        descendants_indices: &[BlockIndex],
-    ) -> Result<(), BestChainCandidatesError>
-    where
-        S: BlockchainStorageRead,
-        V: TransactionVerificationStrategy,
-    {
-        self.remove(chainstate_ref, invalidated_block_index);
+        chs: &Chs,
+        invalidated_block_info: &Chs::BlockInfo,
+        descendant_block_infos: &[Chs::BlockInfo],
+    ) -> Result<(), BestChainCandidatesError> {
+        self.remove(invalidated_block_info);
 
-        for descendant_index in descendants_indices {
-            self.remove(chainstate_ref, descendant_index);
+        for descendant_info in descendant_block_infos {
+            self.remove(descendant_info);
         }
 
         // Add the parent to the list
-        if let Some(prev_block_id) = invalidated_block_index
-            .prev_block_id()
-            .classify(chainstate_ref.chain_config())
-            .chain_block_id()
+        if let Some(parent_block_id) =
+            chs.gen_block_id_to_normal(&invalidated_block_info.parent_id())
         {
-            let prev_block_index = chainstate_ref.get_existing_block_index(&prev_block_id)?;
-            self.add(chainstate_ref, &prev_block_index);
+            let parent_block_info = chs.get_block_info(&parent_block_id)?;
+            self.add(&parent_block_info);
         }
 
         Ok(())
@@ -167,20 +158,121 @@ impl BestChainCandidates {
         self.0.last()
     }
 
-    fn add<S, V>(&mut self, _chainstate_ref: &ChainstateRef<S, V>, block_index: &BlockIndex)
-    where
-        S: BlockchainStorageRead,
-        V: TransactionVerificationStrategy,
-    {
-        self.0.insert(BestChainCandidatesItem::from_block_index(block_index));
+    #[allow(unused)]
+    pub fn elements(&self) -> impl Iterator<Item = &BestChainCandidatesItem> {
+        self.0.iter()
     }
 
-    fn remove<S, V>(&mut self, _chainstate_ref: &ChainstateRef<S, V>, block_index: &BlockIndex)
-    where
-        S: BlockchainStorageRead,
-        V: TransactionVerificationStrategy,
-    {
-        self.0.remove(&BestChainCandidatesItem::from_block_index(block_index));
+    fn add<BI: BlockInfo>(&mut self, block_info: &BI) {
+        self.0.insert(BestChainCandidatesItem::from_block_info(block_info));
+    }
+
+    fn remove<BI: BlockInfo>(&mut self, block_info: &BI) {
+        self.0.remove(&BestChainCandidatesItem::from_block_info(block_info));
+    }
+}
+
+// The purpose of this trait is to abstract away ChainstateRef in order to make
+// unit-testing BestChainCandidates easier.
+pub trait ChainstateAccessor {
+    type BlockInfo: BlockInfo;
+    type GenBlockInfo: GenBlockInfo;
+
+    fn min_height_with_allowed_reorg(&self) -> Result<BlockHeight, PropertyQueryError>;
+
+    fn get_higher_block_ids_sorted_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<Vec<Id<Block>>, PropertyQueryError>;
+
+    fn get_block_info(&self, block_id: &Id<Block>) -> Result<Self::BlockInfo, PropertyQueryError>;
+
+    fn last_common_ancestor_in_main_chain(
+        &self,
+        block_info: &Self::GenBlockInfo,
+    ) -> Result<Self::GenBlockInfo, PropertyQueryError>;
+
+    fn block_info_to_gen(bi: Self::BlockInfo) -> Self::GenBlockInfo;
+
+    fn gen_block_id_to_normal(&self, id: &Id<GenBlock>) -> Option<Id<Block>>;
+}
+
+pub trait BlockInfo: Clone {
+    fn id(&self) -> Id<Block>;
+    fn parent_id(&self) -> Id<GenBlock>;
+    fn height(&self) -> BlockHeight;
+    fn chain_trust(&self) -> Uint256;
+    fn status(&self) -> BlockStatus;
+}
+
+pub trait GenBlockInfo: Clone {
+    fn height(&self) -> BlockHeight;
+}
+
+impl<'a, S, V> ChainstateAccessor for ChainstateRef<'a, S, V>
+where
+    S: BlockchainStorageRead,
+    V: TransactionVerificationStrategy,
+{
+    type BlockInfo = BlockIndex;
+    type GenBlockInfo = GenBlockIndex;
+
+    fn min_height_with_allowed_reorg(&self) -> Result<BlockHeight, PropertyQueryError> {
+        self.get_min_height_with_allowed_reorg()
+    }
+
+    fn get_higher_block_ids_sorted_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        self.get_higher_block_ids_sorted_by_height(start_from)
+    }
+
+    fn get_block_info(&self, block_id: &Id<Block>) -> Result<BlockIndex, PropertyQueryError> {
+        self.get_existing_block_index(block_id)
+    }
+
+    fn last_common_ancestor_in_main_chain(
+        &self,
+        block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        self.last_common_ancestor_in_main_chain(block_index)
+    }
+
+    fn block_info_to_gen(bi: Self::BlockInfo) -> Self::GenBlockInfo {
+        bi.into()
+    }
+
+    fn gen_block_id_to_normal(&self, id: &Id<GenBlock>) -> Option<Id<Block>> {
+        id.classify(self.chain_config()).chain_block_id()
+    }
+}
+
+impl BlockInfo for BlockIndex {
+    fn id(&self) -> Id<Block> {
+        *self.block_id()
+    }
+
+    fn parent_id(&self) -> Id<GenBlock> {
+        *self.prev_block_id()
+    }
+
+    fn height(&self) -> BlockHeight {
+        self.block_height()
+    }
+
+    fn chain_trust(&self) -> Uint256 {
+        self.chain_trust()
+    }
+
+    fn status(&self) -> BlockStatus {
+        self.status()
+    }
+}
+
+impl GenBlockInfo for GenBlockIndex {
+    fn height(&self) -> BlockHeight {
+        self.block_height()
     }
 }
 
