@@ -13,11 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod error;
-
-pub use error::APIServerDaemonError;
-
-#[derive(Debug, Clone)]
-pub struct APIServerState {
-    pub example_shared_value: String,
-}
+pub mod v1;

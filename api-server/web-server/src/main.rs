@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::{
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+mod api;
+mod config;
+mod error;
+
+use api_server_daemon::{error::APIServerDaemonClientError, APIServerDaemonError, APIServerState};
+use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
+use clap::Parser;
+use config::ApiServerDaemonConfig;
+use logging::{init_logging, log::info};
+use serde_json::json;
 
 #[tokio::main]
 async fn main() {
@@ -27,58 +30,38 @@ async fn main() {
         std::env::set_var("RUST_LOG", "info");
     }
 
-    // initialize tracing
-    tracing_subscriber::fmt::init();
+    init_logging::<&std::path::Path>(None);
 
-    // build our application with a route
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
+    let args = ApiServerDaemonConfig::parse();
+    info!("Command line options: {args:?}");
 
-    // run our app with hyper
-    // `axum::Server` is a re-export of `hyper::Server`
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .expect("http server initialization failed");
-}
-
-// basic handler that responds with a static string
-#[allow(clippy::unused_async)]
-async fn root() -> &'static str {
-    "Hello, World!"
-}
-
-#[allow(clippy::unused_async)]
-async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
+    let state = APIServerState {
+        example_shared_value: "test value".to_string(),
     };
 
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
+    let routes = Router::new()
+        .route("/", get(server_status))
+        .nest("/api/v1", api::v1::routes())
+        .fallback(bad_request)
+        .with_state(state);
+
+    axum::Server::bind(&args.address.unwrap_or_default())
+        .serve(routes.into_make_service())
+        .await
+        .expect("API Server Daemon failed")
 }
 
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-struct CreateUser {
-    username: String,
+#[allow(clippy::unused_async)]
+async fn server_status(
+    State(_state): State<APIServerState>,
+) -> Result<impl IntoResponse, APIServerDaemonError> {
+    Ok(Json(json!({
+        "versions": [api::v1::API_VERSION]
+        //"network": "testnet",
+    })))
 }
 
-// the output to our `create_user` handler
-#[derive(Serialize)]
-struct User {
-    id: u64,
-    username: String,
+#[allow(clippy::unused_async)]
+pub async fn bad_request() -> Result<(), APIServerDaemonError> {
+    Err(APIServerDaemonClientError::BadRequest)?
 }

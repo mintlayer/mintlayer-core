@@ -217,17 +217,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
-name = "api-server"
-version = "0.1.1"
-dependencies = [
- "axum",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "api-server-common"
 version = "0.1.1"
 dependencies = [
@@ -240,6 +229,22 @@ dependencies = [
  "serialization",
  "sqlx",
  "test-utils",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "api-server-daemon"
+version = "0.1.1"
+dependencies = [
+ "api-server-common",
+ "axum",
+ "clap",
+ "common",
+ "crypto",
+ "logging",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]
