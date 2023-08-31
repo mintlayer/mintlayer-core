@@ -73,4 +73,4 @@ pub fn choose_common_protocol_version(
 }
 
 /// Latest known network protocol version
-pub const CURRENT_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
+pub const CURRENT_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V1;
