@@ -637,7 +637,6 @@ mod tests {
     fn mainnet_creation() {
         let config = create_mainnet();
 
-        assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
     }
@@ -646,8 +645,7 @@ mod tests {
     fn testnet_creation() {
         let config = create_testnet();
 
-        assert!(!config.net_upgrades.is_empty());
-        assert_eq!(2, config.net_upgrades.len());
+        assert_eq!(3, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 

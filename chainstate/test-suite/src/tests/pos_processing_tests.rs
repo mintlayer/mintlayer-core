@@ -1535,7 +1535,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     50.into(),
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -1551,7 +1551,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     50.into(),
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),

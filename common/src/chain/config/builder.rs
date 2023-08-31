@@ -21,7 +21,7 @@ use crate::{
             create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
             emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        get_initial_randomness, pos_initial_difficulty,
+        create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoSConsensusVersion,
         PoWChainConfig, UpgradeVersion,
@@ -61,7 +61,6 @@ impl ChainType {
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
-                let pos_config = crate::chain::create_testnet_pos_config();
                 let upgrades = vec![
                     (
                         BlockHeight::new(0),
@@ -75,21 +74,21 @@ impl ChainType {
                                 PoSConsensusVersion::V0,
                             )
                             .into(),
-                            config: pos_config,
+                            config: create_testnet_pos_config(PoSConsensusVersion::V0),
                         }),
                     ),
-                    // TODO: Add upgrade to PoSConsensusVersion::V1
-                    // (
-                    //     BlockHeight::new(X),
-                    //     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    //         initial_difficulty: pos_initial_difficulty(
-                    //             ChainType::Testnet,
-                    //             PoSConsensusVersion::V1,
-                    //         )
-                    //         .into(),
-                    //         config: pos_config,
-                    //     }),
-                    // ),
+                    (
+                        // TODO: decide on proper height
+                        BlockHeight::new(9999999999),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: pos_initial_difficulty(
+                                ChainType::Testnet,
+                                PoSConsensusVersion::V1,
+                            )
+                            .into(),
+                            config: create_testnet_pos_config(PoSConsensusVersion::V1),
+                        }),
+                    ),
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }

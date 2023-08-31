@@ -405,7 +405,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         ));
     }
 
-    if chain_pos_netupgrades_v0_to_v1.unwrap_or(false) {
+    if let Some(upgrade_height) = chain_pos_netupgrades_v0_to_v1 {
         builder = builder
             .net_upgrades(
                 NetUpgrades::initialize(vec![
@@ -425,7 +425,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
                         }),
                     ),
                     (
-                        BlockHeight::new(200),
+                        (*upgrade_height).into(),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: pos_initial_difficulty(
                                 ChainType::Regtest,

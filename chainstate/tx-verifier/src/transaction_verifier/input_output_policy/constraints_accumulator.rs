@@ -433,7 +433,7 @@ mod tests {
                     required_spend_share_maturity.into(),
                     2,
                     PerThousand::new(0).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),

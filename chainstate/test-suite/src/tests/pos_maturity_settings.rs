@@ -58,7 +58,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     1.into(),
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -74,7 +74,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     1.into(),
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -208,7 +208,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     100.into(),
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -224,7 +224,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     50.into(), // decrease maturity setting
                     5,
                     PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::CURRENT,
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),

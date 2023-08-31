@@ -298,7 +298,7 @@ mod tests {
                     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                         initial_difficulty: pos_initial_difficulty(
                             ChainType::Regtest,
-                            PoSConsensusVersion::CURRENT,
+                            PoSConsensusVersion::V1,
                         )
                         .into(),
                         config: create_unittest_pos_config(),

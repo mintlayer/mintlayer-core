@@ -53,10 +53,10 @@ impl NetUpgrades<UpgradeVersion> {
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                     initial_difficulty: pos_initial_difficulty(
                         ChainType::Regtest,
-                        PoSConsensusVersion::CURRENT,
+                        PoSConsensusVersion::V1,
                     )
                     .into(),
-                    config: create_regtest_pos_config(PoSConsensusVersion::CURRENT),
+                    config: create_regtest_pos_config(PoSConsensusVersion::V1),
                 }),
             ),
         ])

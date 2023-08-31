@@ -42,8 +42,6 @@ impl PoSConsensusVersion {
     pub const V0: Self = Self(0);
     /// Incentivize pledging and prevent centralization with capped probability
     pub const V1: Self = Self(1);
-
-    pub const CURRENT: Self = Self::V1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -162,7 +160,7 @@ impl PoSChainConfig {
 const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
 const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
 
-pub fn create_testnet_pos_config() -> PoSChainConfig {
+pub fn create_testnet_pos_config(consensus_version: PoSConsensusVersion) -> PoSChainConfig {
     let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
     let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
 
@@ -173,7 +171,7 @@ pub fn create_testnet_pos_config() -> PoSChainConfig {
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-        consensus_version: PoSConsensusVersion::CURRENT,
+        consensus_version,
     }
 }
 
@@ -185,7 +183,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-        consensus_version: PoSConsensusVersion::CURRENT,
+        consensus_version: PoSConsensusVersion::V1,
     }
 }
 

@@ -407,7 +407,7 @@ mod tests {
                 1.into(),
                 2,
                 PerThousand::new(100).unwrap(),
-                PoSConsensusVersion::CURRENT,
+                PoSConsensusVersion::V1,
             )
             .unwrap();
             let new_target =
@@ -429,7 +429,7 @@ mod tests {
                 1.into(),
                 2,
                 PerThousand::new(100).unwrap(),
-                PoSConsensusVersion::CURRENT,
+                PoSConsensusVersion::V1,
             )
             .unwrap();
             let new_target =
@@ -450,7 +450,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let prev_target = H256::random_using(&mut rng).into();
@@ -469,7 +469,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let prev_target = Uint256::MAX;
@@ -490,7 +490,7 @@ mod tests {
             2000.into(),
             5,
             PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
@@ -570,7 +570,7 @@ mod tests {
             2000.into(),
             2, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
@@ -620,7 +620,7 @@ mod tests {
             2000.into(),
             3, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
@@ -721,7 +721,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let pos_config_2 = PoSChainConfig::new(
@@ -731,7 +731,7 @@ mod tests {
             1.into(),
             5,
             PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::CURRENT,
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![
