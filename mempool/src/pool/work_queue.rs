@@ -373,7 +373,9 @@ mod test {
                     log::debug!("Removing peer{peer}");
 
                     // Mark peer's work set as processed
-                    wq.work_queue.get(&peer).map(|q| processed.extend(q.queue.iter().copied()));
+                    if let Some(peer_queue) = wq.work_queue.get(&peer) {
+                        processed.extend(peer_queue.queue.iter().copied());
+                    }
 
                     wq.remove_peer(peer);
                     peer_supply.disconnect(peer);

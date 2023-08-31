@@ -456,6 +456,6 @@ async fn orphan_scheduling(#[case] seed: Seed) {
 
     // Now all transactions should be in mempool
     for tx_id in [&tx0_id, &tx1_id, &tx2_id, &tx3_id, &tx4_id] {
-        assert!(mempool.contains_transaction(&tx_id));
+        assert!(mempool.contains_transaction(tx_id));
     }
 }
