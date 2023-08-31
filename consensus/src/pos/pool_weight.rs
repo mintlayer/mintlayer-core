@@ -13,36 +13,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{primitives::Amount, Uint256};
-
-// Note: rational is used as a convenient representation type and must not be used
-//       for actual calculation because the result has to be predictable and reliable
-type Rational128 = num::rational::Ratio<u128>;
+use common::{
+    primitives::{rational::Rational, Amount},
+    Uint256,
+};
+use thiserror::Error;
+use utils::ensure;
 
 /// Decentralization parameter which ensures that no pool is more powerful than 1/k of the whole network
 const K: u128 = 1000;
-const POOL_SATURATION_LEVEL: Rational128 = Rational128::new_raw(1, K);
+const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
 /// doubles minimum pledge the the result increases by 5%.
 /// If the minimum pledge changes it should be recalculated.
-const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational128 = Rational128::new_raw(789, 1000);
+const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new(789, 1000);
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum PoolWeightError {
+    #[error("Final supply cannot be 0")]
+    FinalSupplyZero,
+    #[error("Pool balance {0:?} cannot be greater than total supply: {1:?}")]
+    PoolBalanceGreaterThanSupply(Amount, Amount),
+    #[error("Pool pledge {0:?} cannot be greater than pool balance {1:?}")]
+    PoolPledgeGreaterThanBalance(Amount, Amount),
+}
 
 /// The function determines pool's weight based on its balance and pledge. In the simplest case
 /// pool's weight is proportional to its balance but we want to incentivize pool's operators to
 /// pledge, so this function takes pledge into account. The weight of a pool grows until the
 /// proportion of pledge to delegated amount reaches 1:1.
-///
-/// The result is a pair that represents a ratio: (numerator, denominator), which is always < 1
 pub fn pool_weight(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
-) -> (Uint256, Uint256) {
+) -> Result<Rational<Uint256>, PoolWeightError> {
     pool_weight_impl(
         pledge_amount,
         pool_balance,
         final_supply,
+        POOL_SATURATION_LEVEL,
         DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
     )
 }
@@ -51,25 +61,32 @@ fn pool_weight_impl(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
-    pledge_influence: Rational128,
-) -> (Uint256, Uint256) {
-    assert!(
-        pool_balance < final_supply,
-        "Pool balance cannot be greater than total supply"
+    pool_saturation_level: Rational<u128>,
+    pledge_influence: Rational<u128>,
+) -> Result<Rational<Uint256>, PoolWeightError> {
+    ensure!(
+        final_supply > Amount::ZERO,
+        PoolWeightError::FinalSupplyZero
     );
-    assert!(
+
+    ensure!(
+        pool_balance < final_supply,
+        PoolWeightError::PoolBalanceGreaterThanSupply(pool_balance, final_supply)
+    );
+
+    ensure!(
         pledge_amount <= pool_balance,
-        "Pledge cannot be greater than pool balance"
+        PoolWeightError::PoolPledgeGreaterThanBalance(pledge_amount, pool_balance)
     );
 
     let relative_pool_stake =
-        Rational128::new(pool_balance.into_atoms(), final_supply.into_atoms());
+        Rational::<u128>::new(pool_balance.into_atoms(), final_supply.into_atoms());
     let relative_pledge_amount =
-        Rational128::new(pledge_amount.into_atoms(), final_supply.into_atoms());
+        Rational::<u128>::new(pledge_amount.into_atoms(), final_supply.into_atoms());
 
     let a = pledge_influence;
-    let sigma = std::cmp::min(relative_pool_stake, POOL_SATURATION_LEVEL);
-    let s = std::cmp::min(relative_pledge_amount, POOL_SATURATION_LEVEL);
+    let sigma = std::cmp::min(relative_pool_stake, pool_saturation_level);
+    let s = std::cmp::min(relative_pledge_amount, pool_saturation_level);
     let m = Uint256::from_u128(u128::MAX);
 
     // Given that z = 1/k, scale the original formula by the factor of m
@@ -106,8 +123,9 @@ fn pool_weight_impl(
         m_sigma + term2_s_a
     };
     let result_denom = m + m * (*a.numer()).into() / (*a.denom()).into();
+    assert_ne!(result_denom, Uint256::ZERO);
 
-    (result_numer, result_denom)
+    Ok(Rational::<Uint256>::new(result_numer, result_denom))
 }
 
 #[cfg(test)]
@@ -116,7 +134,6 @@ mod tests {
 
     use common::{chain::Mlt, primitives::Amount};
     use crypto::random::Rng;
-    use num::{ToPrimitive, Zero};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -124,30 +141,31 @@ mod tests {
         pledge_amount: Amount,
         pool_balance: Amount,
         final_supply: Amount,
-        pledge_influence: Rational128,
+        pool_saturation_level: Rational<u128>,
+        pledge_influence: Rational<u128>,
     ) -> f64 {
         let relative_pool_stake =
             pool_balance.into_atoms() as f64 / final_supply.into_atoms() as f64;
         let relative_pledge_amount =
             pledge_amount.into_atoms() as f64 / final_supply.into_atoms() as f64;
 
-        let z = POOL_SATURATION_LEVEL.to_f64().unwrap();
-        let a = pledge_influence.to_f64().unwrap();
+        let z = *pool_saturation_level.numer() as f64 / *pool_saturation_level.denom() as f64;
+        let a = *pledge_influence.numer() as f64 / *pledge_influence.denom() as f64;
         let sigma = f64::min(relative_pool_stake, z);
         let s = f64::min(relative_pledge_amount, z);
 
         (sigma + s * a * ((sigma - s * ((z - sigma) / z)) / z)) / (a + 1.0)
     }
 
-    fn to_float(numer: Uint256, denom: Uint256, precision: u32) -> f64 {
+    fn to_float(r: Rational<Uint256>, precision: u32) -> f64 {
         let m = 10u128.pow(precision);
-        let i = numer * Uint256::from_u128(m) / denom;
+        let i = (*r.numer()) * Uint256::from_u128(m) / (*r.denom());
         u128::try_from(i).unwrap() as f64 / m as f64
     }
 
-    fn compare_results(actual: (Uint256, Uint256), expected: f64) {
+    fn compare_results(actual: Rational<Uint256>, expected: f64) {
         let tolerance: f64 = 1e-9;
-        let actual_f64 = to_float(actual.0, actual.1, 10);
+        let actual_f64 = to_float(actual, 10);
         assert!(
             (actual_f64 - expected).abs() < tolerance,
             "actual: {}; expected: {}",
@@ -162,9 +180,9 @@ mod tests {
         let pool_balance = Amount::ZERO;
         let pledge_amount = Amount::ZERO;
 
-        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
-        assert_eq!(actual.0, Uint256::ZERO);
-        assert_ne!(actual.1, Uint256::ZERO);
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
+        assert_eq!(actual.numer(), &Uint256::ZERO);
+        assert_ne!(actual.denom(), &Uint256::ZERO);
     }
 
     #[test]
@@ -175,7 +193,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = Mlt::from_mlt(40_000).to_amount_atoms();
 
-            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
             compare_results(actual, 0.000194818);
         }
 
@@ -183,7 +201,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = Mlt::from_mlt(80_000).to_amount_atoms();
 
-            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
             compare_results(actual, 0.000200698);
         }
 
@@ -191,7 +209,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = Mlt::from_mlt(150_000).to_amount_atoms();
 
-            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
             compare_results(actual, 0.0002047);
         }
 
@@ -199,7 +217,7 @@ mod tests {
             let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
             let pledge_amount = pool_balance;
 
-            let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+            let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
             compare_results(actual, 0.000202658);
         }
     }
@@ -220,11 +238,13 @@ mod tests {
             pledge_amount,
             pool_balance,
             final_supply,
-            Rational128::zero(),
-        );
+            POOL_SATURATION_LEVEL,
+            Rational::<u128>::new(0, 1),
+        )
+        .unwrap();
 
         let expected = f64::min(
-            POOL_SATURATION_LEVEL.to_f64().unwrap(),
+            *POOL_SATURATION_LEVEL.numer() as f64 / *POOL_SATURATION_LEVEL.denom() as f64,
             pool_balance.into_atoms() as f64 / final_supply.into_atoms() as f64,
         );
 
@@ -242,11 +262,12 @@ mod tests {
         let pool_balance = Amount::from_atoms(rng.gen_range(2..(final_supply.into_atoms() / K)));
         let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
 
-        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
         let expected = pool_weight_float_impl(
             pledge_amount,
             pool_balance,
             final_supply,
+            POOL_SATURATION_LEVEL,
             DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
         );
         compare_results(actual, expected);
@@ -265,15 +286,16 @@ mod tests {
         );
         let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
 
-        let actual = pool_weight(pledge_amount, pool_balance, final_supply);
+        let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
         let expected = pool_weight_float_impl(
             pledge_amount,
             pool_balance,
             final_supply,
+            POOL_SATURATION_LEVEL,
             DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
         );
         compare_results(actual, expected);
-        assert!(to_float(actual.0, actual.1, 10) < 0.1);
+        assert!(to_float(actual, 10) < 0.1);
     }
 
     // If a pool is saturated (balance == supply/k) then the result is directly proportional to the pledge
@@ -287,8 +309,9 @@ mod tests {
         let weights: Vec<f64> = (0..(pool_balance.into_atoms() / 2))
             .step_by(step as usize)
             .map(|pledge| {
-                let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
-                to_float(w.0, w.1, 10)
+                let w =
+                    pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply).unwrap();
+                to_float(w, 10)
             })
             .collect();
 
@@ -310,8 +333,9 @@ mod tests {
             let weights: Vec<f64> = (0..(pool_balance.into_atoms() / 2))
                 .step_by(step as usize)
                 .map(|pledge| {
-                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
-                    to_float(w.0, w.1, 10)
+                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply)
+                        .unwrap();
+                    to_float(w, 10)
                 })
                 .collect();
 
@@ -323,8 +347,9 @@ mod tests {
             let weights: Vec<f64> = ((pool_balance.into_atoms() / 2)..=pool_balance.into_atoms())
                 .step_by(step as usize)
                 .map(|pledge| {
-                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply);
-                    to_float(w.0, w.1, 10)
+                    let w = pool_weight(Amount::from_atoms(pledge), pool_balance, final_supply)
+                        .unwrap();
+                    to_float(w, 10)
                 })
                 .collect();
 

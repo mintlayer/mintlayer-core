@@ -69,15 +69,17 @@ fn adjust_target(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
-) -> Uint512 {
-    let pool_weight = pool_weight(pledge_amount, pool_balance, final_supply);
+) -> Result<Uint512, ConsensusPoSError> {
+    let pool_weight = pool_weight(pledge_amount, pool_balance, final_supply)?;
     // Constant factor is here to compensate small values of pool's weight and allow target to fit into 256 bits.
     // Let's consider an example with a single pool staking. `hash` is uniformly distributed so adjusted_target
     // must be <= U256::MAX/block_time to produce blocks.
     // Given that pool_weight << 1 for real balances, target would've overflowed U256.
     // To mitigate that weight is multiplied by constant factor which is also accounted when initial difficulty is calculated.
     let constant_factor = Uint512::from_u64(1_000_000_000);
-    (target * pool_weight.0.into() / pool_weight.1.into()) * constant_factor
+    let target =
+        (target * (*pool_weight.numer()).into() / (*pool_weight.denom()).into()) * constant_factor;
+    Ok(target)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -95,7 +97,7 @@ fn check_pos_hash_v1(
         .compact_target()
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-    let adjusted_target = adjust_target(target.into(), pledge_amount, pool_balance, final_supply);
+    let adjusted_target = adjust_target(target.into(), pledge_amount, pool_balance, final_supply)?;
 
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
@@ -175,6 +177,7 @@ mod tests {
                     pool_balance,
                     final_supply,
                 )
+                .unwrap()
             })
             .collect();
 
@@ -203,6 +206,7 @@ mod tests {
                         pool_balance,
                         final_supply,
                     )
+                    .unwrap()
                 })
                 .collect();
 
@@ -221,6 +225,7 @@ mod tests {
                         pool_balance,
                         final_supply,
                     )
+                    .unwrap()
                 })
                 .collect();
 

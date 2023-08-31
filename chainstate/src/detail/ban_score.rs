@@ -366,6 +366,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(_) => 100,
             ConsensusPoSError::FiniteTotalSupplyIsRequired => 100,
             ConsensusPoSError::UnsupportedConsensusVersion => 100,
+            ConsensusPoSError::PoolWeightError(_) => 100,
         }
     }
 }

@@ -21,6 +21,7 @@ pub mod kernel;
 pub mod target;
 
 mod pool_weight;
+pub use pool_weight::PoolWeightError;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},

@@ -22,7 +22,7 @@ use common::{
     UintConversionError,
 };
 
-use super::block_sig::BlockSignatureError;
+use super::{block_sig::BlockSignatureError, PoolWeightError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
@@ -91,4 +91,6 @@ pub enum ConsensusPoSError {
     FiniteTotalSupplyIsRequired,
     #[error("Unsupported PoS consensus version")]
     UnsupportedConsensusVersion,
+    #[error("Error while calculating pool's weight: `{0}`")]
+    PoolWeightError(#[from] PoolWeightError),
 }
