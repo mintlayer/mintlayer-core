@@ -32,7 +32,8 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
-        tests::make_peer_manager_custom, OutboundConnectType, PeerManager, MAX_OUTBOUND_CONNECTIONS,
+        tests::make_peer_manager_custom, OutboundConnectType, PeerManager,
+        OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
@@ -208,7 +209,7 @@ fn test_addr_list_handling_outbound() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
-        block_relay_peer_count: 0.into(),
+        block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -351,7 +352,7 @@ async fn resend_own_addresses() {
     )
     .unwrap();
 
-    for peer_index in 0..MAX_OUTBOUND_CONNECTIONS {
+    for peer_index in 0..OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT {
         let new_peer_id = PeerId::new();
         let peer_address = TestAddressMaker::new_random_address();
         let peer_info = PeerInfo {
@@ -381,7 +382,7 @@ async fn resend_own_addresses() {
 
         pm.accept_connection(peer_address, Role::Outbound, peer_info, Some(own_ip.into()));
     }
-    assert_eq!(pm.peers.len(), MAX_OUTBOUND_CONNECTIONS);
+    assert_eq!(pm.peers.len(), OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT);
 
     let (started_tx, started_rx) = oneshot_nofail::channel();
     tokio::spawn(async move { pm.run_internal(Some(started_tx)).await });

@@ -49,9 +49,7 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::{
-    address_groups::AddressGroup, ip_or_socket_address_to_peer_address, MAX_OUTBOUND_CONNECTIONS,
-};
+use super::{address_groups::AddressGroup, ip_or_socket_address_to_peer_address};
 
 pub struct PeerDb<S> {
     /// P2P configuration
@@ -137,8 +135,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
     pub fn select_new_outbound_addresses(
         &self,
         automatic_outbound: &BTreeSet<SocketAddress>,
+        count: usize,
     ) -> Vec<SocketAddress> {
-        let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(automatic_outbound.len());
         if count == 0 {
             return Vec::new();
         }

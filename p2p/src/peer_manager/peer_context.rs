@@ -30,6 +30,8 @@ pub struct SentPing {
 }
 
 pub struct PeerContext {
+    pub created_at: Duration,
+
     /// Peer information
     pub info: PeerInfo,
 

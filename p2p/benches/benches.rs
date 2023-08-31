@@ -42,7 +42,7 @@ pub fn peer_db(c: &mut Criterion) {
         (0..5).map(|_| TestAddressMaker::new_random_address()).collect::<BTreeSet<_>>();
 
     c.bench_function("PeerDb", |b| {
-        b.iter(|| peerdb.select_new_outbound_addresses(&automatic_outbound))
+        b.iter(|| peerdb.select_new_outbound_addresses(&automatic_outbound, 11))
     });
 }
 

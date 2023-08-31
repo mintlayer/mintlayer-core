@@ -37,7 +37,7 @@ make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
-make_config_setting!(BlockRelayPeerCount, usize, 2);
+make_config_setting!(BlockRelayPeers, bool, true);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -128,5 +128,6 @@ pub struct P2pConfig {
     pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
-    pub block_relay_peer_count: BlockRelayPeerCount,
+    /// Enable/disable block relay peers (only used in unit tests)
+    pub block_relay_peers: BlockRelayPeers,
 }

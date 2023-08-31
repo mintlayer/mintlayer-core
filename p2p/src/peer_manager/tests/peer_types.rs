@@ -67,7 +67,7 @@ fn validate_services() {
             max_peer_tx_announcements: Default::default(),
             max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
-            block_relay_peer_count: Default::default(),
+            block_relay_peers: Default::default(),
         });
 
         let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::unbounded_channel();

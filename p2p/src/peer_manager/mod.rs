@@ -74,10 +74,17 @@ use self::{
     peerdb::storage::PeerDbStorage,
 };
 
-/// Maximum number of outbound connections the [`PeerManager`] is allowed to have open.
+/// Desired number of full relay outbound connections.
 /// This value is constant because users should not change this.
-/// 8 regular peers + 2 block relay peers
-const MAX_OUTBOUND_CONNECTIONS: usize = 10;
+const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
+
+/// Desired number of block relay outbound connections.
+/// This value is constant because users should not change this.
+const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
+
+/// Desired number of automatic outbound connections
+const OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT: usize =
+    OUTBOUND_FULL_RELAY_COUNT + OUTBOUND_BLOCK_RELAY_COUNT;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -428,7 +435,8 @@ where
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
         let block_relay_only = match &outbound_connect_type {
             OutboundConnectType::Automatic => {
-                self.block_relay_peer_count() < *self.p2p_config.block_relay_peer_count
+                *self.p2p_config.block_relay_peers
+                    && self.block_relay_peer_count() < OUTBOUND_BLOCK_RELAY_COUNT
             }
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,
         };
@@ -439,7 +447,7 @@ where
             None
         };
 
-        log::debug!("try to establish outbound connection to peer at address {address:?}, local_services_override: {local_services_override:?}");
+        log::debug!("try a new outbound connection, address: {address:?}, local_services_override: {local_services_override:?}, block_relay_only: {block_relay_only:?}");
         let res = self.try_connect(address, local_services_override);
 
         match res {
@@ -691,6 +699,7 @@ where
             self.discover_own_address(peer_role, info.common_services, receiver_address);
 
         let peer = PeerContext {
+            created_at: self.time_getter.get_time(),
             info,
             address,
             peer_role,
@@ -959,7 +968,8 @@ where
         self.peerdb.heartbeat();
 
         let automatic_outbound = self.automatic_outbound_peers();
-        let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound);
+        let count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT.saturating_sub(automatic_outbound.len());
+        let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound, count);
 
         let pending_outbound =
             self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
@@ -1431,7 +1441,7 @@ where
                 // Pick a random outbound peer to resend the listening address to.
                 // The delay has this value because there are at most `MAX_OUTBOUND_CONNECTIONS`
                 // that can have `discovered_own_address`.
-                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / MAX_OUTBOUND_CONNECTIONS as u32)
+                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                 next_time_resend_own_address += delay;
             }
