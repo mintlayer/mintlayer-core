@@ -571,7 +571,7 @@ where
                 // only when needed or from RPC requests.
                 // TODO: Always allow connections from the whitelisted IPs
                 if self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
-                    && !self.try_evict_random_connection()
+                    && !self.try_evict_random_inbound_connection()
                 {
                     log::info!("no peer is selected for eviction, new connection is dropped");
                     return Err(P2pError::PeerError(PeerError::TooManyPeers));
@@ -606,25 +606,43 @@ where
         Ok(())
     }
 
-    /// Try to disconnect a random peer, making it difficult for attackers to control all inbound peers.
+    fn eviction_candidates(&self, peer_role: PeerRole) -> Vec<peers_eviction::EvictionCandidate> {
+        let now = self.time_getter.get_time();
+        self.peers
+            .values()
+            .filter(|peer| {
+                peer.peer_role == peer_role
+                    && !self.pending_disconnects.contains_key(&peer.info.peer_id)
+            })
+            .map(|peer| {
+                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state, now)
+            })
+            .collect()
+    }
+
+    /// Try to disconnect a random inbound peer, making it difficult for attackers to control all inbound peers.
     /// It's called when a new inbound connection is received, but the connection limit has been reached.
     /// Returns true if a random peer has been disconnected.
-    fn try_evict_random_connection(&mut self) -> bool {
-        let candidates = self
-            .peers
-            .values()
-            .filter(|peer| !self.pending_disconnects.contains_key(&peer.info.peer_id))
-            .map(|peer| {
-                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state)
-            })
-            .collect::<Vec<peers_eviction::EvictionCandidate>>();
-
-        if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
-            log::info!("peer {peer_id} is selected for eviction");
+    fn try_evict_random_inbound_connection(&mut self) -> bool {
+        if let Some(peer_id) =
+            peers_eviction::select_for_eviction_inbound(self.eviction_candidates(PeerRole::Inbound))
+        {
+            log::info!("inbound peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
             true
         } else {
             false
+        }
+    }
+
+    /// Try to disconnect the "worst" block relay peer.
+    /// Once it's disconnected, PeerManager will connect to a new one and may find a better blockchain somewhere.
+    fn try_evict_block_relay_peer(&mut self) {
+        if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
+            self.eviction_candidates(PeerRole::OutboundBlockRelay),
+        ) {
+            log::info!("block relay peer {peer_id} is selected for eviction");
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -981,6 +999,8 @@ where
         for address in new_reserved.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
         }
+
+        self.try_evict_block_relay_peer();
     }
 
     fn handle_incoming_message(&mut self, peer: PeerId, message: PeerManagerMessage) {
