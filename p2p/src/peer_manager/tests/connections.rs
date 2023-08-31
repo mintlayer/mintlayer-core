@@ -863,6 +863,7 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
+        block_relay_peer_count: 0.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -885,7 +886,6 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peer_count: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -911,6 +911,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
+        block_relay_peer_count: 0.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -932,7 +933,6 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peer_count: Default::default(),
     });
     let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -952,6 +952,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
+        block_relay_peer_count: 0.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -973,7 +974,6 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peer_count: Default::default(),
     });
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),

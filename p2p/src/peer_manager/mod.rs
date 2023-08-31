@@ -917,25 +917,20 @@ where
         log::debug!("DNS seed records found: {total}");
     }
 
-    fn outbound_peers(&self, reserved: bool) -> BTreeSet<SocketAddress> {
-        let pending_outbound = self
-            .pending_outbound_connects
-            .keys()
-            .filter(|addr| self.peerdb.is_reserved_node(addr) == reserved)
-            .cloned();
-        let connected_outbound = self
-            .peers
-            .values()
-            .filter(|peer| match peer.peer_role {
-                PeerRole::Inbound => false,
-                PeerRole::OutboundFullRelay
-                | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual => {
-                    self.peerdb.is_reserved_node(&peer.address) == reserved
+    fn automatic_outbound_peers(&self) -> BTreeSet<SocketAddress> {
+        let pending_automatic_outbound =
+            self.pending_outbound_connects.iter().filter_map(|(addr, peer)| {
+                match peer.outbound_connect_type {
+                    OutboundConnectType::Automatic => Some(*addr),
+                    OutboundConnectType::Reserved | OutboundConnectType::Manual { .. } => None,
                 }
-            })
-            .map(|peer| peer.address);
-        pending_outbound.chain(connected_outbound).collect()
+            });
+        let connected_automatic_outbound =
+            self.peers.values().filter_map(|peer| match peer.peer_role {
+                PeerRole::Inbound | PeerRole::OutboundManual => None,
+                PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => Some(peer.address),
+            });
+        connected_automatic_outbound.chain(pending_automatic_outbound).collect()
     }
 
     /// Maintains the peer manager state.
@@ -963,17 +958,17 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let all_normal_outbound = self.outbound_peers(false);
-        let all_reserved_outbound = self.outbound_peers(true);
+        let automatic_outbound = self.automatic_outbound_peers();
+        let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound);
 
-        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
-        let reserved_addresses =
-            self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
+        let pending_outbound =
+            self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
+        let new_reserved = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
 
-        for address in new_addresses.into_iter() {
+        for address in new_automatic.into_iter() {
             self.connect(address, OutboundConnectType::Automatic);
         }
-        for address in reserved_addresses.into_iter() {
+        for address in new_reserved.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
         }
     }
