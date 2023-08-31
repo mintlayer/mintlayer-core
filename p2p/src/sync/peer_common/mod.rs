@@ -15,7 +15,8 @@
 
 mod known_transactions;
 
-use chainstate::ban_score::BanScore;
+use chainstate::{ban_score::BanScore, chainstate_interface::ChainstateInterface};
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use mempool::error::{Error as MempoolError, MempoolPolicyError};
 use p2p_types::PeerId;
@@ -36,7 +37,7 @@ pub use known_transactions::KnownTransactions;
 /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
 ///   "ban score" value of the given error.
 /// - Ignored errors aren't propagated and don't affect the peer score.
-pub async fn handle_result(
+pub async fn handle_message_processing_result(
     peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
     peer_id: PeerId,
     result: Result<()>,
@@ -108,5 +109,30 @@ pub async fn handle_result(
         | P2pError::SubsystemFailure
         | P2pError::StorageFailure(_)
         | P2pError::InvalidStorageState(_)) => Err(e),
+    }
+}
+
+/// This function is used to update peers_best_block_that_we_have.
+/// The "better" block is the one that is on the main chain and has bigger height.
+/// In the case of a tie, new_block_id is preferred.
+pub fn choose_peers_best_block(
+    chainstate: &dyn ChainstateInterface,
+    old_block_id: Option<Id<GenBlock>>,
+    new_block_id: Option<Id<GenBlock>>,
+) -> Result<Option<Id<GenBlock>>> {
+    match (old_block_id, new_block_id) {
+        (None, None) => Ok(None),
+        (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
+        (Some(old_id), Some(new_id)) => {
+            let old_height =
+                chainstate.get_block_height_in_main_chain(&old_id)?.unwrap_or(0.into());
+            let new_height =
+                chainstate.get_block_height_in_main_chain(&new_id)?.unwrap_or(0.into());
+            if new_height >= old_height {
+                Ok(Some(new_id))
+            } else {
+                Ok(Some(old_id))
+            }
+        }
     }
 }
