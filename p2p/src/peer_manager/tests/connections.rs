@@ -639,7 +639,7 @@ async fn connection_timeout_rpc_notified<T>(
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peers: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -753,7 +753,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peers: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -799,7 +799,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
-        block_relay_peers: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -863,7 +863,7 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         allow_discover_private_ips: true.into(),
-        block_relay_peers: false.into(),
+        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -911,7 +911,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
-        block_relay_peers: false.into(),
+        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,
@@ -952,7 +952,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         reserved_nodes,
         allow_discover_private_ips: true.into(),
-        block_relay_peers: false.into(),
+        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: None,

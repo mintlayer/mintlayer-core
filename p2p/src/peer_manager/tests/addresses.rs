@@ -209,7 +209,7 @@ fn test_addr_list_handling_outbound() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
-        block_relay_peers: false.into(),
+        enable_block_relay_peers: false.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),

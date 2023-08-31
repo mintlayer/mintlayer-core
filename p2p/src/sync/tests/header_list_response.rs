@@ -215,7 +215,7 @@ async fn disconnect() {
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
-        block_relay_peers: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let mut node = TestNode::builder().with_p2p_config(Arc::clone(&p2p_config)).build().await;
 

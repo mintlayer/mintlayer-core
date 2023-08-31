@@ -129,5 +129,5 @@ pub struct P2pConfig {
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
     /// Enable/disable block relay peers (only used in unit tests)
-    pub block_relay_peers: BlockRelayPeers,
+    pub enable_block_relay_peers: BlockRelayPeers,
 }

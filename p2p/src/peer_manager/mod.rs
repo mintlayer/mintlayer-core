@@ -435,7 +435,7 @@ where
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
         let block_relay_only = match &outbound_connect_type {
             OutboundConnectType::Automatic => {
-                *self.p2p_config.block_relay_peers
+                *self.p2p_config.enable_block_relay_peers
                     && self.block_relay_peer_count() < OUTBOUND_BLOCK_RELAY_COUNT
             }
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,

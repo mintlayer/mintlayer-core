@@ -35,7 +35,7 @@ storage::decl_schema! {
         /// Table for banned addresses
         pub DBBannedAddresses: Map<String, Duration>,
 
-        /// Table for known addresses
+        /// Table for anchor peers addresses
         pub DBAnchorAddresses: Map<String, ()>,
     }
 }
