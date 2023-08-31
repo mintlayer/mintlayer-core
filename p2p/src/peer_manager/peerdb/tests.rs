@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use common::{
     chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
@@ -132,4 +132,54 @@ fn connected_unknown() {
     // PeerDb should process that normally.
     peerdb.outbound_peer_connected(address);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
+}
+
+#[test]
+fn anchor_peers() {
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
+    let p2p_config = Arc::new(test_p2p_config());
+
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let mut anchors =
+        [TestAddressMaker::new_random_address(), TestAddressMaker::new_random_address()]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    let new_address = TestAddressMaker::new_random_address();
+    anchors.insert(new_address);
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        peerdb.storage,
+    )
+    .unwrap();
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    anchors.remove(&new_address);
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+    let peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        peerdb.storage,
+    )
+    .unwrap();
+    assert_eq!(*peerdb.anchors(), anchors);
 }

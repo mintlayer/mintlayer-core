@@ -200,7 +200,7 @@ pub fn select_for_eviction_block_relay(candidates: Vec<EvictionCandidate>) -> Op
         return None;
     }
 
-    // Starting from the yangest, disconnect the first peer that newer sent a new blockchain tip
+    // Starting from the youngest, disconnect the first peer that newer sent a new blockchain tip
     candidates.sort_by_key(|peer| peer.age);
     for peer in candidates.iter() {
         if peer.last_tip_block_time.is_none() {

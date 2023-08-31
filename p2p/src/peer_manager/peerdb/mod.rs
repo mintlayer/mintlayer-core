@@ -69,6 +69,8 @@ pub struct PeerDb<S> {
     /// when `current_time > ban_duration`.
     banned_addresses: BTreeMap<BannableAddress, Duration>,
 
+    anchor_addresses: BTreeSet<SocketAddress>,
+
     time_getter: TimeGetter,
 
     storage: S,
@@ -82,7 +84,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
         storage: S,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
-        let loaded_storage = LoadedStorage::load_storage(&storage)?;
+        let LoadedStorage {
+            known_addresses,
+            banned_addresses,
+            anchor_addresses,
+        } = LoadedStorage::load_storage(&storage)?;
 
         let boot_nodes = p2p_config
             .boot_nodes
@@ -96,8 +102,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .collect::<BTreeSet<_>>();
 
         let now = time_getter.get_time();
-        let addresses = loaded_storage
-            .known_addresses
+        let addresses = known_addresses
             .iter()
             .chain(boot_nodes.iter())
             .chain(reserved_nodes.iter())
@@ -105,7 +110,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 (
                     *addr,
                     AddressData::new(
-                        loaded_storage.known_addresses.contains(addr),
+                        known_addresses.contains(addr),
                         reserved_nodes.contains(addr),
                         now,
                     ),
@@ -115,8 +120,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         Ok(Self {
             addresses,
-            banned_addresses: loaded_storage.banned_addresses,
             reserved_nodes,
+            banned_addresses,
+            anchor_addresses,
             p2p_config,
             time_getter,
             storage,
@@ -335,6 +341,29 @@ impl<S: PeerDbStorage> PeerDb<S> {
         .expect("adding banned address is expected to succeed (ban_peer)");
 
         self.banned_addresses.remove(address);
+    }
+
+    pub fn anchors(&self) -> &BTreeSet<SocketAddress> {
+        &self.anchor_addresses
+    }
+
+    pub fn set_anchors(&mut self, anchor_addresses: BTreeSet<SocketAddress>) {
+        if self.anchor_addresses == anchor_addresses {
+            return;
+        }
+        storage::update_db(&self.storage, |tx| {
+            for address in self.anchor_addresses.difference(&anchor_addresses) {
+                log::debug!("remove anchor peer {address}");
+                tx.del_anchor_address(&address.to_string())?;
+            }
+            for address in anchor_addresses.difference(&self.anchor_addresses) {
+                log::debug!("add anchor peer {address}");
+                tx.add_anchor_address(&address.to_string())?;
+            }
+            Ok(())
+        })
+        .expect("anchor addresses update is expected to succeed");
+        self.anchor_addresses = anchor_addresses;
     }
 }
 

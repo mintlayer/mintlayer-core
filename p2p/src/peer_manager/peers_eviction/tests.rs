@@ -649,3 +649,160 @@ fn test_randomized(#[case] seed: Seed) {
         }
     }
 }
+
+#[test]
+fn test_block_relay_eviction_young_old_peers() {
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    // Young peers should not be disconnected
+    assert_eq!(
+        select_for_eviction_block_relay(shuffle_vec(vec![
+            EvictionCandidate {
+                age: Duration::from_secs(20000),
+                peer_id: peer1,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer2,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(100),
+                peer_id: peer3,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+        ])),
+        None
+    );
+
+    // Older peer can be disconnected
+    assert_eq!(
+        select_for_eviction_block_relay(shuffle_vec(vec![
+            EvictionCandidate {
+                age: Duration::from_secs(20000),
+                peer_id: peer1,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer2,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(130),
+                peer_id: peer3,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+        ])),
+        Some(peer3)
+    );
+}
+
+#[test]
+fn test_block_relay_eviction_no_blocks() {
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    // The peer that never sent us new blocks is disconnected
+    assert_eq!(
+        select_for_eviction_block_relay(shuffle_vec(vec![
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer1,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: Some(Duration::from_secs(10000)),
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer2,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: Some(Duration::from_secs(20000)),
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer3,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: None,
+                last_tx_time: None,
+            },
+        ])),
+        Some(peer3)
+    );
+}
+
+#[test]
+fn test_block_relay_eviction_old_blocks() {
+    let peer1 = PeerId::new();
+    let peer2 = PeerId::new();
+    let peer3 = PeerId::new();
+
+    // The peer that sent blocks a long time ago is disconnected
+    assert_eq!(
+        select_for_eviction_block_relay(shuffle_vec(vec![
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer1,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: Some(Duration::from_secs(10000)),
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer2,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: Some(Duration::from_secs(20000)),
+                last_tx_time: None,
+            },
+            EvictionCandidate {
+                age: Duration::from_secs(10000),
+                peer_id: peer3,
+                net_group_keyed: NetGroupKeyed(1),
+                ping_min: 123,
+                peer_role: PeerRole::OutboundBlockRelay,
+                last_tip_block_time: Some(Duration::from_secs(30000)),
+                last_tx_time: None,
+            },
+        ])),
+        Some(peer1)
+    );
+}

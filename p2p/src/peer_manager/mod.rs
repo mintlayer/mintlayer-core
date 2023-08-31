@@ -78,7 +78,7 @@ use self::{
 /// This value is constant because users should not change this.
 const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
 
-/// Desired number of block relay outbound connections.
+/// Desired number of block relay outbound connections (two permanent and one temporary).
 /// This value is constant because users should not change this.
 const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
 
@@ -748,6 +748,22 @@ where
             }
         }
 
+        if peer_role == PeerRole::OutboundBlockRelay {
+            let anchor_addresses = self
+                .peers
+                .values()
+                .filter_map(|peer| match peer.peer_role {
+                    PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
+                        None
+                    }
+                    PeerRole::OutboundBlockRelay => Some(peer.address),
+                })
+                // Skip the last block relay peer because it's a temporary connection
+                .take(OUTBOUND_BLOCK_RELAY_COUNT - 1)
+                .collect();
+            self.peerdb.set_anchors(anchor_addresses);
+        }
+
         Ok(())
     }
 
@@ -1378,8 +1394,19 @@ where
         &mut self,
         loop_started_tx: Option<oneshot_nofail::Sender<()>>,
     ) -> crate::Result<Never> {
-        // Run heartbeat right away to start outbound connections
-        self.heartbeat();
+        let anchor_peers = self.peerdb.anchors().clone();
+        if anchor_peers.is_empty() {
+            // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
+            self.heartbeat();
+        } else {
+            // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
+            // The stored anchor peers should be the first connected block relay peers.
+            for anchor_address in anchor_peers {
+                log::debug!("try to connect to anchor peer {anchor_address}");
+                // The first peers should become anchor peers
+                self.connect(anchor_address, OutboundConnectType::Automatic);
+            }
+        }
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
         let mut last_time = self.time_getter.get_time();

@@ -21,6 +21,8 @@ pub trait PeerDbStorageRead {
     fn get_known_addresses(&self) -> Result<Vec<String>, storage::Error>;
 
     fn get_banned_addresses(&self) -> Result<Vec<(String, Duration)>, storage::Error>;
+
+    fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error>;
 }
 
 pub trait PeerDbStorageWrite {
@@ -37,6 +39,10 @@ pub trait PeerDbStorageWrite {
     ) -> Result<(), storage::Error>;
 
     fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error>;
+
+    fn add_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
+
+    fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
 pub trait PeerDbTransactionRo: PeerDbStorageRead {
