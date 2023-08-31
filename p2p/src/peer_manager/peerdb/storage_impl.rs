@@ -34,6 +34,9 @@ storage::decl_schema! {
 
         /// Table for banned addresses
         pub DBBannedAddresses: Map<String, Duration>,
+
+        /// Table for anchor peers addresses
+        pub DBAnchorAddresses: Map<String, ()>,
     }
 }
 
@@ -91,6 +94,14 @@ impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
     fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
         self.0.get_mut::<DBBannedAddresses, _>().del(address)
     }
+
+    fn add_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
+        self.0.get_mut::<DBAnchorAddresses, _>().put(address, ())
+    }
+
+    fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
+        self.0.get_mut::<DBAnchorAddresses, _>().del(address)
+    }
 }
 
 impl<'st, B: storage::Backend> PeerDbTransactionRw for PeerDbStoreTxRw<'st, B> {
@@ -122,6 +133,12 @@ impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
         let map = self.0.get::<DBBannedAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?;
         Ok(iter.collect::<Vec<_>>())
+    }
+
+    fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error> {
+        let map = self.0.get::<DBAnchorAddresses, _>();
+        let iter = map.prefix_iter_decoded(&())?;
+        Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
     }
 }
 

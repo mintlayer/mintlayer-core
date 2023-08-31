@@ -49,9 +49,7 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::{
-    address_groups::AddressGroup, ip_or_socket_address_to_peer_address, MAX_OUTBOUND_CONNECTIONS,
-};
+use super::{address_groups::AddressGroup, ip_or_socket_address_to_peer_address};
 
 pub struct PeerDb<S> {
     /// P2P configuration
@@ -71,6 +69,8 @@ pub struct PeerDb<S> {
     /// when `current_time > ban_duration`.
     banned_addresses: BTreeMap<BannableAddress, Duration>,
 
+    anchor_addresses: BTreeSet<SocketAddress>,
+
     time_getter: TimeGetter,
 
     storage: S,
@@ -84,7 +84,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
         storage: S,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
-        let loaded_storage = LoadedStorage::load_storage(&storage)?;
+        let LoadedStorage {
+            known_addresses,
+            banned_addresses,
+            anchor_addresses,
+        } = LoadedStorage::load_storage(&storage)?;
 
         let boot_nodes = p2p_config
             .boot_nodes
@@ -98,8 +102,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .collect::<BTreeSet<_>>();
 
         let now = time_getter.get_time();
-        let addresses = loaded_storage
-            .known_addresses
+        let addresses = known_addresses
             .iter()
             .chain(boot_nodes.iter())
             .chain(reserved_nodes.iter())
@@ -107,7 +110,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 (
                     *addr,
                     AddressData::new(
-                        loaded_storage.known_addresses.contains(addr),
+                        known_addresses.contains(addr),
                         reserved_nodes.contains(addr),
                         now,
                     ),
@@ -117,8 +120,9 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         Ok(Self {
             addresses,
-            banned_addresses: loaded_storage.banned_addresses,
             reserved_nodes,
+            banned_addresses,
+            anchor_addresses,
             p2p_config,
             time_getter,
             storage,
@@ -136,17 +140,18 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Only one outbound connection is allowed per address group.
     pub fn select_new_outbound_addresses(
         &self,
-        all_normal_outbound: &BTreeSet<SocketAddress>,
+        automatic_outbound: &BTreeSet<SocketAddress>,
+        count: usize,
     ) -> Vec<SocketAddress> {
-        let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(all_normal_outbound.len());
         if count == 0 {
             return Vec::new();
         }
 
         let now = self.time_getter.get_time();
 
-        // Only consider outbound connections, as inbound connections are open to attackers
-        let all_outbound_groups = all_normal_outbound
+        // Only consider outbound connections, as inbound connections are open to attackers.
+        // Manual and reserved outbound peers are ignored.
+        let outbound_groups = automatic_outbound
             .iter()
             .map(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
             .collect::<BTreeSet<_>>();
@@ -156,7 +161,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .iter()
             .filter_map(|(addr, address_data)| {
                 if address_data.connect_now(now)
-                    && !all_outbound_groups
+                    && !outbound_groups
                         .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
@@ -179,7 +184,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(
         &self,
-        all_reserved_outbound: &BTreeSet<SocketAddress>,
+        pending_outbound: &BTreeSet<SocketAddress>,
     ) -> Vec<SocketAddress> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
@@ -189,7 +194,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now) && !all_reserved_outbound.contains(addr) {
+                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
                     Some(*addr)
                 } else {
                     None
@@ -336,6 +341,29 @@ impl<S: PeerDbStorage> PeerDb<S> {
         .expect("adding banned address is expected to succeed (ban_peer)");
 
         self.banned_addresses.remove(address);
+    }
+
+    pub fn anchors(&self) -> &BTreeSet<SocketAddress> {
+        &self.anchor_addresses
+    }
+
+    pub fn set_anchors(&mut self, anchor_addresses: BTreeSet<SocketAddress>) {
+        if self.anchor_addresses == anchor_addresses {
+            return;
+        }
+        storage::update_db(&self.storage, |tx| {
+            for address in self.anchor_addresses.difference(&anchor_addresses) {
+                log::debug!("remove anchor peer {address}");
+                tx.del_anchor_address(&address.to_string())?;
+            }
+            for address in anchor_addresses.difference(&self.anchor_addresses) {
+                log::debug!("add anchor peer {address}");
+                tx.add_anchor_address(&address.to_string())?;
+            }
+            Ok(())
+        })
+        .expect("anchor addresses update is expected to succeed");
+        self.anchor_addresses = anchor_addresses;
     }
 }
 

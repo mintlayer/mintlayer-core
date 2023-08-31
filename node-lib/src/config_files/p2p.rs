@@ -118,7 +118,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .sync_stalling_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
-            block_relay_peer_count: Default::default(),
+            enable_block_relay_peers: Default::default(),
         }
     }
 }

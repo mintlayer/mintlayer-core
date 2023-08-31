@@ -74,10 +74,17 @@ use self::{
     peerdb::storage::PeerDbStorage,
 };
 
-/// Maximum number of outbound connections the [`PeerManager`] is allowed to have open.
+/// Desired number of full relay outbound connections.
 /// This value is constant because users should not change this.
-/// 8 regular peers + 2 block relay peers
-const MAX_OUTBOUND_CONNECTIONS: usize = 10;
+const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
+
+/// Desired number of block relay outbound connections (two permanent and one temporary).
+/// This value is constant because users should not change this.
+const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
+
+/// Desired number of automatic outbound connections
+const OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT: usize =
+    OUTBOUND_FULL_RELAY_COUNT + OUTBOUND_BLOCK_RELAY_COUNT;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -428,7 +435,8 @@ where
     fn connect(&mut self, address: SocketAddress, outbound_connect_type: OutboundConnectType) {
         let block_relay_only = match &outbound_connect_type {
             OutboundConnectType::Automatic => {
-                self.block_relay_peer_count() < *self.p2p_config.block_relay_peer_count
+                *self.p2p_config.enable_block_relay_peers
+                    && self.block_relay_peer_count() < OUTBOUND_BLOCK_RELAY_COUNT
             }
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,
         };
@@ -439,7 +447,7 @@ where
             None
         };
 
-        log::debug!("try to establish outbound connection to peer at address {address:?}, local_services_override: {local_services_override:?}");
+        log::debug!("try a new outbound connection, address: {address:?}, local_services_override: {local_services_override:?}, block_relay_only: {block_relay_only:?}");
         let res = self.try_connect(address, local_services_override);
 
         match res {
@@ -563,7 +571,7 @@ where
                 // only when needed or from RPC requests.
                 // TODO: Always allow connections from the whitelisted IPs
                 if self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
-                    && !self.try_evict_random_connection()
+                    && !self.try_evict_random_inbound_connection()
                 {
                     log::info!("no peer is selected for eviction, new connection is dropped");
                     return Err(P2pError::PeerError(PeerError::TooManyPeers));
@@ -598,25 +606,43 @@ where
         Ok(())
     }
 
-    /// Try to disconnect a random peer, making it difficult for attackers to control all inbound peers.
+    fn eviction_candidates(&self, peer_role: PeerRole) -> Vec<peers_eviction::EvictionCandidate> {
+        let now = self.time_getter.get_time();
+        self.peers
+            .values()
+            .filter(|peer| {
+                peer.peer_role == peer_role
+                    && !self.pending_disconnects.contains_key(&peer.info.peer_id)
+            })
+            .map(|peer| {
+                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state, now)
+            })
+            .collect()
+    }
+
+    /// Try to disconnect a random inbound peer, making it difficult for attackers to control all inbound peers.
     /// It's called when a new inbound connection is received, but the connection limit has been reached.
     /// Returns true if a random peer has been disconnected.
-    fn try_evict_random_connection(&mut self) -> bool {
-        let candidates = self
-            .peers
-            .values()
-            .filter(|peer| !self.pending_disconnects.contains_key(&peer.info.peer_id))
-            .map(|peer| {
-                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state)
-            })
-            .collect::<Vec<peers_eviction::EvictionCandidate>>();
-
-        if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
-            log::info!("peer {peer_id} is selected for eviction");
+    fn try_evict_random_inbound_connection(&mut self) -> bool {
+        if let Some(peer_id) =
+            peers_eviction::select_for_eviction_inbound(self.eviction_candidates(PeerRole::Inbound))
+        {
+            log::info!("inbound peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
             true
         } else {
             false
+        }
+    }
+
+    /// Try to disconnect the "worst" block relay peer.
+    /// Once it's disconnected, PeerManager will connect to a new one and may find a better blockchain somewhere.
+    fn try_evict_block_relay_peer(&mut self) {
+        if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
+            self.eviction_candidates(PeerRole::OutboundBlockRelay),
+        ) {
+            log::info!("block relay peer {peer_id} is selected for eviction");
+            self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
         }
     }
 
@@ -691,6 +717,7 @@ where
             self.discover_own_address(peer_role, info.common_services, receiver_address);
 
         let peer = PeerContext {
+            created_at: self.time_getter.get_time(),
             info,
             address,
             peer_role,
@@ -719,6 +746,22 @@ where
             | PeerRole::OutboundManual => {
                 self.peerdb.outbound_peer_connected(address);
             }
+        }
+
+        if peer_role == PeerRole::OutboundBlockRelay {
+            let anchor_addresses = self
+                .peers
+                .values()
+                .filter_map(|peer| match peer.peer_role {
+                    PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundManual => {
+                        None
+                    }
+                    PeerRole::OutboundBlockRelay => Some(peer.address),
+                })
+                // Skip the last block relay peer because it's a temporary connection
+                .take(OUTBOUND_BLOCK_RELAY_COUNT - 1)
+                .collect();
+            self.peerdb.set_anchors(anchor_addresses);
         }
 
         Ok(())
@@ -917,25 +960,20 @@ where
         log::debug!("DNS seed records found: {total}");
     }
 
-    fn outbound_peers(&self, reserved: bool) -> BTreeSet<SocketAddress> {
-        let pending_outbound = self
-            .pending_outbound_connects
-            .keys()
-            .filter(|addr| self.peerdb.is_reserved_node(addr) == reserved)
-            .cloned();
-        let connected_outbound = self
-            .peers
-            .values()
-            .filter(|peer| match peer.peer_role {
-                PeerRole::Inbound => false,
-                PeerRole::OutboundFullRelay
-                | PeerRole::OutboundBlockRelay
-                | PeerRole::OutboundManual => {
-                    self.peerdb.is_reserved_node(&peer.address) == reserved
+    fn automatic_outbound_peers(&self) -> BTreeSet<SocketAddress> {
+        let pending_automatic_outbound =
+            self.pending_outbound_connects.iter().filter_map(|(addr, peer)| {
+                match peer.outbound_connect_type {
+                    OutboundConnectType::Automatic => Some(*addr),
+                    OutboundConnectType::Reserved | OutboundConnectType::Manual { .. } => None,
                 }
-            })
-            .map(|peer| peer.address);
-        pending_outbound.chain(connected_outbound).collect()
+            });
+        let connected_automatic_outbound =
+            self.peers.values().filter_map(|peer| match peer.peer_role {
+                PeerRole::Inbound | PeerRole::OutboundManual => None,
+                PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => Some(peer.address),
+            });
+        connected_automatic_outbound.chain(pending_automatic_outbound).collect()
     }
 
     /// Maintains the peer manager state.
@@ -963,19 +1001,22 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let all_normal_outbound = self.outbound_peers(false);
-        let all_reserved_outbound = self.outbound_peers(true);
+        let automatic_outbound = self.automatic_outbound_peers();
+        let count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT.saturating_sub(automatic_outbound.len());
+        let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound, count);
 
-        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
-        let reserved_addresses =
-            self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
+        let pending_outbound =
+            self.pending_outbound_connects.keys().cloned().collect::<BTreeSet<_>>();
+        let new_reserved = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
 
-        for address in new_addresses.into_iter() {
+        for address in new_automatic.into_iter() {
             self.connect(address, OutboundConnectType::Automatic);
         }
-        for address in reserved_addresses.into_iter() {
+        for address in new_reserved.into_iter() {
             self.connect(address, OutboundConnectType::Reserved);
         }
+
+        self.try_evict_block_relay_peer();
     }
 
     fn handle_incoming_message(&mut self, peer: PeerId, message: PeerManagerMessage) {
@@ -1353,8 +1394,19 @@ where
         &mut self,
         loop_started_tx: Option<oneshot_nofail::Sender<()>>,
     ) -> crate::Result<Never> {
-        // Run heartbeat right away to start outbound connections
-        self.heartbeat();
+        let anchor_peers = self.peerdb.anchors().clone();
+        if anchor_peers.is_empty() {
+            // Run heartbeat immediately to start outbound connections, but only if there are no stored anchor peers.
+            self.heartbeat();
+        } else {
+            // Skip heartbeat to give the stored anchor peers more time to connect to prevent churn!
+            // The stored anchor peers should be the first connected block relay peers.
+            for anchor_address in anchor_peers {
+                log::debug!("try to connect to anchor peer {anchor_address}");
+                // The first peers should become anchor peers
+                self.connect(anchor_address, OutboundConnectType::Automatic);
+            }
+        }
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
         let mut last_time = self.time_getter.get_time();
@@ -1436,7 +1488,7 @@ where
                 // Pick a random outbound peer to resend the listening address to.
                 // The delay has this value because there are at most `MAX_OUTBOUND_CONNECTIONS`
                 // that can have `discovered_own_address`.
-                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / MAX_OUTBOUND_CONNECTIONS as u32)
+                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                 next_time_resend_own_address += delay;
             }

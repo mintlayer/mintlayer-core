@@ -31,6 +31,7 @@ const STORAGE_VERSION: u32 = 1;
 pub struct LoadedStorage {
     pub known_addresses: BTreeSet<SocketAddress>,
     pub banned_addresses: BTreeMap<BannableAddress, Duration>,
+    pub anchor_addresses: BTreeSet<SocketAddress>,
 }
 
 impl LoadedStorage {
@@ -55,6 +56,7 @@ impl LoadedStorage {
         Ok(LoadedStorage {
             known_addresses: BTreeSet::new(),
             banned_addresses: BTreeMap::new(),
+            anchor_addresses: BTreeSet::new(),
         })
     }
 
@@ -88,9 +90,22 @@ impl LoadedStorage {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
+        let anchor_addresses = tx
+            .get_anchor_addresses()?
+            .iter()
+            .map(|addr| {
+                addr.parse::<SocketAddress>().map_err(|_err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Invalid address in PeerDb storage: {addr}"
+                    ))
+                })
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+
         Ok(LoadedStorage {
             known_addresses,
             banned_addresses,
+            anchor_addresses,
         })
     }
 }

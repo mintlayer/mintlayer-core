@@ -162,7 +162,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(#[case] see
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
-        block_relay_peer_count: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
 
     let blocks = make_new_blocks(
