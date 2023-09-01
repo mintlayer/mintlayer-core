@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use api_server_common::storage::impls::sqlx::SqlxStorage;
 use blockchain_scanner_lib::blockchain_state::BlockchainState;
@@ -21,6 +21,7 @@ use clap::Parser;
 use common::chain::{config::ChainType, ChainConfig};
 use config::ApiServerScannerArgs;
 use node_comm::{make_rpc_client, rpc_client::NodeRpcClient};
+use node_lib::default_rpc_config;
 use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
@@ -118,8 +119,8 @@ async fn main() -> Result<(), ApiServerScannerError> {
         }
     };
 
-    // TODO: Use the constant with the node
-    let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
+    let default_http_rpc_addr = || default_rpc_config().http_bind_address.expect("Can't fail");
+
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 
     let rpc_client = make_rpc_client(rpc_address.to_string(), rpc_auth)

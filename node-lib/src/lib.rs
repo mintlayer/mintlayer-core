@@ -25,9 +25,15 @@ mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use config_files::{NodeConfigFile, NodeTypeConfigFile, StorageBackendConfigFile};
+pub use config_files::{
+    NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
+};
 pub use options::{Command, Options, RunOptions};
 pub use runner::setup;
+
+pub fn default_rpc_config() -> RpcConfigFile {
+    config_files::rpc_config(RpcConfigFile::default(), &options::RunOptions::default())
+}
 
 pub fn init_logging(_opts: &Options) {
     logging::init_logging::<&std::path::Path>(None)

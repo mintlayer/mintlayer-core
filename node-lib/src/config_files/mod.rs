@@ -15,7 +15,9 @@
 
 //! The node configuration.
 
-pub use self::{chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile};
+pub use self::{
+    chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
+};
 
 mod blockprod;
 mod chainstate;
@@ -32,7 +34,7 @@ use crate::RunOptions;
 
 use self::{
     blockprod::BlockProdConfigFile, chainstate::ChainstateConfigFile,
-    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile, rpc::RpcConfigFile,
+    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile,
 };
 
 /// The node configuration.
@@ -200,7 +202,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     }
 }
 
-fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
+pub(crate) fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     const DEFAULT_HTTP_RPC_ENABLED: bool = true;
     // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
     const DEFAULT_WS_RPC_ENABLED: bool = false;

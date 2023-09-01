@@ -587,6 +587,7 @@ dependencies = [
  "common",
  "logging",
  "node-comm",
+ "node-lib",
  "rpc",
  "sqlx",
  "thiserror",
