@@ -63,8 +63,8 @@ jobs:
           concurrent_skipping: "same_content_newer"
           skip_after_successful_duplicate: "true"
       - uses: actions/checkout@v1
-      - run: pip install -r ./.github/scripts/requirements.txt
-      - run: ./.github/scripts/codecheck.py
+      - run: pip install -r ./build-tools/codecheck/requirements.txt
+      - run: ./build-tools/codecheck/codecheck.py
 
   cargo_deny_checks:
     name: Cargo deny check licenses and advisories

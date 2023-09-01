@@ -27,13 +27,13 @@ def build_docker_image(dockerfile_path, image_name, version, num_jobs=None):
         command += f" --build-arg NUM_JOBS={num_jobs}"
     command += " ."
 
-    try: 
+    try:
         # Run the command
         subprocess.check_call(command, shell=True)
         print(f"Built {image_name}:{version} successfully.")
     catch:
         print(f"Error occurred: {error}")
-        exit(1) # stop the build 
+        exit(1) # stop the build
 
 
 def push_docker_image(image_name, version, latest=False):

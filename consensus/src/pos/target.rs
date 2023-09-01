@@ -887,7 +887,7 @@ mod tests {
         let mut tip_height = BlockHeight::one();
         let pos_status = get_pos_status(&chain_config, tip_height.next_height());
 
-        println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}", 
+        println!("Test settings:\n block_count_to_average_for_blocktime: {},\n difficulty_change_limit: {:?}",
                                    pos_status.get_chain_config().block_count_to_average_for_blocktime(),
                                    pos_status.get_chain_config().difficulty_change_limit());
 
