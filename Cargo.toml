@@ -111,6 +111,7 @@ arraytools = "0.1"
 assert_cmd = "2"
 async-trait = "0.1"
 atomic-traits = "0.3"
+axum = "0.6"
 base64 = "0.21"
 bech32 = "0.9"
 bip39 = { version = "2.0", default-features = false }
