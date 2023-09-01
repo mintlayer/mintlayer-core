@@ -46,7 +46,7 @@ pub async fn run(
             .unwrap_or_else(|e| panic!("Storage initialization checking failed {}", e))
         {
             db_tx
-                .initialize_database(&chain_config)
+                .initialize_database(chain_config)
                 .await
                 .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
         }
