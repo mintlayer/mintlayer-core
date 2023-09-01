@@ -108,9 +108,6 @@ struct IncomingDataState {
     /// This includes headers received by any means, e.g. via HeaderList messages, as part
     /// of a locator during peer's header requests, via block responses.
     peers_best_block_that_we_have: Option<Id<GenBlock>>,
-    /// The number of singular unconnected headers received from a peer. This counter is reset
-    /// after receiving a valid header list.
-    singular_unconnected_headers_count: usize,
 }
 
 struct OutgoingDataState {
@@ -161,7 +158,6 @@ where
                 pending_headers: Vec::new(),
                 requested_blocks: BTreeSet::new(),
                 peers_best_block_that_we_have: None,
-                singular_unconnected_headers_count: 0,
             },
             outgoing: OutgoingDataState {
                 blocks_queue: VecDeque::new(),
@@ -649,30 +645,8 @@ where
             || first_header_is_connected_to_pending_headers
             || first_header_is_connected_to_requested_blocks)
         {
-            // Note: legacy nodes will send singular unconnected headers during block announcement,
-            // so we have to handle this behavior here.
-            // TODO: this should be removed in the protocol v2. See the issue #1110.
-            if headers.len() == 1 {
-                self.incoming.singular_unconnected_headers_count += 1;
-
-                log::debug!(
-                    "[peer id = {}] The peer has sent {} singular unconnected headers",
-                    self.id(),
-                    self.incoming.singular_unconnected_headers_count
-                );
-                if self.incoming.singular_unconnected_headers_count
-                    <= *self.p2p_config.max_singular_unconnected_headers
-                {
-                    self.request_headers().await?;
-                    return Ok(());
-                }
-            }
-
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
-
-        // Now that we've received a properly connected header list, this counter may be reset.
-        self.incoming.singular_unconnected_headers_count = 0;
 
         let already_downloading_blocks = if !self.incoming.requested_blocks.is_empty() {
             true
