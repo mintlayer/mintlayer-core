@@ -35,7 +35,7 @@ class WalletCliController:
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
         wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
-        
+
         self.process = await asyncio.create_subprocess_exec(
             wallet_cli, *wallet_args,
             stdin=asyncio.subprocess.PIPE,
