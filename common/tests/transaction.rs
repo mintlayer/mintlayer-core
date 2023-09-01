@@ -62,7 +62,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x3db1faf0caf4f929459d5709c7f5e88c83b0c172ffc995a89035055ffadf7e2d
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // single utxo input / empty outputs
     let tx = Transaction::new(0x00, utxo_ins0.clone(), vec![]).unwrap();
@@ -70,7 +70,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0xbcd223a8ae03b116d255db0d7e2cc5a0570cde789813dd4d6ecd5f6f4d8585b5
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // two utxo inputs / empty outputs
     let tx = Transaction::new(0x00, utxo_ins1.clone(), vec![]).unwrap();
@@ -85,7 +85,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x1e2a16bdf1f663e8065e6c541d1d45196001471be9c94d1d87ebf84b4f1206a4
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // single utxo inputs / single output
     let tx = Transaction::new(0x00, utxo_ins0, outs0.clone()).unwrap();
@@ -93,7 +93,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x8ade05e1e0c8b77a86a8848f8a3c236e5b4666c71f01fc6a48174b553fc9e92f
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // two utxo inputs / single output
     let tx = Transaction::new(0x00, utxo_ins1, outs0.clone()).unwrap();
@@ -108,7 +108,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0xe576d18773468bfbd828eb181106cc417e83a7852b659ffd5943351388b73559
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // single account input / empty outputs
     let tx = Transaction::new(0x00, account_ins0.clone(), vec![]).unwrap();
@@ -116,7 +116,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x74e8d5d826597b52493fc7488fcc63f3f2f44a6c457abf8713f1cc5d353872c7
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // single account input / single output
     let tx = Transaction::new(0x00, account_ins0, outs0.clone()).unwrap();
@@ -124,7 +124,7 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x093479a8a5b7e276db9d9fb205f0cfb7c826567a5fd412e91a1c6f10b5528e82
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 
     // two account inputs / single output
     let tx = Transaction::new(0x00, account_ins1, outs0).unwrap();
@@ -139,5 +139,5 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0xa17efbc0f7ec4ac790bae3c235328535f403da62f80d4a8b282a817daf55bdfd
     "#]]
-    .assert_debug_eq(&signed_tx.transaction().get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().to_hash());
 }

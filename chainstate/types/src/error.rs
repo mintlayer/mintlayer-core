@@ -34,24 +34,14 @@ pub enum PropertyQueryError {
     EpochDataNotFound(BlockHeight),
     #[error("Block index not found for block {0}")]
     BlockIndexNotFound(Id<GenBlock>),
-    #[error("Previous block index not found {0}")]
+    #[error("Previous block index not found: {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
-    #[error("Block index at height {0} not found")]
-    BlockIndexAtHeightNotFound(BlockHeight),
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
     #[error("Genesis block has no header")]
     GetAncestorError(#[from] GetAncestorError),
-    #[error("Outpoint not found")]
-    OutpointNotFound,
-    #[error("Outpoint index out of range")]
-    OutpointIndexOutOfRange,
-    #[error("Transaction not found")]
-    TxNotFound,
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
-    #[error("Tried getting value of a token outpoint")]
-    ExpectedCoinOutpointAndFoundToken,
     #[error("Stake pool {0} data not found")]
     StakePoolDataNotFound(PoolId),
     #[error("Balance of pool {0} not found")]

@@ -216,7 +216,7 @@ async fn test_wallet_node_communication(
         None
     );
 
-    let block_1 = node_interface.get_block(best_block_id.get().into()).await.unwrap().unwrap();
+    let block_1 = node_interface.get_block(best_block_id.to_hash().into()).await.unwrap().unwrap();
 
     assert_eq!(block_1.get_id(), block_1_id);
 

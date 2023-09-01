@@ -1268,7 +1268,7 @@ fn make_invalid_pow_block(
             .unwrap()
             .update_consensus_data(ConsensusData::PoW(data.clone()));
 
-        if !consensus::check_proof_of_work(block.get_id().get(), bits)? {
+        if !consensus::check_proof_of_work(block.get_id().to_hash(), bits)? {
             return Ok(true);
         }
     }

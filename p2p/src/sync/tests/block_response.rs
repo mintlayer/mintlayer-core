@@ -29,7 +29,8 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
-    sync::tests::helpers::TestNode,
+    sync::tests::helpers::{make_new_blocks, make_new_top_blocks_return_headers, TestNode},
+    testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };
@@ -285,6 +286,135 @@ async fn slow_response(#[case] seed: Seed) {
     node.assert_no_error().await;
     // Just in case, check that there were no peer manager events at all, not just disconnects.
     node.assert_no_peer_manager_event().await;
+
+    node.join_subsystem_manager().await;
+}
+
+// Check that requesting a previously invalidated block is handled correctly.
+// The test scenario:
+// 1) Send some blocks to the peer.
+// This will set the node's best_send_block field for this peer.
+// 2) Invalidate 2nd block from the top; add 1 new block instead.
+// 3) Send the tip update for the new block; the peer will ask for the block.
+// 4) Invalidate the newly added block.
+// What happens: the peer asks for a block at height less than best_sent_block.block_height().
+// The node's logic that checks for duplicate block requests will detect this and attempt
+// to figure out if it's because of a reorg. To do so, it will compare the requested block
+// id with the id of the mainchain block at the same height. But there is no mainchain block
+// at that height anymore. The code should not panic.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn invalidated_block(#[case] seed: Seed) {
+    logging::init_logging::<&std::path::Path>(None);
+
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = Arc::new(create_unit_test_config());
+    let p2p_config = Arc::new(test_p2p_config());
+
+    let num_initial_blocks = 2;
+    let initial_blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        num_initial_blocks,
+        &mut rng,
+    );
+
+    let mut node = TestNode::builder()
+        .with_chain_config(chain_config)
+        .with_p2p_config(p2p_config)
+        .with_time_getter(time_getter.get_time_getter())
+        .with_blocks(initial_blocks.clone())
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    // Connect to the peer and check that HeaderListRequest is sent to it.
+    node.connect_peer(peer).await;
+
+    // Receive HeaderListRequest from the peer.
+    let peers_locator = node.get_locator_from_height(0.into()).await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(peers_locator)),
+    )
+    .await;
+
+    // The node sends HeaderList.
+    let initial_blocks_headers = initial_blocks.iter().map(|b| b.header().clone()).collect();
+    assert_eq!(
+        node.message().await.1,
+        SyncMessage::HeaderList(HeaderList::new(initial_blocks_headers))
+    );
+
+    // Receive BlockListRequest from the peer.
+    let initial_blocks_ids = initial_blocks.iter().map(|b| b.get_id()).collect();
+    node.send_message(
+        peer,
+        SyncMessage::BlockListRequest(BlockListRequest::new(initial_blocks_ids)),
+    )
+    .await;
+
+    // The node sends block responses.
+    assert_eq!(
+        node.message().await.1,
+        SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[0].clone()))
+    );
+    assert_eq!(
+        node.message().await.1,
+        SyncMessage::BlockResponse(BlockResponse::new(initial_blocks[1].clone()))
+    );
+
+    // After this, initial_blocks[1] is node's best_send_block for this peer.
+
+    // Invalidate the previously sent blocks
+    let initial_block_id_to_invalidate = initial_blocks[0].get_id();
+    node.chainstate()
+        .call_mut(move |cs| {
+            cs.invalidate_block(&initial_block_id_to_invalidate).unwrap();
+        })
+        .await
+        .unwrap();
+
+    // Create 1 new block on top.
+    let new_header = make_new_top_blocks_return_headers(
+        node.chainstate(),
+        time_getter.get_time_getter(),
+        &mut rng,
+        0,
+        1,
+    )
+    .await[0]
+        .clone();
+
+    // The node should send the new tip update
+    assert_eq!(
+        node.message().await.1,
+        SyncMessage::HeaderList(HeaderList::new(vec![new_header.clone()]))
+    );
+
+    // Invalidate the newly created block
+    let block_id_to_invalidate = new_header.block_id();
+    node.chainstate()
+        .call_mut(move |cs| {
+            cs.invalidate_block(&block_id_to_invalidate).unwrap();
+        })
+        .await
+        .unwrap();
+
+    // The peer requests for the now invalidated block.
+    // The node should handle this correctly.
+    node.send_message(
+        peer,
+        SyncMessage::BlockListRequest(BlockListRequest::new(vec![new_header.block_id()])),
+    )
+    .await;
+
+    node.assert_no_error().await;
 
     node.join_subsystem_manager().await;
 }

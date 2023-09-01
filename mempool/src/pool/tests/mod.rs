@@ -927,7 +927,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     // Use a higher than default fee because we don't want this transaction to be evicted during
     // the trimming process
-    log::debug!("parent_id: {}", parent_id.get());
+    log::debug!("parent_id: {}", parent_id.to_hash());
     log::debug!("before adding parent");
     let mut mempool = Mempool::new(
         Arc::clone(&config),
@@ -951,7 +951,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let child_0_id = child_0.transaction().get_id();
-    log::debug!("child_0_id {}", child_0_id.get());
+    log::debug!("child_0_id {}", child_0_id.to_hash());
 
     let big_fee: Fee = Amount::from_atoms(
         get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100,
@@ -966,7 +966,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let child_1_id = child_1.transaction().get_id();
-    log::debug!("child_1_id {}", child_1_id.get());
+    log::debug!("child_1_id {}", child_1_id.to_hash());
     mempool.add_transaction(child_0.clone(), TxOrigin::TEST)?.assert_in_mempool();
     log::debug!("added child_0");
     mempool.add_transaction(child_1, TxOrigin::TEST)?.assert_in_mempool();
@@ -1281,7 +1281,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_a_id = tx_a.transaction().get_id();
     log::debug!("tx id is: {}", tx_id);
-    log::debug!("tx_a_id : {}", tx_a_id.get());
+    log::debug!("tx_a_id : {}", tx_a_id.to_hash());
     log::debug!("tx_a fee : {:?}", try_get_fee(&mempool, &tx_a).await);
     mempool.add_transaction(tx_a, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1294,7 +1294,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
-    log::debug!("tx_b_id : {}", tx_b_id.get());
+    log::debug!("tx_b_id : {}", tx_b_id.to_hash());
     log::debug!("tx_b fee : {:?}", try_get_fee(&mempool, &tx_b).await);
     mempool.add_transaction(tx_b, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1307,7 +1307,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
-    log::debug!("tx_c_id : {}", tx_c_id.get());
+    log::debug!("tx_c_id : {}", tx_c_id.to_hash());
     log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction(tx_c, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1433,7 +1433,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let tx_a_id = tx_a.transaction().get_id();
-    log::debug!("tx_a_id : {}", tx_a_id.get());
+    log::debug!("tx_a_id : {}", tx_a_id.to_hash());
     log::debug!("tx_a fee : {:?}", try_get_fee(&mempool, &tx_a).await);
     mempool.add_transaction(tx_a, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1446,7 +1446,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
-    log::debug!("tx_b_id : {}", tx_b_id.get());
+    log::debug!("tx_b_id : {}", tx_b_id.to_hash());
     log::debug!("tx_b fee : {:?}", try_get_fee(&mempool, &tx_b).await);
     mempool.add_transaction(tx_b, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1459,7 +1459,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
-    log::debug!("tx_c_id : {}", tx_c_id.get());
+    log::debug!("tx_c_id : {}", tx_c_id.to_hash());
     log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction(tx_c, TxOrigin::TEST)?.assert_in_mempool();
 
@@ -1544,7 +1544,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
         .build();
     log::debug!(
         "mempool_full: tx has id {}",
-        tx.transaction().get_id().get()
+        tx.transaction().get_id().to_hash()
     );
     let res = mempool.add_transaction(tx, TxOrigin::TEST);
     assert_eq!(res, Err(MempoolPolicyError::MempoolFull.into()));

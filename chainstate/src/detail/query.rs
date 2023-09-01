@@ -131,15 +131,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_gen_block_index(id)
     }
 
-    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+    pub fn get_best_block_index(&self) -> Result<GenBlockIndex, PropertyQueryError> {
         self.chainstate_ref.get_best_block_index()
     }
 
     pub fn get_best_block_header(&self) -> Result<SignedBlockHeader, PropertyQueryError> {
-        let best_block_index = self
-            .chainstate_ref
-            .get_best_block_index()?
-            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
+        let best_block_index = self.chainstate_ref.get_best_block_index()?;
         match best_block_index {
             GenBlockIndex::Block(b) => Ok(b.block_header().clone()),
             GenBlockIndex::Genesis(_) => Err(PropertyQueryError::GenesisHeaderRequested),
@@ -158,10 +155,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
-        let best_block_index = self
-            .chainstate_ref
-            .get_best_block_index()?
-            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
+        let best_block_index = self.chainstate_ref.get_best_block_index()?;
         let height = best_block_index.block_height();
         self.get_locator_from_height(height)
     }
@@ -182,6 +176,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.is_block_in_main_chain(id)
     }
 
+    pub fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, PropertyQueryError> {
+        self.chainstate_ref.get_min_height_with_allowed_reorg()
+    }
+
     pub fn get_block_height_in_main_chain(
         &self,
         id: &Id<GenBlock>,
@@ -199,11 +197,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         );
 
         // get headers until either the best block or header limit is reached
-        let best_height = self
-            .chainstate_ref
-            .get_best_block_index()?
-            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?
-            .block_height();
+        let best_height = self.chainstate_ref.get_best_block_index()?.block_height();
 
         let limit = std::cmp::min(
             (height + header_count_limit).expect("BlockHeight limit reached"),

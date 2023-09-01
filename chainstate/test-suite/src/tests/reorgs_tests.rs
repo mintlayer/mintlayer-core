@@ -192,7 +192,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
     //
     let parent = tf.index_at(4).clone();
     let parent_id = parent.block_id();
-    let spend_from = tf.make_chain_block_id(parent.prev_block_id());
+    let spend_from = tf.to_chain_block_id(parent.prev_block_id());
 
     assert!(!tf.is_block_in_main_chain(parent_id));
 

@@ -695,10 +695,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             || Ok(()),
             |conflict| {
                 Err(MempoolPolicyError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.tx_id().get(),
+                    replacement_tx: tx.tx_id().to_hash(),
                     replacement_fee,
                     original_fee: conflict.fee(),
-                    original_tx: conflict.tx_id().get(),
+                    original_tx: conflict.tx_id().to_hash(),
                 })
             },
         )

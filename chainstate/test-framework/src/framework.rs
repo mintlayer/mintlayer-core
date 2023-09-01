@@ -15,6 +15,13 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use rstest::rstest;
+
+use crate::{
+    pos_block_builder::PoSBlockBuilder,
+    utils::{outputs_from_block, outputs_from_genesis},
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
+};
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
@@ -26,14 +33,6 @@ use crypto::{
     key::PrivateKey,
     random::{CryptoRng, Rng},
     vrf::VRFPrivateKey,
-};
-
-use rstest::rstest;
-
-use crate::{
-    pos_block_builder::PoSBlockBuilder,
-    utils::{outputs_from_block, outputs_from_genesis},
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use utils::atomics::SeqCstAtomicU64;
 
@@ -56,6 +55,11 @@ impl TestFramework {
         TestFrameworkBuilder::new(rng)
     }
 
+    pub fn reload(self) -> Self {
+        TestFrameworkBuilder::from_existing_framework(self).build()
+    }
+
+    // TODO: remove this, because there is the 'into_chainstate' function below, which does the same.
     pub fn chainstate(self) -> TestChainstate {
         self.chainstate
     }
@@ -225,6 +229,10 @@ impl TestFramework {
         self.best_block_index().block_id()
     }
 
+    pub fn parent_block_id(&self, id: &Id<GenBlock>) -> Id<GenBlock> {
+        self.block_index(id).prev_block_id().expect("The block has no parent")
+    }
+
     /// Returns a block identifier for the specified height.
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
@@ -233,6 +241,8 @@ impl TestFramework {
             .unwrap()
             .unwrap()
     }
+
+    // TODO: make the functions below accept block Id's by ref.
 
     /// Returns the list of outputs from the selected block.
     #[track_caller]
@@ -272,8 +282,12 @@ impl TestFramework {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
     }
 
-    pub fn make_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
+    pub fn to_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
         block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
+    }
+
+    pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {
+        self.chainstate.get_min_height_with_allowed_reorg().unwrap()
     }
 }
 

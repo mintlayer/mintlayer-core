@@ -418,7 +418,7 @@ impl MempoolStore {
         tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
     ) -> Option<TxMempoolEntry> {
-        log::info!("remove_tx: {}", tx_id.get());
+        log::info!("remove_tx: {}", tx_id.to_hash());
         let entry = self.mem_tracker.modify(&mut self.txs_by_id, |by_id, _| by_id.remove(tx_id));
 
         if let Some(entry) = entry {

@@ -425,12 +425,6 @@ impl ChainConfig {
         self.max_depth_for_reorg
     }
 
-    #[must_use]
-    pub fn min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
-        let result = current_tip_height - self.max_depth_for_reorg;
-        result.unwrap_or(BlockHeight::new(0))
-    }
-
     /// The maximum length of a name of a token
     #[must_use]
     pub fn token_max_name_len(&self) -> usize {
