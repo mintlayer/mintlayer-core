@@ -34,6 +34,9 @@ from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
+import asyncio
+import sys
+
 
 class WalletRecoverAccounts(BitcoinTestFramework):
 
@@ -65,18 +68,23 @@ class WalletRecoverAccounts(BitcoinTestFramework):
         return block_id
 
     def run_test(self):
+        if 'win32' in sys.platform:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        asyncio.run(self.async_test())
+
+    async def async_test(self):
         node = self.nodes[0]
 
         # new wallet
-        with WalletCliController(node, self.config, self.log) as wallet:
-            wallet.create_wallet()
+        async with WalletCliController(node, self.config, self.log) as wallet:
+            await wallet.create_wallet()
 
             # check it is on genesis
-            best_block_height = wallet.get_best_block_height()
+            best_block_height = await wallet.get_best_block_height()
             assert best_block_height == '0'
 
             # new address
-            pub_key_bytes = wallet.new_public_key()
+            pub_key_bytes = await wallet.new_public_key()
             assert len(pub_key_bytes) == 33
 
             # Get chain tip
@@ -96,48 +104,48 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             assert not node.mempool_contains_tx(tx_id)
 
             # sync the wallet
-            output = wallet.sync()
+            output = await wallet.sync()
             assert "Success" in output
 
             # check wallet best block if it is synced
-            best_block_height = wallet.get_best_block_height()
+            best_block_height = await wallet.get_best_block_height()
             assert best_block_height == '1'
 
-            best_block_id = wallet.get_best_block()
+            best_block_id = await wallet.get_best_block()
             assert best_block_id == block_id
 
-            balance = wallet.get_balance()
+            balance = await wallet.get_balance()
             assert "Coins amount: 10" in balance
 
             # create 3 new accounts
             DEFAULT_ACCOUNT_INDEX = 0
             num_accounts = 3
             for idx in range(num_accounts):
-                assert "Success" in wallet.create_new_account()
-                assert "Success" in wallet.select_account(idx+1)
-                address = wallet.new_address()
-                assert "Success" in wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-                assert "The transaction was submitted successfully" in wallet.send_to_address(address, idx+1)
+                assert "Success" in await wallet.create_new_account()
+                assert "Success" in await wallet.select_account(idx+1)
+                address = await wallet.new_address()
+                assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
+                assert "The transaction was submitted successfully" in await wallet.send_to_address(address, idx+1)
                 self.generate_block()
-                assert "Success" in wallet.sync()
-                assert f"{idx+2}" == wallet.get_best_block_height()
+                assert "Success" in await wallet.sync()
+                assert f"{idx+2}" == await wallet.get_best_block_height()
 
             # try to recover the wallet
-            mnemonic = wallet.show_seed_phrase()
+            mnemonic = await wallet.show_seed_phrase()
             assert mnemonic is not None
-            assert "Successfully closed the wallet" in wallet.close_wallet()
-            assert "New wallet created successfully" in wallet.recover_wallet(mnemonic)
+            assert "Successfully closed the wallet" in await wallet.close_wallet()
+            assert "New wallet created successfully" in await wallet.recover_wallet(mnemonic)
             # check that balance is 0 and accounts are not present
-            assert "Coins amount: 0" in wallet.get_balance()
+            assert "Coins amount: 0" in await wallet.get_balance()
             for idx in range(num_accounts):
-                assert f"Account not found for index: {idx+1}" in wallet.select_account(idx+1)
+                assert f"Account not found for index: {idx+1}" in await wallet.select_account(idx+1)
 
             # sync and check that accounts are now present and with correct balances
-            assert "Success" in wallet.sync()
+            assert "Success" in await wallet.sync()
 
             for idx in range(num_accounts):
-                assert "Success" in wallet.select_account(idx+1)
-                assert f"Coins amount: {idx+1}" in wallet.get_balance()
+                assert "Success" in await wallet.select_account(idx+1)
+                assert f"Coins amount: {idx+1}" in await wallet.get_balance()
 
 
 if __name__ == '__main__':

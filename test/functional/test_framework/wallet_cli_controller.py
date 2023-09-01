@@ -16,176 +16,136 @@
 #  limitations under the License.
 """A wrapper around a CLI wallet instance"""
 
-import subprocess
 import os
-from threading import Event, Thread
-from queue import SimpleQueue, Empty
+import asyncio
 
 from typing import Optional
 
-def reader_thread(process_output, queue: SimpleQueue, stop_event: Event):
-    while not stop_event.is_set():
-        try:
-            line = process_output.readline()
-        except:
-            return
-        queue.put(line.strip())
+ONE_MB = 2**20
+READ_TIMEOUT_SEC = 30
 
 class WalletCliController:
 
     def __init__(self, node, config, log):
-        wallet_cli = os.path.join(config["environment"]["BUILDDIR"], "test_wallet"+config["environment"]["EXEEXT"] )
-        cookie_file = os.path.join(node.datadir, ".cookie")
-        wallet_args = ["--network", "regtest", "--rpc-address", node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
-        
         self.log = log
-        self.process = subprocess.Popen([wallet_cli] + wallet_args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.node = node
-        self.stop_event = Event()
-        self.shared_queue = SimpleQueue()
-        self.reader = Thread(target=reader_thread, args=(self.process.stdout, self.shared_queue, self.stop_event))
-        self.reader.start()
+        self.config = config
 
-    def __enter__(self):
+    async def __aenter__(self):
+        wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
+        cookie_file = os.path.join(self.node.datadir, ".cookie")
+        wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
+
+        self.process = await asyncio.create_subprocess_exec(
+            wallet_cli, *wallet_args,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback):
         self.log.debug("exiting wallet")
-        self._write_command("exit\n")
-        self.stop_event.set()
-        self.process.communicate()
-        self.reader.join()
+        await self._write_command("exit\n")
+        await self.process.communicate()
 
-    def _read_available_output(self) -> str:
-        output = self.shared_queue.get(timeout=30)
+    async def _read_available_output(self) -> str:
         try:
-            while not self.shared_queue.empty():
-                output += self.shared_queue.get_nowait()
-        except Empty as _:
-            pass
+            output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=READ_TIMEOUT_SEC)
+            return output.decode().strip()
+        except:
+            return ''
 
-        return output
+    async def _write_command(self, cmd: str) -> str:
+        self.process.stdin.write(cmd.encode())
+        await self.process.stdin.drain()
+        return await self._read_available_output()
 
-    def _read_n_lines(self, lines: int) -> str:
-        output = ''
-        try:
-            for _ in range(lines):
-                output += self.shared_queue.get(timeout=30)
-        except Empty as _:
-            pass
-
-        return output
-
-    def _write_command(self, cmd: str):
-        self.process.stdin.write(cmd)
-        self.process.stdin.flush()
-
-    def create_wallet(self):
+    async def create_wallet(self) -> str:
         wallet_file = os.path.join(self.node.datadir, "wallet")
-        self._write_command(f"createwallet {wallet_file} store-seed-phrase\n")
-        return self._read_available_output()
+        return await self._write_command(f"createwallet {wallet_file} store-seed-phrase\n")
 
-    def recover_wallet(self, mnemonic: str):
+    async def recover_wallet(self, mnemonic: str) -> str:
         wallet_file = os.path.join(self.node.datadir, "recovered_wallet")
-        self._write_command(f"createwallet {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
-        return self._read_available_output()
+        return await self._write_command(f"createwallet {wallet_file} store-seed-phrase \"{mnemonic}\"\n")
 
-    def close_wallet(self):
-        self._write_command("closewallet\n")
-        return self._read_available_output()
+    async def close_wallet(self) -> str:
+        return await self._write_command("closewallet\n")
 
-    def show_seed_phrase(self) -> Optional[str]:
-        self._write_command("showseedphrase\n")
-        output = self._read_available_output()
+    async def show_seed_phrase(self) -> Optional[str]:
+        output = await self._write_command("showseedphrase\n")
         if output.startswith("The saved seed phrase is"):
             mnemonic = output[output.find("\"") + 1:-1]
             return mnemonic
         # wallet doesn't have the seed phrase stored
         return None
 
-    def encrypt_private_keys(self, password: str):
-        self._write_command(f"encryptprivatekeys {password}\n")
-        return self._read_available_output()
+    async def encrypt_private_keys(self, password: str) -> str:
+        return await self._write_command(f"encryptprivatekeys {password}\n")
 
-    def unlock_private_keys(self, password: str):
-        self._write_command(f"unlockprivatekeys {password}\n")
-        return self._read_available_output()
+    async def unlock_private_keys(self, password: str) -> str:
+        return await self._write_command(f"unlockprivatekeys {password}\n")
 
-    def lock_private_keys(self):
-        self._write_command(f"lockprivatekeys\n")
-        return self._read_available_output()
+    async def lock_private_keys(self) -> str:
+        return await self._write_command(f"lockprivatekeys\n")
 
-    def remove_private_keys_encryption(self):
-        self._write_command(f"removeprivatekeysencryption\n")
-        return self._read_available_output()
+    async def remove_private_keys_encryption(self) -> str:
+        return await self._write_command(f"removeprivatekeysencryption\n")
 
-    def get_best_block_height(self):
-        self._write_command("bestblockheight\n")
-        return self._read_n_lines(1)
+    async def get_best_block_height(self) -> str:
+        return await self._write_command("bestblockheight\n")
 
-    def get_best_block(self):
-        self._write_command("bestblock\n")
-        return self._read_n_lines(1)
+    async def get_best_block(self) -> str:
+        return await self._write_command("bestblock\n")
 
-    def create_new_account(self, name: Optional[str] = ''):
-        self._write_command(f"createnewaccount {name}\n")
-        return self._read_available_output()
+    async def create_new_account(self, name: Optional[str] = '') -> str:
+        return await self._write_command(f"createnewaccount {name}\n")
 
-    def select_account(self, account_index: int):
-        self._write_command(f"selectaccount {account_index}\n")
-        return self._read_available_output()
+    async def select_account(self, account_index: int) -> str:
+        return await self._write_command(f"selectaccount {account_index}\n")
 
-    def new_public_key(self):
-        self._write_command("newpublickey\n")
+    async def new_public_key(self) -> bytes:
+        public_key = await self._write_command("newpublickey\n")
 
-        public_key = self._read_n_lines(1)
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
-    def new_address(self):
-        self._write_command(f"newaddress\n")
-        return self._read_n_lines(1)
+    async def new_address(self) -> str:
+        return await self._write_command(f"newaddress\n")
 
-    def send_to_address(self, address: str, amount: int):
-        self._write_command(f"sendtoaddress {address} {amount}\n")
-        return self._read_available_output()
+    async def send_to_address(self, address: str, amount: int) -> str:
+        return await self._write_command(f"sendtoaddress {address} {amount}\n")
 
-    def issue_new_token(self,
-                        token_ticker: str,
-                        amount_to_issue: str,
-                        number_of_decimals: int,
-                        metadata_uri: str,
-                        destination_address: str):
-        self._write_command(f"issuenewtoken {token_ticker} {amount_to_issue} {number_of_decimals} {metadata_uri} {destination_address}\n")
-        return self._read_available_output()
+    async def issue_new_token(self,
+                              token_ticker: str,
+                              amount_to_issue: str,
+                              number_of_decimals: int,
+                              metadata_uri: str,
+                              destination_address: str) -> str:
+        return await self._write_command(f"issuenewtoken {token_ticker} {amount_to_issue} {number_of_decimals} {metadata_uri} {destination_address}\n")
 
-    def issue_new_nft(self,
-                      destination_address: str,
-                      media_hash: str,
-                      name: str,
-                      description: str,
-                      ticker: str,
-                      creator: Optional[str] = '',
-                      icon_uri: Optional[str] = '',
-                      media_uri: Optional[str] = '',
-                      additional_metadata_uri: Optional[str] = ''):
-        self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
-        return self._read_available_output()
+    async def issue_new_nft(self,
+                            destination_address: str,
+                            media_hash: str,
+                            name: str,
+                            description: str,
+                            ticker: str,
+                            creator: Optional[str] = '',
+                            icon_uri: Optional[str] = '',
+                            media_uri: Optional[str] = '',
+                            additional_metadata_uri: Optional[str] = '') -> str:
+        return await self._write_command(f"issuenewnft {destination_address} {media_hash} {name} {description} {ticker} {creator} {icon_uri} {media_uri} {additional_metadata_uri}\n")
 
-    def create_stake_pool(self,
-                          amount: str,
-                          cost_per_block: str,
-                          margin_ratio_per_thousand: str,
-                          decommission_key: Optional[str] = ''):
-        self._write_command(f"createstakepool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
-        return self._read_available_output()
+    async def create_stake_pool(self,
+                                amount: str,
+                                cost_per_block: str,
+                                margin_ratio_per_thousand: str,
+                                decommission_key: Optional[str] = '') -> str:
+        return await self._write_command(f"createstakepool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
 
-    def sync(self):
-        self._write_command("syncwallet\n")
-        return self._read_available_output()
+    async def sync(self) -> str:
+        return await self._write_command("syncwallet\n")
 
-    def get_balance(self):
-        self._write_command("getbalance\n")
-        return self._read_available_output()
-
+    async def get_balance(self) -> str:
+        return await self._write_command("getbalance\n")
