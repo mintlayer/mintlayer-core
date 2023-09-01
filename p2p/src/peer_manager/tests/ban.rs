@@ -22,11 +22,10 @@ use crate::{
         types::{services::Service, PeerInfo, PeerRole, Role},
     },
     peer_manager::{OutboundConnectType, PeerManager},
-    protocol::CURRENT_PROTOCOL_VERSION,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -240,7 +239,7 @@ where
             peer_role,
             net::types::PeerInfo {
                 peer_id,
-                protocol_version: CURRENT_PROTOCOL_VERSION,
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: [1, 2, 3, 4],
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -372,7 +371,7 @@ fn ban_and_disconnect() {
     let address_1 = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol_version: CURRENT_PROTOCOL_VERSION,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),

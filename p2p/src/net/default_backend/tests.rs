@@ -18,7 +18,7 @@ use crate::{
     config::NodeType,
     error::DialError,
     net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
-    protocol::{SupportedProtocolVersion, CURRENT_PROTOCOL_VERSION},
+    protocol::SupportedProtocolVersion,
     testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,

@@ -343,10 +343,9 @@ mod tests {
             },
             types::services::Service,
         },
-        protocol::CURRENT_PROTOCOL_VERSION,
         testing_utils::{
             get_two_connected_sockets, test_p2p_config, TestTransportChannel, TestTransportMaker,
-            TestTransportNoise, TestTransportTcp,
+            TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
         },
     };
     use chainstate::Locator;
@@ -373,7 +372,7 @@ mod tests {
             None,
             tx1,
             rx2,
-            CURRENT_PROTOCOL_VERSION.into(),
+            TEST_PROTOCOL_VERSION.into(),
         );
 
         let handle = tokio::spawn(async move {
@@ -385,7 +384,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -401,7 +400,7 @@ mod tests {
         assert_eq!(
             rx1.try_recv().unwrap().1,
             PeerEvent::PeerInfoReceived {
-                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
                 network: *chain_config.magic_bytes(),
                 common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -451,7 +450,7 @@ mod tests {
             None,
             tx1,
             rx2,
-            CURRENT_PROTOCOL_VERSION.into(),
+            TEST_PROTOCOL_VERSION.into(),
         );
 
         let handle = tokio::spawn(async move {
@@ -463,7 +462,7 @@ mod tests {
         socket2.recv().await.unwrap();
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::HelloAck {
-                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -480,7 +479,7 @@ mod tests {
             Ok((
                 peer_id3,
                 PeerEvent::PeerInfoReceived {
-                    protocol_version: CURRENT_PROTOCOL_VERSION.into(),
+                    protocol_version: TEST_PROTOCOL_VERSION.into(),
                     network: *chain_config.magic_bytes(),
                     common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     user_agent: p2p_config.user_agent.clone(),
@@ -528,7 +527,7 @@ mod tests {
             None,
             tx1,
             rx2,
-            CURRENT_PROTOCOL_VERSION.into(),
+            TEST_PROTOCOL_VERSION.into(),
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
@@ -538,7 +537,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: CURRENT_PROTOCOL_VERSION.into(),
+                protocol_version: TEST_PROTOCOL_VERSION.into(),
                 software_version: *chain_config.software_version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
@@ -589,7 +588,7 @@ mod tests {
             None,
             tx1,
             rx2,
-            CURRENT_PROTOCOL_VERSION.into(),
+            TEST_PROTOCOL_VERSION.into(),
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);

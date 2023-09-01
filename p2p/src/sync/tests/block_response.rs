@@ -29,10 +29,8 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
-    sync::tests::helpers::{
-        for_each_protocol_version, make_new_blocks, make_new_top_blocks_return_headers, TestNode,
-    },
-    testing_utils::test_p2p_config,
+    sync::tests::helpers::{make_new_blocks, make_new_top_blocks_return_headers, TestNode},
+    testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };

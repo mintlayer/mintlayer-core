@@ -28,8 +28,8 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, SyncMessage},
-    sync::tests::helpers::{for_each_protocol_version, TestNode},
-    testing_utils::test_p2p_config,
+    sync::tests::helpers::TestNode,
+    testing_utils::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pError,
 };

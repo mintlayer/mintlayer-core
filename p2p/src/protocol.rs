@@ -71,6 +71,3 @@ pub fn choose_common_protocol_version(
     let min_version = std::cmp::min(version1, version2);
     min_version.try_into()
 }
-
-/// Latest known network protocol version
-pub const CURRENT_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V1;

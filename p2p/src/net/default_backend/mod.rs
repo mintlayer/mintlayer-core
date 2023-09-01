@@ -40,10 +40,15 @@ use crate::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, MessagingService, NetworkingService,
     },
-    protocol::{ProtocolVersion, CURRENT_PROTOCOL_VERSION},
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
     P2pConfig, P2pEventHandler,
 };
+
+// The current protocol version.
+// Note that we intentionally keep this constant private, because most of the code should
+// not depend on its value.
+const CURRENT_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V1;
 
 #[derive(Debug)]
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);

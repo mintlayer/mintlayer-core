@@ -15,12 +15,8 @@
 
 use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
 
-use enum_iterator::all;
-
 use async_trait::async_trait;
 use crypto::random::Rng;
-use futures::Future;
-use logging::log;
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 use tokio::{
@@ -58,7 +54,7 @@ use utils::atomics::SeqCstAtomicBool;
 use crate::{
     message::{HeaderList, SyncMessage},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
-    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
+    protocol::{choose_common_protocol_version, ProtocolVersion},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -660,17 +656,4 @@ pub fn get_random_hash(rng: &mut impl Rng) -> H256 {
 
 pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
     get_random_hash(rng).as_bytes().to_vec()
-}
-
-pub async fn for_each_protocol_version<Func, Res>(func: Func)
-where
-    Func: Fn(ProtocolVersion) -> Res,
-    Res: Future<Output = ()>,
-{
-    logging::init_logging::<&std::path::Path>(None);
-
-    for version in all::<SupportedProtocolVersion>() {
-        log::info!("---------- Testing protocol version {version:?} ----------");
-        func(version.into()).await;
-    }
 }

@@ -28,10 +28,8 @@ use tokio::sync::mpsc::unbounded_channel;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{HeaderList, SyncMessage},
-    sync::{
-        peer_common,
-        tests::helpers::{for_each_protocol_version, TestNode},
-    },
+    sync::{peer_common, tests::helpers::TestNode},
+    testing_utils::for_each_protocol_version,
     types::peer_id::PeerId,
 };
 

@@ -36,10 +36,9 @@ use crate::{
         tests::{make_peer_manager_custom, utils::cmd_to_peer_man_msg},
         OutboundConnectType, PeerManager, OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT,
     },
-    protocol::CURRENT_PROTOCOL_VERSION,
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker,
+        TestTransportMaker, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -69,7 +68,7 @@ where
     let peer_id = PeerId::new();
     let peer_info = PeerInfo {
         peer_id,
-        protocol_version: CURRENT_PROTOCOL_VERSION,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *config.magic_bytes(),
         software_version: *config.software_version(),
         user_agent: mintlayer_core_user_agent(),
@@ -144,7 +143,7 @@ fn test_addr_list_handling_inbound() {
     let peer_id_1 = PeerId::new();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol_version: CURRENT_PROTOCOL_VERSION,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
@@ -253,7 +252,7 @@ fn test_addr_list_handling_outbound() {
     let peer_address = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol_version: CURRENT_PROTOCOL_VERSION,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
@@ -352,7 +351,7 @@ async fn resend_own_addresses() {
         let peer_address = TestAddressMaker::new_random_address();
         let peer_info = PeerInfo {
             peer_id: new_peer_id,
-            protocol_version: CURRENT_PROTOCOL_VERSION,
+            protocol_version: TEST_PROTOCOL_VERSION,
             network: *chain_config.magic_bytes(),
             software_version: *chain_config.software_version(),
             user_agent: mintlayer_core_user_agent(),

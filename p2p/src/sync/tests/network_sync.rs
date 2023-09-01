@@ -25,13 +25,11 @@ use crate::{
     config::P2pConfig,
     message::SyncMessage,
     sync::tests::helpers::{
+        make_new_block, make_new_blocks, make_new_top_blocks,
         test_node_group::{MsgAction, TestNodeGroup},
         TestNode,
     },
-};
-
-use super::helpers::{
-    for_each_protocol_version, make_new_block, make_new_blocks, make_new_top_blocks,
+    testing_utils::for_each_protocol_version,
 };
 
 #[rstest::rstest]

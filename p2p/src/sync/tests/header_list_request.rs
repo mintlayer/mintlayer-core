@@ -28,7 +28,8 @@ use crate::{
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
-    sync::tests::helpers::{for_each_protocol_version, make_new_blocks, TestNode},
+    sync::tests::helpers::{make_new_blocks, TestNode},
+    testing_utils::for_each_protocol_version,
     types::peer_id::PeerId,
     P2pError,
 };
