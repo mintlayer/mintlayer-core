@@ -319,6 +319,13 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(())
     }
 
+    /// Reset all scanned transactions and revert all accounts to the genesis block
+    /// this will cause the wallet to rescan the blockchain
+    pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)
+    }
+
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,

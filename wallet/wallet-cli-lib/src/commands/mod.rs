@@ -813,7 +813,14 @@ impl CommandHandler {
                 )))
             }
 
-            WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
+            WalletCommand::Rescan => {
+                let controller = self.controller()?;
+                controller.reset_wallet_to_genesis().map_err(WalletCliError::Controller)?;
+                controller.sync_once().await.map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Successfully rescanned the blockchain".to_owned(),
+                ))
+            }
 
             WalletCommand::SyncWallet => {
                 self.controller()?.sync_once().await.map_err(WalletCliError::Controller)?;
