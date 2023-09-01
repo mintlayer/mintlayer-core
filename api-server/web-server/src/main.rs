@@ -17,12 +17,14 @@ mod api;
 mod config;
 mod error;
 
-use web_server::{error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState};
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
 use config::ApiServerWebServerConfig;
 use logging::{init_logging, log::info};
 use serde_json::json;
+use web_server::{
+    error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState,
+};
 
 #[tokio::main]
 async fn main() {

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use web_server::{error::APIServerWebServerError, APIServerWebServerState};
 use axum::{extract::Path, response::IntoResponse, routing::get, Json, Router};
 use common::{
     chain::{Block, Genesis, Transaction},
@@ -21,6 +20,7 @@ use common::{
 };
 use crypto::random::{make_true_rng, Rng};
 use serde_json::json;
+use web_server::{error::APIServerWebServerError, APIServerWebServerState};
 
 pub const API_VERSION: &str = "1.0.0";
 
@@ -321,7 +321,9 @@ pub async fn destination_script_hash(
 //
 
 #[allow(clippy::unused_async)]
-pub async fn pool(Path(_pool_id): Path<String>) -> Result<impl IntoResponse, APIServerWebServerError> {
+pub async fn pool(
+    Path(_pool_id): Path<String>,
+) -> Result<impl IntoResponse, APIServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
