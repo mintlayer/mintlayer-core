@@ -1151,14 +1151,19 @@ impl CommandHandler {
                         WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
                     })?;
 
-                let to_print = addresses_with_usage
-                    .into_iter()
-                    .map(|(index, (address, is_used))| {
-                        let is_used = if is_used { "Yes" } else { "No" };
-                        format!("{}\t{}\t;\tused:\t{}", index, address, is_used)
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let to_print = format!(
+                    "{}\t{}\t{}",
+                    "Index", "Address", "Is used in the blockchain"
+                );
+                let to_print = to_print
+                    + &addresses_with_usage
+                        .into_iter()
+                        .map(|(index, (address, is_used))| {
+                            let is_used = if is_used { "Yes" } else { "No" };
+                            format!("{}\t{}\t{}", index, address, is_used)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
 
                 Ok(ConsoleCommand::Print(to_print))
             }
