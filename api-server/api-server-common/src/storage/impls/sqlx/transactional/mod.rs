@@ -87,30 +87,62 @@ impl<D: Database> TransactionalSqlxStorage<D> {
     }
 }
 
-macro_rules! define_is_initialized {
-    ($access_type:ident, $database:ty) => {
-        impl<'a> $access_type<'a, $database> {
-            pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
+// TODO: the definitions here are repeated for R/O and R/W. We should find a way to factor them out.
 
-                let is_initialized =
-                    QueryFromConnection::<$database>::new(conn).is_initialized().await?;
+impl<'a> SqlxTransactionRo<'a, Postgres> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
 
-                Ok(is_initialized)
-            }
-        }
-    };
-    ($database:ty) => {
-        define_is_initialized!(SqlxTransactionRo, $database);
-        define_is_initialized!(SqlxTransactionRw, $database);
-    };
-    () => {
-        define_is_initialized!(Sqlite);
-        define_is_initialized!(Postgres);
-    };
+        let is_initialized = QueryFromConnection::<Postgres>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRo<'a, Sqlite> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Sqlite>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRw<'a, Postgres> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Postgres>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
+}
+
+impl<'a> SqlxTransactionRw<'a, Sqlite> {
+    pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let is_initialized = QueryFromConnection::<Sqlite>::new(conn).is_initialized().await?;
+
+        Ok(is_initialized)
+    }
 }
 
 macro_rules! define_database_access {
@@ -262,7 +294,6 @@ macro_rules! define_database_access {
     () => {
         define_database_access!(SqlxTransactionRo);
         define_database_access!(SqlxTransactionRw);
-        define_is_initialized!();
     };
 }
 
