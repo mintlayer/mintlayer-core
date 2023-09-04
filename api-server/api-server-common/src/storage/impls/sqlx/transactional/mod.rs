@@ -299,9 +299,7 @@ impl<'a, D: Database> SqlxTransactionRw<'a, D> {
     pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
         Self { tx }
     }
-}
 
-impl<'a, D: Database> SqlxTransactionRw<'a, D> {
     pub async fn commit(self) -> Result<(), ApiServerStorageError> {
         self.tx
             .commit()
