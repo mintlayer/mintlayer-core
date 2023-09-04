@@ -25,24 +25,24 @@ use web_server::{error::APIServerWebServerError, APIServerWebServerState};
 pub const API_VERSION: &str = "1.0.0";
 
 pub fn routes() -> Router<APIServerWebServerState> {
-    let mut router = Router::new();
+    let router = Router::new();
 
-    router = router
+    let router = router
         .route("/chain/genesis", get(chain_genesis))
         .route("/chain/tip", get(chain_tip))
         .route("/chain/:height", get(chain_at_height));
 
-    router = router
+    let router = router
         .route("/block/:id", get(block))
         .route("/block/:id/header", get(block_header))
         .route("/block/:id/reward", get(block_reward))
         .route("/block/:id/transaction-ids", get(block_transaction_ids));
 
-    router = router
+    let router = router
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
-    router = router
+    let router = router
         .route(
             "/destination/address/:public_key_hash",
             get(destination_address),
@@ -60,7 +60,7 @@ pub fn routes() -> Router<APIServerWebServerState> {
             get(destination_multisig),
         );
 
-    router = router.route("/pool/:id", get(pool));
+    let router = router.route("/pool/:id", get(pool));
 
     router
 }
