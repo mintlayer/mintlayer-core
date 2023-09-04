@@ -69,33 +69,53 @@ impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> PartialOrd for Rational<T>
     }
 }
 
+impl From<Rational<u128>> for Rational<Uint256> {
+    fn from(other: Rational<u128>) -> Self {
+        Self::new(other.numer.into(), other.denom.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::Seed;
 
-    #[test]
-    fn compare_u64() {
-        let a = Rational::new(2u64, 3u64);
-        let b = Rational::new(3u64, 4u64);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_comparison_against_num(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let a1 = rng.gen_range(1..u128::MAX);
+        let a2 = rng.gen_range(1..u128::MAX);
+        let b1 = rng.gen_range(1..u128::MAX);
+        let b2 = rng.gen_range(1..u128::MAX);
 
-        assert!(a < b);
+        let expected =
+            num::rational::Ratio::<u128>::new_raw(a1, a2)
+                .cmp(&num::rational::Ratio::<u128>::new_raw(b1, b2));
+
+        let actual = Rational::new(a1, a2).cmp(&Rational::new(b1, b2));
+
+        assert_eq!(expected, actual);
     }
 
-    #[test]
-    fn compare_u128() {
-        let a = Rational::new(2u128, 3u128);
-        let b = Rational::new(3u128, 4u128);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_overflow(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        assert!(a < b);
+        let a = Rational::new(
+            Uint256::MAX,
+            Uint256::from_u128(rng.gen_range(1..u128::MAX)),
+        );
+        let b = Rational::new(
+            Uint256::from_u128(rng.gen_range(1..u128::MAX)),
+            Uint256::MAX,
+        );
+
+        assert!(a > b);
     }
-
-    #[test]
-    fn compare_u256() {
-        let a = Rational::new(Uint256::MAX, Uint256::MAX);
-        let b = Rational::new(Uint256::MAX, Uint256::MAX);
-
-        assert!(a == b);
-    }
-
-    //FIXME: more tests
 }

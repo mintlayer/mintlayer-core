@@ -225,8 +225,8 @@ pub fn pos_initial_difficulty(chain_type: ChainType) -> Uint256 {
         ChainType::Regtest => Uint256([
             0x0000000000000000,
             0x0000000000000000,
-            0xCCCCCCCCCCCCCCCC,
-            0x0000000000000003,
+            0x0000000000000000,
+            0x0000000000000004,
         ]),
     }
 }

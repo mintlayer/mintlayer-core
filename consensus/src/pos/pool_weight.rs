@@ -31,6 +31,8 @@ const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoolWeightError {
+    #[error("Arithmetics error while calculating pools weight")]
+    ArithmeticsError,
     #[error("Final supply cannot be 0")]
     FinalSupplyZero,
     #[error("Pool balance {0:?} cannot be greater than total supply: {1:?}")]
@@ -84,9 +86,12 @@ fn pool_weight_impl(
     let relative_pledge_amount =
         Rational::<u128>::new(pledge_amount.into_atoms(), final_supply.into_atoms());
 
-    let a = pledge_influence;
-    let sigma = std::cmp::min(relative_pool_stake, pool_saturation_level);
-    let s = std::cmp::min(relative_pledge_amount, pool_saturation_level);
+    let relative_pool_stake: Rational<Uint256> = relative_pool_stake.into();
+    let relative_pledge_amount: Rational<Uint256> = relative_pledge_amount.into();
+
+    let a: Rational<Uint256> = pledge_influence.into();
+    let sigma = std::cmp::min(relative_pool_stake, pool_saturation_level.into());
+    let s = std::cmp::min(relative_pledge_amount, pool_saturation_level.into());
     let m = Uint256::from_u128(u128::MAX);
 
     // Given that z = 1/k, scale the original formula by the factor of m
@@ -102,27 +107,51 @@ fn pool_weight_impl(
     // Break it into terms for simplicity
     // term1 = m s - m s sigma k
     let term1 = {
-        let m_s = m * (*s.numer()).into() / (*s.denom()).into();
-        let m_s_sigma_k = m * (*s.numer()).into() / (*s.denom()).into() * (*sigma.numer()).into()
-            / (*sigma.denom()).into()
-            * K.into();
-        m_s - m_s_sigma_k
+        let m_s = m
+            .checked_mul(s.numer())
+            .and_then(|v| v.checked_div(s.denom()))
+            .ok_or(PoolWeightError::ArithmeticsError)?;
+        let m_s_sigma_k = m
+            .checked_mul(s.numer())
+            .and_then(|v| v.checked_div(s.denom()))
+            .and_then(|v| v.checked_mul(sigma.numer()))
+            .and_then(|v| v.checked_div(sigma.denom()))
+            .and_then(|v| v.checked_mul(&(*pool_saturation_level.denom()).into()))
+            .ok_or(PoolWeightError::ArithmeticsError)?;
+        m_s.checked_sub(&m_s_sigma_k).ok_or(PoolWeightError::ArithmeticsError)?
     };
 
     // term2 = (m sigma - term1) k
     let term2 = {
-        let m_sigma = m * (*sigma.numer()).into() / (*sigma.denom()).into();
-        (m_sigma - term1) * K.into()
+        let m_sigma = m
+            .checked_mul(sigma.numer())
+            .and_then(|v| v.checked_div(sigma.denom()))
+            .ok_or(PoolWeightError::ArithmeticsError)?;
+        m_sigma
+            .checked_sub(&term1)
+            .and_then(|v| v.checked_mul(&(*pool_saturation_level.denom()).into()))
+            .ok_or(PoolWeightError::ArithmeticsError)?
     };
 
     // result = (m sigma + s a term2) / (m + m a)
     let result_numer = {
-        let m_sigma = m * (*sigma.numer()).into() / (*sigma.denom()).into();
-        let term2_s_a = term2 * (*a.numer()).into() / (*a.denom()).into() * (*s.numer()).into()
-            / (*s.denom()).into();
-        m_sigma + term2_s_a
+        let m_sigma = m
+            .checked_mul(sigma.numer())
+            .and_then(|v| v.checked_div(sigma.denom()))
+            .ok_or(PoolWeightError::ArithmeticsError)?;
+        let term2_s_a = term2
+            .checked_mul(a.numer())
+            .and_then(|v| v.checked_div(a.denom()))
+            .and_then(|v| v.checked_mul(s.numer()))
+            .and_then(|v| v.checked_div(s.denom()))
+            .ok_or(PoolWeightError::ArithmeticsError)?;
+        m_sigma.checked_add(&term2_s_a).ok_or(PoolWeightError::ArithmeticsError)?
     };
-    let result_denom = m + m * (*a.numer()).into() / (*a.denom()).into();
+    let result_denom = m
+        .checked_mul(a.numer())
+        .and_then(|v| v.checked_div(a.denom()))
+        .and_then(|v| v.checked_add(&m))
+        .ok_or(PoolWeightError::ArithmeticsError)?;
     assert_ne!(result_denom, Uint256::ZERO);
 
     Ok(Rational::<Uint256>::new(result_numer, result_denom))
