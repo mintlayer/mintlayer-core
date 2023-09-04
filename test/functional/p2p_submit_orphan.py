@@ -68,22 +68,21 @@ class MempoolOrphanSubmissionTest(BitcoinTestFramework):
         self.sync_all(self.nodes[0:3])
 
     def run_test(self):
+        # Spin up our node, connect it to the rest via node0
+        my_node = SimpleTxSendingNode()
+        node0 = self.nodes[0]
+        node0.add_p2p_connection(my_node)
 
         # Get genesis ID
-        genesis_id = self.nodes[0].chainstate_block_id_at_height(0)
-
+        genesis_id = node0.chainstate_block_id_at_height(0)
         tx1 = make_tx_dict([ reward_input(genesis_id) ], [ 1_000_000 ] )
         tx1_id = calc_tx_id(tx1)
         tx2 = make_tx_dict([ tx_input(tx1_id) ], [ 900_000 ] )
         tx2_id = calc_tx_id(tx2)
 
-        # Spin up our node, connect it to the rest via node0
-        my_node = SimpleTxSendingNode()
-        self.nodes[0].add_p2p_connection(my_node)
-
         # Submit the dependent transaction first, check it is in node0's orphan pool
         my_node.submit_tx(tx2)
-        self.wait_until(lambda: self.nodes[0].mempool_contains_orphan_tx(tx2_id), timeout = 5)
+        self.wait_until(lambda: node0.mempool_contains_orphan_tx(tx2_id), timeout = 5)
 
         # Wait for a while to give enough time for the transactions to propagate through the
         # network. It should not happen, the submitted transaction should be held up in node0's
