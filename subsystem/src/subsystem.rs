@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{pin::Pin, task};
+use std::{pin::Pin, task::Poll};
 
 use futures::future::BoxFuture;
 use tokio::sync::{mpsc, oneshot};
@@ -23,7 +23,7 @@ use utils::shallow_clone::ShallowClone;
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
-pub trait Subsystem: 'static + Send + Sized {
+pub trait Subsystem: 'static + Send + Sync + Sized {
     /// Custom shutdown procedure.
     async fn shutdown(self) {}
 }
@@ -41,15 +41,31 @@ impl SubsystemConfig {
     }
 }
 
-// Internal action type sent in the channel.
-type Action<T, R> = Box<dyn Send + FnOnce(&mut T) -> BoxFuture<R>>;
+// Internal action types sent in the channel.
+type ActionRefFn<T> = Box<dyn Send + FnOnce(&T) -> BoxFuture<()>>;
+type ActionMutFn<T> = Box<dyn Send + FnOnce(&mut T) -> BoxFuture<()>>;
+
+pub enum Action<T: ?Sized> {
+    Ref(ActionRefFn<T>),
+    Mut(ActionMutFn<T>),
+}
+
+impl<T: ?Sized> Action<T> {
+    /// Handle a call without any fancy processing, just using a plain mut reference
+    pub fn handle_call_mut(self, obj: &mut T) -> BoxFuture<()> {
+        match self {
+            Self::Ref(action) => action(&*obj),
+            Self::Mut(action) => action(obj),
+        }
+    }
+}
 
 /// Call request
-pub struct CallRequest<T: ?Sized>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
+pub struct CallRequest<T: ?Sized>(pub(crate) mpsc::UnboundedReceiver<Action<T>>);
 
 impl<T: 'static + ?Sized> CallRequest<T> {
     /// Receive an external call to this subsystem.
-    pub async fn recv(&mut self) -> Action<T, ()> {
+    pub async fn recv(&mut self) -> Action<T> {
         match self.0.recv().await {
             // We have a call, return it
             Some(action) => action,
@@ -71,8 +87,9 @@ impl<T> CallResponse<T> {
 impl<T> std::future::Future for CallResponse<T> {
     type Output = Result<T, CallError>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        Pin::new(&mut self.0).poll(cx).map_err(|_| CallError::ResultFetchFailed)
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        // TODO(PR) better error
+        std::pin::pin!(&mut self.0).poll(cx).map_err(|_| CallError::ResultFetchFailed)
     }
 }
 
@@ -88,7 +105,7 @@ impl ShutdownRequest {
     }
 }
 
-pub type ActionSender<T> = mpsc::UnboundedSender<Action<T, ()>>;
+pub type ActionSender<T> = mpsc::UnboundedSender<Action<T>>;
 
 /// Subsystem handle.
 ///
@@ -146,18 +163,33 @@ impl<T> CallResult<T> {
 impl<T> std::future::Future for CallResult<T> {
     type Output = Result<T, CallError>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        self.0.as_mut().map_or_else(
-            |err| task::Poll::Ready(Err(*err)),
-            |res| Pin::new(res).poll(cx),
-        )
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        self.0
+            .as_mut()
+            .map_or_else(|err| Poll::Ready(Err(*err)), |res| Pin::new(res).poll(cx))
     }
 }
 
-impl<T: ?Sized + Send + 'static> Handle<T> {
+impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
     /// Crate a new subsystem handle.
     pub(crate) fn new(action_tx: ActionSender<T>) -> Self {
         Self { action_tx }
+    }
+
+    pub fn send_action<R: Send + 'static>(
+        &self,
+        action: impl FnOnce(oneshot::Sender<R>) -> Action<T>,
+    ) -> CallResult<R> {
+        let (rtx, rrx) = oneshot::channel::<R>();
+
+        // TODO(PR): Better error
+        let result = self
+            .action_tx
+            .send(action(rtx))
+            .map(|()| CallResponse(rrx))
+            .map_err(|_e| CallError::SubmissionFailed);
+
+        CallResult(result)
     }
 
     /// Call an async procedure to the subsystem. Result has to be await-ed explicitly
@@ -165,21 +197,15 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&mut T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
-        let (rtx, rrx) = oneshot::channel::<R>();
-
-        let res = self
-            .action_tx
-            .send(Box::new(move |subsys| {
+        self.send_action(|rtx| {
+            Action::Mut(Box::new(move |subsys| {
                 Box::pin(async move {
                     if rtx.send(func(subsys).await).is_err() {
-                        log::trace!("Subsystem call result ignored");
+                        log::trace!("Subsystem call (mut) result ignored");
                     }
                 })
             }))
-            .map(|()| CallResponse(rrx))
-            .map_err(|_e| CallError::SubmissionFailed);
-
-        CallResult(res)
+        })
     }
 
     /// Call an async procedure to the subsystem (immutable).
@@ -187,7 +213,15 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
-        self.call_async_mut(|this| func(this))
+        self.send_action(|rtx| {
+            Action::Ref(Box::new(move |subsys| {
+                Box::pin(async move {
+                    if rtx.send(func(subsys).await).is_err() {
+                        log::trace!("Subsystem call (ref) result ignored");
+                    }
+                })
+            }))
+        })
     }
 
     /// Call a procedure to the subsystem.
@@ -195,7 +229,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&mut T) -> R + Send + 'static,
     ) -> CallResult<R> {
-        self.call_async_mut(|this| Box::pin(core::future::ready(func(this))))
+        self.call_async_mut(|this| Box::pin(async { func(this) }))
     }
 
     /// Call a procedure to the subsystem (immutable).
@@ -203,7 +237,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
         &self,
         func: impl FnOnce(&T) -> R + Send + 'static,
     ) -> CallResult<R> {
-        self.call_mut(|this| func(this))
+        self.call_async(|this| Box::pin(core::future::ready(func(this))))
     }
 }
 

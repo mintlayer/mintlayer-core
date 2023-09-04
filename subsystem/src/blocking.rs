@@ -50,7 +50,7 @@ impl<T: ?Sized> BlockingHandle<T> {
     }
 }
 
-impl<T: 'static + Send + ?Sized> BlockingHandle<T> {
+impl<T: 'static + Send + Sync + ?Sized> BlockingHandle<T> {
     /// Perform given closure in a worker, passing the handle to it, get the result
     fn with_handle<R: 'static + Send>(
         &self,

@@ -214,7 +214,7 @@ where
                     self.shutdown().await;
                     break;
                 },
-                call = call.recv() => call(&mut self).await,
+                call = call.recv() => call.handle_call_mut(&mut self).await,
             }
         }
     }

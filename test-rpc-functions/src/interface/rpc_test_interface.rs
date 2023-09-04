@@ -18,6 +18,6 @@ use std::sync::Arc;
 use common::chain::ChainConfig;
 
 #[async_trait::async_trait]
-pub trait RpcTestFunctionsInterface: Send {
+pub trait RpcTestFunctionsInterface: Send + Sync {
     fn get_chain_config(&self) -> Option<Arc<ChainConfig>>;
 }

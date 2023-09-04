@@ -76,7 +76,7 @@ impl MempoolSubsystemInterface for MockMempoolInterface {
     ) {
         loop {
             tokio::select! {
-                call = call_rq.recv() => call(&mut self).await,
+                call = call_rq.recv() => call.handle_call_mut(&mut self).await,
                 () = shut_rq.recv() => return,
             }
         }

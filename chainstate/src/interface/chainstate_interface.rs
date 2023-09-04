@@ -34,7 +34,7 @@ use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
-pub trait ChainstateInterface: Send {
+pub trait ChainstateInterface: Send + Sync {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
     fn process_block(
         &mut self,
