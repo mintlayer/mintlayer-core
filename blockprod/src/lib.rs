@@ -128,8 +128,7 @@ mod tests {
             config::{create_unit_test_config, Builder, ChainConfig, ChainType},
             create_unittest_pos_config, pos_initial_difficulty,
             stakelock::StakePoolData,
-            Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSConsensusVersion,
-            TxOutput, UpgradeVersion,
+            Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
         },
         primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
         time_getter::TimeGetter,
@@ -296,11 +295,7 @@ mod tests {
                 (
                     BlockHeight::new(1),
                     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                        initial_difficulty: pos_initial_difficulty(
-                            ChainType::Regtest,
-                            PoSConsensusVersion::V1,
-                        )
-                        .into(),
+                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                         config: create_unittest_pos_config(),
                     }),
                 ),

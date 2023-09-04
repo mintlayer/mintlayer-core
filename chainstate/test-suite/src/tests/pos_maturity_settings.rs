@@ -50,7 +50,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     1,
@@ -66,7 +66,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: None,
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     1,
@@ -200,7 +200,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     1,
@@ -216,7 +216,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: None,
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     1,

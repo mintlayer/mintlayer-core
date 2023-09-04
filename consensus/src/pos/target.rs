@@ -116,8 +116,11 @@ where
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+            config,
+        } => match initial_difficulty {
+            Some(difficulty) => return Ok(*difficulty),
+            None => config,
+        },
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -138,8 +141,11 @@ pub fn calculate_target_required(
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+            config,
+        } => match initial_difficulty {
+            Some(difficulty) => return Ok(*difficulty),
+            None => config,
+        },
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -174,7 +180,11 @@ where
             PoSStatus::Threshold {
                 initial_difficulty,
                 config: _,
-            } => return Ok(initial_difficulty),
+            } => {
+                if let Some(difficulty) = initial_difficulty {
+                    return Ok(difficulty);
+                }
+            }
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
@@ -496,7 +506,7 @@ mod tests {
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -576,7 +586,7 @@ mod tests {
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -626,7 +636,7 @@ mod tests {
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -738,14 +748,14 @@ mod tests {
             (
                 BlockHeight::new(0),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Compact::from(target_limit_1),
+                    initial_difficulty: Some(Compact::from(target_limit_1)),
                     config: pos_config_1,
                 }),
             ),
             (
                 BlockHeight::new(3),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Compact::from(target_limit_2),
+                    initial_difficulty: Some(Compact::from(target_limit_2)),
                     config: pos_config_2,
                 }),
             ),

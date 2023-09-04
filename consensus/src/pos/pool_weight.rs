@@ -27,6 +27,7 @@ const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
 /// doubles minimum pledge the the result increases by 5%.
 /// If the minimum pledge changes it should be recalculated.
+/// FIXME: change to 0.005 and write test thats proves that
 const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new(789, 1000);
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

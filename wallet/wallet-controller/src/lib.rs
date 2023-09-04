@@ -816,6 +816,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
             let block = self.generate_block(account_index, None).await?;
 
+            println!("Generated block");
             self.rpc_client
                 .submit_block(block)
                 .await

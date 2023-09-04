@@ -416,22 +416,16 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
                     (
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: pos_initial_difficulty(
-                                ChainType::Regtest,
-                                PoSConsensusVersion::V0,
-                            )
-                            .into(),
+                            initial_difficulty: Some(
+                                pos_initial_difficulty(ChainType::Regtest).into(),
+                            ),
                             config: create_regtest_pos_config(PoSConsensusVersion::V0),
                         }),
                     ),
                     (
                         (*upgrade_height).into(),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: pos_initial_difficulty(
-                                ChainType::Regtest,
-                                PoSConsensusVersion::V1,
-                            )
-                            .into(),
+                            initial_difficulty: None,
                             config: create_regtest_pos_config(PoSConsensusVersion::V1),
                         }),
                     ),

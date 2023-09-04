@@ -36,8 +36,7 @@ use common::{
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSConsensusVersion,
-        TxOutput, UpgradeVersion,
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
@@ -151,11 +150,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: pos_initial_difficulty(
-                    ChainType::Regtest,
-                    PoSConsensusVersion::V1,
-                )
-                .into(),
+                initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                 config: pos_config,
             }),
         ),

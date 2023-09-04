@@ -165,7 +165,7 @@ fn setup_test_chain_with_staked_pool(
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -212,7 +212,7 @@ fn setup_test_chain_with_2_staked_pools(
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -596,7 +596,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -924,7 +924,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -1527,7 +1527,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
@@ -1543,7 +1543,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
@@ -1674,7 +1674,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),

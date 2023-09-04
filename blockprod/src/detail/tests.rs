@@ -1255,7 +1255,7 @@ mod produce_block {
                     initial_difficulty: Uint256::MAX.into(),
                 },
                 ConsensusUpgrade::PoS {
-                    initial_difficulty: Uint256::MAX.into(),
+                    initial_difficulty: Some(Uint256::MAX.into()),
                     config: easy_pos_config,
                 },
             ];

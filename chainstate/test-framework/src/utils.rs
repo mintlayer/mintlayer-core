@@ -359,7 +359,7 @@ pub fn create_chain_config_with_staking_pool(
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: create_unittest_pos_config(),
             }),
         ),

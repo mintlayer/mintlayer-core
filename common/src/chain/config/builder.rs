@@ -69,11 +69,9 @@ impl ChainType {
                     (
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: pos_initial_difficulty(
-                                ChainType::Testnet,
-                                PoSConsensusVersion::V0,
-                            )
-                            .into(),
+                            initial_difficulty: Some(
+                                pos_initial_difficulty(ChainType::Testnet).into(),
+                            ),
                             config: create_testnet_pos_config(PoSConsensusVersion::V0),
                         }),
                     ),
@@ -81,11 +79,7 @@ impl ChainType {
                         // TODO: decide on proper height
                         BlockHeight::new(9999999999),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: pos_initial_difficulty(
-                                ChainType::Testnet,
-                                PoSConsensusVersion::V1,
-                            )
-                            .into(),
+                            initial_difficulty: None,
                             config: create_testnet_pos_config(PoSConsensusVersion::V1),
                         }),
                     ),

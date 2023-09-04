@@ -425,7 +425,7 @@ mod tests {
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: None,
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     1,

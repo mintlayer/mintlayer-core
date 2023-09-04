@@ -22,6 +22,7 @@
 use crate::primitives::Amount;
 use thiserror::Error;
 
+// FIXME: add checked mul and add
 macro_rules! construct_uint {
     ($name:ident, $n_words:expr) => {
         /// little endian large integer type
