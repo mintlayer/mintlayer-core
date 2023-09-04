@@ -27,8 +27,7 @@ const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
 /// doubles minimum pledge the the result increases by 5%.
 /// If the minimum pledge changes it should be recalculated.
-/// FIXME: change to 0.005 and write test thats proves that
-const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new(789, 1000);
+const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new(75, 1000);
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoolWeightError {
@@ -195,7 +194,7 @@ mod tests {
             let pledge_amount = Mlt::from_mlt(40_000).to_amount_atoms();
 
             let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
-            compare_results(actual, 0.000194818);
+            compare_results(actual, 0.000311421);
         }
 
         {
@@ -203,7 +202,7 @@ mod tests {
             let pledge_amount = Mlt::from_mlt(80_000).to_amount_atoms();
 
             let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
-            compare_results(actual, 0.000200698);
+            compare_results(actual, 0.000312351);
         }
 
         {
@@ -211,7 +210,7 @@ mod tests {
             let pledge_amount = Mlt::from_mlt(150_000).to_amount_atoms();
 
             let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
-            compare_results(actual, 0.0002047);
+            compare_results(actual, 0.000312984);
         }
 
         {
@@ -219,7 +218,7 @@ mod tests {
             let pledge_amount = pool_balance;
 
             let actual = pool_weight(pledge_amount, pool_balance, final_supply).unwrap();
-            compare_results(actual, 0.000202658);
+            compare_results(actual, 0.000312661);
         }
     }
 
@@ -356,5 +355,27 @@ mod tests {
 
             assert!(weights.windows(2).all(|w| w[0] > w[1]));
         }
+    }
+
+    #[test]
+    fn check_a0_value_calculation() {
+        let final_supply = common::chain::config::create_mainnet()
+            .final_supply()
+            .unwrap()
+            .to_amount_atoms();
+        let pool_balance = (final_supply / K).unwrap();
+
+        let pledge_amount1 = Mlt::from_mlt(40_000).to_amount_atoms();
+        let weight1 = pool_weight(pledge_amount1, pool_balance, final_supply).unwrap();
+        let weight1 = to_float(weight1, 10);
+
+        let pledge_amount2 = Mlt::from_mlt(80_000).to_amount_atoms();
+        let weight2 = pool_weight(pledge_amount2, pool_balance, final_supply).unwrap();
+        let weight2 = to_float(weight2, 10);
+
+        let actual = weight2 - weight1;
+        let expected = weight1 * 0.005;
+        let tolerance: f64 = 3e-8;
+        assert!((actual - expected).abs() < tolerance);
     }
 }
