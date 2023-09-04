@@ -149,7 +149,7 @@ impl MempoolImpl {
         !self.work_queue.is_empty()
     }
 
-    /// A future that resolves if there's orphan work to do and is pending there's not.
+    /// A future that resolves instantly if there's orphan work to do and is pending if there's not.
     ///
     /// CAUTION: This is a one-off check and does not continually check whether some more work has
     /// arrived. Has to be `await`-ed again to check again. For use in event loop `select!` only.
