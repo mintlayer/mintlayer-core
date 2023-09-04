@@ -1151,15 +1151,12 @@ impl CommandHandler {
                         WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
                     })?;
 
-                let to_print = format!(
-                    "{}\t{}\t{}",
-                    "Index", "Address", "Is used in the blockchain\n"
-                );
+                let to_print = format!("{}\t{}\t{}\n", "Index", "Address", "");
                 let to_print = to_print
                     + &addresses_with_usage
                         .into_iter()
                         .map(|(index, (address, is_used))| {
-                            let is_used = if is_used { "Yes" } else { "No" };
+                            let is_used = if is_used { "Used" } else { "Unused" };
                             format!("{}\t{}\t{}", index, address, is_used)
                         })
                         .collect::<Vec<_>>()
