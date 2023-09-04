@@ -145,159 +145,297 @@ impl<'a> SqlxTransactionRw<'a, Sqlite> {
     }
 }
 
-macro_rules! define_database_access {
-    ($access_type:ident) => {
-        pub struct $access_type<'a, D: Database> {
-            tx: sqlx::Transaction<'a, D>,
-        }
-
-        impl<'a, D: Database> $access_type<'a, D> {
-            pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
-                Self { tx }
-            }
-
-            pub async fn get_storage_version(
-                &mut self,
-            ) -> Result<Option<u32>, ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut D::Connection: Executor<'e>,
-                for<'e> &'e Pool<D>: Executor<'e, Database = D>,
-                for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-                usize: ColumnIndex<D::Row>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-                Vec<u8>: sqlx::Type<D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let version = QueryFromConnection::new(conn).get_storage_version().await?;
-
-                Ok(version)
-            }
-
-            pub async fn get_main_chain_block_id(
-                &mut self,
-                block_height: BlockHeight,
-            ) -> Result<Option<Id<Block>>, ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-                usize: ColumnIndex<D::Row>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-                Vec<u8>: sqlx::Type<D>,
-                for<'e> i64: sqlx::Encode<'e, D>,
-                i64: sqlx::Type<D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let block_id =
-                    QueryFromConnection::new(conn).get_main_chain_block_id(block_height).await?;
-
-                Ok(block_id)
-            }
-
-            pub async fn get_block(
-                &mut self,
-                block_id: Id<Block>,
-            ) -> Result<Option<Block>, ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-                usize: ColumnIndex<D::Row>,
-                for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-                Vec<u8>: sqlx::Type<D>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let block = QueryFromConnection::new(conn).get_block(block_id).await?;
-
-                Ok(block)
-            }
-
-            pub async fn get_transaction(
-                &mut self,
-                transaction_id: Id<Transaction>,
-            ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-                usize: ColumnIndex<D::Row>,
-                for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-                Vec<u8>: sqlx::Type<D>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let result = QueryFromConnection::new(conn).get_transaction(transaction_id).await?;
-
-                Ok(result)
-            }
-
-            pub async fn get_block_aux_data(
-                &mut self,
-                block_id: Id<Block>,
-            ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-                usize: ColumnIndex<D::Row>,
-                for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-                Vec<u8>: sqlx::Type<D>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let block_aux_data =
-                    QueryFromConnection::new(conn).get_block_aux_data(block_id).await?;
-
-                Ok(block_aux_data)
-            }
-
-            pub async fn get_best_block(
-                &mut self,
-            ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
-            where
-                for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-                for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
-                for<'e> &'e Pool<D>: Executor<'e, Database = D>,
-                usize: ColumnIndex<<D as sqlx::Database>::Row>,
-                Vec<u8>: sqlx::Type<D>,
-                for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-            {
-                let conn =
-                    self.tx.acquire().await.map_err(|e| {
-                        ApiServerStorageError::AcquiringConnectionFailed(e.to_string())
-                    })?;
-
-                let best = QueryFromConnection::new(conn).get_best_block().await?;
-
-                Ok(best)
-            }
-        }
-    };
-    () => {
-        define_database_access!(SqlxTransactionRo);
-        define_database_access!(SqlxTransactionRw);
-    };
+pub struct SqlxTransactionRo<'a, D: Database> {
+    tx: sqlx::Transaction<'a, D>,
 }
 
-define_database_access!();
+impl<'a, D: Database> SqlxTransactionRo<'a, D> {
+    pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
+        Self { tx }
+    }
+
+    pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let version = QueryFromConnection::new(conn).get_storage_version().await?;
+
+        Ok(version)
+    }
+
+    pub async fn get_main_chain_block_id(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<Block>>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> i64: sqlx::Encode<'e, D>,
+        i64: sqlx::Type<D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block_id = QueryFromConnection::new(conn).get_main_chain_block_id(block_height).await?;
+
+        Ok(block_id)
+    }
+
+    pub async fn get_block(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block = QueryFromConnection::new(conn).get_block(block_id).await?;
+
+        Ok(block)
+    }
+
+    pub async fn get_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let result = QueryFromConnection::new(conn).get_transaction(transaction_id).await?;
+
+        Ok(result)
+    }
+
+    pub async fn get_block_aux_data(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block_aux_data = QueryFromConnection::new(conn).get_block_aux_data(block_id).await?;
+
+        Ok(block_aux_data)
+    }
+
+    pub async fn get_best_block(
+        &mut self,
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let best = QueryFromConnection::new(conn).get_best_block().await?;
+
+        Ok(best)
+    }
+}
+
+pub struct SqlxTransactionRw<'a, D: Database> {
+    tx: sqlx::Transaction<'a, D>,
+}
+
+impl<'a, D: Database> SqlxTransactionRw<'a, D> {
+    pub fn new(tx: sqlx::Transaction<'a, D>) -> Self {
+        Self { tx }
+    }
+
+    pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let version = QueryFromConnection::new(conn).get_storage_version().await?;
+
+        Ok(version)
+    }
+
+    pub async fn get_main_chain_block_id(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<Option<Id<Block>>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> i64: sqlx::Encode<'e, D>,
+        i64: sqlx::Type<D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block_id = QueryFromConnection::new(conn).get_main_chain_block_id(block_height).await?;
+
+        Ok(block_id)
+    }
+
+    pub async fn get_block(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block = QueryFromConnection::new(conn).get_block(block_id).await?;
+
+        Ok(block)
+    }
+
+    pub async fn get_transaction(
+        &mut self,
+        transaction_id: Id<Transaction>,
+    ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let result = QueryFromConnection::new(conn).get_transaction(transaction_id).await?;
+
+        Ok(result)
+    }
+
+    pub async fn get_block_aux_data(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        usize: ColumnIndex<D::Row>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let block_aux_data = QueryFromConnection::new(conn).get_block_aux_data(block_id).await?;
+
+        Ok(block_aux_data)
+    }
+
+    pub async fn get_best_block(
+        &mut self,
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
+    where
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
+        for<'e> &'e Pool<D>: Executor<'e, Database = D>,
+        usize: ColumnIndex<<D as sqlx::Database>::Row>,
+        Vec<u8>: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
+    {
+        let conn = self
+            .tx
+            .acquire()
+            .await
+            .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
+
+        let best = QueryFromConnection::new(conn).get_best_block().await?;
+
+        Ok(best)
+    }
+}
 
 impl<'a, D: Database> SqlxTransactionRw<'a, D> {
     pub async fn commit(self) -> Result<(), ApiServerStorageError> {
