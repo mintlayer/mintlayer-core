@@ -20,7 +20,7 @@ mod error;
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
 use config::ApiServerWebServerConfig;
-use logging::{init_logging, log::info};
+use logging::log;
 use serde_json::json;
 use web_server::{
     error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState,
@@ -32,10 +32,10 @@ async fn main() {
         std::env::set_var("RUST_LOG", "info");
     }
 
-    init_logging::<&std::path::Path>(None);
+    logging::init_logging::<&std::path::Path>(None);
 
     let args = ApiServerWebServerConfig::parse();
-    info!("Command line options: {args:?}");
+    log::info!("Command line options: {args:?}");
 
     let state = APIServerWebServerState {
         example_shared_value: "test value".to_string(),
