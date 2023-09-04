@@ -90,7 +90,11 @@ pub enum WalletCommand {
     /// Returns the node chainstate
     ChainstateInfo,
 
-    /// Show receive-addresses with their usage state
+    /// Show receive-addresses with their usage state.
+    /// Note that whether an address is used isn't based on the wallet,
+    /// but on the blockchain. So if an address is used in a transaction,
+    /// it will be marked as used only when the transaction is included
+    /// in a block.
     ShowReceiveAddresses,
 
     /// Returns the current best block hash
