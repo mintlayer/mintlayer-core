@@ -930,7 +930,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(addresses
             .into_iter()
             .map(|(child_number, address)| {
-                let used = usage.last_used().unwrap_or(U31::ZERO) > child_number.get_index();
+                let used =
+                    usage.last_used().map(|used| used >= child_number.get_index()).unwrap_or(false);
                 (child_number, (address, used))
             })
             .collect())
