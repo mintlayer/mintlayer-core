@@ -1153,7 +1153,7 @@ impl CommandHandler {
 
                 let to_print = format!(
                     "{}\t{}\t{}",
-                    "Index", "Address", "Is used in the blockchain"
+                    "Index", "Address", "Is used in the blockchain\n"
                 );
                 let to_print = to_print
                     + &addresses_with_usage
