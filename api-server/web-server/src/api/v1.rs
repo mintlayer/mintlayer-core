@@ -60,9 +60,7 @@ pub fn routes() -> Router<APIServerWebServerState> {
             get(destination_multisig),
         );
 
-    let router = router.route("/pool/:id", get(pool));
-
-    router
+    router.route("/pool/:id", get(pool))
 }
 
 //
