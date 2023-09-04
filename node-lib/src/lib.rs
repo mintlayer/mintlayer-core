@@ -32,7 +32,7 @@ pub use options::{Command, Options, RunOptions};
 pub use runner::setup;
 
 pub fn default_rpc_config() -> RpcConfigFile {
-    config_files::rpc_config(RpcConfigFile::default(), &options::RunOptions::default())
+    RpcConfigFile::with_run_options(RpcConfigFile::default(), &options::RunOptions::default())
 }
 
 pub fn init_logging(_opts: &Options) {
