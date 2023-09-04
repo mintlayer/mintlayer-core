@@ -33,7 +33,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
 };
 use wallet_types::keys::KeyPurpose;
-use wallet_types::{AccountId, AccountInfo};
+use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::MasterKeyChain;
 
@@ -318,6 +318,10 @@ impl AccountKeyChain {
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
+    }
+
+    pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
+        self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
     }
 }
 

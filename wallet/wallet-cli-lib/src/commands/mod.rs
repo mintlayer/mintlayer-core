@@ -90,6 +90,9 @@ pub enum WalletCommand {
     /// Returns the node chainstate
     ChainstateInfo,
 
+    /// Show receive-addresses with their usage state
+    ShowReceiveAddresses,
+
     /// Returns the current best block hash
     BestBlock,
 
@@ -1139,6 +1142,25 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+            WalletCommand::ShowReceiveAddresses => {
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+
+                let addresses_with_usage =
+                    controller.get_addresses_with_usage(selected_account).map_err(|e| {
+                        WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
+                    })?;
+
+                let to_print = addresses_with_usage
+                    .into_iter()
+                    .map(|(index, (address, is_used))| {
+                        let is_used = if is_used { "Yes" } else { "No" };
+                        format!("{}\t{}\t;\tused:\t{}", index, address, is_used)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                Ok(ConsoleCommand::Print(to_print))
             }
 
             WalletCommand::Exit => Ok(ConsoleCommand::Exit),

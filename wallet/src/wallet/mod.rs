@@ -56,7 +56,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxState;
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, BlockInfo, KeyPurpose};
+use wallet_types::{AccountId, BlockInfo, KeyPurpose, KeychainUsageState};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -698,6 +698,11 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(account.get_all_issued_addresses())
     }
 
+    pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_addresses_usage())
+    }
+
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
         let db_tx = self.db.transaction_ro_unlocked()?;
         self.get_account(account_index)?.get_vrf_public_key(&db_tx)
@@ -916,7 +921,7 @@ impl<B: storage::Backend> Wallet<B> {
     ///
     /// `common_block_height` is the height of the shared blocks that are still in sync after reorgs.
     /// If `common_block_height` is zero, only the genesis block is considered common.
-    /// If a new transaction is recognized for the unused account, it is transferd to the used
+    /// If a new transaction is recognized for the unused account, it is transferred to the used
     /// accounts and a new unused account is created.
     pub fn scan_new_blocks_unused_account(
         &mut self,

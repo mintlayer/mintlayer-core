@@ -80,7 +80,9 @@ pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked, BlockInfo};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, with_locked::WithLocked, BlockInfo, KeychainUsageState,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -901,6 +903,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.wallet
             .get_all_issued_addresses(account_index)
             .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_addresses_usage(
+        &self,
+        account_index: U31,
+    ) -> Result<&KeychainUsageState, ControllerError<T>> {
+        self.wallet
+            .get_addresses_usage(account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Get all addresses with usage information
+    /// The boolean in the BTreeMap's value is true if the address is used, false is otherwise
+    /// Note that the usage statistics follow strictly the rules of the wallet. For example,
+    /// the initial wallet only stored information about the last used address, so the usage
+    /// of all addresses after the first unused address will have the result `false`.
+    #[allow(clippy::type_complexity)]
+    pub fn get_addresses_with_usage(
+        &self,
+        account_index: U31,
+    ) -> Result<BTreeMap<ChildNumber, (Address<Destination>, bool)>, ControllerError<T>> {
+        let addresses = self.get_all_issued_addresses(account_index)?;
+        let usage = self.get_addresses_usage(account_index)?;
+
+        Ok(addresses
+            .into_iter()
+            .map(|(child_number, address)| {
+                let used = usage.last_used().unwrap_or(U31::ZERO) > child_number.get_index();
+                (child_number, (address, used))
+            })
+            .collect())
     }
 
     /// Synchronize the wallet to the current node tip height and return
