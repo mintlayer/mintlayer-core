@@ -1151,18 +1151,23 @@ impl CommandHandler {
                         WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
                     })?;
 
-                let to_print = format!("{}\t{}\t{}\n", "Index", "Address", "");
-                let to_print = to_print
-                    + &addresses_with_usage
-                        .into_iter()
-                        .map(|(index, (address, is_used))| {
-                            let is_used = if is_used { "Used" } else { "Unused" };
-                            format!("{}\t{}\t{}", index, address, is_used)
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
 
-                Ok(ConsoleCommand::Print(to_print))
+                    addresses_with_usage.into_iter().for_each(|(index, (address, is_used))| {
+                        let is_used = if is_used { "Yes" } else { "No" };
+                        addresses_table.add_row(prettytable::row![index, address, is_used]);
+                    });
+
+                    addresses_table
+                };
+
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
             WalletCommand::Exit => Ok(ConsoleCommand::Exit),
