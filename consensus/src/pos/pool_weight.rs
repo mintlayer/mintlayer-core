@@ -109,7 +109,7 @@ fn pool_weight_impl(
     //
     // a: The pledge influence parameter. When a=0,
     //      the pledge has no additional effect other than proportional to the relative stake.
-    //      while a increases, the pledge has more effect on the pool weight, and hence increases the reward
+    //      while `a` increases, the pledge has more effect on the pool weight, and hence increases the reward
     //      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
     // s:     The relative pledge amount
     // sigma: The relative pool stake (pledge + delegated)
@@ -123,6 +123,15 @@ fn pool_weight_impl(
     //                 ⎝            z          ⎠        m sigma + s a (m sigma - (m s - m s sigma k)) k
     // ─────────────────────────────────────────  =>   ──────────────────────────────────────────────────
     //                a + 1                                               m a + m
+    //
+    //
+    // Maximizing the gains from a pool with pledges:
+    //     As a function of the total stake (sigma = pledge + delegations), the pool weight is a concave down parabola.
+    //     The maximum point is very close to sigma = s/2 if sigma << z. Meaning: pledge = delegations maximizes the
+    //     pool weight.
+    //     The true peak can be calculated by calculating the derivative of the function and equating it to zero. The
+    //     result there is s_max = z⋅sigma/(2⋅(z-sigma)), where s_max is the pledge that maximizes the pool weight.
+    //     In that equation we can see if sigma << z, then it simplifies to s_max = sigma/2.
 
     // Break it into terms for simplicity
     // term1 = m s - m s sigma k
