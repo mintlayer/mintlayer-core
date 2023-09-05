@@ -17,7 +17,7 @@ mod ban_score;
 
 pub use ban_score::MempoolBanScore;
 use chainstate::{tx_verifier::error::ConnectTransactionError, ChainstateError};
-use subsystem::subsystem::CallError;
+use subsystem::error::CallError;
 use thiserror::Error;
 
 use common::primitives::H256;

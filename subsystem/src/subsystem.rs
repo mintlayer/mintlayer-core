@@ -15,6 +15,8 @@
 
 use std::{pin::Pin, task::Poll};
 
+use crate::error::{CallError, ResponseError, SubmissionError};
+
 use futures::future::BoxFuture;
 use tokio::sync::{mpsc, oneshot};
 
@@ -76,20 +78,20 @@ impl<T: 'static + ?Sized> CallRequest<T> {
 }
 
 /// Call response that can be polled for result
+#[must_use = "Subsystem call response ignored"]
 pub struct CallResponse<T>(oneshot::Receiver<T>);
 
 impl<T> CallResponse<T> {
-    fn blocking_recv(self) -> Result<T, CallError> {
-        self.0.blocking_recv().map_err(|_| CallError::ResultFetchFailed)
+    fn blocking_recv(self) -> Result<T, ResponseError> {
+        self.0.blocking_recv().map_err(|_| ResponseError::NoResponse)
     }
 }
 
 impl<T> std::future::Future for CallResponse<T> {
-    type Output = Result<T, CallError>;
+    type Output = Result<T, ResponseError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        // TODO(PR) better error
-        std::pin::pin!(&mut self.0).poll(cx).map_err(|_| CallError::ResultFetchFailed)
+        std::pin::pin!(&mut self.0).poll(cx).map_err(|_| ResponseError::NoResponse)
     }
 }
 
@@ -130,25 +132,18 @@ impl<T: ?Sized> ShallowClone for Handle<T> {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
-pub enum CallError {
-    #[error("Call submission failed")]
-    SubmissionFailed,
-    #[error("Result retrieval failed")]
-    ResultFetchFailed,
-}
-
 /// Result of a remote subsystem call.
 ///
 /// Calls happen asynchronously. A value of this type represents the return value of the call of
 /// type `T`. To actually fetch the return value, use `.await`. Alternatively, use
 /// [CallResult::response] to verify if the call submission succeeded and get the return value at
 /// a later time.
-pub struct CallResult<T>(Result<CallResponse<T>, CallError>);
+#[must_use = "Subsystem call result ignored"]
+pub struct CallResult<T>(Result<CallResponse<T>, SubmissionError>);
 
 impl<T> CallResult<T> {
     /// Get the corresponding [`CallResponse`], with the opportunity to handle errors at send time.
-    pub fn response(self) -> Result<CallResponse<T>, CallError> {
+    pub fn response(self) -> Result<CallResponse<T>, SubmissionError> {
         self.0
     }
 
@@ -156,7 +151,18 @@ impl<T> CallResult<T> {
     ///
     /// Panics if called from async context
     pub(crate) fn blocking_get(self) -> Result<T, CallError> {
-        self.0.and_then(|resp| resp.blocking_recv())
+        Ok(self.0?.blocking_recv()?)
+    }
+}
+
+impl CallResult<()> {
+    /// Only submit the call, ignoring the call result.
+    ///
+    /// Only available on `CallResult<()>` to ensure the call does not actually return anything
+    /// useful. It works by throwing away the future that produces the return value, so we also
+    /// give up the ability to observe that the call has completed.
+    pub fn submit_only(self) -> Result<(), SubmissionError> {
+        self.response().map(|_| ())
     }
 }
 
@@ -164,9 +170,8 @@ impl<T> std::future::Future for CallResult<T> {
     type Output = Result<T, CallError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        self.0
-            .as_mut()
-            .map_or_else(|err| Poll::Ready(Err(*err)), |res| Pin::new(res).poll(cx))
+        let future = async { Ok(self.0.as_mut().map_err(|e| *e)?.await?) };
+        std::pin::pin!(future).poll(cx)
     }
 }
 
@@ -182,12 +187,11 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
     ) -> CallResult<R> {
         let (rtx, rrx) = oneshot::channel::<R>();
 
-        // TODO(PR): Better error
         let result = self
             .action_tx
             .send(action(rtx))
             .map(|()| CallResponse(rrx))
-            .map_err(|_e| CallError::SubmissionFailed);
+            .map_err(|_| SubmissionError::ChannelClosed);
 
         CallResult(result)
     }

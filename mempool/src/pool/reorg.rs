@@ -43,7 +43,7 @@ pub enum ReorgError {
     #[error("Block {0:?} not found while traversing history")]
     BlockNotFound(Id<Block>),
     #[error("Chainstate call: {0}")]
-    ChainstateCall(#[from] subsystem::subsystem::CallError),
+    ChainstateCall(#[from] subsystem::error::CallError),
 }
 
 /// Collect blocks between the given two points

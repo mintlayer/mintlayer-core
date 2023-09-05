@@ -45,7 +45,7 @@ pub enum Error {
     #[error("Chainstate error: {0}")]
     Chainstate(#[from] ChainstateError),
     #[error("Subsystem error: {0}")]
-    Subsystem(#[from] subsystem::subsystem::CallError),
+    Subsystem(#[from] subsystem::error::CallError),
 }
 
 impl HasTxIndexDisabledError for Error {

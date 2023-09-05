@@ -209,7 +209,9 @@ impl Manager {
         config: SubsystemConfig,
         subsys: S,
     ) -> Handle<S> {
-        self.add_raw_subsystem_with_config(config, |mut call_rq, mut shutdown_rq| async move {
+        let subsystem_name = config.subsystem_name;
+
+        self.add_raw_subsystem_with_config(config, move |mut call_rq, mut shutdown_rq| async move {
             let mut worker_tasks = JoinSet::new();
             let subsys = Arc::new(RwLock::new(subsys));
 
@@ -236,14 +238,16 @@ impl Manager {
                 }
             }
 
-            // TODO Log as tasks are being shut down?
-            worker_tasks.shutdown().await;
+            while let Some(task_result) = worker_tasks.join_next().await {
+                if let Err(e) = task_result {
+                    log::warn!("Error joining worker task of {}: {e}", subsystem_name);
+                }
+            }
 
-            // TODO use expect, making the subsystem Display
-            let subsys = match Arc::try_unwrap(subsys) {
-                Ok(subsys) => subsys,
-                Err(_) => panic!("Awaited all subtasks just above"),
-            };
+            // All worker tasks have terminated above, we are the last ones holding the subsys Arc
+            let subsys = Arc::try_unwrap(subsys)
+                .map_err(|_| ())
+                .expect("Something else still holds the subsystem reference");
             RwLock::into_inner(subsys).shutdown().await;
         })
     }

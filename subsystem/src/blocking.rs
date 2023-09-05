@@ -15,7 +15,7 @@
 
 //! Blocking interface to subsystem.
 
-use crate::{subsystem::CallError, CallResult, Handle};
+use crate::{error::CallError, CallResult, Handle};
 use futures::future::BoxFuture;
 use utils::shallow_clone::ShallowClone;
 
