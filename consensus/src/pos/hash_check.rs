@@ -153,11 +153,17 @@ mod tests {
     use super::*;
 
     use common::{chain::Mlt, primitives::Amount};
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     // If a pool is saturated (balance == supply/k) then the target is directly proportional to the pledge
-    #[test]
-    fn effective_balance_proportional() {
-        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn effective_balance_proportional(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let final_supply = Mlt::from_mlt(rng.gen_range(10_000..600_000_000)).to_amount_atoms();
         let pool_balance = (final_supply / 1000).unwrap();
 
         let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
@@ -169,15 +175,23 @@ mod tests {
             })
             .collect();
 
-        assert!(effective_balances.windows(2).all(|t| t[0] < t[1]));
+        let initial_diff = effective_balances[1] - effective_balances[0];
+        assert!(effective_balances.windows(2).all(|t| {
+            let ascending = t[0] < t[1];
+            let equidistant = t[1] - t[0] - initial_diff <= Uint512::ONE; // allow for rounding errors
+            ascending && equidistant
+        }));
     }
 
     // If a pool is not saturated (balance != supply/k), specifically if balance == supply/k^2,
     // then then result is a concave down parabola to the pledge. The maximum point is exactly
     // at pool_balance/2.
-    #[test]
-    fn adjust_target_curve() {
-        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn adjust_target_curve(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let final_supply = Mlt::from_mlt(rng.gen_range(10_000..600_000_000)).to_amount_atoms();
         let pool_balance = (final_supply / 1000).and_then(|f| f / 1000).unwrap();
 
         let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();

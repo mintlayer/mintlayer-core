@@ -57,6 +57,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.extra_args = [[
             "--chain-pos-netupgrades-v0-to-v1=200",
+            "--chain-initial-difficulty=419627008",
             "--blockprod-min-peers-to-produce-blocks=0",
         ]]
 

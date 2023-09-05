@@ -343,6 +343,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
         chain_pos_netupgrades_v0_to_v1,
+        chain_initial_difficulty,
         chain_genesis_block_timestamp,
         chain_genesis_staking_settings,
     } = options;
@@ -417,7 +418,9 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: Some(
-                                pos_initial_difficulty(ChainType::Regtest).into(),
+                                chain_initial_difficulty
+                                    .map(common::primitives::Compact)
+                                    .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
                             ),
                             config: create_regtest_pos_config(PoSConsensusVersion::V0),
                         }),
