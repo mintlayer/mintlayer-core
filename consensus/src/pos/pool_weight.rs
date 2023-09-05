@@ -25,7 +25,7 @@ const K: u128 = 1000;
 const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
-/// doubles minimum pledge the the result increases by 5%.
+/// doubles minimum pledge the the result increases by 0.5%.
 /// If the minimum pledge changes it should be recalculated.
 const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new(75, 1000);
 
@@ -94,6 +94,22 @@ fn pool_weight_impl(
     let s = std::cmp::min(relative_pledge_amount, pool_saturation_level.into());
     let m = Uint256::from_u128(u128::MAX);
 
+    // "relative" means relative to some total. In this case, the total is the final supply. There are security
+    //      arguments using Nash Equilibrium on why we want to use the final supply as the total, and not the
+    //      total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
+    //      is a dynamic equilibrium, not a static one.
+    //      The final supply is the total amount of tokens that will ever exist, and hence is a static value.
+    //      This way, stakers can make decisions based on the final supply, and not have to worry about
+    //      the total stake changing over time. Hence, the incentive structure is more stable.
+    //
+    // z = 1/k: The size of the saturated pool
+    // a: The pledge influence parameter. When a=0,
+    //      the pledge has no additional effect other than proportional to the relative stake.
+    //      while a increases, the pledge has more effect on the pool weight, and hence increases the reward
+    //      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
+    // s:     The relative pledge amount
+    // sigma: The relative pool stake (pledge + delegated)
+    //
     // Given that z = 1/k, scale the original formula by the factor of m
     //
     //                 ⎛            ⎛z - sigma⎞⎞
