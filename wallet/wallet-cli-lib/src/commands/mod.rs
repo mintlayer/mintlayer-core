@@ -1163,10 +1163,12 @@ impl CommandHandler {
                         "Is used in transaction history",
                     ]);
 
-                    addresses_with_usage.into_iter().for_each(|(index, (address, is_used))| {
-                        let is_used = if is_used { "Yes" } else { "No" };
-                        addresses_table.add_row(prettytable::row![index, address, is_used]);
-                    });
+                    addresses_table.extend(addresses_with_usage.into_iter().map(
+                        |(index, (address, is_used))| {
+                            let is_used = if is_used { "Yes" } else { "No" };
+                            prettytable::row![index, address, is_used]
+                        },
+                    ));
 
                     addresses_table
                 };
