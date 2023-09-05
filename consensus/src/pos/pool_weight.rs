@@ -98,7 +98,7 @@ fn pool_weight_impl(
     //      arguments using Nash Equilibrium on why we want to use the final supply as the total, and not the
     //      total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
     //      is a dynamic equilibrium, not a static one.
-    //      The final supply is the total amount of tokens that will ever exist, and hence is a static value.
+    //      The final supply is the total amount of coins that will ever exist, and hence is a static value.
     //      This way, stakers can make decisions based on the final supply, and not have to worry about
     //      the total stake changing over time. Hence, the incentive structure is more stable.
     //
