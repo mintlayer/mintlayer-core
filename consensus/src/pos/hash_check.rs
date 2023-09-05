@@ -183,7 +183,13 @@ mod tests {
         let initial_diff = effective_balances[1] - effective_balances[0];
         assert!(effective_balances.windows(2).all(|t| {
             let ascending = t[0] < t[1];
-            let equidistant = t[1] - t[0] - initial_diff <= Uint512::ONE; // allow for rounding errors
+            let diff = t[1] - t[0];
+            // allow for rounding error
+            let equidistant = if diff > initial_diff {
+                diff - initial_diff <= Uint512::ONE
+            } else {
+                initial_diff - diff <= Uint512::ONE
+            };
             ascending && equidistant
         }));
     }
