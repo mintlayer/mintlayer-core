@@ -64,16 +64,21 @@ fn check_pos_hash_v0(
     Ok(())
 }
 
+/// The effective balance is the balance of the pool adjusted by the pool weight.
 fn effective_balance(
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
 ) -> Result<Uint512, ConsensusPoSError> {
     let pool_weight = pool_weight(pledge_amount, pool_balance, final_supply)?;
-    let effective_balance = Uint512::from_amount(pool_balance)
-        + Uint512::from_amount(pool_balance) * (*pool_weight.numer()).into()
-            / (*pool_weight.denom()).into();
-    Ok(effective_balance)
+    let weight_numerator = (*pool_weight.numer()).into();
+    let weight_denominator = (*pool_weight.denom()).into();
+
+    let pool_balance = Uint512::from_amount(pool_balance);
+
+    // Delta is the extra balance that the pool gets according to the weight formula
+    let delta = pool_balance * weight_numerator / weight_denominator;
+    Ok(pool_balance + delta)
 }
 
 #[allow(clippy::too_many_arguments)]
