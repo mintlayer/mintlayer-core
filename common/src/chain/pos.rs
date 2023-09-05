@@ -223,10 +223,10 @@ pub fn pos_initial_difficulty(chain_type: ChainType) -> Uint256 {
         // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
         // It's hardcoded because division for Uint256 is not const
         ChainType::Regtest => Uint256([
-            0x0000000000000000,
-            0x0000000000000000,
-            0x0000000000000000,
-            0x0000000000000004,
+            0x2222222222222222,
+            0x2222222222222222,
+            0x2222222222222222,
+            0x0222222222222222,
         ]),
     }
 }

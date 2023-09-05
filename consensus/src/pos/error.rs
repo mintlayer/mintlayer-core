@@ -66,6 +66,8 @@ pub enum ConsensusPoSError {
     TimestampOverflow,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
+    #[error("Timespan cannot be empty when calculating average block time")]
+    EmptyTimespan,
     #[error("No input data was provided for PoS block generation")]
     NoInputDataProvided,
     #[error("PoW input data was provided for PoS block generation")]
