@@ -103,6 +103,10 @@ fn pool_weight_impl(
     //      the total stake changing over time. Hence, the incentive structure is more stable.
     //
     // z = 1/k: The size of the saturated pool
+    // Saturated pool: A pool is saturated if its relative stake (pledge + delegated) is equal to
+    //      the size given by z = 1/k. A pool that has reached saturation will not have additional
+    //      rewards if the total stake is increased. This is to prevent pools from growing too large.
+    //
     // a: The pledge influence parameter. When a=0,
     //      the pledge has no additional effect other than proportional to the relative stake.
     //      while a increases, the pledge has more effect on the pool weight, and hence increases the reward
