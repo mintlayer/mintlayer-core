@@ -63,7 +63,7 @@ use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, U
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
     AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
-    WalletTx,
+    KeychainUsageState, WalletTx,
 };
 
 use self::output_cache::OutputCache;
@@ -701,6 +701,10 @@ impl Account {
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.key_chain.get_all_issued_addresses()
+    }
+
+    pub fn get_addresses_usage(&self) -> &KeychainUsageState {
+        self.key_chain.get_addresses_usage_state()
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {

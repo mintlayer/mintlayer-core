@@ -90,6 +90,13 @@ pub enum WalletCommand {
     /// Returns the node chainstate
     ChainstateInfo,
 
+    /// Show receive-addresses with their usage state.
+    /// Note that whether an address is used isn't based on the wallet,
+    /// but on the blockchain. So if an address is used in a transaction,
+    /// it will be marked as used only when the transaction is included
+    /// in a block.
+    ShowReceiveAddresses,
+
     /// Returns the current best block hash
     BestBlock,
 
@@ -1139,6 +1146,34 @@ impl CommandHandler {
                     .await
                     .map_err(WalletCliError::RpcError)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+            WalletCommand::ShowReceiveAddresses => {
+                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+
+                let addresses_with_usage =
+                    controller.get_addresses_with_usage(selected_account).map_err(|e| {
+                        WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
+                    })?;
+
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row![
+                        "Index",
+                        "Address",
+                        "Is used in transaction history",
+                    ]);
+
+                    addresses_table.extend(addresses_with_usage.into_iter().map(
+                        |(index, (address, is_used))| {
+                            let is_used = if is_used { "Yes" } else { "No" };
+                            prettytable::row![index, address, is_used]
+                        },
+                    ));
+
+                    addresses_table
+                };
+
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
             WalletCommand::Exit => Ok(ConsoleCommand::Exit),
