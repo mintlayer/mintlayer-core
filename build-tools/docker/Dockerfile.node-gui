@@ -4,8 +4,7 @@ FROM mintlayer-builder:latest AS builder
 # Runtime Stage
 FROM debian:bookworm-slim
 
-# Install any necessary dependencies for your GUI (such as X11, GTK, etc.)
-# Replace libgtk-3-0 with the appropriate dependencies for your application
+# Install necessary runtime dependencies for the GUI (such as X11, GTK, etc.)
 RUN apt-get update && apt-get install -y ca-certificates libgtk-3-0 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/src/target/release/node-gui /usr/bin/node-gui
