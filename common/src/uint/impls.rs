@@ -1178,6 +1178,90 @@ mod tests {
             UintConversionError::ConversionOverflow
         );
     }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn checked_add(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        {
+            let a = Uint128::MAX;
+            let b = rng.gen_range(1..u128::MAX).into();
+            assert!(a.checked_add(&b).is_none());
+            assert!(b.checked_add(&a).is_none());
+        }
+        {
+            let a: Uint128 = rng.gen::<u128>().into();
+            let b = Uint128::MAX - a;
+            assert_eq!(a.checked_add(&b), Some(a + b));
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn checked_sub(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        {
+            let a = Uint128::ZERO;
+            let b = rng.gen_range(1..u128::MAX).into();
+            assert!(a.checked_sub(&b).is_none());
+        }
+        {
+            let a = rng.gen::<u128>();
+            let b: Uint128 = rng.gen_range(0..a).into();
+            let a: Uint128 = a.into();
+            assert_eq!(a.checked_sub(&b), Some(a - b));
+            assert_eq!(b.checked_sub(&a), None);
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn checked_mul(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        {
+            let a = Uint128::MAX;
+            let b = rng.gen_range(2..u128::MAX).into();
+            assert!(a.checked_mul(&b).is_none());
+            assert!(b.checked_mul(&a).is_none());
+        }
+        {
+            let a: Uint128 = rng.gen::<u128>().into();
+            let b = Uint128::ZERO;
+            assert_eq!(a.checked_mul(&b), Some(Uint128::ZERO));
+            assert_eq!(b.checked_mul(&a), Some(Uint128::ZERO));
+            assert_eq!(b.checked_mul(&b), Some(Uint128::ZERO));
+        }
+        {
+            let a = Uint128::from_u64(rng.gen::<u64>());
+            let b = Uint128::from_u64(rng.gen::<u64>());
+            assert_eq!(a.checked_mul(&b), Some(a * b));
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn checked_div(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        {
+            let a: Uint128 = rng.gen::<u128>().into();
+            let b = Uint128::ZERO;
+            assert!(a.checked_div(&b).is_none());
+        }
+        {
+            let a = Uint128::ZERO;
+            let b: Uint128 = rng.gen::<u128>().into();
+            assert_eq!(a.checked_div(&b), Some(Uint128::ZERO));
+        }
+        {
+            let a: Uint128 = rng.gen::<u128>().into();
+            let b: Uint128 = rng.gen::<u128>().into();
+            assert_eq!(a.checked_div(&b), Some(a / b));
+        }
+    }
 }
 
 #[cfg(kani)]

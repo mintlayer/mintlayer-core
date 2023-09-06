@@ -23,6 +23,9 @@ pub struct Rational<T> {
 
 impl<T> Rational<T> {
     pub const fn new(numer: T, denom: T) -> Self {
+        // TODO: find a way to move this check to compile time;
+        //       at the moment static_assertions doesn't work with type parameters
+        assert!(std::mem::size_of::<T>() * 2 <= std::mem::size_of::<Uint512>());
         Self { numer, denom }
     }
 
@@ -117,5 +120,11 @@ mod tests {
         );
 
         assert!(a > b);
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_overflow_type() {
+        Rational::new(Uint512::MAX, Uint512::MAX);
     }
 }

@@ -368,6 +368,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::UnsupportedConsensusVersion => 100,
             ConsensusPoSError::PoolWeightError(_) => 100,
             ConsensusPoSError::EmptyTimespan => 100,
+            ConsensusPoSError::FailedToCalculateCappedBalance => 100,
         }
     }
 }

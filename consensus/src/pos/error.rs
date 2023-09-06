@@ -95,4 +95,6 @@ pub enum ConsensusPoSError {
     UnsupportedConsensusVersion,
     #[error("Error while calculating pool's weight: `{0}`")]
     PoolWeightError(#[from] PoolWeightError),
+    #[error("Failed to calculate capped balance")]
+    FailedToCalculateCappedBalance,
 }

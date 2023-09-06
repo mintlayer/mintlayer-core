@@ -22,7 +22,7 @@ use utils::ensure;
 
 /// Decentralization parameter which ensures that no pool is more powerful than 1/k of the whole network
 const K: u128 = 1000;
-const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
+pub const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
 /// doubles minimum pledge the the result increases by 0.5%.
@@ -31,8 +31,8 @@ const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> = Rational::<u128>::new
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoolWeightError {
-    #[error("Arithmetics error while calculating pools weight")]
-    ArithmeticsError,
+    #[error("Arithmetic error while calculating pools weight")]
+    ArithmeticError,
     #[error("Final supply cannot be 0")]
     FinalSupplyZero,
     #[error("Pool balance {0:?} cannot be greater than total supply: {1:?}")]
@@ -139,15 +139,15 @@ fn pool_weight_impl(
         let m_s = m
             .checked_mul(s.numer())
             .and_then(|v| v.checked_div(s.denom()))
-            .ok_or(PoolWeightError::ArithmeticsError)?;
+            .ok_or(PoolWeightError::ArithmeticError)?;
         let m_s_sigma_k = m
             .checked_mul(s.numer())
             .and_then(|v| v.checked_div(s.denom()))
             .and_then(|v| v.checked_mul(sigma.numer()))
             .and_then(|v| v.checked_div(sigma.denom()))
             .and_then(|v| v.checked_mul(&(*pool_saturation_level.denom()).into()))
-            .ok_or(PoolWeightError::ArithmeticsError)?;
-        m_s.checked_sub(&m_s_sigma_k).ok_or(PoolWeightError::ArithmeticsError)?
+            .ok_or(PoolWeightError::ArithmeticError)?;
+        m_s.checked_sub(&m_s_sigma_k).ok_or(PoolWeightError::ArithmeticError)?
     };
 
     // term2 = (m sigma - term1) k
@@ -155,11 +155,11 @@ fn pool_weight_impl(
         let m_sigma = m
             .checked_mul(sigma.numer())
             .and_then(|v| v.checked_div(sigma.denom()))
-            .ok_or(PoolWeightError::ArithmeticsError)?;
+            .ok_or(PoolWeightError::ArithmeticError)?;
         m_sigma
             .checked_sub(&term1)
             .and_then(|v| v.checked_mul(&(*pool_saturation_level.denom()).into()))
-            .ok_or(PoolWeightError::ArithmeticsError)?
+            .ok_or(PoolWeightError::ArithmeticError)?
     };
 
     // result = (m sigma + s a term2) / (m + m a)
@@ -167,20 +167,20 @@ fn pool_weight_impl(
         let m_sigma = m
             .checked_mul(sigma.numer())
             .and_then(|v| v.checked_div(sigma.denom()))
-            .ok_or(PoolWeightError::ArithmeticsError)?;
+            .ok_or(PoolWeightError::ArithmeticError)?;
         let term2_s_a = term2
             .checked_mul(a.numer())
             .and_then(|v| v.checked_div(a.denom()))
             .and_then(|v| v.checked_mul(s.numer()))
             .and_then(|v| v.checked_div(s.denom()))
-            .ok_or(PoolWeightError::ArithmeticsError)?;
-        m_sigma.checked_add(&term2_s_a).ok_or(PoolWeightError::ArithmeticsError)?
+            .ok_or(PoolWeightError::ArithmeticError)?;
+        m_sigma.checked_add(&term2_s_a).ok_or(PoolWeightError::ArithmeticError)?
     };
     let result_denom = m
         .checked_mul(a.numer())
         .and_then(|v| v.checked_div(a.denom()))
         .and_then(|v| v.checked_add(&m))
-        .ok_or(PoolWeightError::ArithmeticsError)?;
+        .ok_or(PoolWeightError::ArithmeticError)?;
     assert_ne!(result_denom, Uint256::ZERO);
 
     Ok(Rational::<Uint256>::new(result_numer, result_denom))
