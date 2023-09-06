@@ -688,7 +688,10 @@ impl CommandHandler {
 
             WalletCommand::StartStaking => {
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller.start_staking(selected_account).map_err(WalletCliError::Controller)?;
+                controller
+                    .start_staking(selected_account)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 

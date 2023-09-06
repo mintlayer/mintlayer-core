@@ -830,8 +830,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
+    pub async fn start_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
+        // Sync once to get the updated pool list
+        self.sync_once().await?;
         // Make sure that account_index is valid and that pools exist
         let pool_ids =
             self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
