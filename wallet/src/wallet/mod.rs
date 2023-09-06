@@ -23,7 +23,7 @@ use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{
     make_issue_nft_outputs, make_issue_token_outputs, StakePoolDataArguments,
 };
-use crate::wallet_events::WalletEvents;
+use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -265,7 +265,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         // reset wallet transaction as now we will need to rescan the blockchain to store the
         // correct order of the transactions to avoid bugs in loading them in the wrong order
-        Self::reset_wallet_transactions(chain_config.as_ref(), &mut db_tx)?;
+        Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
 
         // Create the next unused account
         Self::migrate_next_unused_account(chain_config, &mut db_tx)?;
@@ -320,7 +320,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     fn reset_wallet_transactions(
-        chain_config: &ChainConfig,
+        chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
         db_tx.clear_transactions()?;
@@ -331,6 +331,8 @@ impl<B: storage::Backend> Wallet<B> {
             info.update_best_block(BlockHeight::new(0), chain_config.genesis_block_id());
             db_tx.set_account(&id, &info)?;
             db_tx.set_account_unconfirmed_tx_counter(&id, 0)?;
+            let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
+            account.scan_genesis(db_tx, &WalletEventsNoOp)?;
         }
 
         Ok(())
