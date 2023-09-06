@@ -49,7 +49,7 @@ async fn staking_locked_wallet(#[case] seed: Seed) {
         test.exec("unlockprivatekeys Password123"),
         "Success. The wallet is now unlocked."
     );
-    assert_eq!(test.exec("startstaking"), "Success");
+    assert_eq!(test.exec("startstaking"), "Staking started successfully");
 
     // It is not possible to lock the wallet while staking is running
     assert_eq!(

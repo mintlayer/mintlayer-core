@@ -692,7 +692,9 @@ impl CommandHandler {
                     .start_staking(selected_account)
                     .await
                     .map_err(WalletCliError::Controller)?;
-                Ok(ConsoleCommand::Print("Success".to_owned()))
+                Ok(ConsoleCommand::Print(
+                    "Staking started successfully".to_owned(),
+                ))
             }
 
             WalletCommand::StopStaking => {
