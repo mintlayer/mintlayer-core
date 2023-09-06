@@ -52,7 +52,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
@@ -68,7 +68,7 @@ use wallet_types::{
 
 use self::output_cache::OutputCache;
 use self::transaction_list::{get_transaction_list, TransactionList};
-use self::utxo_selector::PayFee;
+use self::utxo_selector::{CoinSelectionAlgo, PayFee};
 
 pub struct Account {
     chain_config: Arc<ChainConfig>,
@@ -137,7 +137,8 @@ impl Account {
 
     fn select_inputs_for_send_request(
         &mut self,
-        mut request: SendRequest,
+        request: SendRequest,
+        input_utxos: BTreeSet<UtxoOutPoint>,
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
@@ -164,11 +165,33 @@ impl Account {
         let (coin_change_fee, token_change_fee) =
             coin_and_token_output_change_fees(current_fee_rate)?;
 
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+
+        let (utxos, selection_algo) = if input_utxos.is_empty() {
+            (
+                self.get_utxos(
+                    UtxoType::Transfer | UtxoType::LockThenTransfer,
+                    median_time,
+                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                    WithLocked::Unlocked,
+                ),
+                CoinSelectionAlgo::Randomize,
+            )
+        } else {
+            (
+                self.output_cache.find_utxos(current_block_info, &input_utxos),
+                CoinSelectionAlgo::UsePreselected,
+            )
+        };
+
         let mut utxos_by_currency = self.utxo_output_groups_by_currency(
             current_fee_rate,
             consolidate_fee_rate,
-            median_time,
             &pay_fee_with_currency,
+            utxos,
         )?;
 
         let amount_to_be_paid_in_currency_with_fees =
@@ -190,6 +213,7 @@ impl Account {
                     *output_amount,
                     PayFee::DoNotPayFeeWithThisCurrency,
                     cost_of_change,
+                    selection_algo,
                 )?;
 
                 total_fees_not_paid = (total_fees_not_paid + selection_result.get_total_fees())
@@ -221,6 +245,7 @@ impl Account {
             amount_to_be_paid_in_currency_with_fees,
             PayFee::PayFeeWithThisCurrency,
             cost_of_change,
+            selection_algo,
         )?;
 
         let change_amount = selection_result.get_change();
@@ -238,6 +263,16 @@ impl Account {
         selected_inputs.insert(pay_fee_with_currency, selection_result);
 
         // Check outputs against inputs and create change
+        self.check_outputs_and_add_change(output_currency_amounts, selected_inputs, db_tx, request)
+    }
+
+    fn check_outputs_and_add_change(
+        &mut self,
+        output_currency_amounts: BTreeMap<Currency, Amount>,
+        selected_inputs: BTreeMap<Currency, utxo_selector::SelectionResult>,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        mut request: SendRequest,
+    ) -> Result<SendRequest, WalletError> {
         for currency in output_currency_amounts.keys() {
             let change_amount =
                 selected_inputs.get(currency).map_or(Amount::ZERO, |result| result.get_change());
@@ -260,6 +295,7 @@ impl Account {
                 request = request.with_outputs([change_output]);
             }
         }
+
         let selected_inputs = selected_inputs.into_iter().flat_map(|x| x.1.into_output_pairs());
 
         Ok(request.with_inputs(selected_inputs))
@@ -269,8 +305,8 @@ impl Account {
         &self,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-        median_time: BlockTimestamp,
         pay_fee_with_currency: &Currency,
+        utxos: BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>,
     ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -299,13 +335,7 @@ impl Account {
             };
 
         group_utxos_for_input(
-            self.get_utxos(
-                UtxoType::Transfer | UtxoType::LockThenTransfer,
-                median_time,
-                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                WithLocked::Unlocked,
-            )
-            .into_iter(),
+            utxos.into_iter(),
             |(_, (tx_output, _))| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
                 grouped.push((element.0.clone(), element.1 .0.clone()));
@@ -338,12 +368,14 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         request: SendRequest,
+        inputs: BTreeSet<UtxoOutPoint>,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = self.select_inputs_for_send_request(
             request,
+            inputs,
             db_tx,
             median_time,
             current_fee_rate,
@@ -522,6 +554,7 @@ impl Account {
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
         let mut request = self.select_inputs_for_send_request(
             request,
+            BTreeSet::new(),
             db_tx,
             median_time,
             current_fee_rate,

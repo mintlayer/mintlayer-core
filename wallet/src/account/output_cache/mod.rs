@@ -28,7 +28,7 @@ use common::{
 use pos_accounting::make_delegation_id;
 use utils::ensure;
 use wallet_types::{
-    utxo_types::{get_utxo_state, UtxoStates},
+    utxo_types::{get_utxo_state, UtxoState, UtxoStates},
     wallet_tx::TxState,
     with_locked::WithLocked,
     AccountWalletTxId, BlockInfo, WalletTx,
@@ -347,6 +347,53 @@ impl OutputCache {
         self.consumed.get(outpoint).map_or(false, |consumed_state| {
             utxo_states.contains(get_utxo_state(consumed_state))
         })
+    }
+
+    pub fn find_utxos(
+        &self,
+        current_block_info: BlockInfo,
+        inputs: &BTreeSet<UtxoOutPoint>,
+    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
+        self.txs
+            .values()
+            .flat_map(|tx| {
+                let tx_block_info = get_block_info(tx);
+                let token_id = match tx {
+                    WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+                    WalletTx::Block(_) => None,
+                };
+
+                tx.outputs()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, output)| (output, UtxoOutPoint::new(tx.id(), idx as u32)))
+                    .filter(move |(output, outpoint)| {
+                        !self.is_consumed(
+                            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                            outpoint,
+                        ) && is_specific_lock_state(
+                            WithLocked::Unlocked,
+                            output,
+                            current_block_info,
+                            tx_block_info,
+                            outpoint,
+                        ) && inputs.contains(outpoint)
+                    })
+                    .map(move |(output, outpoint)| {
+                        (
+                            outpoint,
+                            (
+                                output,
+                                if output.is_token_or_nft_issuance() {
+                                    token_id
+                                } else {
+                                    None
+                                },
+                            ),
+                        )
+                    })
+            })
+            .collect()
     }
 
     pub fn utxos_with_token_ids(

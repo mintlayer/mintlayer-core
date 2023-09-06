@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -737,15 +737,18 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: impl IntoIterator<Item = UtxoOutPoint>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let inputs = inputs.into_iter().collect::<BTreeSet<_>>();
             account.process_send_request(
                 db_tx,
                 request,
+                inputs,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,
@@ -776,6 +779,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -804,6 +808,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -824,6 +829,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;

@@ -536,6 +536,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         address: Address<Destination>,
         amount: Amount,
+        selected_utxos: Vec<UtxoOutPoint>,
     ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
@@ -552,6 +553,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .create_transaction_to_addresses(
                 account_index,
                 [output],
+                selected_utxos,
                 current_fee_rate,
                 consolidate_fee_rate,
             )
@@ -609,7 +611,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .wallet
             .create_transaction_to_addresses(
                 account_index,
-                vec![output],
+                [output],
+                [],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
@@ -667,6 +670,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .create_transaction_to_addresses(
                 account_index,
                 [output],
+                [],
                 current_fee_rate,
                 consolidate_fee_rate,
             )

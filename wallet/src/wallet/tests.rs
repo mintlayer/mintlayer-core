@@ -797,10 +797,11 @@ fn wallet_accounts_creation() {
     let tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![TxOutput::Transfer(
+            [TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
                 Destination::PublicKey(acc1_pk),
             )],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1050,7 +1051,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     assert_eq!(
         wallet.create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output.clone()],
+            [new_output.clone()],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         ),
@@ -1065,7 +1067,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![new_output],
+                [new_output],
+                [],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -1092,7 +1095,8 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
         wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![new_output],
+                [new_output],
+                [],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -1171,7 +1175,8 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
         let err = wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![gen_random_transfer(&mut rng, Amount::from_atoms(1))],
+                [gen_random_transfer(&mut rng, Amount::from_atoms(1))],
+                [],
                 very_big_feerate,
                 very_big_feerate,
             )
@@ -1197,7 +1202,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
 
     let feerate = FeeRate::new(Amount::from_atoms(1000));
     let transaction = wallet
-        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, feerate, feerate)
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, outputs, [], feerate, feerate)
         .unwrap();
 
     let tx_size = serialization::Encode::encoded_size(&transaction);
@@ -1508,7 +1513,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let delegation_stake_tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            [TxOutput::DelegateStaking(delegation_amount, delegation_id)],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1751,7 +1757,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1820,7 +1827,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let transfer_tokens_error = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -1924,7 +1932,8 @@ fn lock_then_transfer(#[case] seed: Seed) {
     let lock_then_transfer_transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2107,7 +2116,8 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
         let transaction = wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![new_output],
+                [new_output],
+                [],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -2254,7 +2264,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
         let transaction = wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![new_output, change_output],
+                [new_output, change_output],
+                [],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
@@ -2287,7 +2298,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2324,7 +2336,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let err = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2348,7 +2361,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     let transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            vec![new_output],
+            [new_output],
+            [],
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
@@ -2501,7 +2515,8 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         let transaction = wallet
             .create_transaction_to_addresses(
                 DEFAULT_ACCOUNT_INDEX,
-                vec![new_output, change_output],
+                [new_output, change_output],
+                [],
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
