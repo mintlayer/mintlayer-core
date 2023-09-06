@@ -257,7 +257,24 @@ fn wallet_creation_in_memory() {
 #[case(Seed::from_entropy())]
 fn wallet_migration_to_v2(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_regtest());
+    let address = get_address(
+        &create_regtest(),
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let genesis_amount = Amount::from_atoms(100);
+    let genesis = Genesis::new(
+        String::new(),
+        BlockTimestamp::from_int_seconds(1639975460),
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(genesis_amount),
+            address.decode_object(&create_regtest()).unwrap(),
+        )],
+    );
+    let chain_type = ChainType::Regtest;
+    let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
     let mut wallet = Wallet::create_new_wallet(
@@ -270,6 +287,8 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         genesis_block_id,
     )
     .unwrap();
+    verify_wallet_balance(&chain_config, &wallet, genesis_amount);
+
     let password = Some("password".into());
     wallet.encrypt_wallet(&password).unwrap();
     wallet.lock_wallet().unwrap();
@@ -319,6 +338,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         wallet.get_best_block_for_account(DEFAULT_ACCOUNT_INDEX).unwrap(),
         (chain_config.genesis_block_id(), BlockHeight::new(0))
     );
+    verify_wallet_balance(&chain_config, &wallet, genesis_amount);
 }
 
 #[rstest]

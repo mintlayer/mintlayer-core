@@ -315,7 +315,7 @@ impl Backend {
         })
     }
 
-    fn toggle_staking(
+    async fn toggle_staking(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
@@ -329,6 +329,7 @@ impl Backend {
             wallet
                 .controller
                 .start_staking(account_id.account_index())
+                .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
         } else {
             wallet
@@ -476,7 +477,7 @@ impl Backend {
                 Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
             }
             BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
-                let toggle_res = self.toggle_staking(wallet_id, account_id, enabled);
+                let toggle_res = self.toggle_staking(wallet_id, account_id, enabled).await;
                 Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
             }
             BackendRequest::SendAmount(send_request) => {

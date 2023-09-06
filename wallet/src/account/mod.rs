@@ -878,7 +878,7 @@ impl Account {
         }
     }
 
-    fn scan_genesis(
+    pub fn scan_genesis(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         wallet_events: &impl WalletEvents,
