@@ -147,5 +147,8 @@ class WalletCliController:
     async def sync(self) -> str:
         return await self._write_command("syncwallet\n")
 
+    async def get_addresses_usage(self) -> str:
+        return await self._write_command("showreceiveaddresses\n")
+
     async def get_balance(self) -> str:
         return await self._write_command("getbalance\n")

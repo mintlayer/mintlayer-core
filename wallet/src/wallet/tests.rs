@@ -2552,3 +2552,51 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
         .unwrap_or(Amount::ZERO);
     assert_eq!(coin_balance, coins_after_abandon);
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn wallet_address_usage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(usage.last_used(), None);
+    assert_eq!(usage.last_issued(), None);
+
+    // issue some new address
+    let addresses_to_issue = rng.gen_range(1..10);
+    for _ in 0..=addresses_to_issue {
+        let _ = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    }
+
+    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(usage.last_used(), None);
+    assert_eq!(
+        usage.last_issued(),
+        Some(addresses_to_issue.try_into().unwrap())
+    );
+
+    let block1_amount = Amount::from_atoms(10000);
+    let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let last_used = addresses_to_issue + 1;
+    let usage = wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(usage.last_used(), Some(last_used.try_into().unwrap()));
+    assert_eq!(usage.last_issued(), Some(last_used.try_into().unwrap()));
+}
