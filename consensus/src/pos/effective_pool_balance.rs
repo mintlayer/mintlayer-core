@@ -61,44 +61,6 @@ pub fn effective_pool_balance(
     )
 }
 
-/// There are security arguments using Nash Equilibrium on why we want to use the final supply as the total,
-/// and not the total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
-/// is a dynamic equilibrium, not a static one.
-/// The final supply is the total amount of coins that will ever exist, and hence is a static value.
-/// This way, stakers can make decisions based on the final supply, and not have to worry about
-/// the total stake changing over time. Hence, the incentive structure is more stable.
-///
-/// z = 1/k: The size of the saturated pool
-/// Saturated pool: A pool is saturated if its relative stake (pledge + delegated) is equal to
-///      the size given by z = 1/k. A pool that has reached saturation will not have additional
-///      rewards if the total stake is increased. This is to prevent pools from growing too large.
-///
-/// a: The pledge influence parameter. When a=0,
-///      the pledge has no additional effect other than proportional to the relative stake.
-///      while `a` increases, the pledge has more effect on the pool weight, and hence increases the reward
-///      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
-/// s:     The pool's pledge amount
-/// sigma: The pool's stake (pledge + delegated)
-///
-/// The formula is rewritten as follows to represent the result as sigma minus some adjustment.
-/// Also it makes it more suitable for integer arithmetic because there is a single division at the end.
-///
-///                 ⎛            ⎛z - sigma⎞⎞
-///                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
-///                 ⎜            ⎝    z    ⎠⎟
-/// sigma + s ⋅ a ⋅ ⎜───────────────────────⎟
-///                 ⎝            z          ⎠               a     ⎛ sigma z^2 - s (z sigma - s (z - sigma))⎞
-/// ─────────────────────────────────────────  => sigma - ──────  ⎜────────────────────────────────────────⎟
-///                a + 1                                  a + 1   ⎝                 z^2                    ⎠
-///
-///
-/// Maximizing the gains from a pool with pledges:
-///     As a function of the total stake (sigma = pledge + delegations), the pool's effective balance is a concave down parabola.
-///     The maximum point is very close to sigma = s/2 if sigma << z. Meaning: pledge = delegations maximizes the
-///     effective balance.
-///     The true peak can be calculated by calculating the derivative of the function and equating it to zero. The
-///     result there is s_max = z⋅sigma/(2⋅(z-sigma)), where s_max is the pledge that maximizes the effective balance.
-///     In that equation we can see if sigma << z, then it simplifies to s_max = sigma/2.
 fn effective_pool_balance_impl(
     pledge_amount: Amount,
     pool_balance: Amount,
@@ -139,8 +101,46 @@ fn effective_pool_balance_impl(
     let z_squared = z.checked_mul(z).ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     let z_squared: Uint256 = z_squared.into();
 
-    // Break the formula down into terms for simplicity
+    // There are security arguments using Nash Equilibrium on why we want to use the final supply as the total,
+    // and not the total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
+    // is a dynamic equilibrium, not a static one.
+    // The final supply is the total amount of coins that will ever exist, and hence is a static value.
+    // This way, stakers can make decisions based on the final supply, and not have to worry about
+    // the total stake changing over time. Hence, the incentive structure is more stable.
+    //
+    // z = 1/k: The size of the saturated pool
+    // Saturated pool: A pool is saturated if its relative stake (pledge + delegated) is equal to
+    //      the size given by z = 1/k. A pool that has reached saturation will not have additional
+    //      rewards if the total stake is increased. This is to prevent pools from growing too large.
+    //
+    // a: The pledge influence parameter. When a=0,
+    //      the pledge has no additional effect other than proportional to the relative stake.
+    //      while `a` increases, the pledge has more effect on the pool weight, and hence increases the reward
+    //      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
+    // s:     The pool's pledge amount
+    // sigma: The pool's stake (pledge + delegated)
+    //
+    // The formula is rewritten as follows to represent the result as sigma minus some adjustment.
+    // Also it makes it more suitable for integer arithmetic because there is a single division at the end.
+    //
+    //                 ⎛            ⎛z - sigma⎞⎞
+    //                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
+    //                 ⎜            ⎝    z    ⎠⎟
+    // sigma + s ⋅ a ⋅ ⎜───────────────────────⎟
+    //                 ⎝            z          ⎠               a     ⎛ sigma z^2 - s (z sigma - s (z - sigma))⎞
+    // ─────────────────────────────────────────  => sigma - ──────  ⎜────────────────────────────────────────⎟
+    //                a + 1                                  a + 1   ⎝                 z^2                    ⎠
+    //
+    //
+    // Maximizing the gains from a pool with pledges:
+    //     As a function of the total stake (sigma = pledge + delegations), the pool's effective balance is a concave down parabola.
+    //     The maximum point is very close to sigma = s/2 if sigma << z. Meaning: pledge = delegations maximizes the
+    //     effective balance.
+    //     The true peak can be calculated by calculating the derivative of the function and equating it to zero. The
+    //     result there is s_max = z⋅sigma/(2⋅(z-sigma)), where s_max is the pledge that maximizes the effective balance.
+    //     In that equation we can see if sigma << z, then it simplifies to s_max = sigma/2.
 
+    // Break the formula down into terms for simplicity
     // term1 = s (z - sigma)
     let term1 = z
         .checked_sub(sigma)

@@ -93,8 +93,8 @@ pub enum ConsensusPoSError {
     FiniteTotalSupplyIsRequired,
     #[error("Unsupported PoS consensus version")]
     UnsupportedConsensusVersion,
-    #[error("Error while calculating pool's weight: `{0}`")]
-    PoolWeightError(#[from] EffectivePoolBalanceError),
+    #[error("Error while calculating pool's effective balance: `{0}`")]
+    EffectivePoolBalanceError(#[from] EffectivePoolBalanceError),
     #[error("Failed to calculate capped balance")]
     FailedToCalculateCappedBalance,
 }
