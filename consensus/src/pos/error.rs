@@ -22,7 +22,7 @@ use common::{
     UintConversionError,
 };
 
-use super::{block_sig::BlockSignatureError, PoolWeightError};
+use super::{block_sig::BlockSignatureError, EffectivePoolBalanceError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
@@ -94,7 +94,7 @@ pub enum ConsensusPoSError {
     #[error("Unsupported PoS consensus version")]
     UnsupportedConsensusVersion,
     #[error("Error while calculating pool's weight: `{0}`")]
-    PoolWeightError(#[from] PoolWeightError),
+    PoolWeightError(#[from] EffectivePoolBalanceError),
     #[error("Failed to calculate capped balance")]
     FailedToCalculateCappedBalance,
 }

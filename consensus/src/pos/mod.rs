@@ -20,8 +20,8 @@ pub mod input_data;
 pub mod kernel;
 pub mod target;
 
-mod pool_weight;
-pub use pool_weight::PoolWeightError;
+mod effective_pool_balance;
+pub use effective_pool_balance::EffectivePoolBalanceError;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
