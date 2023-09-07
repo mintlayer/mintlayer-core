@@ -24,13 +24,14 @@ use serialization::{Decode, Encode};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
+    error::P2pError,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
         HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
         TransactionResponse,
     },
     net::types::services::Services,
-    protocol::ProtocolVersion,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -79,7 +80,7 @@ impl P2pTimestamp {
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        protocol_version: ProtocolVersion,
+        protocol_version: SupportedProtocolVersion,
         network: [u8; 4],
         common_services: Services,
         user_agent: UserAgent,
@@ -93,6 +94,9 @@ pub enum PeerEvent {
 
     /// Connection closed to remote
     ConnectionClosed,
+
+    /// Handshake failed
+    HandshakeFailed { error: P2pError },
 
     /// Message received from remote
     MessageReceived { message: PeerManagerMessage },

@@ -165,6 +165,15 @@ pub enum ConnectivityEvent {
         /// Error code of the violation
         error: P2pError,
     },
+
+    /// Handshake failed
+    HandshakeFailed {
+        /// Peer's address
+        address: SocketAddress,
+
+        /// Error that occurred
+        error: P2pError,
+    },
 }
 
 /// Syncing-related events (sent from the backend)
