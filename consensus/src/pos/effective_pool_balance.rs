@@ -17,6 +17,7 @@ use common::{
     primitives::{rational::Rational, Amount},
     Uint256,
 };
+use logging::log;
 use thiserror::Error;
 use utils::ensure;
 
@@ -109,12 +110,12 @@ fn effective_pool_balance_impl(
     // the total stake changing over time. Hence, the incentive structure is more stable.
     //
     // z = 1/k: The size of the saturated pool
-    // Saturated pool: A pool is saturated if its relative stake (pledge + delegated) is equal to
+    // Saturated pool: A pool is saturated if its stake (pledge + delegated) is equal to
     //      the size given by z = 1/k. A pool that has reached saturation will not have additional
     //      rewards if the total stake is increased. This is to prevent pools from growing too large.
     //
     // a: The pledge influence parameter. When a=0,
-    //      the pledge has no additional effect other than proportional to the relative stake.
+    //      the pledge has no additional effect other than proportional to the stake.
     //      while `a` increases, the pledge has more effect on the pool weight, and hence increases the reward
     //      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
     // s:     The pool's pledge amount
@@ -130,6 +131,17 @@ fn effective_pool_balance_impl(
     //                 ⎝            z          ⎠               a     ⎛ sigma z^2 - s (z sigma - s (z - sigma))⎞
     // ─────────────────────────────────────────  => sigma - ──────  ⎜────────────────────────────────────────⎟
     //                a + 1                                  a + 1   ⎝                 z^2                    ⎠
+    //
+    //
+    // Note: The second term is always positive, so the result is always sigma minus some adjustment. Proving the second
+    // term is always positive requires the following considerations:
+    // 1. The range of `s` is [0, z]
+    // 2. The range of `sigma` is [0, z]
+    //
+    // Given this:
+    //    - When s=0, the second term is 0 because, because of the s at the front.
+    //    - When s=z, this can only happen when sigma=z, and the second term is 0 too.
+    //    - When s is between 0 and z, the value is always positive because this is a concave down parabola.
     //
     //
     // Maximizing the gains from a pool with pledges:
@@ -183,6 +195,20 @@ fn effective_pool_balance_impl(
         .checked_sub(adjustment)
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     assert!(effective_balance <= sigma);
+
+    log::debug!("---------------------------------------------");
+    log::debug!("Done calculating the effective balance");
+    log::debug!("---------------------------------------------");
+    log::debug!("Pool pledge: {:?}", pledge_amount);
+    log::debug!("Saturation level: {:?}", pool_saturation_level);
+    log::debug!("Pledge influence: {:?}", pledge_influence);
+    log::debug!("Final supply: {:?}", final_supply);
+    log::debug!("---------------------------------------------");
+    log::debug!("Pool balance: {:?}", pool_balance);
+    log::debug!("Adjustment term: {:?}", adjustment);
+    log::debug!("Effective balance: {}", effective_balance);
+    log::debug!("---------------------------------------------");
+    log::debug!("---------------------------------------------");
 
     Ok(Amount::from_atoms(effective_balance))
 }
