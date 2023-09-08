@@ -1186,7 +1186,9 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(
                 Amount::ZERO,
                 amount,
-            )) => assert!(amount > Amount::from_atoms(1)),
+            )) => {
+                assert!(amount > Amount::from_atoms(1))
+            }
             _ => panic!("wrong error"),
         }
     }

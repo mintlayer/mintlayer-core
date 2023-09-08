@@ -129,6 +129,8 @@ BASE_SCRIPTS = [
     'wallet_select_utxos.py',
     'wallet_recover_accounts.py',
     'wallet_get_address_usage.py',
+    'wallet_tokens.py',
+    'wallet_nfts.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',

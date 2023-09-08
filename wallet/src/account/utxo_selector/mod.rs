@@ -153,7 +153,7 @@ impl SelectionResult {
 pub enum UtxoSelectorError {
     #[error("No solution found")]
     NoSolutionFound,
-    #[error("Not enough funds")]
+    #[error("Not enough funds got: {0:?}, requested: {1:?}")]
     NotEnoughFunds(Amount, Amount),
     #[error("The inputs size exceeds the maximum weight.")]
     MaxWeightExceeded,
