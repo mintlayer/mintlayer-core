@@ -14,22 +14,28 @@
 // limitations under the License.
 
 use crate::{
-    chain::{AccountNonce, DelegationId},
+    chain::{tokens::TokenId, AccountNonce, DelegationId},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
 
-// Type of an account that can be used to identify series of spending from an account
+/// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
+    /// Token account type is used to identify reissuance of a token.
+    /// It stores a supply rather than a balance. So it's a way to authorize reissuance and
+    /// track the supply in case it's fixed.
+    #[codec(index = 1)]
+    Token(TokenId),
 }
 
 impl From<AccountSpending> for AccountType {
     fn from(spending: AccountSpending) -> Self {
         match spending {
             AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
+            AccountSpending::Token(id, _) => AccountType::Token(id),
         }
     }
 }
@@ -41,6 +47,8 @@ impl From<AccountSpending> for AccountType {
 pub enum AccountSpending {
     #[codec(index = 0)]
     Delegation(DelegationId, Amount),
+    #[codec(index = 1)]
+    Token(TokenId, Amount),
 }
 
 /// Type of OutPoint that represents spending from an account

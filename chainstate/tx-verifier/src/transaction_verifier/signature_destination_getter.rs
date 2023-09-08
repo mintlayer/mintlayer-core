@@ -13,9 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint};
+use core::panic;
+
+use common::chain::{
+    output_value::OutputValue,
+    tokens::{TokenAuxiliaryData, TokenData, TokenId},
+    AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
+};
 use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
+
+use crate::TransactionVerifierStorageRef;
 
 pub type SignatureDestinationGetterFn<'a> =
     dyn Fn(&TxInput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
@@ -62,9 +70,15 @@ pub struct SignatureDestinationGetter<'a> {
 
 impl<'a> SignatureDestinationGetter<'a> {
     pub fn new_for_transaction<
+        S: TransactionVerifierStorageRef,
+        F: Fn(
+            &TokenId,
+        )
+            -> Result<Option<TokenAuxiliaryData>, <S as TransactionVerifierStorageRef>::Error>,
         P: PoSAccountingView<Error = pos_accounting::Error>,
         U: UtxosView,
     >(
+        aux_data_getter: &'a F,
         accounting_view: &'a P,
         utxos_view: &'a U,
     ) -> Self {
@@ -121,14 +135,21 @@ impl<'a> SignatureDestinationGetter<'a> {
                         }
                     }
                     TxInput::Account(account_input) => match account_input.account() {
-                        common::chain::AccountSpending::Delegation(delegation_id, _) => {
-                            Ok(accounting_view
-                                .get_delegation_data(*delegation_id)?
-                                .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
-                                    *delegation_id,
-                                ))?
-                                .spend_destination()
-                                .clone())
+                        AccountSpending::Delegation(delegation_id, _) => Ok(accounting_view
+                            .get_delegation_data(*delegation_id)?
+                            .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
+                                *delegation_id,
+                            ))?
+                            .spend_destination()
+                            .clone()),
+                        AccountSpending::Token(token_id, _) => {
+                            let aux_data = aux_data_getter(token_id).unwrap().unwrap();
+                            match aux_data.supply() {
+                                common::chain::tokens::TokenSupply::Fixed => {
+                                    panic!("Token supply is fixed");
+                                }
+                                common::chain::tokens::TokenSupply::Infinite(d) => Ok(d.clone()),
+                            }
                         }
                     },
                 }
