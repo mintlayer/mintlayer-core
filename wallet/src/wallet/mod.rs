@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -148,6 +148,12 @@ pub enum WalletError {
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
     UnknownPoolId(PoolId),
+    #[error("Cannot find UTXO")]
+    CannotFindUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is already consumed")]
+    ConsumedUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is still locked")]
+    LockedUtxo(UtxoOutPoint),
 }
 
 /// Result type used for the wallet
@@ -744,7 +750,7 @@ impl<B: storage::Backend> Wallet<B> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            let inputs = inputs.into_iter().collect::<BTreeSet<_>>();
+            let inputs = inputs.into_iter().collect();
             account.process_send_request(
                 db_tx,
                 request,

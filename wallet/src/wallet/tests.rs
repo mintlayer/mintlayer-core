@@ -1279,6 +1279,23 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             WithLocked::Unlocked,
         )
         .unwrap();
+    let burn_amount = Amount::from_atoms(rng.gen_range(1..utxo_amount.into_atoms()));
+
+    {
+        let missing_utxo =
+            UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 123);
+        let err = wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [TxOutput::Burn(OutputValue::Coin(burn_amount))],
+                vec![missing_utxo.clone()],
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
+            )
+            .unwrap_err();
+
+        assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo))
+    }
 
     let selected_utxos = utxos
         .keys()
@@ -1286,7 +1303,6 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
         .cloned()
         .collect::<BTreeSet<_>>();
 
-    let burn_amount = Amount::from_atoms(rng.gen_range(1..utxo_amount.into_atoms()));
     let tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
@@ -1315,6 +1331,26 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             TxOutput::Burn(value) => assert_eq!(value.coin_amount().unwrap(), burn_amount),
             _ => panic!("unexpected output"),
         }
+    }
+
+    {
+        wallet.add_unconfirmed_tx(tx, &WalletEventsNoOp).unwrap();
+        // Try to select the same UTXOs now they should be already consumed
+
+        let err = wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [TxOutput::Burn(OutputValue::Coin(burn_amount))],
+                selected_utxos.clone(),
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            err,
+            WalletError::ConsumedUtxo(selected_utxos.first().unwrap().clone())
+        );
     }
 }
 

@@ -52,7 +52,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{
@@ -138,7 +138,7 @@ impl Account {
     fn select_inputs_for_send_request(
         &mut self,
         request: SendRequest,
-        input_utxos: BTreeSet<UtxoOutPoint>,
+        input_utxos: Vec<UtxoOutPoint>,
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
@@ -182,7 +182,7 @@ impl Account {
             )
         } else {
             (
-                self.output_cache.find_utxos(current_block_info, &input_utxos),
+                self.output_cache.find_utxos(current_block_info, input_utxos)?,
                 CoinSelectionAlgo::UsePreselected,
             )
         };
@@ -368,7 +368,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         request: SendRequest,
-        inputs: BTreeSet<UtxoOutPoint>,
+        inputs: Vec<UtxoOutPoint>,
         median_time: BlockTimestamp,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -554,7 +554,7 @@ impl Account {
         let request = SendRequest::new().with_outputs([dummy_stake_output]);
         let mut request = self.select_inputs_for_send_request(
             request,
-            BTreeSet::new(),
+            vec![],
             db_tx,
             median_time,
             current_fee_rate,

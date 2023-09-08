@@ -125,6 +125,7 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
 
             address = await wallet.new_address()
             selected_utxos = utxos[:3]
+            not_selected_utxos = utxos[3:]
             await wallet.send_to_address(address, 1, selected_utxos)
 
             self.generate_block()
@@ -142,6 +143,8 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             assert len(new_utxos) == num_utxos - len(selected_utxos) + 2
             # check selected utxos are no longer present
             assert all(selected_utxo not in new_utxos for selected_utxo in selected_utxos)
+            # check not-selected utxos are still present
+            assert all(not_selected_utxo in new_utxos for not_selected_utxo in not_selected_utxos)
 
 
 

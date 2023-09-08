@@ -349,49 +349,58 @@ impl OutputCache {
         })
     }
 
+    fn find_unspent_unlocked_utxo(
+        &self,
+        utxo: &UtxoOutPoint,
+        current_block_info: BlockInfo,
+    ) -> WalletResult<(&TxOutput, Option<TokenId>)> {
+        let tx = self
+            .txs
+            .get(&utxo.source_id())
+            .ok_or(WalletError::CannotFindUtxo(utxo.clone()))?;
+        let tx_block_info = get_block_info(tx);
+        let output = tx
+            .outputs()
+            .get(utxo.output_index() as usize)
+            .ok_or(WalletError::CannotFindUtxo(utxo.clone()))?;
+
+        ensure!(
+            !self.is_consumed(
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                utxo,
+            ),
+            WalletError::ConsumedUtxo(utxo.clone())
+        );
+
+        ensure!(
+            is_specific_lock_state(
+                WithLocked::Unlocked,
+                output,
+                current_block_info,
+                tx_block_info,
+                utxo,
+            ),
+            WalletError::LockedUtxo(utxo.clone())
+        );
+
+        let token_id = match tx {
+            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+            WalletTx::Block(_) => None,
+        };
+
+        Ok((output, token_id))
+    }
+
     pub fn find_utxos(
         &self,
         current_block_info: BlockInfo,
-        inputs: &BTreeSet<UtxoOutPoint>,
-    ) -> BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)> {
-        self.txs
-            .values()
-            .flat_map(|tx| {
-                let tx_block_info = get_block_info(tx);
-                let token_id = match tx {
-                    WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
-                    WalletTx::Block(_) => None,
-                };
-
-                tx.outputs()
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, output)| (output, UtxoOutPoint::new(tx.id(), idx as u32)))
-                    .filter(move |(output, outpoint)| {
-                        !self.is_consumed(
-                            UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                            outpoint,
-                        ) && is_specific_lock_state(
-                            WithLocked::Unlocked,
-                            output,
-                            current_block_info,
-                            tx_block_info,
-                            outpoint,
-                        ) && inputs.contains(outpoint)
-                    })
-                    .map(move |(output, outpoint)| {
-                        (
-                            outpoint,
-                            (
-                                output,
-                                if output.is_token_or_nft_issuance() {
-                                    token_id
-                                } else {
-                                    None
-                                },
-                            ),
-                        )
-                    })
+        inputs: Vec<UtxoOutPoint>,
+    ) -> WalletResult<BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>> {
+        inputs
+            .into_iter()
+            .map(|utxo| {
+                self.find_unspent_unlocked_utxo(&utxo, current_block_info)
+                    .map(|res| (utxo, res))
             })
             .collect()
     }
