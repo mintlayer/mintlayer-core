@@ -1179,3 +1179,123 @@ mod tests {
         );
     }
 }
+
+#[cfg(kani)]
+mod verification {
+    use super::*;
+
+    #[kani::proof]
+    fn uint128_u128_equivalent() {
+        // *_m - model, *_v - to be verified against the model
+        let a_m = kani::any();
+        let b_m = kani::any();
+        let a_v = Uint128::from_u128(a_m);
+        let b_v = Uint128::from_u128(b_m);
+
+        {
+            let (ab_m, c_m) = a_m.overflowing_add(b_m);
+            let (ab_v, c_v) = a_v.overflowing_add(&b_v);
+            assert_eq!(Uint128::from_u128(ab_m), ab_v, "Result mismatch");
+            assert_eq!(c_m, c_v, "Carry flag mismatch");
+        }
+    }
+
+    #[cfg(feature = "expensive-verification")]
+    #[kani::proof]
+    fn uint128_mul_u64() {
+        let a_m = kani::any();
+        let a_v = Uint128::from_u128(a_m);
+        let b: u64 = kani::any();
+
+        let (ab_m, is_verflow_m) = a_m.overflowing_mul(b as u128);
+        let (ab_v, c_v) = a_v.widening_mul_u64(b);
+        assert_eq!(Uint128::from_u128(ab_m), ab_v, "Result mismatch");
+        assert_eq!(is_verflow_m, c_v != 0, "Carry flag mismatch");
+    }
+
+    #[cfg(feature = "expensive-verification")]
+    #[kani::proof]
+    fn uint128_mul_u64max() {
+        let x = Uint128(kani::any());
+        let u64_max = Uint128::from_u64(u64::MAX);
+        let r = (Uint256::from(x) << 64) - Uint256::from(x);
+        let r_hi = Uint128([r.0[2], r.0[3]]);
+        let r_lo = Uint128([r.0[0], r.0[1]]);
+        assert_eq!(x.widening_mul(&u64_max), (r_lo, r_hi));
+        assert_eq!(u64_max.widening_mul(&x), (r_lo, r_hi));
+    }
+
+    #[kani::proof]
+    fn uint128_mul_u64big() {
+        let x = Uint128(kani::any());
+        kani::assume(x != Uint128::ZERO);
+        let big = Uint128::from_u64(3u64 << 62);
+        let r = (Uint256::from(x) << 62) + (Uint256::from(x) << 63);
+        let r_hi = Uint128([r.0[2], r.0[3]]);
+        let r_lo = Uint128([r.0[0], r.0[1]]);
+        assert_eq!(x.widening_mul(&big), (r_lo, r_hi));
+        assert_eq!(big.widening_mul(&x), (r_lo, r_hi));
+    }
+
+    #[kani::proof]
+    fn uint256_additive_identity() {
+        let x = Uint256(kani::any());
+        assert_eq!(x + Uint256::ZERO, x);
+        assert_eq!(Uint256::ZERO + x, x);
+    }
+
+    #[kani::proof]
+    fn uint256_add_commut() {
+        let x = Uint256(kani::any());
+        let y = Uint256(kani::any());
+        assert_eq!(x.overflowing_add(&y), y.overflowing_add(&x));
+    }
+
+    #[kani::proof]
+    fn uint256_add_assoc() {
+        let x = Uint256(kani::any());
+        let y = Uint256(kani::any());
+        let z = Uint256(kani::any());
+        assert_eq!(
+            x.checked_add(&y).and_then(|xy| xy.checked_add(&z)),
+            y.checked_add(&z).and_then(|yz| x.checked_add(&yz)),
+        );
+    }
+
+    #[kani::proof]
+    fn uint256_mul_up_to_5_commut() {
+        let x = Uint256(kani::any());
+        let y2 = Uint256::from_u64(2);
+        let y3 = Uint256::from_u64(3);
+        let y4 = Uint256::from_u64(4);
+        let y5 = Uint256::from_u64(5);
+        assert_eq!(x.widening_mul(&y2), y2.widening_mul(&x));
+        assert_eq!(x.widening_mul(&y3), y3.widening_mul(&x));
+        assert_eq!(x.widening_mul(&y4), y4.widening_mul(&x));
+        assert_eq!(x.widening_mul(&y5), y5.widening_mul(&x));
+    }
+
+    #[kani::proof]
+    fn uint256_mul_01() {
+        let x = Uint256(kani::any());
+        assert_eq!(
+            x.widening_mul(&Uint256::ZERO),
+            (Uint256::ZERO, Uint256::ZERO)
+        );
+        assert_eq!(x.widening_mul(&Uint256::ONE), (x, Uint256::ZERO));
+        assert_eq!(
+            Uint256::ZERO.widening_mul(&x),
+            (Uint256::ZERO, Uint256::ZERO)
+        );
+        assert_eq!(Uint256::ONE.widening_mul(&x), (x, Uint256::ZERO));
+    }
+
+    #[kani::proof]
+    fn shl_and_shl_words_agree() {
+        let x = Uint256(kani::any());
+        for i in 0..=4 {
+            assert_eq!(x << (i * 64), x.shl_words(i));
+            assert_eq!(x >> (i * 64), x.shr_words(i));
+        }
+    }
+}
