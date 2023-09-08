@@ -109,9 +109,6 @@ pub fn create_utxo_data(
             TokenData::TokenIssuanceV1(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
             }
-            TokenData::TokenReissuanceV1(_) => {
-                TxOutput::Transfer(OutputValue::Token(token_data), anyonecanspend_address())
-            }
         },
     };
 
@@ -240,7 +237,6 @@ pub fn create_multiple_utxo_data(
                 }
             }
             TokenData::TokenIssuanceV1(_) => todo!(),
-            TokenData::TokenReissuanceV1(_) => todo!(),
         },
     };
 

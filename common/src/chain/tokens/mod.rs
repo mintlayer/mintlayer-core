@@ -103,12 +103,6 @@ pub struct TokenIssuanceV1 {
     pub supply: TokenSupply,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub struct TokenReissuanceV1 {
-    pub token_id: TokenId,
-    pub amount_to_issue: Amount,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
@@ -120,13 +114,9 @@ pub enum TokenData {
     // A new NFT creation
     #[codec(index = 3)]
     NftIssuance(Box<NftIssuance>),
-    /// New token creation V!
+    /// New token creation with supply support
     #[codec(index = 4)]
     TokenIssuanceV1(Box<TokenIssuanceV1>),
-    // Increase amount of tokens
-    // FIXME: this type is not require, just transfer from an account
-    #[codec(index = 5)]
-    TokenReissuanceV1(TokenReissuanceV1),
 }
 
 impl From<NftIssuance> for TokenData {

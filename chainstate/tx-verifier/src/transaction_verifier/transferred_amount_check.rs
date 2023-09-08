@@ -241,12 +241,6 @@ fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
-            TokenData::TokenReissuanceV1(reissuance) => include_issuance.and_then(|_| {
-                Some((
-                    CoinOrTokenId::TokenId(reissuance.token_id),
-                    reissuance.amount_to_issue,
-                ))
-            }),
         },
     })
 }
@@ -280,10 +274,6 @@ where
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
-            TokenData::TokenReissuanceV1(reissuance) => (
-                CoinOrTokenId::TokenId(reissuance.token_id),
-                reissuance.amount_to_issue,
-            ),
         },
     })
 }
