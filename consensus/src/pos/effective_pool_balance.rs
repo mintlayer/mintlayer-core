@@ -33,7 +33,7 @@ const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> =
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum EffectivePoolBalanceError {
-    #[error("Arithmetic error while calculating pools weight")]
+    #[error("Arithmetic error while calculating effective pool balance")]
     ArithmeticError,
     #[error("Final supply cannot be 0")]
     FinalSupplyZero,
@@ -46,7 +46,7 @@ pub enum EffectivePoolBalanceError {
 }
 
 /// The function determines pool's effective balance based on its pledge. In the simplest case
-/// pool's weight is proportional to its balance but we want to incentivize pool's operators to
+/// effective pool balance is proportional to its balance but we want to incentivize pool's operators to
 /// pledge, so this function takes pledge into account.
 pub fn effective_pool_balance(
     pledge_amount: Amount,
@@ -111,8 +111,8 @@ fn effective_pool_balance_impl(
     //
     // a: The pledge influence parameter. When a=0,
     //      the pledge has no additional effect other than proportional to the stake.
-    //      while `a` increases, the pledge has more effect on the pool weight, and hence increases the reward
-    //      more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
+    //      while `a` increases, the pledge has more effect on the effective pool balance, and hence increases the
+    //      reward more compared to delegation. The parameter a can be controlled to incentivize pools to pledge more.
     // s:     The pool's pledge amount
     // sigma: The pool's stake (pledge + delegated)
     //
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_pool_weight_zero_balance() {
+    fn calculate_pool_zero_balance() {
         let final_supply = Amount::from_atoms(600_000_000);
         let pool_balance = Amount::ZERO;
         let pledge_amount = Amount::ZERO;
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn calculate_pool_weight_fixed_values() {
+    fn calculate_effective_pool_balance_fixed_values() {
         let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
 
         {
@@ -313,7 +313,7 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn calculate_pool_weight_a_zero(#[case] seed: Seed) {
+    fn calculate_effetive_pool_balance_with_a_zero(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let final_supply = Amount::from_atoms(600_000_000);
@@ -344,7 +344,10 @@ mod tests {
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
     #[trace]
     #[case(Seed::from_entropy(), Mlt::from_mlt(600_000_000).to_amount_atoms())]
-    fn calculate_pool_weight_not_saturated(#[case] seed: Seed, #[case] final_supply: Amount) {
+    fn calculate_effective_pool_balance_not_saturated(
+        #[case] seed: Seed,
+        #[case] final_supply: Amount,
+    ) {
         let mut rng = make_seedable_rng(seed);
 
         let pool_balance = Amount::from_atoms(rng.gen_range(2..(final_supply.into_atoms() / K)));
