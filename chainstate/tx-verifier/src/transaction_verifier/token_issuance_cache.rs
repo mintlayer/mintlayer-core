@@ -98,7 +98,7 @@ impl TokenIssuanceCache {
     ) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
 
-        // FIXME: v0/v1/nft messed up
+        // FIXME: messy v0/v1/nft
         let issuance_v1 = common::chain::tokens::get_tokens_issuance_v1(tx.outputs());
         let aux_data = if issuance_v1.is_empty() {
             TokenAuxiliaryData::new(tx.clone(), *block_id, TokenSupply::Fixed)
