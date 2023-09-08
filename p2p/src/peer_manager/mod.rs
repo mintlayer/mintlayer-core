@@ -1282,9 +1282,6 @@ where
             ConnectivityEvent::ConnectionError { address, error } => {
                 self.handle_outbound_error(address, error);
             }
-            ConnectivityEvent::Misbehaved { peer_id, error } => {
-                self.adjust_peer_score(peer_id, error.ban_score());
-            }
             ConnectivityEvent::HandshakeFailed { address, error } => {
                 self.adjust_peer_score_on_failed_handshake(address, error.ban_score());
             }

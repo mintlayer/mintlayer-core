@@ -65,7 +65,6 @@ use crate::{
 use super::chainstate_handle::ChainstateHandle;
 
 // TODO: Take into account the chain work when syncing.
-// TODO: rename this struct to PeerState/PeerManager or similar.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
