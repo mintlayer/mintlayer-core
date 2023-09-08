@@ -41,8 +41,8 @@ pub enum EffectivePoolBalanceError {
     PoolBalanceGreaterThanSupply(Amount, Amount),
     #[error("Pool pledge {0:?} cannot be greater than pool balance {1:?}")]
     PoolPledgeGreaterThanBalance(Amount, Amount),
-    #[error("Adjustment to balance must feet into Amount type")]
-    AdjustmentMustFeetIntoAmount,
+    #[error("Adjustment to balance must fit into Amount type")]
+    AdjustmentMustFitIntoAmount,
 }
 
 /// The function determines pool's effective balance based on its pledge. In the simplest case
@@ -198,7 +198,7 @@ fn effective_pool_balance_impl(
         .and_then(|v| v.checked_div(&z_squared))
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?
         .try_into()
-        .map_err(|_| EffectivePoolBalanceError::AdjustmentMustFeetIntoAmount)?;
+        .map_err(|_| EffectivePoolBalanceError::AdjustmentMustFitIntoAmount)?;
 
     let effective_balance = sigma
         .checked_sub(adjustment)
