@@ -126,6 +126,7 @@ BASE_SCRIPTS = [
     'feature_db_reinit.py',
     'feature_lmdb_backend_test.py',
     'wallet_submit_tx.py',
+    'wallet_select_utxos.py',
     'wallet_recover_accounts.py',
     'wallet_get_address_usage.py',
     'mempool_basic_reorg.py',

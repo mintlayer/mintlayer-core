@@ -1241,6 +1241,86 @@ fn lock_wallet_fail_empty_password() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn spend_from_user_specified_utxos(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    // Generate a new block which sends reward to the wallet
+    let utxo_amount = Amount::from_atoms(rng.gen_range(100..10000));
+    let reward_outputs = (0..10)
+        .map(|idx| {
+            let address = get_address(
+                &chain_config,
+                MNEMONIC,
+                DEFAULT_ACCOUNT_INDEX,
+                KeyPurpose::ReceiveFunds,
+                idx.try_into().unwrap(),
+            );
+            make_address_output(chain_config.as_ref(), address, utxo_amount).unwrap()
+        })
+        .collect_vec();
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(reward_outputs),
+    )
+    .unwrap();
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let utxos = wallet
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+
+    let selected_utxos = utxos
+        .keys()
+        .take(rng.gen_range(0..utxos.len()))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+
+    let burn_amount = Amount::from_atoms(rng.gen_range(1..utxo_amount.into_atoms()));
+    let tx = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::Burn(OutputValue::Coin(burn_amount))],
+            selected_utxos.clone(),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    // check that we only have the selected_utxo as inputs
+    assert_eq!(tx.inputs().len(), selected_utxos.len());
+    for tx_input in tx.inputs() {
+        assert!(selected_utxos.contains(tx_input.utxo_outpoint().unwrap()));
+    }
+
+    // check that there is a change output
+    assert_eq!(tx.outputs().len(), 2);
+    let change_amount =
+        ((utxo_amount * selected_utxos.len() as u128).unwrap() - burn_amount).unwrap();
+    for out in tx.outputs() {
+        match out {
+            TxOutput::Transfer(value, _) => {
+                assert_eq!(value.coin_amount().unwrap(), change_amount)
+            }
+            TxOutput::Burn(value) => assert_eq!(value.coin_amount().unwrap(), burn_amount),
+            _ => panic!("unexpected output"),
+        }
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
