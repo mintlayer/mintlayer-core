@@ -124,6 +124,11 @@ fn effective_pool_balance_impl(
     // The formula is rewritten as follows to represent the result as sigma minus some adjustment.
     // Also it makes it more suitable for integer arithmetic because there is a single division at the end.
     //
+    // Note: the original formula had `s`, `sigma` and `z` as fractions [0, 1], but we are using integers
+    //       with s in [0, z], sigma in [0, z] and z in [0, final_supply]. This is because we cannot
+    //       just multiple the pool balance by this formula, given that the formula is not linear in anything,
+    //       even for sigma, because it's fixed in a range [0, final_supply].
+    //
     //                 ⎛            ⎛z - sigma⎞⎞
     //                 ⎜sigma - s ⋅ ⎜─────────⎟⎟
     //                 ⎜            ⎝    z    ⎠⎟
@@ -168,7 +173,10 @@ fn effective_pool_balance_impl(
             .ok_or(EffectivePoolBalanceError::ArithmeticError)?
     };
 
-    // a.n (sigma z z - term2)
+    // To calculate a / (a + 1), we consider that a=an/ad, where an is the numerator of a, and ad is the denominator of a.
+    // Then, we multiply both the nominator and denominator by ad, and we get  a / (a + 1) = an / (an + ad)
+
+    // an (sigma z z - term2)
     let adjustment_numerator = {
         let sigma: Uint256 = sigma.into();
         sigma
@@ -178,7 +186,7 @@ fn effective_pool_balance_impl(
             .ok_or(EffectivePoolBalanceError::ArithmeticError)?
     };
 
-    // (a.n + a.d) z^2
+    // (an + ad) z^2
     let adjustment_denominator = a
         .numer()
         .checked_add(*a.denom())
