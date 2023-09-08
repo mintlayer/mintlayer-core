@@ -173,8 +173,8 @@ fn effective_pool_balance_impl(
             .ok_or(EffectivePoolBalanceError::ArithmeticError)?
     };
 
-    // To calculate a / (a + 1), we consider that a=an/ad, where an is the numerator of a, and ad is the denominator of a.
-    // Then, we multiply both the nominator and denominator by ad, and we get  a / (a + 1) = an / (an + ad)
+    // To calculate a / (a + 1), we consider that a=an/ad, where `an` is the numerator of `a`, and `ad` is the denominator of `a`.
+    // Then, we multiply both the numerator and denominator by `ad`, and we get  a / (a + 1) = an / (an + ad)
 
     // an (sigma z z - term2)
     let adjustment_numerator = {
