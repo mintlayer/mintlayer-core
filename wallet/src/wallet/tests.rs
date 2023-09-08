@@ -1178,8 +1178,11 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             .unwrap_err();
 
         match err {
-            WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(0, amount)) => {
-                assert!(amount > 1)
+            WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(
+                Amount::ZERO,
+                amount,
+            )) => {
+                assert!(amount > Amount::from_atoms(1))
             }
             _ => panic!("wrong error"),
         }
@@ -1829,8 +1832,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(
         transfer_tokens_error,
         WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(
-            (token_amount_to_issue - tokens_to_transfer).unwrap().into_atoms(),
-            not_enough_tokens_to_transfer.into_atoms()
+            (token_amount_to_issue - tokens_to_transfer).unwrap(),
+            not_enough_tokens_to_transfer
         ))
     )
 }
@@ -2331,8 +2334,8 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
     assert_eq!(
         err,
         WalletError::CoinSelectionError(UtxoSelectorError::NotEnoughFunds(
-            amount_to_keep.into_atoms(),
-            should_fail_to_send.into_atoms()
+            amount_to_keep,
+            should_fail_to_send
         ))
     );
 

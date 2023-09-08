@@ -152,8 +152,8 @@ impl SelectionResult {
 pub enum UtxoSelectorError {
     #[error("No solution found")]
     NoSolutionFound,
-    #[error("Not enough funds got: {0}, requested: {1}")]
-    NotEnoughFunds(u128, u128),
+    #[error("Not enough funds got: {0:?}, requested: {1:?}")]
+    NotEnoughFunds(Amount, Amount),
     #[error("The inputs size exceeds the maximum weight.")]
     MaxWeightExceeded,
     #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
@@ -486,8 +486,8 @@ fn select_coins_bnb(
 
     if curr_available_value < selection_target {
         return Err(UtxoSelectorError::NotEnoughFunds(
-            curr_available_value.into_atoms(),
-            selection_target.into_atoms(),
+            curr_available_value,
+            selection_target,
         ));
     }
 
@@ -655,8 +655,8 @@ pub fn select_coins(
 
     if total_available_value < selection_target {
         return Err(UtxoSelectorError::NotEnoughFunds(
-            total_available_value.into_atoms(),
-            selection_target.into_atoms(),
+            total_available_value,
+            selection_target,
         ));
     }
 
