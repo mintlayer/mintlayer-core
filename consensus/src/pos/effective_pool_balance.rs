@@ -231,14 +231,6 @@ mod tests {
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    fn abs_diff(a: Amount, b: Amount) -> Amount {
-        if a > b {
-            (a - b).expect("cannot be negative")
-        } else {
-            (b - a).expect("cannot be negative")
-        }
-    }
-
     fn effective_pool_balance_float_impl(
         pledge_amount: Amount,
         pool_balance: Amount,
@@ -361,7 +353,7 @@ mod tests {
             POOL_SATURATION_LEVEL,
             DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
         );
-        assert!(abs_diff(actual, expected).into_atoms() <= 100);
+        assert!(actual.abs_diff(expected).into_atoms() <= 100);
     }
 
     #[rstest]
@@ -408,7 +400,7 @@ mod tests {
         assert!(effective_balances.windows(2).all(|t| {
             let ascending = t[0] < t[1];
             let equidistant =
-                abs_diff((t[1] - t[0]).unwrap(), initial_diff) <= Amount::from_atoms(1); // allow for rounding error
+                (t[1] - t[0]).unwrap().abs_diff(initial_diff) <= Amount::from_atoms(1); // allow for rounding error
             ascending && equidistant
         }));
     }
