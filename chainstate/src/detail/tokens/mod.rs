@@ -159,8 +159,5 @@ pub fn check_tokens_data(
             &issuance.metadata_uri,
         )
         .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
-        TokenData::TokenReissuanceV1(reissuance) => {
-            check_positive_amount(source_block_id, tx, &reissuance.amount_to_issue)
-        }
     }
 }
