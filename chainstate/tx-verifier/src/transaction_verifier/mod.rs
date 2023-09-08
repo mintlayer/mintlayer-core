@@ -245,7 +245,7 @@ where
         }
 
         // Check if the fee is enough for reissuance
-        let reissuance_count = get_tokens_reissuance_count(tx.outputs());
+        let reissuance_count = get_tokens_reissuance_count(tx.inputs());
         if reissuance_count > 0 {
             let total_burned = tx
                 .outputs()

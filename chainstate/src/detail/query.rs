@@ -312,7 +312,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     )))
                 }
                 TokenData::TokenIssuanceV1(_) => todo!(),
-                TokenData::TokenTransfer(_) | TokenData::TokenReissuanceV1(_) => None,
+                TokenData::TokenTransfer(_) => None,
             }))
     }
 

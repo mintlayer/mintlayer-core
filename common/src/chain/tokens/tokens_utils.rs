@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId, TokenIssuanceV1};
 use crate::{
-    chain::{output_value::OutputValue, Transaction, TxOutput},
+    chain::{output_value::OutputValue, Transaction, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -32,8 +32,7 @@ pub fn get_tokens_issuance_v1(outputs: &[TxOutput]) -> Vec<&TokenIssuanceV1> {
                     OutputValue::Token(data) => match data.as_ref() {
                         TokenData::TokenIssuance(_)
                         | TokenData::NftIssuance(_)
-                        | TokenData::TokenTransfer(_)
-                        | TokenData::TokenReissuanceV1(_) => None,
+                        | TokenData::TokenTransfer(_) => None,
                         TokenData::TokenIssuanceV1(issuance) => Some(issuance.as_ref()),
                     },
                     OutputValue::Coin(_) => None,
@@ -51,8 +50,8 @@ pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs.iter().filter(|&output| is_token_or_nft_issuance(output)).count()
 }
 
-pub fn get_tokens_reissuance_count(outputs: &[TxOutput]) -> usize {
-    outputs.iter().filter(|&output| is_token_reissuance(output)).count()
+pub fn get_tokens_reissuance_count(outputs: &[TxInput]) -> usize {
+    outputs.iter().filter(|&input| is_token_reissuance(input)).count()
 }
 
 pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
@@ -63,7 +62,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
                     TokenData::TokenIssuance(_)
                     | TokenData::NftIssuance(_)
                     | TokenData::TokenIssuanceV1(_) => true,
-                    TokenData::TokenTransfer(_) | TokenData::TokenReissuanceV1(_) => false,
+                    TokenData::TokenTransfer(_) => false,
                 },
                 OutputValue::Coin(_) => false,
             }
@@ -75,23 +74,12 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
     }
 }
 
-pub fn is_token_reissuance(output: &TxOutput) -> bool {
-    match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            match v {
-                OutputValue::Token(data) => match data.as_ref() {
-                    TokenData::TokenReissuanceV1(_) => true,
-                    TokenData::TokenTransfer(_)
-                    | TokenData::TokenIssuance(_)
-                    | TokenData::NftIssuance(_)
-                    | TokenData::TokenIssuanceV1(_) => false,
-                },
-                OutputValue::Coin(_) => false,
-            }
-        }
-        TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _) => false,
+pub fn is_token_reissuance(input: &TxInput) -> bool {
+    match input {
+        TxInput::Utxo(_) => false,
+        TxInput::Account(account) => match account.account() {
+            crate::chain::AccountSpending::Delegation(_, _) => false,
+            crate::chain::AccountSpending::Token(_, _) => true,
+        },
     }
 }
