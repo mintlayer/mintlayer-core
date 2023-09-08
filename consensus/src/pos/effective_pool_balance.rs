@@ -186,15 +186,16 @@ fn effective_pool_balance_impl(
             .ok_or(EffectivePoolBalanceError::ArithmeticError)?
     };
 
-    // (an + ad) z^2
-    let adjustment_denominator = a
+    // (an + ad)
+    let an_ad = a
         .numer()
         .checked_add(*a.denom())
-        .and_then(|v| z_squared.checked_mul(&v.into()))
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
+    // adjustment_numerator / (an + ad) / z_squared
     let adjustment: u128 = adjustment_numerator
-        .checked_div(&adjustment_denominator)
+        .checked_div(&an_ad.into())
+        .and_then(|v| v.checked_div(&z_squared))
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?
         .try_into()
         .map_err(|_| EffectivePoolBalanceError::AdjustmentMustFeetIntoAmount)?;
