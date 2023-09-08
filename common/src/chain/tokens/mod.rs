@@ -44,13 +44,19 @@ impl TokenIssuanceVersion {
 pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
     issuance_block_id: Id<Block>,
+    supply: TokenSupply, // FIXME: is this backward compatible?
 }
 
 impl TokenAuxiliaryData {
-    pub fn new(issuance_tx: Transaction, issuance_block_id: Id<Block>) -> Self {
+    pub fn new(
+        issuance_tx: Transaction,
+        issuance_block_id: Id<Block>,
+        supply: TokenSupply,
+    ) -> Self {
         Self {
             issuance_tx,
             issuance_block_id,
+            supply,
         }
     }
 
@@ -60,6 +66,10 @@ impl TokenAuxiliaryData {
 
     pub fn issuance_block_id(&self) -> Id<Block> {
         self.issuance_block_id
+    }
+
+    pub fn supply(&self) -> &TokenSupply {
+        &self.supply
     }
 }
 
@@ -80,7 +90,8 @@ pub struct TokenIssuance {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenSupply {
     Fixed,
-    Increasable(Destination),
+    Infinite(Destination),
+    // TODO: Capped(Destination, Amount),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
@@ -113,6 +124,7 @@ pub enum TokenData {
     #[codec(index = 4)]
     TokenIssuanceV1(Box<TokenIssuanceV1>),
     // Increase amount of tokens
+    // FIXME: this type is not require, just transfer from an account
     #[codec(index = 5)]
     TokenReissuanceV1(TokenReissuanceV1),
 }

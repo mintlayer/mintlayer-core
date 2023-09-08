@@ -61,6 +61,7 @@ impl TxDependency {
             AccountSpending::Delegation(delegation_id, _) => {
                 Self::DelegationAccount(TxAccountDependency::new(*delegation_id, nonce))
             }
+            AccountSpending::Token(_, _) => todo!(),
         }
     }
 
