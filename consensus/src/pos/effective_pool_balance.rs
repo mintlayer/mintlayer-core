@@ -205,19 +205,23 @@ fn effective_pool_balance_impl(
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     assert!(effective_balance <= sigma);
 
-    log::debug!("---------------------------------------------");
-    log::debug!("Done calculating the effective balance");
-    log::debug!("---------------------------------------------");
-    log::debug!("Pool pledge: {:?}", pledge_amount);
-    log::debug!("Saturation level: {:?}", pool_saturation_level);
-    log::debug!("Pledge influence: {:?}", pledge_influence);
-    log::debug!("Final supply: {:?}", final_supply);
-    log::debug!("---------------------------------------------");
-    log::debug!("Pool balance: {:?}", pool_balance);
-    log::debug!("Adjustment term: {:?}", adjustment);
-    log::debug!("Effective balance: {}", effective_balance);
-    log::debug!("---------------------------------------------");
-    log::debug!("---------------------------------------------");
+    {
+        log::debug!("---------------------------------------------");
+        log::debug!("Done calculating the effective balance");
+        log::debug!("---------------------------------------------");
+        log::debug!("Pool pledge:       {}", pledge_amount.into_atoms());
+        #[rustfmt::skip]
+        log::debug!("Saturation level:  {} / {}", pool_saturation_level.numer(), pool_saturation_level.denom());
+        #[rustfmt::skip]
+        log::debug!("Pledge influence:  {} / {}", pledge_influence.numer(), pledge_influence.denom());
+        log::debug!("Final supply:      {}", final_supply.into_atoms());
+        log::debug!("---------------------------------------------");
+        log::debug!("Pool balance:      {}", pool_balance.into_atoms());
+        log::debug!("Adjustment term:   {}", adjustment);
+        log::debug!("Effective balance: {}", effective_balance);
+        log::debug!("---------------------------------------------");
+        log::debug!("---------------------------------------------");
+    }
 
     Ok(Amount::from_atoms(effective_balance))
 }
