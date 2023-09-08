@@ -361,9 +361,10 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
+        // TODO: add support for utxo selection in the GUI
         wallet
             .controller
-            .send_to_address(account_id.account_index(), address, amount)
+            .send_to_address(account_id.account_index(), address, amount, vec![])
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 

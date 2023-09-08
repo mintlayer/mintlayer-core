@@ -18,11 +18,22 @@
 
 import os
 import asyncio
+import re
+from dataclasses import dataclass
 
-from typing import Optional
+from typing import Optional, List
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
+
+@dataclass
+class UtxoOutpoint:
+    id: str
+    index: int
+
+    def __str__(self):
+        return f'tx({self.id},{self.index})'
+
 
 class WalletCliController:
 
@@ -114,8 +125,16 @@ class WalletCliController:
     async def new_address(self) -> str:
         return await self._write_command(f"newaddress\n")
 
-    async def send_to_address(self, address: str, amount: int) -> str:
-        return await self._write_command(f"sendtoaddress {address} {amount}\n")
+    async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self._write_command(f"listutxo {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+
+        pattern = r'UtxoOutPoint\s*{[^}]*Id<Transaction>\{0x([^}]*)\}[^}]*index:\s*(\d+)'
+        matches = re.findall(pattern, output, re.DOTALL)
+        return [UtxoOutpoint(id=match[0].strip(), index=int(match[1].strip())) for match in matches]
+
+
+    async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
+        return await self._write_command(f"sendtoaddress {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def issue_new_token(self,
                               token_ticker: str,

@@ -148,6 +148,12 @@ pub enum WalletError {
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
     UnknownPoolId(PoolId),
+    #[error("Cannot find UTXO")]
+    CannotFindUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is already consumed")]
+    ConsumedUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is still locked")]
+    LockedUtxo(UtxoOutPoint),
 }
 
 /// Result type used for the wallet
@@ -317,6 +323,13 @@ impl<B: storage::Backend> Wallet<B> {
         );
 
         Ok(())
+    }
+
+    /// Reset all scanned transactions and revert all accounts to the genesis block
+    /// this will cause the wallet to rescan the blockchain
+    pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)
     }
 
     fn reset_wallet_transactions(
@@ -730,15 +743,18 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: impl IntoIterator<Item = UtxoOutPoint>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            let inputs = inputs.into_iter().collect();
             account.process_send_request(
                 db_tx,
                 request,
+                inputs,
                 latest_median_time,
                 current_fee_rate,
                 consolidate_fee_rate,
@@ -769,6 +785,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -797,6 +814,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;
@@ -817,6 +835,7 @@ impl<B: storage::Backend> Wallet<B> {
         let tx = self.create_transaction_to_addresses(
             account_index,
             outputs,
+            [],
             current_fee_rate,
             consolidate_fee_rate,
         )?;

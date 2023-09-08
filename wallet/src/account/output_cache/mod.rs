@@ -28,7 +28,7 @@ use common::{
 use pos_accounting::make_delegation_id;
 use utils::ensure;
 use wallet_types::{
-    utxo_types::{get_utxo_state, UtxoStates},
+    utxo_types::{get_utxo_state, UtxoState, UtxoStates},
     wallet_tx::TxState,
     with_locked::WithLocked,
     AccountWalletTxId, BlockInfo, WalletTx,
@@ -347,6 +347,62 @@ impl OutputCache {
         self.consumed.get(outpoint).map_or(false, |consumed_state| {
             utxo_states.contains(get_utxo_state(consumed_state))
         })
+    }
+
+    fn find_unspent_unlocked_utxo(
+        &self,
+        utxo: &UtxoOutPoint,
+        current_block_info: BlockInfo,
+    ) -> WalletResult<(&TxOutput, Option<TokenId>)> {
+        let tx = self
+            .txs
+            .get(&utxo.source_id())
+            .ok_or(WalletError::CannotFindUtxo(utxo.clone()))?;
+        let tx_block_info = get_block_info(tx);
+        let output = tx
+            .outputs()
+            .get(utxo.output_index() as usize)
+            .ok_or(WalletError::CannotFindUtxo(utxo.clone()))?;
+
+        ensure!(
+            !self.is_consumed(
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                utxo,
+            ),
+            WalletError::ConsumedUtxo(utxo.clone())
+        );
+
+        ensure!(
+            is_specific_lock_state(
+                WithLocked::Unlocked,
+                output,
+                current_block_info,
+                tx_block_info,
+                utxo,
+            ),
+            WalletError::LockedUtxo(utxo.clone())
+        );
+
+        let token_id = match tx {
+            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+            WalletTx::Block(_) => None,
+        };
+
+        Ok((output, token_id))
+    }
+
+    pub fn find_utxos(
+        &self,
+        current_block_info: BlockInfo,
+        inputs: Vec<UtxoOutPoint>,
+    ) -> WalletResult<BTreeMap<UtxoOutPoint, (&TxOutput, Option<TokenId>)>> {
+        inputs
+            .into_iter()
+            .map(|utxo| {
+                self.find_unspent_unlocked_utxo(&utxo, current_block_info)
+                    .map(|res| (utxo, res))
+            })
+            .collect()
     }
 
     pub fn utxos_with_token_ids(

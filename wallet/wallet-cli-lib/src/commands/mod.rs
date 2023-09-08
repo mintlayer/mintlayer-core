@@ -22,7 +22,7 @@ use common::{
     address::Address,
     chain::{
         tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, Destination, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, Destination, PoolId, SignedTransaction, Transaction, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
@@ -35,8 +35,8 @@ use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_IN
 use crate::{errors::WalletCliError, CliController};
 
 use self::helper_types::{
-    format_delegation_info, format_pool_info, CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes,
-    CliWithLocked,
+    format_delegation_info, format_pool_info, parse_utxo_outpoint, CliStoreSeedPhrase,
+    CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -234,6 +234,8 @@ pub enum WalletCommand {
     SendToAddress {
         address: String,
         amount: String,
+        #[arg(default_values_t = Vec::<String>::new())]
+        utxos: Vec<String>,
     },
 
     SendTokensToAddress {
@@ -813,7 +815,14 @@ impl CommandHandler {
                 )))
             }
 
-            WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
+            WalletCommand::Rescan => {
+                let controller = self.controller()?;
+                controller.reset_wallet_to_genesis().map_err(WalletCliError::Controller)?;
+                controller.sync_once().await.map_err(WalletCliError::Controller)?;
+                Ok(ConsoleCommand::Print(
+                    "Successfully rescanned the blockchain".to_owned(),
+                ))
+            }
 
             WalletCommand::SyncWallet => {
                 self.controller()?.sync_once().await.map_err(WalletCliError::Controller)?;
@@ -903,12 +912,20 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
             }
 
-            WalletCommand::SendToAddress { address, amount } => {
+            WalletCommand::SendToAddress {
+                address,
+                amount,
+                utxos,
+            } => {
+                let utxos: Vec<UtxoOutPoint> = utxos
+                    .into_iter()
+                    .map(parse_utxo_outpoint)
+                    .collect::<Result<Vec<_>, WalletCliError>>()?;
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
                 controller
-                    .send_to_address(selected_account, address, amount)
+                    .send_to_address(selected_account, address, amount, utxos)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())

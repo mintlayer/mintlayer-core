@@ -204,6 +204,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         Ok(wallet)
     }
+
     fn make_backup_wallet_file(file_path: impl AsRef<Path>) -> Result<(), ControllerError<T>> {
         let backup_name = file_path
             .as_ref()
@@ -282,6 +283,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .delete_seed_phrase()
             .map(|opt| opt.map(|phrase| Self::serializable_seed_phrase_to_vec(phrase)))
             .map_err(ControllerError::WalletError)
+    }
+
+    /// Rescan the blockchain
+    /// Resets the wallet to the genesis block
+    pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<T>> {
+        self.wallet.reset_wallet_to_genesis().map_err(ControllerError::WalletError)
     }
 
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
@@ -529,6 +536,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         account_index: U31,
         address: Address<Destination>,
         amount: Amount,
+        selected_utxos: Vec<UtxoOutPoint>,
     ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(self.chain_config.as_ref(), address, amount)
             .map_err(ControllerError::WalletError)?;
@@ -545,6 +553,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .create_transaction_to_addresses(
                 account_index,
                 [output],
+                selected_utxos,
                 current_fee_rate,
                 consolidate_fee_rate,
             )
@@ -602,7 +611,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .wallet
             .create_transaction_to_addresses(
                 account_index,
-                vec![output],
+                [output],
+                [],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
@@ -660,6 +670,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .create_transaction_to_addresses(
                 account_index,
                 [output],
+                [],
                 current_fee_rate,
                 consolidate_fee_rate,
             )
