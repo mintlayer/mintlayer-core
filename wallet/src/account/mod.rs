@@ -925,6 +925,7 @@ impl Account {
                 AccountSpending::Delegation(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
+                AccountSpending::Token(_, _) => todo!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;

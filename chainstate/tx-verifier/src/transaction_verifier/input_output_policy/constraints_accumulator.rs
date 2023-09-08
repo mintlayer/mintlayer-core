@@ -120,6 +120,7 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
+                        AccountSpending::Token(_, _) => todo!(),
                     };
                 }
             }

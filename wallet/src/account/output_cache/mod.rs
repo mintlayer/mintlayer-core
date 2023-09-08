@@ -18,10 +18,8 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{is_token_or_nft_issuance, token_id, TokenId},
-        AccountNonce,
-        AccountSpending::Delegation,
-        DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Id},
 };
@@ -268,7 +266,7 @@ impl OutputCache {
                 TxInput::Account(outpoint) => {
                     if !already_present {
                         match outpoint.account() {
-                            Delegation(delegation_id, _) => {
+                            AccountSpending::Delegation(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
@@ -279,6 +277,7 @@ impl OutputCache {
                                     )?;
                                 }
                             }
+                            AccountSpending::Token(_, _) => todo!(),
                         }
                     }
                 }
@@ -328,13 +327,14 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
-                        Delegation(delegation_id, _) => {
+                        AccountSpending::Delegation(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
+                        AccountSpending::Token(_, _) => todo!(),
                     },
                 }
             }
@@ -495,7 +495,7 @@ impl OutputCache {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
                                     TxInput::Account(outpoint) => match outpoint.account() {
-                                        Delegation(delegation_id, _) => {
+                                        AccountSpending::Delegation(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
@@ -506,6 +506,7 @@ impl OutputCache {
                                                 );
                                             }
                                         }
+                                        AccountSpending::Token(_, _) => todo!(),
                                     },
                                 }
                             }

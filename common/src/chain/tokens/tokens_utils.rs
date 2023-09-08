@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{TokenData, TokenId};
+use super::{TokenData, TokenId, TokenIssuanceV1};
 use crate::{
     chain::{output_value::OutputValue, Transaction, TxOutput},
     primitives::id::hash_encoded,
@@ -21,6 +21,30 @@ use crate::{
 
 pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(TokenId::new(hash_encoded(tx.inputs().get(0)?)))
+}
+
+pub fn get_tokens_issuance_v1(outputs: &[TxOutput]) -> Vec<&TokenIssuanceV1> {
+    outputs
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                match v {
+                    OutputValue::Token(data) => match data.as_ref() {
+                        TokenData::TokenIssuance(_)
+                        | TokenData::NftIssuance(_)
+                        | TokenData::TokenTransfer(_)
+                        | TokenData::TokenReissuanceV1(_) => None,
+                        TokenData::TokenIssuanceV1(issuance) => Some(issuance.as_ref()),
+                    },
+                    OutputValue::Coin(_) => None,
+                }
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => None,
+        })
+        .collect()
 }
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {

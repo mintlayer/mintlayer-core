@@ -182,6 +182,9 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
+            AccountSpending::Token(token_id, amount) => {
+                Ok((CoinOrTokenId::TokenId(*token_id), *amount))
+            }
         },
     });
 
@@ -238,10 +241,12 @@ fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
-            TokenData::TokenReissuanceV1(reissuance) => Some((
-                CoinOrTokenId::TokenId(reissuance.token_id),
-                reissuance.amount_to_issue,
-            )),
+            TokenData::TokenReissuanceV1(reissuance) => include_issuance.and_then(|_| {
+                Some((
+                    CoinOrTokenId::TokenId(reissuance.token_id),
+                    reissuance.amount_to_issue,
+                ))
+            }),
         },
     })
 }

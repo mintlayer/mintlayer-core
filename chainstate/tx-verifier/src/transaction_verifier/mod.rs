@@ -436,6 +436,7 @@ where
                     .spend_share_from_delegation_id(delegation_id, withdraw_amount)
                     .map_err(ConnectTransactionError::PoSAccountingError)
             }
+            AccountSpending::Token(_, _) => todo!(),
         }
     }
 
@@ -489,6 +490,7 @@ where
                 TxInput::Account(account_input) => {
                     check_for_delegation_cleanup = match account_input.account() {
                         AccountSpending::Delegation(delegation_id, _) => Some(*delegation_id),
+                        AccountSpending::Token(_, _) => todo!(),
                     };
                     Some(self.spend_input_from_account(tx_source, account_input))
                 }
@@ -717,11 +719,19 @@ where
         )?;
 
         // verify input signatures
+        let aux_data_getter = |token_id: &_| self.storage.get_token_aux_data(token_id);
+
         signature_check::verify_signatures(
             self.chain_config.as_ref(),
             &self.utxo_cache,
             tx,
-            SignatureDestinationGetter::new_for_transaction(
+            SignatureDestinationGetter::new_for_transaction::<
+                S,
+                _,
+                &PoSAccountingDelta<A>,
+                UtxosCache<U>,
+            >(
+                &aux_data_getter,
                 &self.accounting_delta_adapter.accounting_delta(),
                 &self.utxo_cache,
             ),
