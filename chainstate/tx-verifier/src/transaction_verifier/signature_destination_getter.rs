@@ -16,8 +16,7 @@
 use core::panic;
 
 use common::chain::{
-    output_value::OutputValue,
-    tokens::{TokenAuxiliaryData, TokenData, TokenId},
+    tokens::{TokenAuxiliaryData, TokenId},
     AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;

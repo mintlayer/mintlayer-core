@@ -120,8 +120,10 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        // FIXME: unconstrained_value should support tokens
-                        AccountSpending::Token(_, _) => todo!(),
+                        AccountSpending::Token(_token_id, _amount) => {
+                            // FIXME: unconstrained_value should support tokens
+                            // use CoinOrTokenId::TokenId to insert into unconstrained_value
+                        }
                     };
                 }
             }
