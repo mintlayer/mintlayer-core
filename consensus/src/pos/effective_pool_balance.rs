@@ -90,14 +90,9 @@ fn effective_pool_balance_impl(
         .and_then(|v| v.checked_div(*pool_saturation_level.denom()))
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
-    // If the pool is saturated, then the effective balance is capped to z
-    if pool_balance.into_atoms() > z {
-        return Ok(Amount::from_atoms(z));
-    }
-
     let a = pledge_influence;
-    let sigma = pool_balance.into_atoms();
-    let s = pledge_amount.into_atoms();
+    let sigma = std::cmp::min(pool_balance.into_atoms(), z);
+    let s = std::cmp::min(pledge_amount.into_atoms(), z);
 
     let z_squared = z.checked_mul(z).ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     let z_squared: Uint256 = z_squared.into();
@@ -209,16 +204,17 @@ fn effective_pool_balance_impl(
         log::debug!("---------------------------------------------");
         log::debug!("Done calculating the effective balance");
         log::debug!("---------------------------------------------");
-        log::debug!("Pool pledge:       {}", pledge_amount.into_atoms());
+        log::debug!("Pool pledge:         {}", pledge_amount.into_atoms());
         #[rustfmt::skip]
-        log::debug!("Saturation level:  {} / {}", pool_saturation_level.numer(), pool_saturation_level.denom());
+        log::debug!("Saturation level:    {} / {}", pool_saturation_level.numer(), pool_saturation_level.denom());
         #[rustfmt::skip]
-        log::debug!("Pledge influence:  {} / {}", pledge_influence.numer(), pledge_influence.denom());
-        log::debug!("Final supply:      {}", final_supply.into_atoms());
+        log::debug!("Pledge influence:    {} / {}", pledge_influence.numer(), pledge_influence.denom());
+        log::debug!("Final supply:        {}", final_supply.into_atoms());
         log::debug!("---------------------------------------------");
-        log::debug!("Pool balance:      {}", pool_balance.into_atoms());
-        log::debug!("Adjustment term:   {}", adjustment);
-        log::debug!("Effective balance: {}", effective_balance);
+        log::debug!("Pool balance:        {}", pool_balance.into_atoms());
+        log::debug!("Capped pool balance: {}", sigma);
+        log::debug!("Adjustment term:     {}", adjustment);
+        log::debug!("Effective balance:   {}", effective_balance);
         log::debug!("---------------------------------------------");
         log::debug!("---------------------------------------------");
     }
