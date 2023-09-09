@@ -20,6 +20,7 @@ import os
 import asyncio
 import re
 from dataclasses import dataclass
+from tempfile import NamedTemporaryFile
 
 from typing import Optional, List
 
@@ -46,12 +47,13 @@ class WalletCliController:
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
         wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
+        self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
 
         self.process = await asyncio.create_subprocess_exec(
             wallet_cli, *wallet_args,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=self.wallet_log_file,
         )
         return self
 
@@ -59,6 +61,7 @@ class WalletCliController:
         self.log.debug("exiting wallet")
         await self._write_command("exit\n")
         await self.process.communicate()
+        self.wallet_log_file.close()
 
     async def _read_available_output(self) -> str:
         try:
