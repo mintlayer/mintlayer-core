@@ -269,6 +269,8 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
+    #[error("Tokens issuance v1 cannot be used as an input")]
+    TokenIssuanceV1OutputSpending,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
