@@ -17,10 +17,12 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{get_tokens_issuance_count, token_id, TokenAuxiliaryData, TokenId, TokenSupply},
-        Block, Transaction,
+        tokens::{
+            get_tokens_issuance_count, token_id, TokenAuxiliaryData, TokenId, TokenSupplyLimit,
+        },
+        Block, Destination, Transaction,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{Amount, Id, Idable, H256},
 };
 
 use super::{
@@ -101,9 +103,9 @@ impl TokenIssuanceCache {
         // FIXME: messy v0/v1/nft
         let issuance_v1 = common::chain::tokens::get_tokens_issuance_v1(tx.outputs());
         let aux_data = if issuance_v1.is_empty() {
-            TokenAuxiliaryData::new(tx.clone(), *block_id, TokenSupply::Fixed)
+            TokenAuxiliaryData::new(tx.clone(), *block_id, TokenSupplyLimit::Fixed(Amount::ZERO))
         } else {
-            TokenAuxiliaryData::new(tx.clone(), *block_id, issuance_v1[0].supply.clone())
+            TokenAuxiliaryData::new(tx.clone(), *block_id, issuance_v1[0].supply_limit.clone())
         };
 
         self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;

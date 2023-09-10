@@ -78,13 +78,7 @@ pub fn make_issue_token_outputs(
 ) -> WalletResult<Vec<TxOutput>> {
     let destination = address.decode_object(chain_config)?;
 
-    chainstate::check_tokens_issuance_data(
-        chain_config,
-        &token_issuance.token_ticker,
-        &token_issuance.amount_to_issue,
-        &token_issuance.number_of_decimals,
-        &token_issuance.metadata_uri,
-    )?;
+    chainstate::check_tokens_issuance_data_v0(chain_config, &token_issuance)?;
 
     let issuance_output = TxOutput::Transfer(
         OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),

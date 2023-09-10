@@ -13,10 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::panic;
-
 use common::chain::{
-    tokens::{TokenAuxiliaryData, TokenId},
+    tokens::{TokenAuxiliaryData, TokenId, TokenSupplyLimit},
     AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
@@ -144,10 +142,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                         AccountSpending::Token(token_id, _) => {
                             let aux_data = aux_data_getter(token_id).unwrap().unwrap();
                             match aux_data.supply() {
-                                common::chain::tokens::TokenSupply::Fixed => {
-                                    panic!("Token supply is fixed");
-                                }
-                                common::chain::tokens::TokenSupply::Infinite(d) => Ok(d.clone()),
+                                TokenSupplyLimit::Fixed(d, _) // FIXME: return error if fixed?
+                                | TokenSupplyLimit::Unlimited(d) => Ok(d.clone()),
                             }
                         }
                     },

@@ -68,7 +68,7 @@ pub use self::{
     error::*,
     info::ChainInfo,
     median_time::calculate_median_time_past,
-    tokens::{check_nft_issuance_data, check_tokens_issuance_data, is_rfc3986_valid_symbol},
+    tokens::{check_nft_issuance_data, check_tokens_issuance_data_v0, is_rfc3986_valid_symbol},
 };
 pub use chainstate_types::Locator;
 pub use error::{

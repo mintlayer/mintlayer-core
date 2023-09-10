@@ -44,19 +44,13 @@ impl TokenIssuanceVersion {
 pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
     issuance_block_id: Id<Block>,
-    supply: TokenSupply, // FIXME: is this backward compatible?
 }
 
 impl TokenAuxiliaryData {
-    pub fn new(
-        issuance_tx: Transaction,
-        issuance_block_id: Id<Block>,
-        supply: TokenSupply,
-    ) -> Self {
+    pub fn new(issuance_tx: Transaction, issuance_block_id: Id<Block>) -> Self {
         Self {
             issuance_tx,
             issuance_block_id,
-            supply,
         }
     }
 
@@ -66,10 +60,6 @@ impl TokenAuxiliaryData {
 
     pub fn issuance_block_id(&self) -> Id<Block> {
         self.issuance_block_id
-    }
-
-    pub fn supply(&self) -> &TokenSupply {
-        &self.supply
     }
 }
 
@@ -88,19 +78,18 @@ pub struct TokenIssuance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub enum TokenSupply {
-    Fixed,
-    Infinite(Destination),
-    // TODO: Capped(Destination, Amount),
+pub enum TokenSupplyLimit {
+    Unlimited,
+    Fixed(Amount),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub struct TokenIssuanceV1 {
     pub token_ticker: Vec<u8>,
-    pub amount_to_issue: Amount,
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
-    pub supply: TokenSupply,
+    pub supply_limit: TokenSupplyLimit,
+    pub reissuance_controller: Destination,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
