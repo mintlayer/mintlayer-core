@@ -106,8 +106,8 @@ pub fn create_utxo_data(
             TokenData::NftIssuance(_issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
             }
-            TokenData::TokenIssuanceV1(issuance) => {
-                new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
+            TokenData::TokenIssuanceV1(_) => {
+                panic!("Unsupported output type, use Account::Token");
             }
         },
     };
