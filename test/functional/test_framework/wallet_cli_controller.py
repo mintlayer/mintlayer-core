@@ -48,6 +48,7 @@ class WalletCliController:
         cookie_file = os.path.join(self.node.datadir, ".cookie")
         wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
+        self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 
         self.process = await asyncio.create_subprocess_exec(
             wallet_cli, *wallet_args,
@@ -62,16 +63,22 @@ class WalletCliController:
         await self._write_command("exit\n")
         await self.process.communicate()
         self.wallet_log_file.close()
+        self.wallet_commands_file.close()
 
     async def _read_available_output(self) -> str:
         try:
             output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=READ_TIMEOUT_SEC)
+            self.wallet_commands_file.write(output)
             return output.decode().strip()
         except:
+            self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''
 
     async def _write_command(self, cmd: str) -> str:
-        self.process.stdin.write(cmd.encode())
+        encoded_cmd = cmd.encode()
+        self.wallet_commands_file.write(b"writhing command: ")
+        self.wallet_commands_file.write(encoded_cmd)
+        self.process.stdin.write(encoded_cmd)
         await self.process.stdin.drain()
         return await self._read_available_output()
 
