@@ -81,6 +81,12 @@ impl SqlxStorage<Postgres> {
 impl<D> SqlxStorage<D>
 where
     D: Database,
+    i64: sqlx::Type<D>,
+    usize: ColumnIndex<D::Row>,
+    Vec<u8>: sqlx::Type<D>,
+    for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+    for<'e> i64: sqlx::Decode<'e, D>,
+    for<'e> Vec<u8>: sqlx::Decode<'e, D>,
 {
     pub fn into_transactional(self) -> transactional::TransactionalSqlxStorage<D> {
         transactional::TransactionalSqlxStorage::new(self)
@@ -93,12 +99,6 @@ where
     async fn is_initialized_internal(&self, query_str: &str) -> Result<bool, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> i64: sqlx::Decode<'e, D>,
-        i64: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -115,13 +115,9 @@ where
 
     pub async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>
     where
-        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut D::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -138,10 +134,9 @@ where
     #[allow(dead_code)]
     async fn create_tables(&self) -> Result<(), ApiServerStorageError>
     where
-        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
         for<'e> &'e mut <D as Database>::Connection: Executor<'e>,
         for<'e> &'e Pool<D>: Executor<'e, Database = D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -160,13 +155,10 @@ where
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError>
     where
-        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
         for<'e> &'e str: sqlx::Type<D>,
+        for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -186,12 +178,7 @@ where
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
-        i64: sqlx::Type<D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -212,12 +199,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
         for<'e> i64: sqlx::Encode<'e, D>,
-        i64: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -239,10 +222,7 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> i64: sqlx::Encode<'e, D>,
-        i64: sqlx::Type<D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -262,11 +242,7 @@ where
     ) -> Result<Option<Block>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -287,10 +263,7 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
     {
         logging::log::debug!("Inserting block with id: {:?}", block_id);
 
@@ -312,11 +285,7 @@ where
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -338,11 +307,8 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
         for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
     {
         logging::log::debug!(
             "Inserting transaction with id {}, owned by block {:?}",
@@ -370,11 +336,7 @@ where
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let mut pool: sqlx::pool::PoolConnection<D> = self
             .db_pool
@@ -395,10 +357,7 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
         for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
     {
         logging::log::debug!("Inserting block aux data with block_id {}", block_id);
 
@@ -419,10 +378,6 @@ where
     pub async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        Vec<u8>: sqlx::Type<D>,
-        for<'e> Vec<u8>: sqlx::Decode<'e, D>,
     {
         let mut pool = self
             .db_pool
@@ -443,12 +398,9 @@ where
     ) -> Result<(), ApiServerStorageError>
     where
         for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-        for<'e> &'e mut D::Connection: Executor<'e, Database = D>,
-        usize: ColumnIndex<D::Row>,
-        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-        Vec<u8>: sqlx::Type<D>,
         for<'e> &'e str: sqlx::Encode<'e, D>,
         for<'e> &'e str: sqlx::Type<D>,
+        for<'e> Vec<u8>: sqlx::Encode<'e, D>,
     {
         logging::log::debug!("Inserting best block with block_id {}", block_id);
 
