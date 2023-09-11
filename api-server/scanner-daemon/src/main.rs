@@ -127,8 +127,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 
-    {
-        run(&chain_config, &rpc_client).await?;
-    }
+    run(&chain_config, &rpc_client).await?;
+
     Ok(())
 }
