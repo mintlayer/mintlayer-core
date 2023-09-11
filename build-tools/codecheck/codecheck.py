@@ -297,7 +297,11 @@ def check_trailing_whitespaces():
 
     ok = True
     for path in all_files():
-        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+        # Note: some of the paths in exempted_files are temporary build artifacts, which
+        # may not exist when this script is run; this is why we need the os.path.exists
+        # check here.
+        if any((os.path.exists(exempted) and os.path.samefile(path, exempted))
+               for exempted in exempted_files):
             continue
 
         with open(path) as file:

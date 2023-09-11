@@ -1,0 +1,28 @@
+[package]
+name = "blockchain-scanner-lib"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+api-server-common = { path = "../api-server-common" }
+chainstate = { path = "../../chainstate" }
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+node-comm = { path = "../../wallet/wallet-node-client" }
+utils = { path = "../../utils" }
+
+async-trait.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+sqlx = { workspace = true, features = [ "runtime-tokio", "macros", "sqlite", "postgres" ] }
+
+[dev-dependencies]
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
+crypto = { path = "../../crypto" }
+test-utils = { path = "../../test-utils" }
+
+rstest.workspace = true

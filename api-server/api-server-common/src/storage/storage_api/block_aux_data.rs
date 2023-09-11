@@ -13,25 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub async fn run() -> anyhow::Result<()> {
-    let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
-    logging::log::info!("Command line options: {opts:?}");
-    let node = node_lib::setup(opts).await?;
-    node.main().await;
-    Ok(())
+use common::{
+    chain::Block,
+    primitives::{BlockHeight, Id},
+};
+use serialization::{Decode, Encode};
+
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
+pub struct BlockAuxData {
+    block_id: Id<Block>,
+    block_height: BlockHeight,
 }
 
-#[tokio::main]
-async fn main() {
-    utils::rust_backtrace::enable();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
+impl BlockAuxData {
+    pub fn new(block_id: Id<Block>, block_height: BlockHeight) -> Self {
+        Self {
+            block_id,
+            block_height,
+        }
     }
 
-    run().await.unwrap_or_else(|err| {
-        eprintln!("Mintlayer node launch failed: {err:?}");
-        std::process::exit(1)
-    })
+    pub fn block_id(&self) -> Id<Block> {
+        self.block_id
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        self.block_height
+    }
 }

@@ -25,7 +25,7 @@ use crate::{
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
+    chain::{Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -37,6 +37,7 @@ use crypto::{
 use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
+#[must_use]
 pub struct TestFramework {
     pub chainstate: TestChainstate,
     pub storage: TestStore,
@@ -62,6 +63,10 @@ impl TestFramework {
     // TODO: remove this, because there is the 'into_chainstate' function below, which does the same.
     pub fn chainstate(self) -> TestChainstate {
         self.chainstate
+    }
+
+    pub fn chain_config(&self) -> &Arc<ChainConfig> {
+        self.chainstate.get_chain_config()
     }
 
     /// Returns a block builder instance that can be used for block construction and processing.

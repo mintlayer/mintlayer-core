@@ -15,7 +15,9 @@
 
 //! The node configuration.
 
-pub use self::{chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile};
+pub use self::{
+    chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
+};
 
 mod blockprod;
 mod chainstate;
@@ -23,7 +25,7 @@ mod chainstate_launcher;
 mod p2p;
 mod rpc;
 
-use std::{fs, net::SocketAddr, path::Path, str::FromStr};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -32,7 +34,7 @@ use crate::RunOptions;
 
 use self::{
     blockprod::BlockProdConfigFile, chainstate::ChainstateConfigFile,
-    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile, rpc::RpcConfigFile,
+    chainstate_launcher::ChainstateLauncherConfigFile, p2p::P2pConfigFile,
 };
 
 /// The node configuration.
@@ -82,7 +84,7 @@ impl NodeConfigFile {
         let blockprod = blockprod_config(blockprod.unwrap_or_default(), options);
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
-        let rpc = rpc_config(rpc.unwrap_or_default(), options);
+        let rpc = RpcConfigFile::with_run_options(rpc.unwrap_or_default(), options);
 
         Ok(Self {
             blockprod: Some(blockprod),
@@ -197,50 +199,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ping_timeout,
         sync_stalling_timeout,
         node_type,
-    }
-}
-
-fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
-    const DEFAULT_HTTP_RPC_ENABLED: bool = true;
-    // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
-    const DEFAULT_WS_RPC_ENABLED: bool = false;
-    let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
-    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3032").expect("Can't fail");
-
-    let RpcConfigFile {
-        http_bind_address,
-        http_enabled,
-        ws_bind_address,
-        ws_enabled,
-        username,
-        password,
-        cookie_file,
-    } = config;
-
-    let http_bind_address = options
-        .http_rpc_addr
-        .unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
-    let http_enabled = options
-        .http_rpc_enabled
-        .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
-    let ws_bind_address = options
-        .ws_rpc_addr
-        .unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
-    let ws_enabled = options
-        .ws_rpc_enabled
-        .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
-    let username = username.or(options.rpc_username.clone());
-    let password = password.or(options.rpc_password.clone());
-    let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
-
-    RpcConfigFile {
-        http_bind_address: Some(http_bind_address),
-        http_enabled: Some(http_enabled),
-        ws_bind_address: Some(ws_bind_address),
-        ws_enabled: Some(ws_enabled),
-        username,
-        password,
-        cookie_file,
     }
 }
 
