@@ -342,6 +342,7 @@ mod test {
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let mut man = subsystem::Manager::new("rpctest");
+        let shutdown = man.make_shutdown_trigger();
         let handle = man.add_subsystem(
             "chainstate",
             crate::make_chainstate(
@@ -354,11 +355,11 @@ mod test {
             )
             .unwrap(),
         );
-        let _ = man.add_subsystem_with_custom_eventloop(
-            "test",
-            move |_: subsystem::CallRequest<()>, _| proc(handle),
-        );
-        man.main().await;
+        let tester = tokio::spawn(async move {
+            proc(handle);
+            shutdown.initiate();
+        });
+        let _ = tokio::join!(man.main(), tester);
     }
 
     #[tokio::test]

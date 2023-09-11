@@ -15,15 +15,14 @@
 
 use std::sync::Arc;
 
-use chainstate::{chainstate_interface::ChainstateInterface, ChainstateEvent};
-use subsystem::Handle;
+use chainstate::ChainstateEvent;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_error_log::LogError;
 
 use super::{backend_impl::Backend, messages::BackendEvent};
 
 pub struct ChainstateEventHandler {
-    chainstate: Handle<Box<dyn ChainstateInterface>>,
+    chainstate: chainstate::ChainstateHandle,
     chainstate_event_rx: UnboundedReceiver<ChainstateEvent>,
     event_tx: UnboundedSender<BackendEvent>,
     chain_info_updated: bool,
@@ -31,7 +30,7 @@ pub struct ChainstateEventHandler {
 
 impl ChainstateEventHandler {
     pub async fn new(
-        chainstate: &Handle<Box<dyn ChainstateInterface>>,
+        chainstate: chainstate::ChainstateHandle,
         event_tx: UnboundedSender<BackendEvent>,
     ) -> Self {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
@@ -47,7 +46,7 @@ impl ChainstateEventHandler {
             .expect("Failed to subscribe to chainstate");
 
         Self {
-            chainstate: chainstate.clone(),
+            chainstate,
             chainstate_event_rx,
             event_tx,
             chain_info_updated: false,

@@ -36,8 +36,6 @@ use subsystem::blocking::BlockingHandle;
 use utils::shallow_clone::ShallowClone;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
-pub type Chainstate = Box<dyn ChainstateInterface>;
-
 /// Chainstate handle error includes errors coming from chainstate and inter-subprocess
 /// communication errors.
 #[derive(thiserror::Error, PartialEq, Eq, Debug)]
@@ -88,10 +86,10 @@ impl From<Error> for crate::error::Error {
 }
 
 /// A wrapper over handle to chainstate
-pub struct ChainstateHandle(BlockingHandle<Chainstate>);
+pub struct ChainstateHandle(BlockingHandle<dyn ChainstateInterface>);
 
 impl ChainstateHandle {
-    pub fn new(inner: subsystem::Handle<Chainstate>) -> Self {
+    pub fn new(inner: chainstate::ChainstateHandle) -> Self {
         Self(BlockingHandle::new(inner))
     }
 }

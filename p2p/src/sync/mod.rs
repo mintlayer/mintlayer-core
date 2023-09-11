@@ -30,7 +30,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{config::ChainConfig, Block, Transaction},
     primitives::Id,
@@ -104,7 +103,7 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::MessagingHandle,
         syncing_event_receiver: T::SyncingEventReceiver,
-        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate_handle: chainstate::ChainstateHandle,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         time_getter: TimeGetter,

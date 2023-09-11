@@ -24,7 +24,6 @@ pub use chainstate::tx_verifier::flush_to_storage;
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 
-use chainstate_handle::Chainstate;
 pub use chainstate_handle::ChainstateHandle;
 pub use utxo_view::MempoolUtxoView;
 
@@ -39,7 +38,7 @@ pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<
 /// Make a new transaction verifier
 pub fn create(
     chain_config: Arc<ChainConfig>,
-    chainstate: subsystem::Handle<Chainstate>,
+    chainstate: chainstate::ChainstateHandle,
 ) -> TransactionVerifier {
     let verifier_config = chainstate::tx_verifier::TransactionVerifierConfig::new(false);
     let chainstate = chainstate_handle::ChainstateHandle::new(chainstate);

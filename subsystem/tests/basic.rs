@@ -25,15 +25,14 @@ fn basic_passive_shutdown() {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
 
-            let _substr = app.add_subsystem("substr", Substringer::new("abc".into()));
-            let _counter = app.add_subsystem("counter", Counter::new());
+            let _substr = app.add_direct_subsystem("substr", Substringer::new("abc".into()));
+            let _counter = app.add_direct_subsystem("counter", Counter::new());
 
-            // Start a subsystem that immediately terminates, instructing the remaining subsystems
-            // to terminate too.
-            let _shut: subsystem::Handle<()> =
-                app.add_subsystem_with_custom_eventloop("terminator", |_, _| async {});
+            // Task that shuts down the subsysytem
+            let trigger = app.make_shutdown_trigger();
+            let shut = tokio::spawn(async { trigger.initiate() });
 
-            app.main().await
+            let _ = tokio::join!(app.main(), shut);
         })
     })
 }
@@ -46,7 +45,7 @@ fn separate_call_and_result() {
             let mut app = subsystem::Manager::new("app");
             let shutdown = app.make_shutdown_trigger();
 
-            let substr = app.add_subsystem("substr", Substringer::new("abc".into()));
+            let substr = app.add_direct_subsystem("substr", Substringer::new("abc".into()));
 
             // The API allows for the submission of closure to call to be separate form retrieval
             // of the result. This task verifies the behavior is as expected.

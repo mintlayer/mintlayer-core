@@ -33,10 +33,16 @@
 //!    request by shutting themselves down.
 //! 3. The main task waits for all subsystems to terminate.
 
-pub mod blocking;
-pub mod error;
-pub mod manager;
-pub mod subsystem;
+mod calls;
+mod manager;
+mod subsystem;
+mod task;
+mod wrappers;
 
-pub use crate::manager::Manager;
-pub use crate::subsystem::{CallRequest, CallResult, Handle, ShutdownRequest, Subsystem};
+pub mod error;
+
+pub use crate::{
+    calls::{blocking, CallResponse, CallResult, Handle, SubmitOnlyHandle},
+    manager::{Manager, ManagerConfig, ManagerJoinHandle, ShutdownTrigger},
+    subsystem::Subsystem,
+};

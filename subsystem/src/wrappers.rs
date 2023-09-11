@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,22 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(clippy::clone_on_ref_ptr)]
+//! Wrappers around objects to turn them into a subsystem.
 
-pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface};
-pub use mempool_types::{tx_origin, TxStatus};
+use crate::Subsystem;
 
-mod config;
-pub mod error;
-pub mod event;
-mod interface;
-mod pool;
-pub mod rpc;
-pub mod tx_accumulator;
+/// Simple stateful subsystem that does not need any customization, the object is used directly.
+pub struct Direct<T>(T);
 
-pub use pool::FeeRate;
+impl<T> Direct<T> {
+    pub fn new(subsys: T) -> Self {
+        Self(subsys)
+    }
+}
 
-pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
+impl<T: Send + Sync + 'static> Subsystem for Direct<T> {
+    type Interface = T;
 
-pub type Result<T> = core::result::Result<T, error::Error>;
+    fn interface_ref(&self) -> &Self::Interface {
+        &self.0
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        &mut self.0
+    }
+}

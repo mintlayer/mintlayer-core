@@ -47,13 +47,10 @@ impl RpcTestFunctions {
     }
 }
 
+pub type RpcTestFunctionsSubsystem = Box<dyn RpcTestFunctionsInterface>;
 pub type RpcTestFunctionsHandle = subsystem::Handle<Box<dyn RpcTestFunctionsInterface>>;
 
-impl subsystem::Subsystem for Box<dyn RpcTestFunctionsInterface> {}
-
-pub fn make_rpc_test_functions(
-    chain_config: Arc<ChainConfig>,
-) -> Box<dyn RpcTestFunctionsInterface> {
+pub fn make_rpc_test_functions(chain_config: Arc<ChainConfig>) -> RpcTestFunctionsSubsystem {
     let rpc_test_functions = RpcTestFunctions::new(chain_config);
     let rpc_test_functions_interface = RpcTestFunctionsImpl::new(rpc_test_functions);
     Box::new(rpc_test_functions_interface)

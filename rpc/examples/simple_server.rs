@@ -33,8 +33,6 @@
 
 struct SomeSubsystem(u64);
 
-impl subsystem::Subsystem for SomeSubsystem {}
-
 impl SomeSubsystem {
     fn bump(&mut self) -> u64 {
         self.0 += 1;
@@ -75,9 +73,9 @@ impl SomeSubsystemRpcServer for SomeSubsystemHandle {
 async fn main() -> anyhow::Result<()> {
     logging::init_logging();
 
-    let mut app = subsystem::Manager::new("rpc-example");
-    app.install_signal_handlers();
-    let some_subsystem = app.add_subsystem("some_subsystem", SomeSubsystem(0));
+    let config = subsystem::ManagerConfig::new("rpc-exmaple").enable_signal_handlers();
+    let mut app = subsystem::Manager::new_with_config(config);
+    let some_subsystem = app.add_direct_subsystem("some_subsystem", SomeSubsystem(0));
     let rpc_config = rpc::RpcConfig::default();
     let _rpc_subsystem = app.add_subsystem(
         "rpc",

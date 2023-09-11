@@ -33,8 +33,9 @@ impl From<EmptyRpcTestFunctionsRpc> for rpc::Methods {
     }
 }
 
-pub fn make_empty_rpc_test_functions() -> Box<dyn RpcTestFunctionsInterface> {
-    Box::new(EmptyRpcTestFunctionsRpc::new())
+pub fn make_empty_rpc_test_functions() -> super::RpcTestFunctionsSubsystem {
+    let subsys = EmptyRpcTestFunctionsRpc::new();
+    Box::new(subsys)
 }
 
 impl RpcTestFunctionsInterface for EmptyRpcTestFunctionsRpc {

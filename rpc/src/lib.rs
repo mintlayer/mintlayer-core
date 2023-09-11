@@ -191,6 +191,16 @@ impl Rpc {
 
 #[async_trait::async_trait]
 impl subsystem::Subsystem for Rpc {
+    type Interface = Self;
+
+    fn interface_ref(&self) -> &Self {
+        self
+    }
+
+    fn interface_mut(&mut self) -> &mut Self {
+        self
+    }
+
     async fn shutdown(self) {
         if let Some(obj) = self.http {
             match obj.1.stop() {

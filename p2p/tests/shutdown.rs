@@ -17,7 +17,6 @@ use std::{sync::Arc, time::Duration};
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::chain::config::create_mainnet;
-use mempool::MempoolSubsystemInterface;
 use storage_inmemory::InMemory;
 
 use p2p::{
@@ -37,10 +36,9 @@ async fn shutdown_timeout() {
     let p2p_config = Arc::new(test_p2p_config());
 
     let timeout = Duration::from_secs(3);
-    let mut manager = subsystem::Manager::new_with_config(subsystem::manager::ManagerConfig::new(
-        "shutdown-test",
-        Some(timeout),
-    ));
+    let mut manager = subsystem::Manager::new_with_config(
+        subsystem::ManagerConfig::new("shutdown-test").with_shutdown_timeout_per_subsystem(timeout),
+    );
     let shutdown_trigger = manager.make_shutdown_trigger();
 
     let chainstate = make_chainstate(
@@ -59,12 +57,10 @@ async fn shutdown_timeout() {
         chainstate.clone(),
         Default::default(),
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("shutdown-test-mempool", {
-        move |call, shutdown| mempool.run(call, shutdown)
-    });
+    let mempool = manager.add_custom_subsystem("shutdown-test-mempool", |hdl| mempool.init(hdl));
 
     let peerdb_storage = PeerDbStorageImpl::new(InMemory::new()).unwrap();
-    let p2p = make_p2p(
+    let _p2p = make_p2p(
         Arc::clone(&chain_config),
         p2p_config,
         chainstate.clone(),
@@ -72,10 +68,8 @@ async fn shutdown_timeout() {
         Default::default(),
         peerdb_storage,
     )
-    .unwrap();
-    let _p2p = manager.add_subsystem_with_custom_eventloop("shutdown-test-p2p", {
-        move |call, shutdown| p2p.run(call, shutdown)
-    });
+    .unwrap()
+    .add_to_manager("shutdown-test-p2p", &mut manager);
 
     let task = manager.main_in_task();
     shutdown_trigger.initiate();

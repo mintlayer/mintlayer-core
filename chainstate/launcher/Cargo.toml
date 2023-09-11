@@ -13,4 +13,5 @@ logging = {path = '../../logging'}
 storage = { path = "../../storage" }
 storage-inmemory = { path = "../../storage/inmemory" }
 storage-lmdb = { path = "../../storage/lmdb" }
+subsystem = { path = "../../subsystem" }
 utils = { path = '../../utils' }

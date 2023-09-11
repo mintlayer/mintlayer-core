@@ -17,45 +17,7 @@ mod helpers;
 mod sample_subsystems;
 
 use sample_subsystems::{Counter, Substringer};
-use subsystem::{
-    blocking::BlockingHandle,
-    subsystem::{CallRequest, ShutdownRequest},
-};
-
-// The subsystem testing the other two subsystems
-pub struct Tester {
-    substringer: BlockingHandle<Substringer>,
-    counter: BlockingHandle<Counter>,
-}
-
-impl Tester {
-    fn new(substringer: BlockingHandle<Substringer>, counter: BlockingHandle<Counter>) -> Self {
-        Self {
-            substringer,
-            counter,
-        }
-    }
-
-    async fn run(self, _: CallRequest<()>, _shutdown: ShutdownRequest) {
-        let res0 = self.substringer.call_mut(|this| this.append_get("xyz"));
-        assert_eq!(res0, Ok("abcxyz".to_string()));
-        assert_eq!(self.substringer.call(Substringer::size), Ok(6));
-        tokio::task::yield_now().await;
-
-        let res1 = self.substringer.call(|this| this.substr(2, 5));
-        assert_eq!(res1, Ok("cxy".to_string()));
-        tokio::task::yield_now().await;
-
-        let res2 = self.counter.call(Counter::get);
-        assert_eq!(res2, Ok(13));
-        tokio::task::yield_now().await;
-
-        let res3 = self.counter.call_mut(|this| this.add_and_get(3));
-        assert_eq!(res3, Ok(16));
-    }
-}
-
-static_assertions::assert_impl_all!(Tester: Send);
+use subsystem::blocking::BlockingHandle;
 
 #[test]
 fn basic_passive_subsystem_blocking() {
@@ -64,15 +26,34 @@ fn basic_passive_subsystem_blocking() {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
 
-            let substr = app.add_subsystem("substr", Substringer::new("abc".into()));
-            let counter = app.add_subsystem("counter", Counter::new());
+            let substr = app.add_direct_subsystem("substr", Substringer::new("abc".into()));
+            let counter = app.add_direct_subsystem("counter", Counter::new());
+            let shutdown = app.make_shutdown_trigger();
 
-            let tester1 = Tester::new(substr.into(), counter.into());
-            app.add_subsystem_with_custom_eventloop("test", |call_rq, shut_rq| async move {
-                tester1.run(call_rq, shut_rq).await
+            let tester = tokio::spawn(async {
+                let substr = BlockingHandle::new(substr);
+                let counter = BlockingHandle::new(counter);
+
+                let res0 = substr.call_mut(|this| this.append_get("xyz"));
+                assert_eq!(res0, Ok("abcxyz".to_string()));
+                assert_eq!(substr.call(Substringer::size), Ok(6));
+                tokio::task::yield_now().await;
+
+                let res1 = substr.call(|this| this.substr(2, 5));
+                assert_eq!(res1, Ok("cxy".to_string()));
+                tokio::task::yield_now().await;
+
+                let res2 = counter.call(Counter::get);
+                assert_eq!(res2, Ok(13));
+                tokio::task::yield_now().await;
+
+                let res3 = counter.call_mut(|this| this.add_and_get(3));
+                assert_eq!(res3, Ok(16));
+
+                shutdown.initiate();
             });
 
-            app.main().await
+            let _ = tokio::join!(app.main(), tester);
         })
     })
 }
@@ -80,7 +61,7 @@ fn basic_passive_subsystem_blocking() {
 fn tester_worker_thread(
     substringer: BlockingHandle<Substringer>,
     counter: BlockingHandle<Counter>,
-    shutdown: subsystem::manager::ShutdownTrigger,
+    shutdown: subsystem::ShutdownTrigger,
 ) {
     eprintln!("res0");
     let res0 = substringer.call_mut(|this| this.append_get("xyz"));
@@ -109,8 +90,8 @@ fn basic_passive_subsystem_called_from_separate_thread() {
         let mut app = subsystem::Manager::new("app");
 
         let substr =
-            BlockingHandle::new(app.add_subsystem("substr", Substringer::new("abc".into())));
-        let counter = BlockingHandle::new(app.add_subsystem("counter", Counter::new()));
+            BlockingHandle::new(app.add_direct_subsystem("substr", Substringer::new("abc".into())));
+        let counter = BlockingHandle::new(app.add_direct_subsystem("counter", Counter::new()));
         let shutdown = app.make_shutdown_trigger();
 
         let tester_thread =

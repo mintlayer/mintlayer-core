@@ -21,7 +21,6 @@ mod error;
 mod p2p_event_handler;
 mod wallet_events;
 
-use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
@@ -100,7 +99,7 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
     // Subscribe to chainstate before getting the current chain_info!
     let chainstate_event_handler =
-        ChainstateEventHandler::new(&controller.chainstate, event_tx.clone()).await;
+        ChainstateEventHandler::new(controller.chainstate.clone(), event_tx.clone()).await;
 
     let p2p_event_handler = P2pEventHandler::new(&controller.p2p, event_tx.clone()).await;
 

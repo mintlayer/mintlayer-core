@@ -69,9 +69,8 @@ pub enum BlockProductionError {
     JobManagerError(#[from] JobManagerError),
 }
 
-impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {}
-
-pub type BlockProductionHandle = subsystem::Handle<Box<dyn BlockProductionInterface>>;
+pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;
+pub type BlockProductionHandle = subsystem::Handle<dyn BlockProductionInterface>;
 
 fn prepare_thread_pool(thread_count: u16) -> Arc<slave_pool::ThreadPool> {
     let mining_thread_pool = Arc::new(slave_pool::ThreadPool::new());
@@ -88,7 +87,7 @@ pub fn make_blockproduction(
     mempool_handle: MempoolHandle,
     p2p_handle: P2pHandle,
     time_getter: TimeGetter,
-) -> Result<Box<dyn BlockProductionInterface>, BlockProductionError> {
+) -> Result<BlockProductionSubsystem, BlockProductionError> {
     // TODO: make the number of threads configurable
     let thread_count = 2;
     let mining_thread_pool = prepare_thread_pool(thread_count);
@@ -139,7 +138,7 @@ mod tests {
         random::Rng,
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
-    use mempool::{MempoolHandle, MempoolSubsystemInterface};
+    use mempool::MempoolHandle;
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
     };
@@ -195,8 +194,9 @@ mod tests {
         MempoolHandle,
         P2pHandle,
     ) {
-        let mut manager = Manager::new("blockprod-unit-test");
-        manager.install_signal_handlers();
+        let manager_config =
+            subsystem::ManagerConfig::new("blockprod-unit-test").enable_signal_handlers();
+        let mut manager = Manager::new_with_config(manager_config);
 
         let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
@@ -228,9 +228,7 @@ mod tests {
             subsystem::Handle::clone(&chainstate),
             time_getter.clone(),
         );
-        let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
-            move |call, shutdn| mempool.run(call, shutdn)
-        });
+        let mempool = manager.add_custom_subsystem("mempool", |hdl| mempool.init(hdl));
 
         let mut p2p_config = test_p2p_config();
         p2p_config.bind_addresses = vec!["127.0.0.1:0".to_owned()];
@@ -238,16 +236,13 @@ mod tests {
         let p2p = p2p::make_p2p(
             Arc::clone(&chain_config),
             Arc::new(p2p_config),
-            chainstate.clone(),
+            subsystem::Handle::clone(&chainstate),
             mempool.clone(),
             time_getter,
             PeerDbStorageImpl::new(InMemory::new()).unwrap(),
         )
-        .expect("P2p initialization was successful");
-
-        let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
-            move |call, shutdown| p2p.run(call, shutdown)
-        });
+        .expect("P2p initialization was successful")
+        .add_to_manager("p2p", &mut manager);
 
         (manager, chain_config, chainstate, mempool, p2p)
     }
@@ -341,7 +336,7 @@ mod tests {
         )
         .expect("Error initializing blockprod");
 
-        let blockprod = manager.add_subsystem("blockprod", blockprod);
+        let blockprod = manager.add_direct_subsystem("blockprod", blockprod);
         let shutdown = manager.make_shutdown_trigger();
 
         tokio::spawn(async move {
