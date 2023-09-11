@@ -319,7 +319,10 @@ pub async fn subscribe_to_new_tip(
         );
 
     chainstate_handle
-        .call_mut(|this| Ok(this.subscribe_to_events(subscribe_func)))
+        .call_mut(|this| {
+            this.subscribe_to_events(subscribe_func);
+            Ok(())
+        })
         .await?;
 
     Ok(receiver)
