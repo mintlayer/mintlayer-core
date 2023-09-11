@@ -6655,6 +6655,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "tokens-accounting"
+version = "0.1.2"
+dependencies = [
+ "accounting",
+ "chainstate-types",
+ "common",
+ "parity-scale-codec",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "variant_count",
+]
+
+[[package]]
 name = "tokio"
 version = "1.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7068,6 +7083,7 @@ dependencies = [
  "static_assertions",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]
