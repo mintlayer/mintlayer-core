@@ -1301,7 +1301,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 
     let selected_utxos = utxos
         .keys()
-        .take(rng.gen_range(0..utxos.len()))
+        .take(rng.gen_range(1..utxos.len()))
         .cloned()
         .collect::<BTreeSet<_>>();
 
