@@ -78,9 +78,10 @@ pub struct TokenIssuance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub enum TokenSupplyLimit {
-    Unlimited,
-    Fixed(Amount),
+pub enum TokenTotalSupply {
+    Fixed(Amount), // fixed to a certain amount
+    Lockable,      // not known in advance but can be locked at some point in time
+    Unlimited,     // is limited only by the Amount data type
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
@@ -88,7 +89,7 @@ pub struct TokenIssuanceV1 {
     pub token_ticker: Vec<u8>,
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
-    pub supply_limit: TokenSupplyLimit,
+    pub supply_limit: TokenTotalSupply,
     pub reissuance_controller: Destination,
 }
 
