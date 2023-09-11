@@ -35,6 +35,7 @@ pub mod storage;
 pub mod timelock_check;
 
 mod tx_source;
+use tokens_accounting::TokensAccountingCache;
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
 mod cached_operation;
@@ -123,6 +124,7 @@ pub struct TransactionVerifier<C, S, U, A> {
     accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
 
+    //tokens_accounting_cache: TokensAccountingCache<T>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
@@ -719,23 +721,16 @@ where
         )?;
 
         // verify input signatures
-        let aux_data_getter = |token_id: &_| self.storage.get_token_aux_data(token_id);
-
-        signature_check::verify_signatures(
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            tx,
-            SignatureDestinationGetter::new_for_transaction::<
-                S,
-                _,
-                &PoSAccountingDelta<A>,
-                UtxosCache<U>,
-            >(
-                &aux_data_getter,
-                &self.accounting_delta_adapter.accounting_delta(),
-                &self.utxo_cache,
-            ),
-        )?;
+        // FIXME: pass tokens accounting
+        //signature_check::verify_signatures(
+        //    self.chain_config.as_ref(),
+        //    &self.utxo_cache,
+        //    tx,
+        //    SignatureDestinationGetter::new_for_transaction(
+        //        &self.accounting_delta_adapter.accounting_delta(),
+        //        &self.utxo_cache,
+        //    ),
+        //)?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 

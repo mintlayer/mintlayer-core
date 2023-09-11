@@ -192,6 +192,8 @@ impl MempoolBanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
             SignatureDestinationGetterError::UtxoOutputNotFound(_) => 0,
             SignatureDestinationGetterError::UtxoViewError(_) => 0,
+            SignatureDestinationGetterError::TokenDataNotFound(_) => 0,
+            SignatureDestinationGetterError::SigVerifyTokensAccountingError(_) => 100,
         }
     }
 }

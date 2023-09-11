@@ -183,7 +183,7 @@ where
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
             AccountSpending::Token(token_id, amount) => {
-                // TODO: check if supply can be increased
+                // FIXME: check if supply can be increased
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
         },

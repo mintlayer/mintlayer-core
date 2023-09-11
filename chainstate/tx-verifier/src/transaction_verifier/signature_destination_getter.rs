@@ -14,13 +14,12 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::{TokenAuxiliaryData, TokenId, TokenSupplyLimit},
-    AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
+    tokens::TokenId, AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
+use tokens_accounting::TokensAccountingView;
 use utxo::UtxosView;
-
-use crate::TransactionVerifierStorageRef;
 
 pub type SignatureDestinationGetterFn<'a> =
     dyn Fn(&TxInput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
@@ -37,12 +36,16 @@ pub enum SignatureDestinationGetterError {
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
     DelegationDataNotFound(DelegationId),
+    #[error("Token data not found for signature verification {0}")]
+    TokenDataNotFound(TokenId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
     UtxoOutputNotFound(UtxoOutPoint),
     #[error("Error accessing utxo set")]
     UtxoViewError(utxo::Error),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]
     SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
+    #[error("During destination getting for signature verification: Tokens accounting error {0}")]
+    SigVerifyTokensAccountingError(#[from] tokens_accounting::Error),
 }
 
 /// Given a signed transaction input, which spends an output of some type,
@@ -67,15 +70,11 @@ pub struct SignatureDestinationGetter<'a> {
 
 impl<'a> SignatureDestinationGetter<'a> {
     pub fn new_for_transaction<
-        S: TransactionVerifierStorageRef,
-        F: Fn(
-            &TokenId,
-        )
-            -> Result<Option<TokenAuxiliaryData>, <S as TransactionVerifierStorageRef>::Error>,
+        T: TokensAccountingView<Error = tokens_accounting::Error>,
         P: PoSAccountingView<Error = pos_accounting::Error>,
         U: UtxosView,
     >(
-        aux_data_getter: &'a F,
+        tokens_view: &'a T,
         accounting_view: &'a P,
         utxos_view: &'a U,
     ) -> Self {
@@ -140,11 +139,15 @@ impl<'a> SignatureDestinationGetter<'a> {
                             .spend_destination()
                             .clone()),
                         AccountSpending::Token(token_id, _) => {
-                            let aux_data = aux_data_getter(token_id).unwrap().unwrap();
-                            match aux_data.supply() {
-                                TokenSupplyLimit::Fixed(d, _) // FIXME: return error if fixed?
-                                | TokenSupplyLimit::Unlimited(d) => Ok(d.clone()),
-                            }
+                            let token_data = tokens_view.get_token_data(token_id)?.ok_or(
+                                SignatureDestinationGetterError::TokenDataNotFound(*token_id),
+                            )?;
+                            let destination = match token_data {
+                                tokens_accounting::TokenData::FungibleToken(data) => {
+                                    data.reissuance_controller().clone()
+                                }
+                            };
+                            Ok(destination)
                         }
                     },
                 }
