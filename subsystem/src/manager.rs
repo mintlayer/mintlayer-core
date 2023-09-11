@@ -209,7 +209,8 @@ impl Manager {
         config: SubsystemConfig,
         subsys: S,
     ) -> Handle<S> {
-        let subsystem_name = config.subsystem_name;
+        let manager_name = self.name;
+        let subsys_name = config.subsystem_name;
 
         self.add_raw_subsystem_with_config(config, move |mut call_rq, mut shutdown_rq| async move {
             let mut worker_tasks = JoinSet::new();
@@ -235,13 +236,14 @@ impl Manager {
                             },
                         }
                     }
+                    Some(task_result) = worker_tasks.join_next() => {
+                        Self::handle_task_result(manager_name, subsys_name, "worker", task_result);
+                    }
                 }
             }
 
             while let Some(task_result) = worker_tasks.join_next().await {
-                if let Err(e) = task_result {
-                    log::warn!("Error joining worker task of {}: {e}", subsystem_name);
-                }
+                Self::handle_task_result(manager_name, subsys_name, "worker", task_result);
             }
 
             // All worker tasks have terminated above, we are the last ones holding the subsys Arc
@@ -361,16 +363,25 @@ impl Manager {
         log::info!("Manager {} terminated", self.name);
     }
 
-    async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
-        match handle.await {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Manager {manager_name}: failed to join the {subsystem_name} subsystem task: {e:?}");
-                if let Ok(p) = e.try_into_panic() {
-                    panic::resume_unwind(p);
-                }
+    fn handle_task_result(
+        manager_name: &str,
+        subsys_name: &str,
+        task_type: &str,
+        res: Result<(), tokio::task::JoinError>,
+    ) {
+        log::trace!("Manager {manager_name}: {subsys_name} {task_type} task finished");
+        if let Err(err) = res {
+            log::error!(
+                "Manager {manager_name}: failed to join the {subsys_name} {task_type} task: {err}"
+            );
+            if let Ok(p) = err.try_into_panic() {
+                panic::resume_unwind(p);
             }
         }
+    }
+
+    async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
+        Self::handle_task_result(manager_name, subsystem_name, "top-level", handle.await)
     }
 
     async fn wait_for_subsystem_shutdown(
