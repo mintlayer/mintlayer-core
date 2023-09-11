@@ -127,7 +127,6 @@ crossterm = "0.27"
 derive_more = "0.99"
 directories = "5.0"
 enum-iterator = "1.4"
-env_logger = "0.10"
 expect-test = "1.3"
 fallible-iterator = "0.3"
 fixed-hash = "0.8"
@@ -194,6 +193,8 @@ tap = "1.0"
 tempfile = "3.3"
 testing_logger = "0.1"
 thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tokio = { version = "1.27", default-features = false }
 tokio-socks = "0.5"
 tokio-util = { version = "0.7", default-features = false }

@@ -13,7 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Write;
+use std::{
+    io::{IsTerminal, Write},
+    sync::Mutex,
+};
+
+use tracing_subscriber::{
+    fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry,
+};
 
 pub use log;
 
@@ -27,15 +34,39 @@ pub fn is_file_output_supported() -> bool {
 
 static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
 
+fn init_logging_impl<MW>(make_writer: MW, enable_coloring: bool)
+where
+    MW: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
+    INITIALIZE_LOGGER_ONCE_FLAG.call_once(move || {
+        Registry::default()
+            .with(
+                tracing_subscriber::fmt::Layer::new()
+                    .with_writer(make_writer)
+                    .with_ansi(enable_coloring),
+            )
+            // This will construct EnvFilter using the default env variable RUST_LOG
+            .with(EnvFilter::from_default_env())
+            // This basically calls tracing::subscriber::set_global_default on self and then
+            // initializes a 'log' compatibility layer, so that 'log' macros continue to work
+            // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
+            .init();
+    });
+}
+
 pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
-    INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
+    init_logging_impl(
+        // Write to stderr to mimic the behavior of env_logger.
+        std::io::stderr,
+        // Use output coloring only if stderr is a terminal (i.e. it wasn't redirected
+        // to a file etc).
+        std::io::stderr().is_terminal(),
+    );
 }
 
 /// Send log output to the specified [Write] instance, log lines are separated by '\n'
-pub fn init_logging_pipe(file: impl Write + Send + 'static) {
-    INITIALIZE_LOGGER_ONCE_FLAG.call_once(|| {
-        env_logger::builder().target(env_logger::Target::Pipe(Box::new(file))).init()
-    });
+pub fn init_logging_pipe(file: impl Write + Send + 'static, enable_coloring: bool) {
+    init_logging_impl(Mutex::new(Box::new(file)), enable_coloring);
 }
 
 #[cfg(test)]
