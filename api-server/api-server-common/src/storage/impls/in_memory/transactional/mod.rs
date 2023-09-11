@@ -63,7 +63,7 @@ impl<'t> ApiTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 
     fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
-        Ok(())
+        unimplemented!()
     }
 }
 
