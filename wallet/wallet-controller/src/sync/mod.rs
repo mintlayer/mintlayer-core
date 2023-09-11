@@ -80,6 +80,7 @@ impl SyncingWallet for DefaultWallet {
     }
 }
 
+#[derive(Debug)]
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
     common_block_height: BlockHeight,
@@ -100,6 +101,7 @@ enum FetchBlockError<T: NodeInterface> {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum AccountType {
     Account(U31),
     UnusedAccount,
@@ -133,7 +135,7 @@ pub async fn sync_once<T: NodeInterface>(
             .map_err(ControllerError::WalletError)?;
 
         // Group accounts in the same state
-        let mut accounts_grouped = group_accounts_by_common_block(
+        let mut accounts_grouped = group_accounts_by_mainchain_blocks(
             chain_config,
             rpc_client,
             chain_info.best_block_id,
@@ -143,18 +145,26 @@ pub async fn sync_once<T: NodeInterface>(
         )
         .await?;
 
+        // Sync all account groups together from last to first,
+        // where the last has the lowest block height.
+        // Once a group is synced with the next one, merge them,
+        // and continue with the other groups until there's only one group left containing all the accounts
         let mut current = accounts_grouped.pop().expect("empty accounts");
-        while let Some(mut next) = accounts_grouped.pop() {
-            // fetch blocks up to the next account group
-            let block_to_fetch = (next.0.common_block_height - current.0.common_block_height)
-                .expect("already sorted")
-                .to_int() as usize;
-
-            fetch_and_sync(&current, block_to_fetch, rpc_client, wallet, wallet_events).await?;
-
-            current.1.append(&mut next.1);
+        while let Some(next) = accounts_grouped.pop() {
+            // fetch blocks up to the next account group and merge the two groups
+            current = fetch_and_sync_to_next_group(
+                &mut current,
+                next.0,
+                next.1,
+                rpc_client,
+                wallet,
+                wallet_events,
+            )
+            .await?;
         }
 
+        // At this point, all accounts have the same best block,
+        // and we sync them all together to the global best block
         fetch_and_sync(
             &current,
             MAX_FETCH_BLOCK_COUNT,
@@ -164,6 +174,24 @@ pub async fn sync_once<T: NodeInterface>(
         )
         .await?;
     }
+}
+
+async fn fetch_and_sync_to_next_group<T: NodeInterface>(
+    current: &mut (NextBlockInfo, Vec<AccountType>),
+    next_group_block_info: NextBlockInfo,
+    mut next_group_accounts: Vec<AccountType>,
+    rpc_client: &T,
+    wallet: &mut impl SyncingWallet,
+    wallet_events: &impl WalletEvents,
+) -> Result<(NextBlockInfo, Vec<AccountType>), ControllerError<T>> {
+    let block_to_fetch = (next_group_block_info.common_block_height - current.0.common_block_height)
+        .expect("already sorted")
+        .to_int() as usize;
+    fetch_and_sync(&*current, block_to_fetch, rpc_client, wallet, wallet_events).await?;
+
+    // once the current group accounts are synced up to the next group join them
+    next_group_accounts.append(&mut current.1);
+    Ok((next_group_block_info, next_group_accounts))
 }
 
 async fn fetch_and_sync<T: NodeInterface>(
@@ -259,9 +287,11 @@ async fn fetch_next_blocks<T: NodeInterface>(
     })
 }
 
-/// Group the accounts by the highest common block on the mainchain
+/// Group the accounts by the latest fork block from the mainchain.
+/// Meaning: If the account's best block is now not in the mainchain,
+/// this function will return the latest ancestor that's in the mainchain.
 /// and sort them in descending order from highest to lowest
-async fn group_accounts_by_common_block<T: NodeInterface>(
+async fn group_accounts_by_mainchain_blocks<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     node_block_id: Id<GenBlock>,
