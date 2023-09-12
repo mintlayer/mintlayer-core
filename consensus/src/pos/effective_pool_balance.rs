@@ -94,8 +94,9 @@ fn effective_pool_balance_impl(
     let sigma = std::cmp::min(pool_balance.into_atoms(), z);
     let s = std::cmp::min(pledge_amount.into_atoms(), z);
 
-    let z_squared = z.checked_mul(z).ok_or(EffectivePoolBalanceError::ArithmeticError)?;
-    let z_squared: Uint256 = z_squared.into();
+    let z_squared = Uint256::from_u128(z)
+        .checked_mul(&z.into())
+        .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     // There are security arguments using Nash Equilibrium on why we want to use the final supply as the total,
     // and not the total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
@@ -200,24 +201,30 @@ fn effective_pool_balance_impl(
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     assert!(effective_balance <= sigma);
 
-    {
-        log::debug!("---------------------------------------------");
-        log::debug!("Done calculating the effective balance");
-        log::debug!("---------------------------------------------");
-        log::debug!("Pool pledge:         {}", pledge_amount.into_atoms());
-        #[rustfmt::skip]
-        log::debug!("Saturation level:    {} / {}", pool_saturation_level.numer(), pool_saturation_level.denom());
-        #[rustfmt::skip]
-        log::debug!("Pledge influence:    {} / {}", pledge_influence.numer(), pledge_influence.denom());
-        log::debug!("Final supply:        {}", final_supply.into_atoms());
-        log::debug!("---------------------------------------------");
-        log::debug!("Pool balance:        {}", pool_balance.into_atoms());
-        log::debug!("Capped pool balance: {}", sigma);
-        log::debug!("Adjustment term:     {}", adjustment);
-        log::debug!("Effective balance:   {}", effective_balance);
-        log::debug!("---------------------------------------------");
-        log::debug!("---------------------------------------------");
-    }
+    log::debug!(
+        "---------------------------------------------\n\
+         Done calculating the effective balance\n\
+         ---------------------------------------------\n\
+         Pool pledge:         {}\n\
+         Saturation level:    {}\n\
+         Pledge influence:    {}\n\
+         Final supply:        {}\n\
+         ---------------------------------------------\
+         Pool balance:        {}\n\
+         Capped pool balance: {}\n\
+         Adjustment term:     {}\n\
+         Effective balance:   {}\n\
+         ---------------------------------------------\n\
+         ---------------------------------------------\n",
+        pledge_amount.into_atoms(),
+        pool_saturation_level,
+        pledge_influence,
+        final_supply.into_atoms(),
+        pool_balance.into_atoms(),
+        sigma,
+        adjustment,
+        effective_balance
+    );
 
     Ok(Amount::from_atoms(effective_balance))
 }

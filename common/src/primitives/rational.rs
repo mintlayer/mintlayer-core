@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Display};
+
 use crate::{Uint256, Uint512};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -53,7 +55,7 @@ impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> Ord for Rational<T> {
         }
 
         if self.numer == other.numer {
-            return self.denom.cmp(&other.denom).reverse();
+            return other.denom.cmp(&self.denom);
         }
 
         let self_numer_big: Uint512 = self.numer.into();
@@ -75,6 +77,12 @@ impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> PartialOrd for Rational<T>
 impl From<Rational<u128>> for Rational<Uint256> {
     fn from(other: Rational<u128>) -> Self {
         Self::new(other.numer.into(), other.denom.into())
+    }
+}
+
+impl<T: Display> Display for Rational<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} / {}", self.numer(), self.denom())
     }
 }
 
