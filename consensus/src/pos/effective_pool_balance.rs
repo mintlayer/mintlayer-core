@@ -91,12 +91,13 @@ fn effective_pool_balance_impl(
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     let a = pledge_influence;
-    let sigma = std::cmp::min(pool_balance.into_atoms(), z);
+    let sigma128 = std::cmp::min(pool_balance.into_atoms(), z);
+    let sigma: Uint256 = sigma128.into();
     let s = std::cmp::min(pledge_amount.into_atoms(), z);
+    let s: Uint256 = s.into();
 
-    let z_squared = Uint256::from_u128(z)
-        .checked_mul(&z.into())
-        .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
+    let z: Uint256 = z.into();
+    let z_squared = z.checked_mul(&z).ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     // There are security arguments using Nash Equilibrium on why we want to use the final supply as the total,
     // and not the total stake in all pools. This is because the total stake changes over time, and the Nash Equilibrium
@@ -156,31 +157,26 @@ fn effective_pool_balance_impl(
     // Break the formula down into terms for simplicity
     // term1 = s (z - sigma)
     let term1 = z
-        .checked_sub(sigma)
-        .and_then(|v| v.checked_mul(s))
+        .checked_sub(&sigma)
+        .and_then(|v| v.checked_mul(&s))
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     // term2 = s (z sigma - term1)
-    let term2 = {
-        let z: Uint256 = z.into();
-        z.checked_mul(&sigma.into())
-            .and_then(|v| v.checked_sub(&term1.into()))
-            .and_then(|v| v.checked_mul(&s.into()))
-            .ok_or(EffectivePoolBalanceError::ArithmeticError)?
-    };
+    let term2 = z
+        .checked_mul(&sigma)
+        .and_then(|v| v.checked_sub(&term1))
+        .and_then(|v| v.checked_mul(&s))
+        .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     // To calculate a / (a + 1), we consider that a=an/ad, where `an` is the numerator of `a`, and `ad` is the denominator of `a`.
     // Then, we multiply both the numerator and denominator by `ad`, and we get  a / (a + 1) = an / (an + ad)
 
     // an (sigma z z - term2)
-    let adjustment_numerator = {
-        let sigma: Uint256 = sigma.into();
-        sigma
-            .checked_mul(&z_squared)
-            .and_then(|v| v.checked_sub(&term2))
-            .and_then(|v| v.checked_mul(&(*a.numer()).into()))
-            .ok_or(EffectivePoolBalanceError::ArithmeticError)?
-    };
+    let adjustment_numerator = sigma
+        .checked_mul(&z_squared)
+        .and_then(|v| v.checked_sub(&term2))
+        .and_then(|v| v.checked_mul(&(*a.numer()).into()))
+        .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
 
     // (an + ad)
     let an_ad = a
@@ -196,10 +192,10 @@ fn effective_pool_balance_impl(
         .try_into()
         .map_err(|_| EffectivePoolBalanceError::AdjustmentMustFitIntoAmount)?;
 
-    let effective_balance = sigma
+    let effective_balance = sigma128
         .checked_sub(adjustment)
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
-    assert!(effective_balance <= sigma);
+    assert!(effective_balance <= sigma128);
 
     log::debug!(
         "---------------------------------------------\n\
@@ -215,13 +211,13 @@ fn effective_pool_balance_impl(
          Adjustment term:     {}\n\
          Effective balance:   {}\n\
          ---------------------------------------------\n\
-         ---------------------------------------------\n",
+         ---------------------------------------------",
         pledge_amount.into_atoms(),
         pool_saturation_level,
         pledge_influence,
         final_supply.into_atoms(),
         pool_balance.into_atoms(),
-        sigma,
+        sigma128,
         adjustment,
         effective_balance
     );
@@ -382,6 +378,28 @@ mod tests {
         let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
         assert_eq!(actual, cap);
         assert!(actual <= pool_balance);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn no_overflow_for_bigger_final_supply(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let final_supply = Mlt::from_mlt(600_000_000_000).to_amount_atoms();
+
+        let cap = (final_supply / 100).unwrap();
+        let pool_balance =
+            Amount::from_atoms(rng.gen_range(cap.into_atoms()..final_supply.into_atoms()));
+        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+
+        let _ = effective_pool_balance_impl(
+            pledge_amount,
+            pool_balance,
+            final_supply,
+            Rational::<u128>::new(1, 1), // z == final_supply
+            DEFAULT_PLEDGE_INFLUENCE_PARAMETER,
+        )
+        .unwrap();
     }
 
     // If a pool balance == supply/k value then the target is directly proportional to the pledge
