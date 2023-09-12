@@ -371,10 +371,11 @@ mod tests {
 
         let pool_balance =
             Amount::from_atoms(rng.gen_range(cap.into_atoms()..final_supply.into_atoms()));
-        let pledge_amount = Amount::from_atoms(rng.gen_range(1..pool_balance.into_atoms()));
+        let pledge_amount = Amount::from_atoms(rng.gen_range(1..cap.into_atoms()));
 
+        let expected = effective_pool_balance(pledge_amount, cap, final_supply).unwrap();
         let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
-        assert_eq!(actual, cap);
+        assert_eq!(actual, expected);
         assert!(actual <= pool_balance);
     }
 
