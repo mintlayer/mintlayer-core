@@ -23,7 +23,7 @@ use common::{
         DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, Id},
+    primitives::{id::WithId, Id},
 };
 use pos_accounting::make_delegation_id;
 use utils::ensure;
@@ -37,14 +37,14 @@ use wallet_types::{
 use crate::{WalletError, WalletResult};
 
 pub struct DelegationData {
-    pub balance: Amount,
+    pub pool_id: PoolId,
     pub destination: Destination,
     pub last_nonce: Option<AccountNonce>,
 }
 impl DelegationData {
-    fn new(destination: Destination) -> DelegationData {
+    fn new(pool_id: PoolId, destination: Destination) -> DelegationData {
         DelegationData {
-            balance: Amount::ZERO,
+            pool_id,
             destination,
             last_nonce: None,
         }
@@ -217,21 +217,12 @@ impl OutputCache {
                             )
                         });
                 }
-                TxOutput::DelegateStaking(amount, delegation_id) => {
-                    match self.delegations.entry(*delegation_id) {
-                        Entry::Vacant(_) => {
-                            return Err(WalletError::InconsistentDelegationAddition(
-                                *delegation_id,
-                            ));
-                        }
-                        Entry::Occupied(mut entry) => {
-                            let pool_data = entry.get_mut();
-                            pool_data.balance = (pool_data.balance + *amount)
-                                .ok_or(WalletError::OutputAmountOverflow)?;
-                        }
-                    }
+                TxOutput::DelegateStaking(_, delegation_id) => {
+                    self.delegations
+                        .get(delegation_id)
+                        .ok_or(WalletError::InconsistentDelegationAddition(*delegation_id))?;
                 }
-                TxOutput::CreateDelegationId(destination, _) => {
+                TxOutput::CreateDelegationId(destination, pool_id) => {
                     let input0_outpoint = tx
                         .inputs()
                         .get(0)
@@ -239,8 +230,10 @@ impl OutputCache {
                         .utxo_outpoint()
                         .ok_or(WalletError::NoUtxos)?;
                     let delegation_id = make_delegation_id(input0_outpoint);
-                    self.delegations
-                        .insert(delegation_id, DelegationData::new(destination.clone()));
+                    self.delegations.insert(
+                        delegation_id,
+                        DelegationData::new(*pool_id, destination.clone()),
+                    );
                 }
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
@@ -275,12 +268,9 @@ impl OutputCache {
                 TxInput::Account(outpoint) => {
                     if !already_present {
                         match outpoint.account() {
-                            Delegation(delegation_id, amount) => {
+                            Delegation(delegation_id, _) => {
                                 match self.delegations.get_mut(delegation_id) {
                                     Some(data) => {
-                                        data.balance = (data.balance - *amount).ok_or(
-                                            WalletError::NegativeDelegationAmount(*delegation_id),
-                                        )?;
                                         let next_nonce = data
                                             .last_nonce
                                             .map_or(Some(AccountNonce::new(0)), |nonce| {
@@ -323,12 +313,9 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
-                        Delegation(delegation_id, amount) => {
+                        Delegation(delegation_id, _) => {
                             match self.delegations.get_mut(delegation_id) {
                                 Some(data) => {
-                                    data.balance = (data.balance - *amount).ok_or(
-                                        WalletError::InconsistentDelegationRemoval(*delegation_id),
-                                    )?;
                                     data.last_nonce = outpoint.nonce().decrement();
                                 }
                                 None => {
@@ -496,23 +483,19 @@ impl OutputCache {
                                         TxInput::Utxo(outpoint) => {
                                             self.consumed.insert(outpoint.clone(), *tx.state());
                                         }
-                                        TxInput::Account(outpoint) => {
-                                            match outpoint.account() {
-                                                Delegation(delegation_id, amount) => {
-                                                    match self.delegations.get_mut(delegation_id) {
-                                                        Some(data) => {
-                                                            data.last_nonce =
-                                                                outpoint.nonce().decrement();
-                                                            data.balance = (data.balance + *amount)
-                                .ok_or(WalletError::DelegationAmountOverflow(*delegation_id))?;
-                                                        }
-                                                        None => {
-                                                            return Err(WalletError::InconsistentDelegationRemoval(*delegation_id));
-                                                        }
+                                        TxInput::Account(outpoint) => match outpoint.account() {
+                                            Delegation(delegation_id, _) => {
+                                                match self.delegations.get_mut(delegation_id) {
+                                                    Some(data) => {
+                                                        data.last_nonce =
+                                                            outpoint.nonce().decrement();
+                                                    }
+                                                    None => {
+                                                        return Err(WalletError::InconsistentDelegationRemoval(*delegation_id));
                                                     }
                                                 }
                                             }
-                                        }
+                                        },
                                     }
                                 }
                                 Ok(())
@@ -588,98 +571,4 @@ fn valid_timelock(
 /// Check Tx is in the selected state Confirmed/Inactive/Abandoned...
 fn is_in_state(tx: &WalletTx, utxo_states: UtxoStates) -> bool {
     utxo_states.contains(get_utxo_state(&tx.state()))
-}
-
-#[cfg(test)]
-mod tests {
-    use common::{
-        chain::block::timestamp::BlockTimestamp,
-        primitives::{BlockHeight, H256},
-    };
-    use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
-    use crypto::random::Rng;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
-    use wallet_types::{wallet_tx::TxData, AccountId};
-
-    use super::*;
-
-    fn make_delegation_tx(output_index: u32) -> (Transaction, DelegationId) {
-        let input0_outpoint = UtxoOutPoint::new(
-            OutPointSourceId::Transaction(Id::<Transaction>::new(H256::zero())),
-            output_index,
-        );
-        let delegation_id = make_delegation_id(&input0_outpoint);
-        let tx = Transaction::new(
-            0,
-            vec![TxInput::from(input0_outpoint)],
-            vec![TxOutput::CreateDelegationId(
-                Destination::AnyoneCanSpend,
-                PoolId::new(H256::zero()),
-            )],
-        )
-        .unwrap();
-
-        (tx, delegation_id)
-    }
-
-    fn make_stake_delegation_tx(delegation_id: DelegationId) -> Transaction {
-        Transaction::new(
-            0,
-            vec![],
-            vec![TxOutput::DelegateStaking(Amount::ZERO, delegation_id)],
-        )
-        .unwrap()
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn test_wallet_transaction_sorting_on_load(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let account_id = AccountId::new_from_xpub(
-            &ExtendedPrivateKey::new_from_entropy(ExtendedKeyKind::Secp256k1Schnorr).1,
-        );
-
-        let mut delegation_ids = BTreeMap::new();
-        let txs = (0..100)
-            .map(|idx| {
-                let tx: WithId<Transaction> = if rng.gen::<bool>() || delegation_ids.is_empty() {
-                    let (tx, delegation_id) = make_delegation_tx(delegation_ids.len() as u32);
-                    delegation_ids.insert(delegation_id, Amount::ZERO);
-                    tx.into()
-                } else {
-                    let delegation_id =
-                        delegation_ids.keys().nth(rng.gen_range(0..delegation_ids.len())).unwrap();
-                    make_stake_delegation_tx(*delegation_id).into()
-                };
-
-                let tx_id = WithId::id(&tx);
-
-                let wtx = WalletTx::Tx(TxData::new(
-                    tx,
-                    TxState::Confirmed(
-                        BlockHeight::new(0),
-                        BlockTimestamp::from_int_seconds(0),
-                        idx as u64,
-                    ),
-                ));
-
-                (
-                    AccountWalletTxId::new(account_id.clone(), OutPointSourceId::from(tx_id)),
-                    wtx,
-                )
-            })
-            .collect();
-
-        let cache = OutputCache::new(txs).unwrap();
-
-        let delegations: BTreeMap<&DelegationId, _> = cache.delegation_ids().collect();
-
-        for (delegation_id, balance) in delegation_ids {
-            let data = delegations.get(&delegation_id).unwrap();
-            assert_eq!(data.balance, balance);
-        }
-    }
 }

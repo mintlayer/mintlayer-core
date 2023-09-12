@@ -18,7 +18,7 @@ use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -108,6 +108,16 @@ impl NodeInterface for NodeRpcClient {
 
     async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         ChainstateRpcClient::stake_pool_pledge(&self.http_client, pool_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        ChainstateRpcClient::delegation_share(&self.http_client, pool_id, delegation_id)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

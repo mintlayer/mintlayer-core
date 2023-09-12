@@ -18,7 +18,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -162,6 +162,18 @@ impl NodeInterface for WalletHandlesClient {
             .call(move |this| this.get_stake_pool_data(pool_id))
             .await??
             .map(|data| data.pledge_amount());
+        Ok(result)
+    }
+
+    async fn get_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+            .await??;
         Ok(result)
     }
 

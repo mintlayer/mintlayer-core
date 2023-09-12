@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{Currency, UtxoSelectorError};
+use crate::account::{Currency, DelegationData, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{
     make_issue_nft_outputs, make_issue_token_outputs, StakePoolDataArguments,
@@ -668,9 +668,17 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_delegations(
         &self,
         account_index: U31,
-    ) -> WalletResult<impl Iterator<Item = (&DelegationId, Amount)>> {
+    ) -> WalletResult<impl Iterator<Item = (&DelegationId, PoolId)>> {
         let delegations = self.get_account(account_index)?.get_delegations();
         Ok(delegations)
+    }
+
+    pub fn get_delegation(
+        &self,
+        account_index: U31,
+        delegation_id: DelegationId,
+    ) -> WalletResult<&DelegationData> {
+        self.get_account(account_index)?.find_delegation(delegation_id)
     }
 
     pub fn get_new_address(
@@ -768,10 +776,18 @@ impl<B: storage::Backend> Wallet<B> {
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
+        delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.spend_from_delegation(db_tx, address, amount, delegation_id, current_fee_rate)
+            account.spend_from_delegation(
+                db_tx,
+                address,
+                amount,
+                delegation_id,
+                delegation_share,
+                current_fee_rate,
+            )
         })
     }
 
