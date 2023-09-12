@@ -197,30 +197,28 @@ fn effective_pool_balance_impl(
         .ok_or(EffectivePoolBalanceError::ArithmeticError)?;
     assert!(effective_balance <= sigma128);
 
-    log::debug!(
-        "---------------------------------------------\n\
-         Done calculating the effective balance\n\
-         ---------------------------------------------\n\
-         Pool pledge:         {}\n\
-         Saturation level:    {}\n\
-         Pledge influence:    {}\n\
-         Final supply:        {}\n\
-         ---------------------------------------------\
-         Pool balance:        {}\n\
-         Capped pool balance: {}\n\
-         Adjustment term:     {}\n\
-         Effective balance:   {}\n\
-         ---------------------------------------------\n\
-         ---------------------------------------------",
-        pledge_amount.into_atoms(),
-        pool_saturation_level,
-        pledge_influence,
-        final_supply.into_atoms(),
-        pool_balance.into_atoms(),
-        sigma128,
-        adjustment,
-        effective_balance
-    );
+    {
+        let pledge_atoms = pledge_amount.into_atoms();
+        let pool_balance_atoms = pool_balance.into_atoms();
+        let final_supply_atoms = final_supply.into_atoms();
+
+        log::debug!(
+            "---------------------------------------------\n\
+             Done calculating the effective balance\n\
+             ---------------------------------------------\n\
+             Pool pledge:         {pledge_atoms}\n\
+             Saturation level:    {pool_saturation_level}\n\
+             Pledge influence:    {pledge_influence}\n\
+             Final supply:        {final_supply_atoms}\n\
+             ---------------------------------------------\
+             Pool balance:        {pool_balance_atoms}\n\
+             Capped pool balance: {sigma128}\n\
+             Adjustment term:     {adjustment}\n\
+             Effective balance:   {effective_balance}\n\
+             ---------------------------------------------\n\
+             ---------------------------------------------",
+        );
+    }
 
     Ok(Amount::from_atoms(effective_balance))
 }
