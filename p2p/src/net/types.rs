@@ -157,6 +157,15 @@ pub enum ConnectivityEvent {
         peer_id: PeerId,
     },
 
+    /// Protocol violation
+    Misbehaved {
+        /// Unique ID of the peer
+        peer_id: PeerId,
+
+        /// Error code of the violation
+        error: P2pError,
+    },
+
     /// Handshake failed
     HandshakeFailed {
         /// Peer's address

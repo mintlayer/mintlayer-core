@@ -219,6 +219,13 @@ where
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });
             }
+            ConnectivityEvent::Misbehaved {
+                peer_id: _,
+                error: _,
+            } => {
+                // Ignore all misbehave reports
+                // TODO: Should we ban peers when they send unexpected messages?
+            }
         }
     }
 

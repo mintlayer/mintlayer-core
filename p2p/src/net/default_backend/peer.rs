@@ -274,7 +274,11 @@ where
         // TODO: Use a bounded channel to send messages to the peer manager
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
-                log::error!("peer {peer} sent handshaking message");
+                // TODO: this must be reported to the peer manager, so that it can adjust
+                // the peer's ban score. (We may add a separate PeerEvent for this and Backend
+                // can then use the now unused ConnectivityEvent::Misbehaved to forward the error
+                // to the peer manager.)
+                log::error!("Peer {peer} sent unexpected handshake message");
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
                 peer_event_tx.send((peer, PeerEvent::MessageReceived { message: msg }))?
