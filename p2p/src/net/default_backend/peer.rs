@@ -16,10 +16,7 @@
 use std::{sync::Arc, time::Duration};
 
 use p2p_types::services::Services;
-use tokio::{
-    sync::mpsc::{self, Sender},
-    time::timeout,
-};
+use tokio::{sync::mpsc, time::timeout};
 
 use common::chain::ChainConfig;
 use logging::log;
@@ -85,7 +82,7 @@ pub struct Peer<T: TransportSocket> {
     receiver_address: Option<PeerAddress>,
 
     /// Channel sender for sending events to Backend
-    peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+    peer_event_tx: mpsc::Sender<(PeerId, PeerEvent)>,
 
     /// Channel receiver for receiving events from Backend.
     backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
@@ -108,7 +105,7 @@ where
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         receiver_address: Option<PeerAddress>,
-        peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+        peer_event_tx: mpsc::Sender<(PeerId, PeerEvent)>,
         backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
     ) -> Self {
@@ -178,18 +175,20 @@ where
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
                 // It's required to reliably detect self-connects.
-                self.peer_event_tx.send((
-                    self.peer_id,
-                    PeerEvent::PeerInfoReceived {
-                        protocol_version: common_protocol_version,
-                        network,
-                        common_services,
-                        user_agent,
-                        software_version,
-                        receiver_address,
-                        handshake_nonce,
-                    },
-                ))?;
+                self.peer_event_tx
+                    .send((
+                        self.peer_id,
+                        PeerEvent::PeerInfoReceived {
+                            protocol_version: common_protocol_version,
+                            network,
+                            common_services,
+                            user_agent,
+                            software_version,
+                            receiver_address,
+                            handshake_nonce,
+                        },
+                    ))
+                    .await?;
 
                 self.socket
                     .send(Message::Handshake(HandshakeMessage::HelloAck {
@@ -247,31 +246,34 @@ where
                 let common_protocol_version =
                     choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
 
-                self.peer_event_tx.send((
-                    self.peer_id,
-                    PeerEvent::PeerInfoReceived {
-                        protocol_version: common_protocol_version,
-                        network,
-                        common_services,
-                        user_agent,
-                        software_version,
-                        receiver_address,
-                        handshake_nonce,
-                    },
-                ))?;
+                self.peer_event_tx
+                    .send((
+                        self.peer_id,
+                        PeerEvent::PeerInfoReceived {
+                            protocol_version: common_protocol_version,
+                            network,
+                            common_services,
+                            user_agent,
+                            software_version,
+                            receiver_address,
+                            handshake_nonce,
+                        },
+                    ))
+                    .await?;
             }
         }
 
         Ok(())
     }
 
+    // Note: the channels used by this function to propagate messages to other parts of p2p
+    // must be bounded; this is important to prevent DoS attacks.
     async fn handle_socket_msg(
         peer: PeerId,
         msg: Message,
-        peer_event_tx: &mut mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        sync_msg_tx: &mut Sender<SyncMessage>,
+        peer_event_tx: &mut mpsc::Sender<(PeerId, PeerEvent)>,
+        sync_msg_tx: &mut mpsc::Sender<SyncMessage>,
     ) -> crate::Result<()> {
-        // TODO: Use a bounded channel to send messages to the peer manager
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
                 // TODO: this must be reported to the peer manager, so that it can adjust
@@ -281,7 +283,7 @@ where
                 log::error!("Peer {peer} sent unexpected handshake message");
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
-                peer_event_tx.send((peer, PeerEvent::MessageReceived { message: msg }))?
+                peer_event_tx.send((peer, PeerEvent::MessageReceived { message: msg })).await?
             }
             CategorizedMessage::SyncMessage(msg) => sync_msg_tx.send(msg).await?,
         }
@@ -289,7 +291,7 @@ where
         Ok(())
     }
 
-    pub async fn run(mut self, local_time: P2pTimestamp) -> crate::Result<()> {
+    async fn run_impl(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
         let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake(local_time)).await;
         match handshake_res {
@@ -297,10 +299,13 @@ where
             Ok(Err(err)) => {
                 log::debug!("handshake failed for peer {}: {err}", self.peer_id);
 
-                let send_result = self.peer_event_tx.send((
-                    self.peer_id,
-                    PeerEvent::HandshakeFailed { error: err.clone() },
-                ));
+                let send_result = self
+                    .peer_event_tx
+                    .send((
+                        self.peer_id,
+                        PeerEvent::HandshakeFailed { error: err.clone() },
+                    ))
+                    .await;
                 if let Err(send_error) = send_result {
                     log::error!(
                         "Cannot send PeerEvent::HandshakeFailed to peer {}: {}",
@@ -348,11 +353,23 @@ where
             }
         }
     }
-}
 
-impl<T: TransportSocket> Drop for Peer<T> {
-    fn drop(&mut self) {
-        let _ = self.peer_event_tx.send((self.peer_id, PeerEvent::ConnectionClosed));
+    pub async fn run(mut self, local_time: P2pTimestamp) -> crate::Result<()> {
+        let run_result = self.run_impl(local_time).await;
+        let send_result =
+            self.peer_event_tx.send((self.peer_id, PeerEvent::ConnectionClosed)).await;
+
+        if let Err(send_error) = send_result {
+            // Note: this situation is likely to happen if the connection is already closed,
+            // so it's not really an error.
+            log::debug!(
+                "Unable to send PeerEvent::ConnectionClosed to Backend for peer {}: {}",
+                self.peer_id,
+                send_error
+            );
+        }
+
+        run_result
     }
 }
 
@@ -375,6 +392,8 @@ mod tests {
     use chainstate::Locator;
     use futures::FutureExt;
 
+    const TEST_CHAN_BUF_SIZE: usize = 100;
+
     async fn handshake_inbound<A, T>()
     where
         A: TestTransportMaker<Transport = T>,
@@ -383,7 +402,7 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(test_p2p_config());
-        let (tx1, mut rx1) = mpsc::unbounded_channel();
+        let (tx1, mut rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
 
@@ -458,7 +477,7 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(test_p2p_config());
-        let (tx1, mut rx1) = mpsc::unbounded_channel();
+        let (tx1, mut rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
 
@@ -538,7 +557,7 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(test_p2p_config());
-        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (tx1, _rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
 
@@ -599,7 +618,7 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(test_p2p_config());
-        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (tx1, _rx1) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
 

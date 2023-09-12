@@ -163,6 +163,8 @@ where
         accounting: A,
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
+        // TODO: both "expect"s in this function may fire when exiting the node-gui app;
+        // get rid of them and return a proper Result.
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block");

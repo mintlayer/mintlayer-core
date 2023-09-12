@@ -57,10 +57,15 @@ use super::{
     types::{HandshakeNonce, Message, P2pTimestamp},
 };
 
-/// Buffer size of the channel to the SyncManager peer task.
-/// How many unprocessed messages can be sent before the peer's event loop is blocked.
-// TODO: Decide what the optimal value is (for example, by comparing the initial block download time)
-const SYNC_CHAN_BUF_SIZE: usize = 20;
+/// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
+///
+/// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
+/// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
+/// requests, which may lead to memory exhaustion.
+/// Note: the value was chosen pretty much arbitrarily, but judging by the initial block download
+/// time there is no difference between 20 and 10000, so the former seems reasonable enough.
+const SYNC_MSG_CHAN_BUF_SIZE: usize = 20;
+const PEER_EVENT_CHAN_BUF_SIZE: usize = 20;
 
 /// Active peer data
 struct PeerContext {
@@ -125,10 +130,10 @@ pub struct Backend<T: TransportSocket> {
 
     /// Channel sender for sending events from Peers to Backend; this will be passed to each
     /// Peer upon its creation.
-    peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+    peer_event_tx: mpsc::Sender<(PeerId, PeerEvent)>,
 
     /// Channel receiver for receiving events from Peers
-    peer_event_rx: mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
+    peer_event_rx: mpsc::Receiver<(PeerId, PeerEvent)>,
 
     /// Channel sender for sending connectivity events to the frontend
     conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
@@ -171,7 +176,7 @@ where
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
         node_protocol_version: ProtocolVersion,
     ) -> Self {
-        let (peer_event_tx, peer_event_rx) = mpsc::unbounded_channel();
+        let (peer_event_tx, peer_event_rx) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
         Self {
             transport,
             socket,
@@ -234,7 +239,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
+        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
         peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
 
         let old_value = peer.was_accepted.test_and_set();
