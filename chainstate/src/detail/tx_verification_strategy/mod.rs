@@ -24,6 +24,7 @@ use common::{
     primitives::id::WithId,
 };
 use pos_accounting::PoSAccountingView;
+use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     error::ConnectTransactionError,
     transaction_verifier::{
@@ -35,13 +36,13 @@ use tx_verifier::{
 use utxo::UtxosView;
 
 // TODO: replace with trait_alias when stabilized
-pub trait TransactionVerifierMakerFn<C, S, U, A>:
-    Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A>
+pub trait TransactionVerifierMakerFn<C, S, U, A, T>:
+    Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A, T>
 {
 }
 
-impl<C, S, U, A, T> TransactionVerifierMakerFn<C, S, U, A> for T where
-    T: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A>
+impl<C, S, U, A, T, F> TransactionVerifierMakerFn<C, S, U, A, T> for F where
+    F: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A, T>
 {
 }
 
@@ -54,7 +55,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
     #[allow(clippy::too_many_arguments)]
-    fn connect_block<C, S, M, U, A>(
+    fn connect_block<C, S, M, U, A, T>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -63,13 +64,14 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         C: AsRef<ChainConfig>,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>,
+        T: TokensAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>;
 
     /// Disconnect the transactions given by block and block_index,
@@ -78,19 +80,20 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<C, S, M, U, A>(
+    fn disconnect_block<C, S, M, U, A, T>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>,
+        T: TokensAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>;
 }

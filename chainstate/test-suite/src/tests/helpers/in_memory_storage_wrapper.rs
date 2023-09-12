@@ -29,6 +29,7 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
+use tokens_accounting::TokensAccountingStorageRead;
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -172,5 +173,20 @@ impl PoSAccountingView for InMemoryStorageWrapper {
     ) -> Result<Option<Amount>, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_pool_delegation_share(pool_id, delegation_id)
+    }
+}
+
+impl TokensAccountingStorageRead for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

@@ -33,6 +33,7 @@ use pos_accounting::{
 };
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;
+use tokens_accounting::TokensAccountingStorageRead;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
 use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
@@ -317,6 +318,18 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     }
 }
 
+impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<'st, B> {
+    type Error = crate::Error;
+
+    fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+}
+
 /// Blockchain data storage transaction
 impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B> {
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
@@ -531,5 +544,17 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         delegation_id: DelegationId,
     ) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolDelegationSharesSealed, _, _>((pool_id, delegation_id))
+    }
+}
+
+impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<'st, B> {
+    type Error = crate::Error;
+
+    fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
+        todo!()
     }
 }
