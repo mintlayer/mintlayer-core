@@ -1114,12 +1114,12 @@ impl CommandHandler {
                         )
                     })
                     .collect();
-                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
+                Ok(ConsoleCommand::Print(pool_ids.join("\n").to_string()))
             }
 
             WalletCommand::ListDelegationIds => {
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let pool_ids: Vec<_> = controller
+                let delegations: Vec<_> = controller
                     .get_delegations(selected_account)
                     .await
                     .map_err(WalletCliError::Controller)?
@@ -1128,7 +1128,7 @@ impl CommandHandler {
                         format_delegation_info(delegation_id, balance, chain_config.as_ref())
                     })
                     .collect();
-                Ok(ConsoleCommand::Print(format!("[{}]", pool_ids.join(", "))))
+                Ok(ConsoleCommand::Print(delegations.join("\n").to_string()))
             }
 
             WalletCommand::NodeShutdown => {

@@ -40,6 +40,7 @@ pub struct DelegationData {
     pub pool_id: PoolId,
     pub destination: Destination,
     pub last_nonce: Option<AccountNonce>,
+    pub not_staked_yet: bool,
 }
 impl DelegationData {
     fn new(pool_id: PoolId, destination: Destination) -> DelegationData {
@@ -47,6 +48,7 @@ impl DelegationData {
             pool_id,
             destination,
             last_nonce: None,
+            not_staked_yet: true,
         }
     }
 }
@@ -218,9 +220,11 @@ impl OutputCache {
                         });
                 }
                 TxOutput::DelegateStaking(_, delegation_id) => {
-                    self.delegations
-                        .get(delegation_id)
+                    let delegation_data = self
+                        .delegations
+                        .get_mut(delegation_id)
                         .ok_or(WalletError::InconsistentDelegationAddition(*delegation_id))?;
+                    delegation_data.not_staked_yet = false;
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
                     let input0_outpoint = tx

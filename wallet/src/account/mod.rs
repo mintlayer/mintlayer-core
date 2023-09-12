@@ -526,10 +526,8 @@ impl Account {
         self.output_cache.pool_ids()
     }
 
-    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, PoolId)> {
-        self.output_cache
-            .delegation_ids()
-            .map(|(delegation_id, data)| (delegation_id, data.pool_id))
+    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
+        self.output_cache.delegation_ids()
     }
 
     pub fn find_delegation(&self, delegation_id: DelegationId) -> WalletResult<&DelegationData> {

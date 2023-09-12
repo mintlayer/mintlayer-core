@@ -668,7 +668,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_delegations(
         &self,
         account_index: U31,
-    ) -> WalletResult<impl Iterator<Item = (&DelegationId, PoolId)>> {
+    ) -> WalletResult<impl Iterator<Item = (&DelegationId, &DelegationData)>> {
         let delegations = self.get_account(account_index)?.get_delegations();
         Ok(delegations)
     }

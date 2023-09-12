@@ -67,8 +67,8 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{
-    account::transaction_list::TransactionList,
     account::Currency,
+    account::{transaction_list::TransactionList, DelegationData},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         StakePoolDataArguments,
@@ -484,11 +484,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     async fn get_delegation_share(
         &self,
         chain_config: &ChainConfig,
-        pool_id: PoolId,
+        delegation_data: &DelegationData,
         delegation_id: DelegationId,
     ) -> Result<(DelegationId, Amount), ControllerError<T>> {
+        if delegation_data.not_staked_yet {
+            return Ok((delegation_id, Amount::ZERO));
+        }
+
         self.rpc_client
-            .get_delegation_share(pool_id, delegation_id)
+            .get_delegation_share(delegation_data.pool_id, delegation_id)
             .await
             .map_err(ControllerError::NodeCallError)
             .and_then(|balance| {
@@ -528,8 +532,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let tasks: FuturesUnordered<_> = delegations
             .into_iter()
-            .map(|(delegation_id, pool_id)| {
-                self.get_delegation_share(self.chain_config.as_ref(), pool_id, *delegation_id)
+            .map(|(delegation_id, delegation_data)| {
+                self.get_delegation_share(
+                    self.chain_config.as_ref(),
+                    delegation_data,
+                    *delegation_id,
+                )
             })
             .collect();
 
@@ -681,7 +689,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 WalletError::DelegationNotFound(delegation_id),
             ))?;
 
-        // FIXME get the delegation balance
         let tx = self
             .wallet
             .create_transaction_to_addresses_from_delegation(
