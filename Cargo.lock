@@ -849,6 +849,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "tx-verifier",
  "utils",
@@ -885,6 +886,7 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]
@@ -906,6 +908,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
+ "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
@@ -932,6 +935,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
+ "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
@@ -3615,6 +3619,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "utils",
  "utxo",
@@ -6441,7 +6446,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokens-accounting"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "accounting",
  "chainstate-types",

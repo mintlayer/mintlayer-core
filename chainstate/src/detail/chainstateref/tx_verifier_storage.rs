@@ -37,6 +37,7 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
+use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
@@ -381,5 +382,22 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
         let mut db = PoSAccountingDB::<_, TipStorageTag>::new(&mut self.db_tx);
         db.batch_write_delta(data)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAccountingStorageRead
+    for ChainstateRef<'a, S, V>
+{
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

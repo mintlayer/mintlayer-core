@@ -32,6 +32,7 @@ use common::{
 use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
 };
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use super::mock_impl_accounting::{
@@ -150,6 +151,12 @@ mockall::mock! {
             pool_id: PoolId,
             delegation_id: DelegationId,
         ) -> crate::Result<Option<Amount>>;
+    }
+
+    impl TokensAccountingStorageRead for Store {
+        type Error = crate::Error;
+        fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
     impl crate::BlockchainStorageWrite for Store {
@@ -291,6 +298,14 @@ mockall::mock! {
         ) -> crate::Result<()>;
     }
 
+    impl TokensAccountingStorageWrite for Store {
+        fn set_token_data(&mut self, id: &TokenId, data: &tokens_accounting::TokenData) -> crate::Result<()>;
+        fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()>;
+
+        fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<() >;
+        fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
+    }
+
     #[allow(clippy::extra_unused_lifetimes)]
     impl<'tx> crate::Transactional<'tx> for Store {
         type TransactionRo = MockStoreTxRo;
@@ -411,6 +426,12 @@ mockall::mock! {
         ) -> crate::Result<Option<Amount>>;
     }
 
+    impl TokensAccountingStorageRead for StoreTxRo {
+        type Error = crate::Error;
+        fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
+    }
+
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
@@ -525,6 +546,12 @@ mockall::mock! {
             pool_id: PoolId,
             delegation_id: DelegationId,
         ) -> crate::Result<Option<Amount>>;
+    }
+
+    impl TokensAccountingStorageRead for StoreTxRw {
+        type Error = crate::Error;
+        fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
@@ -664,6 +691,14 @@ mockall::mock! {
             pool_id: PoolId,
             delegation_id: DelegationId,
         ) -> crate::Result<()>;
+    }
+
+    impl TokensAccountingStorageWrite for StoreTxRw {
+        fn set_token_data(&mut self, id: &TokenId, data: &tokens_accounting::TokenData) -> crate::Result<()>;
+        fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()>;
+
+        fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<() >;
+        fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
     }
 
     impl crate::TransactionRw for StoreTxRw {

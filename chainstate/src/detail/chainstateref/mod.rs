@@ -48,7 +48,7 @@ use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
-use utxo::{UtxosCache, UtxosDB, UtxosView};
+use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
@@ -145,7 +145,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    pub fn make_utxo_view(&self) -> impl UtxosView<Error = S::Error> + '_ {
+    pub fn make_utxo_view(&self) -> impl UtxosView<Error = <S as UtxosStorageRead>::Error> + '_ {
         UtxosDB::new(&self.db_tx)
     }
 

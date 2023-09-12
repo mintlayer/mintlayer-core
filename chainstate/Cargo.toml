@@ -17,6 +17,7 @@ rpc = {path = '../rpc'}
 serialization = {path = "../serialization"}
 subsystem = {path = '../subsystem'}
 tx-verifier = {path = './tx-verifier'}
+tokens-accounting = {path = '../tokens-accounting'}
 utils = {path = '../utils'}
 utxo = {path = '../utxo'}
 

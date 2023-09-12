@@ -34,6 +34,7 @@ use pos_accounting::{
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use storage::MakeMapRef;
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
@@ -384,6 +385,14 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
     }
 }
 
+impl<B: storage::Backend> TokensAccountingStorageRead for Store<B> {
+    type Error = crate::Error;
+    delegate_to_transaction! {
+        fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount>>;
+    }
+}
+
 impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
@@ -669,6 +678,16 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
             delegation_id,
         )?;
         tx.commit()
+    }
+}
+
+impl<B: storage::Backend> TokensAccountingStorageWrite for Store<B> {
+    delegate_to_transaction! {
+        fn set_token_data(&mut self, id: &TokenId, data: &tokens_accounting::TokenData) -> crate::Result<()>;
+        fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()>;
+
+        fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<()>;
+        fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
     }
 }
 

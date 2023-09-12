@@ -35,7 +35,7 @@ pub mod storage;
 pub mod timelock_check;
 
 mod tx_source;
-use tokens_accounting::TokensAccountingCache;
+use tokens_accounting::{TokensAccountingCache, TokensAccountingDB, TokensAccountingView};
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
 mod cached_operation;
@@ -110,7 +110,7 @@ impl TransactionVerifierDelta {
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
-pub struct TransactionVerifier<C, S, U, A> {
+pub struct TransactionVerifier<C, S, U, A, T> {
     chain_config: C,
     storage: S,
     best_block: Id<GenBlock>,
@@ -124,19 +124,24 @@ pub struct TransactionVerifier<C, S, U, A> {
     accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
 
-    //tokens_accounting_cache: TokensAccountingCache<T>,
+    tokens_accounting_cache: TokensAccountingCache<T>,
+
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
-impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
+impl<C, S: TransactionVerifierStorageRef + ShallowClone>
+    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
+{
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
-        let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(S::clone(&storage));
+        let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block");
         let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
+        let tokens_accounting_cache =
+            TokensAccountingCache::new(TokensAccountingDB::new(storage.shallow_clone()));
         Self {
             storage,
             chain_config,
@@ -147,22 +152,25 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta_adapter,
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            tokens_accounting_cache,
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A> TransactionVerifier<C, S, U, A>
+impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
 where
     S: TransactionVerifierStorageRef,
     U: UtxosView + Send + Sync,
     A: PoSAccountingView + Send + Sync,
+    T: TokensAccountingView + Send + Sync,
 {
     pub fn new_generic(
         storage: S,
         chain_config: C,
         utxos: U,
         accounting: A,
+        tokens_accounting: T,
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         // TODO: both "expect"s in this function may fire when exiting the node-gui app;
@@ -182,22 +190,30 @@ where
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta_adapter: PoSAccountingDeltaAdapter::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            tokens_accounting_cache: TokensAccountingCache::new(tokens_accounting),
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A> TransactionVerifier<C, S, U, A>
+impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
 where
     C: AsRef<ChainConfig>,
     S: TransactionVerifierStorageRef,
     U: UtxosView,
     A: PoSAccountingView,
+    T: TokensAccountingView,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     pub fn derive_child(
         &self,
-    ) -> TransactionVerifier<&ChainConfig, &Self, &UtxosCache<U>, &PoSAccountingDelta<A>> {
+    ) -> TransactionVerifier<
+        &ChainConfig,
+        &Self,
+        &UtxosCache<U>,
+        &PoSAccountingDelta<A>,
+        &TokensAccountingCache<T>,
+    > {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -208,6 +224,7 @@ where
             accounting_delta_adapter: PoSAccountingDeltaAdapter::new(
                 self.accounting_delta_adapter.accounting_delta(),
             ),
+            tokens_accounting_cache: TokensAccountingCache::new(&self.tokens_accounting_cache),
             accounting_block_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
@@ -721,16 +738,16 @@ where
         )?;
 
         // verify input signatures
-        // FIXME: pass tokens accounting
-        //signature_check::verify_signatures(
-        //    self.chain_config.as_ref(),
-        //    &self.utxo_cache,
-        //    tx,
-        //    SignatureDestinationGetter::new_for_transaction(
-        //        &self.accounting_delta_adapter.accounting_delta(),
-        //        &self.utxo_cache,
-        //    ),
-        //)?;
+        signature_check::verify_signatures(
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            tx,
+            SignatureDestinationGetter::new_for_transaction(
+                &self.tokens_accounting_cache,
+                &self.accounting_delta_adapter.accounting_delta(),
+                &self.utxo_cache,
+            ),
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 

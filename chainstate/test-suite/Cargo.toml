@@ -20,6 +20,7 @@ logging = { path = '../../logging' }
 pos_accounting = {path = '../../pos_accounting'}
 serialization = { path = '../../serialization' }
 test-utils = {path = '../../test-utils'}
+tokens-accounting = {path = '../../tokens-accounting'}
 tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 utxo = { path = '../../utxo' }
