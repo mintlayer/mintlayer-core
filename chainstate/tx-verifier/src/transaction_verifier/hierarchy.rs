@@ -37,10 +37,16 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
-    TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A>
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A, T>
 where
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
@@ -123,8 +129,8 @@ where
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
-    for TransactionVerifier<C, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A, T> UtxosStorageRead
+    for TransactionVerifier<C, S, U, A, T>
 where
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
@@ -146,13 +152,14 @@ where
     }
 }
 
-impl<C, S, U, A> TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A>
+impl<C, S, U, A, T> TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A, T>
 where
     S: TransactionVerifierStorageRef,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<TransactionVerifierStorageError>,
     U: UtxosView,
     A: PoSAccountingView,
+    T: TokensAccountingView,
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -282,8 +289,8 @@ where
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView
-    for TransactionVerifier<C, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView, T> FlushableUtxoView
+    for TransactionVerifier<C, S, U, A, T>
 {
     type Error = utxo::Error;
 
@@ -292,8 +299,13 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Fl
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
-    for TransactionVerifier<C, S, U, A>
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > PoSAccountingView for TransactionVerifier<C, S, U, A, T>
 {
     type Error = pos_accounting::Error;
 
@@ -347,11 +359,35 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
     }
 }
 
-impl<C, S, U, A: PoSAccountingView> FlushablePoSAccountingView for TransactionVerifier<C, S, U, A> {
+impl<C, S, U, A: PoSAccountingView, T> FlushablePoSAccountingView
+    for TransactionVerifier<C, S, U, A, T>
+{
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
         self.accounting_delta_adapter.batch_write_delta(data)
+    }
+}
+
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > TokensAccountingStorageRead for TransactionVerifier<C, S, U, A, T>
+{
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

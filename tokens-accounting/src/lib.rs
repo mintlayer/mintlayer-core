@@ -24,5 +24,6 @@ pub use {
     cache::TokensAccountingCache,
     data::{FungibleTokenData, TokenData},
     error::Error,
+    storage::{db::TokensAccountingDB, TokensAccountingStorageRead, TokensAccountingStorageWrite},
     view::{FlushableUtxoView, TokensAccountingView},
 };
