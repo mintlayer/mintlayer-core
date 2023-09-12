@@ -29,6 +29,8 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageWrite, PoolData,
 };
+use storage::MakeMapRef;
+use tokens_accounting::TokensAccountingStorageWrite;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
 use super::db;
@@ -359,5 +361,27 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
             .get_mut::<db::DBAccountingPoolDelegationSharesSealed, _>()
             .del((pool_id, delegation_id))
             .map_err(Into::into)
+    }
+}
+
+impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B> {
+    fn set_token_data(
+        &mut self,
+        id: &TokenId,
+        data: &tokens_accounting::TokenData,
+    ) -> crate::Result<()> {
+        todo!()
+    }
+
+    fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()> {
+        todo!()
+    }
+
+    fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<()> {
+        todo!()
+    }
+
+    fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
+        todo!()
     }
 }

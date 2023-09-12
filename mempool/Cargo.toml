@@ -20,6 +20,7 @@ pos_accounting = { path = '../pos_accounting' }
 rpc = { path = '../rpc' }
 serialization = { path = '../serialization' }
 subsystem = { path = '../subsystem' }
+tokens-accounting = { path = '../tokens-accounting' }
 utils = { path = '../utils' }
 utxo = { path = '../utxo' }
 

@@ -33,6 +33,7 @@ use common::{
 };
 use pos_accounting::{AccountingBlockUndo, DelegationData, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
@@ -247,5 +248,35 @@ impl UtxosView for ChainstateHandle {
 
     fn estimated_size(&self) -> Option<usize> {
         None
+    }
+}
+
+impl TokensAccountingView for ChainstateHandle {
+    type Error = Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+}
+
+impl TokensAccountingStorageRead for ChainstateHandle {
+    type Error = Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

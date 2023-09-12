@@ -38,6 +38,7 @@ use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingStorageWrite,
 };
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 pub use internal::{ChainstateStorageVersion, Store};
@@ -62,6 +63,7 @@ pub trait BlockchainStorageRead:
     + PoSAccountingStorageRead<SealedStorageTag>
     + PoSAccountingStorageRead<TipStorageTag>
     + EpochStorageRead
+    + TokensAccountingStorageRead
 {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
@@ -142,6 +144,7 @@ pub trait BlockchainStorageWrite:
     + PoSAccountingStorageWrite<SealedStorageTag>
     + PoSAccountingStorageWrite<TipStorageTag>
     + EpochStorageWrite
+    + TokensAccountingStorageWrite
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;

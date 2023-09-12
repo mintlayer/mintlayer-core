@@ -25,6 +25,7 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 use pos_accounting::PoSAccountingView;
+use tokens_accounting::TokensAccountingView;
 use tx_verifier::{
     transaction_verifier::{
         config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
@@ -54,7 +55,7 @@ impl Default for DisposableTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for DisposableTransactionVerificationStrategy {
-    fn connect_block<C, S, M, U, A>(
+    fn connect_block<C, S, M, U, A, T>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -63,13 +64,14 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>,
+        T: TokensAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
@@ -120,20 +122,21 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         Ok(base_tx_verifier)
     }
 
-    fn disconnect_block<C, S, M, U, A>(
+    fn disconnect_block<C, S, M, U, A, T>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>,
+        T: TokensAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut base_tx_verifier =
