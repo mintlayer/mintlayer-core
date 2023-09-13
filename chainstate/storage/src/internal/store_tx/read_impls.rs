@@ -322,11 +322,11 @@ impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<
     type Error = crate::Error;
 
     fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
-        todo!()
+        self.read::<db::DBTokensData, _, _>(id)
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
-        todo!()
+        self.read::<db::DBTokensCirculatingSupply, _, _>(id)
     }
 }
 
@@ -551,10 +551,10 @@ impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<
     type Error = crate::Error;
 
     fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
-        todo!()
+        self.read::<db::DBTokensData, _, _>(id)
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
-        todo!()
+        self.read::<db::DBTokensCirculatingSupply, _, _>(id)
     }
 }
