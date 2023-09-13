@@ -1,4 +1,4 @@
-# Mintlayer core
+# Mintlayer core - test
 
 Welcome to the official Github repository for Mintlayer, an innovative, open-source blockchain project. For detailed technical insights, we recommend visiting our [documentation](https://docs.mintlayer.org/).
 
