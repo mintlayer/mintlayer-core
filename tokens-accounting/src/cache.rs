@@ -126,7 +126,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                 }
                 TokenTotalSupply::Lockable => {
                     if data.is_locked() {
-                        return Err(Error::CannotMintLockedSupply(id));
+                        return Err(Error::CannotIncreaseLockedSupply(id));
                     }
                 }
                 TokenTotalSupply::Unlimited => { /* do nothing */ }
@@ -146,11 +146,17 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         id: TokenId,
         amount_to_burn: Amount,
     ) -> Result<TokenAccountingUndo, Error> {
-        let _token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
         let circulating_supply =
             self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
 
-        // FIXME: can you burn locked supply?
+        match token_data {
+            TokenData::FungibleToken(data) => {
+                if data.is_locked() {
+                    return Err(Error::CannotDecreaseLockedSupply(id));
+                }
+            }
+        };
 
         if circulating_supply < amount_to_burn {
             return Err(Error::NotEnoughCirculatingSupplyToBurn(

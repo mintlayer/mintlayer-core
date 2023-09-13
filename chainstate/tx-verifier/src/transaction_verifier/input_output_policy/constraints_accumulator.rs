@@ -120,10 +120,14 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountSpending::Token(_token_id, _amount) => {
+                        AccountSpending::TokenUnrealizedSupply(_token_id, _amount) => {
                             // FIXME: unconstrained_value should support tokens
                             // use CoinOrTokenId::TokenId to insert into unconstrained_value
                         }
+                        AccountSpending::TokenCirculatingSupply(_, _) => {
+                            todo!("Add burn requirement")
+                        }
+                        AccountSpending::TokenSupplyLock(_) => todo!(),
                     };
                 }
             }

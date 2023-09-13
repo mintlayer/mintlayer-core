@@ -56,6 +56,9 @@ storage::decl_schema! {
         /// Store the number of transactions per account
         pub DBAccountNonceCount: Map<AccountType, AccountNonce>,
 
+        //pub DBTokensData: Map<TokenId, tokens_accounting::TokenData>,
+        //pub DBTokensCirculatingSupply: Map<TokenId, Amount>,
+
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
         /// Store for accounting deltas per epoch
@@ -65,7 +68,7 @@ storage::decl_schema! {
 
         /// Accounting data is stored as 2 different sets: tip, sealed
         /// `Tip` is the current state of the accounting data. It is updated on every block.
-        /// `Pre-seal` is the intermediary state of the accounting data that is about to be sealed.
+        /// `Sealed` is the state of the accounting data that is N epochs behind the tip.
 
         /// Store for tip accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

@@ -277,7 +277,9 @@ impl OutputCache {
                                     )?;
                                 }
                             }
-                            AccountSpending::Token(_, _) => todo!(),
+                            AccountSpending::TokenUnrealizedSupply(_, _) => todo!(),
+                            AccountSpending::TokenCirculatingSupply(_, _) => todo!(),
+                            AccountSpending::TokenSupplyLock(_) => todo!(),
                         }
                     }
                 }
@@ -334,7 +336,9 @@ impl OutputCache {
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountSpending::Token(_, _) => todo!(),
+                        AccountSpending::TokenUnrealizedSupply(_, _) => todo!(),
+                        AccountSpending::TokenCirculatingSupply(_, _) => todo!(),
+                        AccountSpending::TokenSupplyLock(_) => todo!(),
                     },
                 }
             }
@@ -506,7 +510,9 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountSpending::Token(_, _) => todo!(),
+                                        AccountSpending::TokenUnrealizedSupply(_, _) => todo!(),
+                                        AccountSpending::TokenCirculatingSupply(_, _) => todo!(),
+                                        AccountSpending::TokenSupplyLock(_) => todo!(),
                                     },
                                 }
                             }

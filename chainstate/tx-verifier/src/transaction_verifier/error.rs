@@ -154,6 +154,8 @@ pub enum ConnectTransactionError {
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]
     IOPolicyError(IOPolicyError, OutPointSourceId),
+    #[error("Tokens accounting error: {0}")]
+    TokensAccountingError(#[from] tokens_accounting::Error),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

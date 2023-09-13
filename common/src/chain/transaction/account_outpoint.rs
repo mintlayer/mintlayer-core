@@ -24,18 +24,18 @@ use serialization::{Decode, Encode};
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
-    /// Token account type is used to identify reissuance of a token.
-    /// It stores a supply rather than a balance. So it's a way to authorize reissuance and
-    /// track the supply in case it's fixed.
+    /// Token account type is used to authorize changes in supply of a token.
     #[codec(index = 1)]
-    Token(TokenId),
+    TokenSupply(TokenId),
 }
 
 impl From<AccountSpending> for AccountType {
     fn from(spending: AccountSpending) -> Self {
         match spending {
             AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
-            AccountSpending::Token(id, _) => AccountType::Token(id),
+            AccountSpending::TokenUnrealizedSupply(id, _)
+            | AccountSpending::TokenCirculatingSupply(id, _)
+            | AccountSpending::TokenSupplyLock(id) => AccountType::TokenSupply(id),
         }
     }
 }
@@ -48,7 +48,11 @@ pub enum AccountSpending {
     #[codec(index = 0)]
     Delegation(DelegationId, Amount),
     #[codec(index = 1)]
-    Token(TokenId, Amount),
+    TokenUnrealizedSupply(TokenId, Amount),
+    #[codec(index = 2)]
+    TokenCirculatingSupply(TokenId, Amount),
+    #[codec(index = 3)]
+    TokenSupplyLock(TokenId),
 }
 
 /// Type of OutPoint that represents spending from an account

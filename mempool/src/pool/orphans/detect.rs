@@ -87,6 +87,7 @@ impl OrphanType {
             | CTE::AttemptToCreateStakePoolFromAccounts
             | CTE::AttemptToCreateDelegationFromAccounts
             | CTE::FailedToIncrementAccountNonce
+            | CTE::TokensAccountingError(_)
             | CTE::IOPolicyError(_, _) => None,
         }
     }
