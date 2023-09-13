@@ -27,3 +27,5 @@ pub use {
     storage::{db::TokensAccountingDB, TokensAccountingStorageRead, TokensAccountingStorageWrite},
     view::{FlushableUtxoView, TokensAccountingView},
 };
+
+// FIXME: tests

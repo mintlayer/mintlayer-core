@@ -13,12 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeMap, ops::Neg};
+
+use accounting::{
+    combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
+};
 use common::{chain::tokens::TokenId, primitives::Amount};
 
 use crate::{
     data::{TokensAccountingDeltaData, TokensAccountingDeltaUndoData},
     error::Error,
-    TokenData, TokensAccountingView,
+    FlushableUtxoView, TokenData, TokensAccountingView,
 };
 
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
@@ -37,65 +42,102 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingDB<S> {
         &mut self,
         other: TokensAccountingDeltaData,
     ) -> Result<TokensAccountingDeltaUndoData, Error> {
-        todo!()
+        let data_undo = other
+            .token_data
+            .consume()
+            .into_iter()
+            .map(|(id, delta)| -> Result<_, Error> {
+                let undo = delta.clone().invert();
+                let old_data = self.0.get_token_data(&id).map_err(|_| Error::ViewFail)?;
+                match combine_data_with_delta(old_data, Some(delta))? {
+                    Some(result) => {
+                        self.0.set_token_data(&id, &result).map_err(|_| Error::StorageWrite)?
+                    }
+                    None => self.0.del_token_data(&id).map_err(|_| Error::StorageWrite)?,
+                };
+                Ok((id, undo))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let balance_undo = other
+            .circulating_supply
+            .consume()
+            .into_iter()
+            .map(|(id, delta)| -> Result<_, Error> {
+                let balance = self.0.get_circulating_supply(&id).map_err(|_| Error::ViewFail)?;
+                match combine_amount_delta(&balance, &Some(delta))? {
+                    Some(result) => {
+                        if result > Amount::ZERO {
+                            self.0
+                                .set_circulating_supply(&id, &result)
+                                .map_err(|_| Error::StorageWrite)?
+                        } else {
+                            self.0.del_circulating_supply(&id).map_err(|_| Error::StorageWrite)?
+                        }
+                    }
+                    None => self.0.del_circulating_supply(&id).map_err(|_| Error::StorageWrite)?,
+                };
+                let balance_undo = delta.neg().expect("amount negation some");
+                Ok((id, balance_undo))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        Ok(TokensAccountingDeltaUndoData {
+            token_data: DeltaDataUndoCollection::from_data(data_undo),
+            circulating_supply: DeltaAmountCollection::from_iter(balance_undo),
+        })
     }
 }
 
 impl<S: TokensAccountingStorageRead> TokensAccountingView for TokensAccountingDB<S> {
-    type Error = Error;
+    type Error = S::Error;
 
     fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error> {
-        todo!()
+        self.0.get_token_data(id)
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.0.get_circulating_supply(id)
     }
 }
 
 impl<S: TokensAccountingStorageRead> TokensAccountingStorageRead for TokensAccountingDB<S> {
     type Error = S::Error;
 
-    fn get_token_data(
-        &self,
-        id: &common::chain::tokens::TokenId,
-    ) -> Result<Option<crate::TokenData>, Self::Error> {
-        todo!()
+    fn get_token_data(&self, id: &TokenId) -> Result<Option<crate::TokenData>, Self::Error> {
+        self.0.get_token_data(id)
     }
 
-    fn get_circulating_supply(
-        &self,
-        id: &common::chain::tokens::TokenId,
-    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
-        todo!()
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        self.0.get_circulating_supply(id)
     }
 }
 
 impl<S: TokensAccountingStorageWrite> TokensAccountingStorageWrite for TokensAccountingDB<S> {
-    fn set_token_data(
-        &mut self,
-        id: &common::chain::tokens::TokenId,
-        data: &crate::TokenData,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    fn set_token_data(&mut self, id: &TokenId, data: &crate::TokenData) -> Result<(), Self::Error> {
+        self.0.set_token_data(id, data)
     }
 
-    fn del_token_data(&mut self, id: &common::chain::tokens::TokenId) -> Result<(), Self::Error> {
-        todo!()
+    fn del_token_data(&mut self, id: &TokenId) -> Result<(), Self::Error> {
+        self.0.del_token_data(id)
     }
 
-    fn set_circulating_supply(
-        &mut self,
-        id: &common::chain::tokens::TokenId,
-        supply: &common::primitives::Amount,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> Result<(), Self::Error> {
+        self.0.set_circulating_supply(id, supply)
     }
 
-    fn del_circulating_supply(
+    fn del_circulating_supply(&mut self, id: &TokenId) -> Result<(), Self::Error> {
+        self.0.del_circulating_supply(id)
+    }
+}
+
+impl<S: TokensAccountingStorageWrite> FlushableUtxoView for TokensAccountingDB<S> {
+    type Error = Error;
+
+    fn batch_write(
         &mut self,
-        id: &common::chain::tokens::TokenId,
-    ) -> Result<(), Self::Error> {
-        todo!()
+        delta: TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
+        self.merge_with_delta(delta).map_err(|_| Error::StorageWrite)
     }
 }
