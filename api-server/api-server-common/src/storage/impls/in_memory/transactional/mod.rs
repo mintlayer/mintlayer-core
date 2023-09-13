@@ -63,6 +63,7 @@ impl<'t> ApiTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 
     fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+        // TODO(PR): make this work by having transactions copy the whole storage into the transaction object, then copy them back on commit
         unimplemented!()
     }
 }

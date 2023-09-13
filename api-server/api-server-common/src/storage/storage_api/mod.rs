@@ -45,27 +45,27 @@ pub enum ApiServerStorageError {
 }
 
 pub trait ApiServerStorageRead {
-    fn is_initialized(&self) -> Result<bool, ApiServerStorageError>;
+    fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError>;
 
-    fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>;
+    fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>;
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
+    fn get_best_block(&mut self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
+    fn get_block(&mut self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
 
     fn get_block_aux_data(
-        &self,
+        &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
     fn get_main_chain_block_id(
-        &self,
+        &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
     fn get_transaction(
-        &self,
+        &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
 }
@@ -75,8 +75,6 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError>;
-
-    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiServerStorageError>;
 
     fn set_best_block(
         &mut self,
@@ -138,4 +136,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError>;
 }
 
-pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send {}
+pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send + Sync {}

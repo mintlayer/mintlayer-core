@@ -25,38 +25,38 @@ use crate::storage::storage_api::{
 use super::ApiServerInMemoryStorageTransactionalRo;
 
 impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
-    fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
+    fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
         self.transaction.is_initialized()
     }
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
+    fn get_block(&mut self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
         self.transaction.get_block(block_id)
     }
 
     fn get_transaction(
-        &self,
+        &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         self.transaction.get_transaction(transaction_id)
     }
 
-    fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
+    fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
         self.transaction.get_storage_version()
     }
 
-    fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    fn get_best_block(&mut self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         self.transaction.get_best_block()
     }
 
     fn get_block_aux_data(
-        &self,
+        &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
         self.transaction.get_block_aux_data(block_id)
     }
 
     fn get_main_chain_block_id(
-        &self,
+        &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         self.transaction.get_main_chain_block_id(block_height)

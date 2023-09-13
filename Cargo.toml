@@ -13,6 +13,7 @@ edition = "2021"
 members = [
   "accounting",                   # Accounting and balances abstractions.
   "api-server/api-server-common", # API server, for light-wallets and block explorers: common between web-server and scanner.
+  "api-server/storage-test-suite",# Test suite for the abstract storage layer of the API server to ensure consistent behavior.
   "api-server/scanner-daemon",    # API server, for light-wallets and block explorers: blockchain scanner daemon.
   "api-server/scanner-lib",       # API server, for light-wallets and block explorers: blockchain scanner library.
   "api-server/web-server",        # API server, for light-wallets and block explorers: web-server.
@@ -186,7 +187,6 @@ siphasher = "1.0"
 slave-pool = "0.2"
 snowstorm = "0.4"
 socket2 = "0.5"
-sqlx = "0.7"
 sscanf = "0.4"
 static_assertions = "1.1"
 syn = "2.0"

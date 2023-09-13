@@ -16,7 +16,9 @@ serialization = { path = "../../serialization" }
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-sqlx = { workspace = true, features = [ "runtime-tokio", "macros", "sqlite", "postgres" ] }
+postgres = "0.19"
+r2d2_postgres = "0.18"
+ouroboros = "0.18"
 
 [dev-dependencies]
 chainstate-test-framework = { path = '../../chainstate/test-framework' }

@@ -1,0 +1,13 @@
+[package]
+name = "api-server-backend-test-suite"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+logging = { path = "../../logging" }
+utils = { path = "../../utils" }
+
+libtest-mimic.workspace = true
+proptest.workspace = true

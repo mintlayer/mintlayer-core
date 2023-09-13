@@ -140,11 +140,6 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
-    fn set_storage_version(&mut self, version: u32) -> Result<(), ApiServerStorageError> {
-        self.storage_version = Some(version);
-        Ok(())
-    }
-
     fn set_best_block(
         &mut self,
         block_height: BlockHeight,
