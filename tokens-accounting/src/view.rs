@@ -17,7 +17,7 @@ use std::ops::Deref;
 
 use common::{chain::tokens::TokenId, primitives::Amount};
 
-use crate::data::{TokenData, TokensAccountingDeltaData};
+use crate::data::{TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData};
 
 pub trait TokensAccountingView {
     /// Error that can occur during queries
@@ -35,7 +35,10 @@ pub trait FlushableUtxoView {
     type Error: std::error::Error;
 
     /// Performs bulk modification
-    fn batch_write(&mut self, delta: TokensAccountingDeltaData) -> Result<(), Self::Error>;
+    fn batch_write(
+        &mut self,
+        delta: TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error>;
 }
 
 impl<T> TokensAccountingView for T

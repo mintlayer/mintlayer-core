@@ -13,17 +13,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::{chain::tokens::TokenId, primitives::Amount};
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Accounting storage error")]
     StorageError(#[from] chainstate_types::storage_result::Error),
     #[error("Base accounting error: {0}")]
     AccountingError(#[from] accounting::Error),
+    #[error("Token already exist: `{0}`")]
+    TokenAlreadyExist(TokenId),
+    #[error("Data for token {0}` not found")]
+    TokenDataNotFound(TokenId),
+    #[error("Data for token {0}` not found on reversal")]
+    TokenDataNotFoundOnReversal(TokenId),
+    #[error("Circulating supply for token {0}` not found")]
+    CirculatingSupplyNotFound(TokenId),
+    #[error("Minting `{0:?}` tokens would exceed supply limit `{1:?}` for token `{2}`")]
+    MintExceedsSupplyLimit(Amount, Amount, TokenId),
+    #[error("Amount overflow")]
+    AmountOverflow,
+    #[error("Cannot mint for a token with locked supply '{0}`")]
+    CannotMintLockedSupply(TokenId),
+    #[error("Circulating supply `{0:?}` is not enough to burn `{1:?}` for token `{2}`")]
+    NotEnoughCirculatingSupplyToBurn(Amount, Amount, TokenId),
+    #[error("Supply for a token '{0}` is already locked")]
+    SupplyIsAlreadyLocked(TokenId),
+    #[error("Cannot lock supply for a token '{0}` with not lockable supply type")]
+    CannotLockNotLockableSupply(TokenId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("Tokens accounting view query failed")]
     ViewFail,
+    #[error("Tokens accounting storage write failed")]
+    StorageWrite,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
