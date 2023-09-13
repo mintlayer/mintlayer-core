@@ -182,10 +182,12 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::Token(token_id, amount) => {
+            AccountSpending::TokenUnrealizedSupply(token_id, amount) => {
                 // FIXME: check if supply can be increased
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
+            AccountSpending::TokenCirculatingSupply(_, _) => todo!(),
+            AccountSpending::TokenSupplyLock(_) => todo!(),
         },
     });
 
