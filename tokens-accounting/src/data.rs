@@ -20,6 +20,8 @@ use common::chain::{
 };
 use serialization::{Decode, Encode};
 
+use crate::Error;
+
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct TokensAccountingDeltaData {
     pub token_data: DeltaDataCollection<TokenId, TokenData>,
@@ -38,6 +40,21 @@ impl TokensAccountingDeltaData {
             token_data: DeltaDataCollection::new(),
             circulating_supply: DeltaAmountCollection::new(),
         }
+    }
+
+    pub fn merge_with_delta(
+        &mut self,
+        other: TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Error> {
+        let token_data_undo = self.token_data.merge_delta_data(other.token_data)?;
+
+        let circulating_supply_undo = other.circulating_supply.clone();
+        self.circulating_supply.merge_delta_amounts(other.circulating_supply)?;
+
+        Ok(TokensAccountingDeltaUndoData {
+            token_data: token_data_undo,
+            circulating_supply: circulating_supply_undo,
+        })
     }
 }
 

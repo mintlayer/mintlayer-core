@@ -14,13 +14,20 @@
 // limitations under the License.
 
 use accounting::combine_amount_delta;
-use common::{chain::tokens::TokenId, primitives::Amount};
+use common::{
+    chain::tokens::{TokenId, TokenTotalSupply},
+    primitives::Amount,
+};
 
 use crate::{
     data::{TokenData, TokensAccountingDeltaData},
     error::Error,
-    operations::{TokenAccountingUndo, TokensAccountingOperations},
+    operations::{
+        BurnTokenUndo, IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
+        TokensAccountingOperations,
+    },
     view::TokensAccountingView,
+    FlushableUtxoView, TokensAccountingStorageWrite,
 };
 
 pub struct TokensAccountingCache<P> {
@@ -65,20 +72,152 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
     }
 }
 
+impl<P: TokensAccountingStorageWrite> FlushableUtxoView for TokensAccountingCache<P> {
+    type Error = Error;
+
+    fn batch_write(
+        &mut self,
+        delta: TokensAccountingDeltaData,
+    ) -> Result<crate::data::TokensAccountingDeltaUndoData, Self::Error> {
+        self.data.merge_with_delta(delta)
+    }
+}
+
 impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCache<P> {
     fn issue_token(&mut self, id: TokenId, data: TokenData) -> Result<TokenAccountingUndo, Error> {
-        todo!()
+        if self.get_token_data(&id)?.is_some() {
+            return Err(Error::TokenAlreadyExist(id));
+        }
+
+        if self.get_circulating_supply(&id)?.is_some() {
+            return Err(Error::TokenAlreadyExist(id));
+        }
+
+        // FIXME: set circulating supply to 0?
+
+        let undo_data = self
+            .data
+            .token_data
+            .merge_delta_data_element(id, accounting::DataDelta::new(None, Some(data)))?;
+
+        Ok(TokenAccountingUndo::IssueToken(IssueTokenUndo {
+            id,
+            undo_data,
+        }))
     }
 
-    fn mint_tokens(&mut self, id: TokenId, amount: Amount) -> Result<TokenAccountingUndo, Error> {
-        todo!()
+    fn mint_tokens(
+        &mut self,
+        id: TokenId,
+        amount_to_add: Amount,
+    ) -> Result<TokenAccountingUndo, Error> {
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+        let circulating_supply =
+            self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
+
+        match token_data {
+            TokenData::FungibleToken(data) => match data.supply_limit() {
+                TokenTotalSupply::Fixed(limit) => {
+                    let expected_circulating_supply =
+                        (circulating_supply + amount_to_add).ok_or(Error::AmountOverflow)?;
+                    if expected_circulating_supply > *limit {
+                        return Err(Error::MintExceedsSupplyLimit(amount_to_add, *limit, id));
+                    }
+                }
+                TokenTotalSupply::Lockable => {
+                    if data.is_locked() {
+                        return Err(Error::CannotMintLockedSupply(id));
+                    }
+                }
+                TokenTotalSupply::Unlimited => { /* do nothing */ }
+            },
+        };
+
+        self.data.circulating_supply.add_unsigned(id, amount_to_add)?;
+
+        Ok(TokenAccountingUndo::MintTokens(MintTokenUndo {
+            id,
+            amount_to_add,
+        }))
+    }
+
+    fn burn_tokens(
+        &mut self,
+        id: TokenId,
+        amount_to_burn: Amount,
+    ) -> Result<TokenAccountingUndo, Error> {
+        let _token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+        let circulating_supply =
+            self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
+
+        // FIXME: can you burn locked supply?
+
+        if circulating_supply < amount_to_burn {
+            return Err(Error::NotEnoughCirculatingSupplyToBurn(
+                circulating_supply,
+                amount_to_burn,
+                id,
+            ));
+        }
+
+        self.data.circulating_supply.sub_unsigned(id, amount_to_burn)?;
+
+        Ok(TokenAccountingUndo::BurnTokens(BurnTokenUndo {
+            id,
+            amount_to_burn,
+        }))
     }
 
     fn lock_total_supply(&mut self, id: TokenId) -> crate::error::Result<TokenAccountingUndo> {
-        todo!()
+        let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
+
+        let undo_data = match token_data {
+            TokenData::FungibleToken(data) => {
+                if data.is_locked() {
+                    return Err(Error::SupplyIsAlreadyLocked(id));
+                }
+                let new_data = data.clone().lock().ok_or(Error::CannotLockNotLockableSupply(id))?;
+                self.data.token_data.merge_delta_data_element(
+                    id,
+                    accounting::DataDelta::new(
+                        Some(TokenData::FungibleToken(data)),
+                        Some(TokenData::FungibleToken(new_data)),
+                    ),
+                )?
+            }
+        };
+        Ok(TokenAccountingUndo::LockSupply(LockSupplyUndo {
+            id,
+            undo_data,
+        }))
     }
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<(), Error> {
-        todo!()
+        match undo_data {
+            TokenAccountingUndo::IssueToken(undo) => {
+                let _ = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
+                Ok(())
+            }
+            TokenAccountingUndo::MintTokens(undo) => self
+                .data
+                .circulating_supply
+                .sub_unsigned(undo.id, undo.amount_to_add)
+                .map_err(Error::AccountingError),
+            TokenAccountingUndo::BurnTokens(undo) => self
+                .data
+                .circulating_supply
+                .add_unsigned(undo.id, undo.amount_to_burn)
+                .map_err(Error::AccountingError),
+            TokenAccountingUndo::LockSupply(undo) => {
+                let _ = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
+                Ok(())
+            }
+        }
     }
 }
