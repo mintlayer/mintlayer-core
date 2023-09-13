@@ -22,6 +22,7 @@ pub mod db;
 
 pub trait TokensAccountingStorageRead {
     type Error: std::error::Error;
+
     fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error>;
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error>;
 }
