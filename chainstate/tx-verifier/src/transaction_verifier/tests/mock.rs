@@ -33,7 +33,10 @@ use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
     PoSAccountingView, PoolData,
 };
-use tokens_accounting::{TokenData, TokensAccountingStorageRead};
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokenData, TokensAccountingDeltaData,
+    TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
+};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
 mockall::mock! {
@@ -182,5 +185,10 @@ mockall::mock! {
         type Error = tokens_accounting::Error;
         fn get_token_data(&self, id: &TokenId,) -> Result<Option<TokenData>, tokens_accounting::Error>;
         fn get_circulating_supply(&self, id: &TokenId,) -> Result<Option<Amount>, tokens_accounting::Error>;
+    }
+
+    impl FlushableTokensAccountingView for Store {
+        type Error = tokens_accounting::Error;
+        fn batch_write_tokens_data(&mut self, delta: TokensAccountingDeltaData) -> Result<TokensAccountingDeltaUndoData, tokens_accounting::Error>;
     }
 }
