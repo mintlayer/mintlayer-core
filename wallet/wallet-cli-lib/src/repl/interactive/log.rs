@@ -74,7 +74,7 @@ impl InteractiveLogger {
         let log_writer =
             ReedlineLogWriter::new(external_printer.clone(), Arc::clone(&print_directly));
 
-        logging::init_logging_pipe(log_writer, true);
+        logging::init_logging_to(log_writer, true);
 
         Self {
             external_printer,
