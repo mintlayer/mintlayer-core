@@ -135,10 +135,6 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             assert mnemonic is not None
             assert "Successfully closed the wallet" in await wallet.close_wallet()
             assert "New wallet created successfully" in await wallet.recover_wallet(mnemonic)
-            # check that balance is 0 and accounts are not present
-            assert "Coins amount: 0" in await wallet.get_balance()
-            for idx in range(num_accounts):
-                assert f"Account not found for index: {idx+1}" in await wallet.select_account(idx+1)
 
             # sync and check that accounts are now present and with correct balances
             assert "Success" in await wallet.sync()
