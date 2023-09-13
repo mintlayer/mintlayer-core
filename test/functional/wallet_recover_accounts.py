@@ -32,7 +32,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
 from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import WalletCliController
+from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
 
 import asyncio
 import sys
@@ -118,7 +118,6 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             assert "Coins amount: 10" in balance
 
             # create 3 new accounts
-            DEFAULT_ACCOUNT_INDEX = 0
             num_accounts = 3
             for idx in range(num_accounts):
                 assert "Success" in await wallet.create_new_account()

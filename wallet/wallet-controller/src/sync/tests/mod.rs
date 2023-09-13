@@ -23,7 +23,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId, SignedTransaction,
+        DelegationId, PoolId, SignedTransaction,
     },
     primitives::Amount,
 };
@@ -249,6 +249,14 @@ impl NodeInterface for MockNode {
     }
 
     async fn get_stake_pool_pledge(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
         unreachable!()
     }
 

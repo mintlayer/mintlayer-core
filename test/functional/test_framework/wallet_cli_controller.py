@@ -26,6 +26,7 @@ from typing import Optional, List
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
+DEFAULT_ACCOUNT_INDEX = 0
 
 @dataclass
 class UtxoOutpoint:
@@ -35,6 +36,15 @@ class UtxoOutpoint:
     def __str__(self):
         return f'tx({self.id},{self.index})'
 
+@dataclass
+class PoolData:
+    pool_id: str
+    balance: int
+
+@dataclass
+class DelegationData:
+    delegation_id: str
+    balance: int
 
 class WalletCliController:
 
@@ -192,14 +202,41 @@ class WalletCliController:
         return None
 
     async def create_stake_pool(self,
-                                amount: str,
-                                cost_per_block: str,
-                                margin_ratio_per_thousand: str,
+                                amount: int,
+                                cost_per_block: int,
+                                margin_ratio_per_thousand: float,
                                 decommission_key: Optional[str] = '') -> str:
         return await self._write_command(f"createstakepool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
 
+    async def list_pool_ids(self) -> List[PoolData]:
+        output = await self._write_command("listpoolids\n")
+        pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'
+        matches = re.findall(pattern, output)
+        return [PoolData(pool_id, int(balance)) for pool_id, balance in matches]
+
+    async def create_delegation(self, address: str, pool_id: str) -> Optional[str]:
+        output = await self._write_command(f"createdelegation {address} {pool_id}\n")
+        pattern = r'Delegation id: ([a-zA-Z0-9]+)'
+        match = re.search(pattern, output)
+        if match:
+            return match.group(1)
+        else:
+            return None
+
+    async def stake_delegation(self, amount: int, delegation_id: str) -> str:
+        return await self._write_command(f"delegatestaking {amount} {delegation_id}\n")
+
+    async def list_delegation_ids(self) -> List[DelegationData]:
+        output = await self._write_command("listdelegationids\n")
+        pattern = r'Delegation Id: ([a-zA-Z0-9]+), Balance: (\d+)'
+        matches = re.findall(pattern, output)
+        return [DelegationData(delegation_id, int(balance)) for delegation_id, balance in matches]
+
     async def sync(self) -> str:
         return await self._write_command("syncwallet\n")
+
+    async def start_staking(self) -> str:
+        return await self._write_command(f"startstaking\n")
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("showreceiveaddresses\n")

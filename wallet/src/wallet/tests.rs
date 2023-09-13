@@ -1654,6 +1654,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             address.clone(),
             Amount::from_atoms(1),
             delegation_id,
+            Amount::from_atoms(2),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
@@ -1667,6 +1668,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             address,
             Amount::from_atoms(1),
             delegation_id,
+            Amount::from_atoms(1),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
@@ -1676,12 +1678,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     // Check delegation balance after unconfirmed tx status
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
-    let (deleg_id, deleg_amount) = delegations.pop().unwrap();
+    let (deleg_id, _pool_id) = delegations.pop().unwrap();
     assert_eq!(*deleg_id, delegation_id);
-    assert_eq!(
-        deleg_amount,
-        (delegation_amount - Amount::from_atoms(2)).unwrap()
-    );
 
     let block5 = Block::new(
         delegation_tx1,
@@ -1705,12 +1703,8 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     // Check delegation balance after confirmed tx status
     let mut delegations = wallet.get_delegations(DEFAULT_ACCOUNT_INDEX).unwrap().collect_vec();
     assert_eq!(delegations.len(), 1);
-    let (deleg_id, deleg_amount) = delegations.pop().unwrap();
+    let (deleg_id, _pool_id) = delegations.pop().unwrap();
     assert_eq!(*deleg_id, delegation_id);
-    assert_eq!(
-        deleg_amount,
-        (delegation_amount - Amount::from_atoms(2)).unwrap()
-    );
 }
 
 #[rstest]

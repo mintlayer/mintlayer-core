@@ -24,7 +24,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId, SignedTransaction, Transaction,
+        DelegationId, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -109,6 +109,13 @@ trait ChainstateRpc {
 
     #[method(name = "stake_pool_pledge")]
     async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
+
+    #[method(name = "delegation_share")]
+    async fn delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> RpcResult<Option<Amount>>;
 
     /// Get token information
     #[method(name = "token_info")]
@@ -243,6 +250,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                     .map(|opt| opt.map(|data| data.pledge_amount()))
             })
             .await,
+        )
+    }
+
+    async fn delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> RpcResult<Option<Amount>> {
+        rpc::handle_result(
+            self.call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+                .await,
         )
     }
 

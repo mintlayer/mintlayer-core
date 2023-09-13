@@ -25,6 +25,7 @@ use common::primitives::Idable;
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
+use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::with_locked::WithLocked;
 
@@ -66,6 +67,7 @@ use wallet_types::{
     KeychainUsageState, WalletTx,
 };
 
+pub use self::output_cache::DelegationData;
 use self::output_cache::OutputCache;
 use self::transaction_list::{get_transaction_list, TransactionList};
 use self::utxo_selector::{CoinSelectionAlgo, PayFee};
@@ -438,6 +440,7 @@ impl Account {
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
+        delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let current_block_height = self.best_block().1;
@@ -477,6 +480,11 @@ impl Account {
                     .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
                     .into())
             .ok_or(WalletError::OutputAmountOverflow)?;
+            ensure!(
+                new_amount_with_fee <= delegation_share,
+                UtxoSelectorError::NotEnoughFunds(delegation_share, new_amount_with_fee)
+            );
+
             tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
                 Delegation(delegation_id, new_amount_with_fee),
@@ -518,10 +526,12 @@ impl Account {
         self.output_cache.pool_ids()
     }
 
-    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, Amount)> {
-        self.output_cache
-            .delegation_ids()
-            .map(|(delegation_id, data)| (delegation_id, data.balance))
+    pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
+        self.output_cache.delegation_ids()
+    }
+
+    pub fn find_delegation(&self, delegation_id: DelegationId) -> WalletResult<&DelegationData> {
+        self.output_cache.delegation_data(delegation_id)
     }
 
     pub fn create_stake_pool_tx(

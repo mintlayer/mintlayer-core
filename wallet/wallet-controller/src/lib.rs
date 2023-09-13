@@ -67,8 +67,8 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{
-    account::transaction_list::TransactionList,
     account::Currency,
+    account::{transaction_list::TransactionList, DelegationData},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         StakePoolDataArguments,
@@ -481,6 +481,30 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .log_err()
     }
 
+    async fn get_delegation_share(
+        &self,
+        chain_config: &ChainConfig,
+        delegation_data: &DelegationData,
+        delegation_id: DelegationId,
+    ) -> Result<(DelegationId, Amount), ControllerError<T>> {
+        if delegation_data.not_staked_yet {
+            return Ok((delegation_id, Amount::ZERO));
+        }
+
+        self.rpc_client
+            .get_delegation_share(delegation_data.pool_id, delegation_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
+            .and_then(|balance| {
+                balance.ok_or(ControllerError::SyncError(format!(
+                    "Delegation id {} from wallet not found in node",
+                    Address::new(chain_config, &delegation_id)?
+                )))
+            })
+            .map(|balance| (delegation_id, balance))
+            .log_err()
+    }
+
     pub async fn get_pool_ids(
         &self,
         chain_config: &ChainConfig,
@@ -497,11 +521,27 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         tasks.try_collect().await
     }
 
-    pub fn get_delegations(
+    pub async fn get_delegations(
         &mut self,
         account_index: U31,
-    ) -> Result<impl Iterator<Item = (&DelegationId, Amount)>, ControllerError<T>> {
-        self.wallet.get_delegations(account_index).map_err(ControllerError::WalletError)
+    ) -> Result<Vec<(DelegationId, Amount)>, ControllerError<T>> {
+        let delegations = self
+            .wallet
+            .get_delegations(account_index)
+            .map_err(ControllerError::WalletError)?;
+
+        let tasks: FuturesUnordered<_> = delegations
+            .into_iter()
+            .map(|(delegation_id, delegation_data)| {
+                self.get_delegation_share(
+                    self.chain_config.as_ref(),
+                    delegation_data,
+                    *delegation_id,
+                )
+            })
+            .collect();
+
+        tasks.try_collect().await
     }
 
     pub fn get_vrf_public_key(
@@ -634,6 +674,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .await
             .map_err(ControllerError::NodeCallError)?;
 
+        let pool_id = self
+            .wallet
+            .get_delegation(account_index, delegation_id)
+            .map_err(ControllerError::WalletError)?
+            .pool_id;
+
+        let delegation_share = self
+            .rpc_client
+            .get_delegation_share(pool_id, delegation_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(
+                WalletError::DelegationNotFound(delegation_id),
+            ))?;
+
         let tx = self
             .wallet
             .create_transaction_to_addresses_from_delegation(
@@ -641,6 +696,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 address,
                 amount,
                 delegation_id,
+                delegation_share,
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)?;
