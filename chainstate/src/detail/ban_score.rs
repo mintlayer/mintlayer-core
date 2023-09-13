@@ -149,6 +149,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
+            ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }
@@ -502,6 +503,28 @@ impl BanScore for IOPolicyError {
             IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
+        }
+    }
+}
+
+impl BanScore for tokens_accounting::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            tokens_accounting::Error::StorageError(_) => todo!(),
+            tokens_accounting::Error::AccountingError(_) => todo!(),
+            tokens_accounting::Error::TokenAlreadyExist(_) => todo!(),
+            tokens_accounting::Error::TokenDataNotFound(_) => todo!(),
+            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => todo!(),
+            tokens_accounting::Error::CirculatingSupplyNotFound(_) => todo!(),
+            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => todo!(),
+            tokens_accounting::Error::AmountOverflow => todo!(),
+            tokens_accounting::Error::CannotIncreaseLockedSupply(_) => todo!(),
+            tokens_accounting::Error::CannotDecreaseLockedSupply(_) => todo!(),
+            tokens_accounting::Error::NotEnoughCirculatingSupplyToBurn(_, _, _) => todo!(),
+            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => todo!(),
+            tokens_accounting::Error::CannotLockNotLockableSupply(_) => todo!(),
+            tokens_accounting::Error::ViewFail => todo!(),
+            tokens_accounting::Error::StorageWrite => todo!(),
         }
     }
 }

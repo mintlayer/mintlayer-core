@@ -177,6 +177,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
+            ConnectTransactionError::TokensAccountingError(_) => todo!(),
         }
     }
 }
