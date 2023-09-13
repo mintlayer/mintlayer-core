@@ -40,15 +40,15 @@ impl<T> Rational<T> {
     }
 }
 
-trait ComparableTypes {}
+trait ComparableType {}
 
-impl ComparableTypes for u64 {}
-impl ComparableTypes for u128 {}
-impl ComparableTypes for Uint256 {}
+impl ComparableType for u64 {}
+impl ComparableType for u128 {}
+impl ComparableType for Uint256 {}
 
 // Comparing a/b and c/d is equivalent to comparing a*d and b*c.
 // Only works for types that can be converted to Uint512 to handle overflow on multiplication.
-impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> Ord for Rational<T> {
+impl<T: Into<Uint512> + ComparableType + Ord + Copy> Ord for Rational<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if self.denom == other.denom {
             return self.numer.cmp(&other.numer);
@@ -68,7 +68,7 @@ impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> Ord for Rational<T> {
     }
 }
 
-impl<T: Into<Uint512> + ComparableTypes + Ord + Copy> PartialOrd for Rational<T> {
+impl<T: Into<Uint512> + ComparableType + Ord + Copy> PartialOrd for Rational<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }

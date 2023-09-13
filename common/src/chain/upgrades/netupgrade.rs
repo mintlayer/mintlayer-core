@@ -83,7 +83,7 @@ pub enum ConsensusUpgrade {
         initial_difficulty: Compact,
     },
     PoS {
-        // If None the value will be take from the network's current difficulty
+        // If None the value will be taken from the network's current difficulty
         initial_difficulty: Option<Compact>,
         config: PoSChainConfig,
     },
@@ -107,7 +107,7 @@ pub enum PoWStatus {
 pub enum PoSStatus {
     Ongoing(PoSChainConfig),
     Threshold {
-        // If None the value will be take from the network's current difficulty
+        // If None the value will be taken from the network's current difficulty
         initial_difficulty: Option<Compact>,
         config: PoSChainConfig,
     },

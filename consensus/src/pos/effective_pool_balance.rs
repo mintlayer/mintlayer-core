@@ -26,7 +26,7 @@ const K: u128 = 1000;
 pub const POOL_SATURATION_LEVEL: Rational<u128> = Rational::<u128>::new(1, K);
 
 /// Parameter determines the influence of the reward on the result. It was chosen such that if a pool
-/// doubles minimum pledge the the result increases by 0.5%.
+/// doubles minimum pledge the result increases by 0.5%.
 /// If the minimum pledge changes it should be recalculated.
 const DEFAULT_PLEDGE_INFLUENCE_PARAMETER: Rational<u128> =
     Rational::<u128>::new(75375728, 1_000_000_000); // 0.075375728
@@ -123,7 +123,7 @@ fn effective_pool_balance_impl(
     //
     // Note: the original formula had `s`, `sigma` and `z` as fractions [0, 1], but we are using integers
     //       with s in [0, z], sigma in [0, z] and z in [0, final_supply]. This is because we cannot
-    //       just multiple the pool balance by this formula, given that the formula is not linear in anything,
+    //       just multiply the pool balance by this formula, given that the formula is not linear in anything,
     //       even for sigma, because it's fixed in a range [0, final_supply].
     //
     //                 ⎛            ⎛z - sigma⎞⎞
