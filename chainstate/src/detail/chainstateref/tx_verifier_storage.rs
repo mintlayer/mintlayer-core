@@ -37,7 +37,10 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
-use tokens_accounting::TokensAccountingStorageRead;
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
+    TokensAccountingStorageRead,
+};
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
@@ -388,16 +391,33 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAccountingStorageRead
     for ChainstateRef<'a, S, V>
 {
-    type Error = tokens_accounting::Error;
+    type Error = storage_result::Error;
 
     fn get_token_data(
         &self,
         id: &TokenId,
-    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
-        todo!()
+    ) -> Result<Option<tokens_accounting::TokenData>, storage_result::Error> {
+        self.db_tx.get_token_data(id)
     }
 
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+    fn get_circulating_supply(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<Amount>, storage_result::Error> {
+        self.db_tx.get_circulating_supply(id)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
+    FlushableTokensAccountingView for ChainstateRef<'a, S, V>
+{
+    type Error = tokens_accounting::Error;
+
+    fn batch_write_tokens_data(
+        &mut self,
+        delta: tokens_accounting::TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
+        let mut db = TokensAccountingDB::new(&mut self.db_tx);
+        db.batch_write_tokens_data(delta)
     }
 }

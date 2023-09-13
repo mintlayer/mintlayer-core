@@ -30,12 +30,12 @@ pub trait TokensAccountingView {
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error>;
 }
 
-pub trait FlushableUtxoView {
+pub trait FlushableTokensAccountingView {
     /// Errors potentially triggered by flushing the view
     type Error: std::error::Error;
 
     /// Performs bulk modification
-    fn batch_write(
+    fn batch_write_tokens_data(
         &mut self,
         delta: TokensAccountingDeltaData,
     ) -> Result<TokensAccountingDeltaUndoData, Self::Error>;

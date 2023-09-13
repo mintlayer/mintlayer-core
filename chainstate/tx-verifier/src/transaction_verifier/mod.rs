@@ -36,7 +36,8 @@ pub mod timelock_check;
 
 mod tx_source;
 use tokens_accounting::{
-    TokensAccountingCache, TokensAccountingDB, TokensAccountingOperations, TokensAccountingView,
+    TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
+    TokensAccountingOperations, TokensAccountingView,
 };
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
@@ -106,6 +107,7 @@ pub struct TransactionVerifierDelta {
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
+    tokens_accounting_delta: TokensAccountingDeltaData,
 }
 
 impl TransactionVerifierDelta {
@@ -1141,6 +1143,7 @@ where
             accounting_delta_undo: self.accounting_block_undo.consume(),
             accounting_block_deltas,
             account_nonce: self.account_nonce,
+            tokens_accounting_delta: self.tokens_accounting_cache.consume(),
         })
     }
 }
