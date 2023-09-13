@@ -27,7 +27,7 @@ use crate::{
         TokensAccountingOperations,
     },
     view::TokensAccountingView,
-    FlushableUtxoView, TokensAccountingStorageWrite,
+    FlushableTokensAccountingView,
 };
 
 pub struct TokensAccountingCache<P> {
@@ -72,10 +72,10 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
     }
 }
 
-impl<P: TokensAccountingStorageWrite> FlushableUtxoView for TokensAccountingCache<P> {
+impl<P> FlushableTokensAccountingView for TokensAccountingCache<P> {
     type Error = Error;
 
-    fn batch_write(
+    fn batch_write_tokens_data(
         &mut self,
         delta: TokensAccountingDeltaData,
     ) -> Result<crate::data::TokensAccountingDeltaUndoData, Self::Error> {

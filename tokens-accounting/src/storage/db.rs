@@ -23,7 +23,7 @@ use common::{chain::tokens::TokenId, primitives::Amount};
 use crate::{
     data::{TokensAccountingDeltaData, TokensAccountingDeltaUndoData},
     error::Error,
-    FlushableUtxoView, TokenData, TokensAccountingView,
+    FlushableTokensAccountingView, TokenData, TokensAccountingView,
 };
 
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
@@ -131,10 +131,10 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingStorageWrite for TokensAcc
     }
 }
 
-impl<S: TokensAccountingStorageWrite> FlushableUtxoView for TokensAccountingDB<S> {
+impl<S: TokensAccountingStorageWrite> FlushableTokensAccountingView for TokensAccountingDB<S> {
     type Error = Error;
 
-    fn batch_write(
+    fn batch_write_tokens_data(
         &mut self,
         delta: TokensAccountingDeltaData,
     ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {

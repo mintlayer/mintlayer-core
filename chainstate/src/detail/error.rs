@@ -73,6 +73,8 @@ pub enum BlockError {
     BlockDataMissingForValidBlockIndex(Id<Block>),
     #[error("Error accessing best chain candidates: {0}")]
     BestChainCandidatesAccessorError(BestChainCandidatesError),
+    #[error("Tokens accounting error: {0}")]
+    TokensAccountingError(#[from] tokens_accounting::Error),
 
     #[error("Failed to obtain best block id: {0}")]
     BestBlockIdQueryError(PropertyQueryError),

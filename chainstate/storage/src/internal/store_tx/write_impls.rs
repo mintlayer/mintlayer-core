@@ -370,18 +370,18 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
         id: &TokenId,
         data: &tokens_accounting::TokenData,
     ) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBTokensData, _, _, _>(id, data)
     }
 
     fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()> {
-        todo!()
+        self.0.get_mut::<db::DBTokensData, _>().del(id).map_err(Into::into)
     }
 
     fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBTokensCirculatingSupply, _, _, _>(id, supply)
     }
 
     fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
-        todo!()
+        self.0.get_mut::<db::DBTokensCirculatingSupply, _>().del(id).map_err(Into::into)
     }
 }

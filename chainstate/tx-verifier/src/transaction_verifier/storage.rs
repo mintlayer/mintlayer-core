@@ -28,7 +28,7 @@ use pos_accounting::{
     AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
 };
 use thiserror::Error;
-use tokens_accounting::TokensAccountingStorageRead;
+use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
 use super::{
@@ -60,6 +60,8 @@ pub enum TransactionVerifierStorageError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
+    #[error("Tokens accounting error: {0}")]
+    TokensAccountingError(#[from] tokens_accounting::Error),
 }
 
 pub trait HasTxIndexDisabledError {
@@ -118,7 +120,10 @@ where
 }
 
 pub trait TransactionVerifierStorageMut:
-    TransactionVerifierStorageRef + FlushableUtxoView + FlushablePoSAccountingView
+    TransactionVerifierStorageRef
+    + FlushableUtxoView
+    + FlushablePoSAccountingView
+    + FlushableTokensAccountingView
 {
     fn set_mainchain_tx_index(
         &mut self,

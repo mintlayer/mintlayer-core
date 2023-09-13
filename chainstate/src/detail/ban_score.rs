@@ -74,6 +74,7 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
+            BlockError::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }
@@ -195,6 +196,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
+            TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }

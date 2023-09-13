@@ -37,7 +37,10 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
-use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
+    TokensAccountingStorageRead, TokensAccountingView,
+};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
 impl<
@@ -389,5 +392,18 @@ impl<
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         self.tokens_accounting_cache.get_circulating_supply(id)
+    }
+}
+
+impl<C, S, U, A, T: TokensAccountingView> FlushableTokensAccountingView
+    for TransactionVerifier<C, S, U, A, T>
+{
+    type Error = tokens_accounting::Error;
+
+    fn batch_write_tokens_data(
+        &mut self,
+        data: TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
+        self.tokens_accounting_cache.batch_write_tokens_data(data)
     }
 }

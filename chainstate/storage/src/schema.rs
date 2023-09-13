@@ -56,8 +56,8 @@ storage::decl_schema! {
         /// Store the number of transactions per account
         pub DBAccountNonceCount: Map<AccountType, AccountNonce>,
 
-        //pub DBTokensData: Map<TokenId, tokens_accounting::TokenData>,
-        //pub DBTokensCirculatingSupply: Map<TokenId, Amount>,
+        pub DBTokensData: Map<TokenId, tokens_accounting::TokenData>,
+        pub DBTokensCirculatingSupply: Map<TokenId, Amount>,
 
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,

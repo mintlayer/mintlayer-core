@@ -21,6 +21,8 @@ use super::{
     CachedInputsOperation, CachedOperation, TransactionVerifierDelta,
 };
 use common::chain::OutPointSourceId;
+use tokens_accounting::FlushableTokensAccountingView;
+use utxo::FlushableUtxoView;
 
 fn flush_tx_indexes<S: TransactionVerifierStorageMut>(
     storage: &mut S,
@@ -80,7 +82,8 @@ pub fn flush_to_storage<S: TransactionVerifierStorageMut>(
     consumed: TransactionVerifierDelta,
 ) -> Result<(), <S as TransactionVerifierStorageRef>::Error>
 where
-    <S as TransactionVerifierStorageRef>::Error: From<<S as utxo::FlushableUtxoView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableUtxoView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
     for (tx_id, tx_index_op) in consumed.tx_index_cache {
@@ -112,6 +115,8 @@ where
 
     // flush pos accounting
     storage.batch_write_delta(consumed.accounting_delta)?;
+
+    storage.batch_write_tokens_data(consumed.tokens_accounting_delta)?;
 
     for (tx_source, delta) in consumed.accounting_block_deltas {
         storage.apply_accounting_delta(tx_source, &delta)?;

@@ -22,11 +22,13 @@ mod view;
 
 pub use {
     cache::TokensAccountingCache,
-    data::{FungibleTokenData, TokenData},
+    data::{
+        FungibleTokenData, TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
+    },
     error::Error,
     operations::{TokenAccountingUndo, TokensAccountingOperations},
     storage::{db::TokensAccountingDB, TokensAccountingStorageRead, TokensAccountingStorageWrite},
-    view::{FlushableUtxoView, TokensAccountingView},
+    view::{FlushableTokensAccountingView, TokensAccountingView},
 };
 
 // FIXME: tests
