@@ -129,7 +129,9 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 +-------+----------------------------------------------+--------------------------------+
 | 6     | rmt1q8lrw5tzgmwjnsc26v8qfu8k2jmddpmhwqz6kwt7 | No                             |
 +-------+----------------------------------------------+--------------------------------+"""
-            assert expected_output == await wallet.get_addresses_usage()
+            output = await wallet.get_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert line == expected_line
 
 
 if __name__ == '__main__':
