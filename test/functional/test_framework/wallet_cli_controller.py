@@ -69,7 +69,19 @@ class WalletCliController:
         try:
             output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=READ_TIMEOUT_SEC)
             self.wallet_commands_file.write(output)
-            return output.decode().strip()
+            result = output.decode().strip()
+
+            try:
+                while True:
+                    output = await asyncio.wait_for(self.process.stdout.read(ONE_MB), timeout=0.1)
+                    if not output:
+                        break
+                    self.wallet_commands_file.write(output)
+                    result += output.decode().strip()
+            except:
+                pass
+
+            return result
         except:
             self.wallet_commands_file.write(b"read from stdout timedout\n")
             return ''

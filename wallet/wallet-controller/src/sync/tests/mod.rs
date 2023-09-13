@@ -29,6 +29,7 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
+use futures::executor::block_on;
 use logging::log;
 use mempool::FeeRate;
 use node_comm::{
@@ -40,21 +41,24 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
 use wallet::wallet_events::WalletEventsNoOp;
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use super::*;
 
 struct MockWallet {
     genesis_id: Id<GenBlock>,
     blocks: Vec<Id<Block>>,
-    new_tip_tx: mpsc::UnboundedSender<Id<Block>>,
+    next_unused_blocks: Vec<Id<Block>>,
+    new_tip_tx: mpsc::Sender<(AccountType, Id<Block>)>,
     latest_median_time: BlockTimestamp,
 }
 
 impl MockWallet {
-    fn new(chain_config: &ChainConfig, new_tip_tx: mpsc::UnboundedSender<Id<Block>>) -> Self {
+    fn new(chain_config: &ChainConfig, new_tip_tx: mpsc::Sender<(AccountType, Id<Block>)>) -> Self {
         Self {
             genesis_id: chain_config.genesis_block_id(),
             blocks: Vec::new(),
+            next_unused_blocks: Vec::new(),
             new_tip_tx,
             latest_median_time: chain_config.genesis_block().timestamp(),
         }
@@ -67,26 +71,42 @@ impl MockWallet {
     fn get_block_height(&self) -> BlockHeight {
         BlockHeight::from(self.blocks.len() as u64)
     }
+
+    fn get_unused_acc_best_block_id(&self) -> Id<GenBlock> {
+        self.next_unused_blocks.last().cloned().map_or(self.genesis_id, Into::into)
+    }
+
+    fn get_unused_acc_block_height(&self) -> BlockHeight {
+        BlockHeight::from(self.next_unused_blocks.len() as u64)
+    }
+
+    pub fn reset_unused_account_to_height(&mut self, height: usize) {
+        self.next_unused_blocks.truncate(height);
+    }
 }
 
 impl SyncingWallet for MockWallet {
     fn syncing_state(&self) -> WalletSyncingState {
         WalletSyncingState {
             account_best_blocks: BTreeMap::from([(
-                U31::ZERO,
+                DEFAULT_ACCOUNT_INDEX,
                 (self.get_best_block_id(), self.get_block_height()),
             )]),
-            unused_account_best_block: (self.get_best_block_id(), self.get_block_height()),
+            unused_account_best_block: (
+                self.get_unused_acc_best_block_id(),
+                self.get_unused_acc_block_height(),
+            ),
         }
     }
 
     fn scan_blocks(
         &mut self,
-        _account: U31,
+        account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
         _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
+        assert!(account == DEFAULT_ACCOUNT_INDEX);
         assert!(!blocks.is_empty());
         assert!(
             common_block_height <= self.get_block_height(),
@@ -98,7 +118,15 @@ impl SyncingWallet for MockWallet {
         for block in blocks {
             assert_eq!(*block.header().prev_block_id(), self.get_best_block_id());
             self.blocks.push(block.header().block_id());
-            let _ = self.new_tip_tx.send(block.header().block_id());
+            block_on(async {
+                self.new_tip_tx
+                    .send((
+                        AccountType::Account(DEFAULT_ACCOUNT_INDEX),
+                        block.header().block_id(),
+                    ))
+                    .await
+            })
+            .unwrap();
         }
 
         log::debug!(
@@ -112,10 +140,38 @@ impl SyncingWallet for MockWallet {
 
     fn scan_blocks_for_unused_account(
         &mut self,
-        _common_block_height: BlockHeight,
-        _blocks: Vec<Block>,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
         _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
+        assert!(!blocks.is_empty());
+        assert!(
+            common_block_height <= self.get_unused_acc_block_height(),
+            "Invalid common block height: {common_block_height}, max: {}",
+            self.get_unused_acc_block_height()
+        );
+
+        self.next_unused_blocks.truncate(common_block_height.into_int() as usize);
+        for block in blocks {
+            assert_eq!(
+                *block.header().prev_block_id(),
+                self.get_unused_acc_best_block_id()
+            );
+            self.next_unused_blocks.push(block.header().block_id());
+            block_on(async {
+                self.new_tip_tx
+                    .send((AccountType::UnusedAccount, block.header().block_id()))
+                    .await
+            })
+            .unwrap();
+        }
+
+        log::debug!(
+            "new block added to wallet: {}, block height: {}",
+            self.get_unused_acc_best_block_id(),
+            self.get_unused_acc_block_height(),
+        );
+
         Ok(())
     }
 
@@ -266,9 +322,21 @@ fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, 
     tf.create_chain(&parent_id, count, rng).unwrap();
 }
 
-async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<Id<Block>>) {
+async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::Receiver<(AccountType, Id<Block>)>) {
     let expected_block_id = node.tf.lock().unwrap().best_block_id();
-    let wait_fut = async move { while new_tip_tx.recv().await.unwrap() != expected_block_id {} };
+    let mut reached = BTreeMap::<AccountType, Option<Id<Block>>>::new();
+    reached.insert(AccountType::Account(DEFAULT_ACCOUNT_INDEX), None);
+    reached.insert(AccountType::UnusedAccount, None);
+
+    let wait_fut = async move {
+        while !reached
+            .values()
+            .all(|block| block.map_or(false, |block| block == expected_block_id))
+        {
+            let (acc, block_id) = new_tip_tx.recv().await.unwrap();
+            reached.entry(acc).or_default().replace(block_id);
+        }
+    };
     tokio::time::timeout(Duration::from_secs(60), wait_fut).await.unwrap();
 }
 
@@ -289,7 +357,7 @@ async fn basic_sync(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let node = MockNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
-    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let (new_tip_tx, mut new_tip_rx) = mpsc::channel(100);
     let wallet = MockWallet::new(&chain_config, new_tip_tx);
 
     run_sync(Arc::clone(&chain_config), node.clone(), wallet);
@@ -327,7 +395,7 @@ async fn restart_from_genesis(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let node = MockNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
-    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let (new_tip_tx, mut new_tip_rx) = mpsc::channel(100);
     let wallet = MockWallet::new(&chain_config, new_tip_tx);
 
     run_sync(Arc::clone(&chain_config), node.clone(), wallet);
@@ -349,7 +417,7 @@ async fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let node = MockNode::new(&mut rng);
     let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
-    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let (new_tip_tx, mut new_tip_rx) = mpsc::channel(100);
     let wallet = MockWallet::new(&chain_config, new_tip_tx);
 
     run_sync(Arc::clone(&chain_config), node.clone(), wallet);
@@ -370,6 +438,67 @@ async fn randomized(#[case] seed: Seed) {
 
         if new_tip {
             wait_new_tip(&node, &mut new_tip_rx).await;
+        }
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn account_out_of_sync(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let node = MockNode::new(&mut rng);
+    let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
+    let (new_tip_tx, mut new_tip_rx) = mpsc::channel(100);
+    let mut wallet = MockWallet::new(&chain_config, new_tip_tx);
+
+    // Build blocks
+    for height in 1..10 {
+        create_chain(&node, &mut rng, height - 1, 1);
+    }
+
+    let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    let reset_to = rng.gen_range(1..9);
+    wallet.reset_unused_account_to_height(reset_to);
+
+    // Build new blocks
+    for height in 10..20 {
+        create_chain(&node, &mut rng, height - 1, 1);
+    }
+
+    // DEFAULT_ACCOUNT_INDEX is 10 blocks behind but unused account is a bit more
+    let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
+
+    // check that we receive that first the unused account was borough to height 10
+    for height in (reset_to + 1)..10 {
+        let (acc, block_id) = new_tip_rx.recv().await.unwrap();
+
+        let expected_block_id = node
+            .get_block_id_at_height(BlockHeight::new(height as u64))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(acc, AccountType::UnusedAccount);
+        assert_eq!(block_id, expected_block_id);
+    }
+
+    // Next in order of highest to lowest the accounts will be synced to 20
+    for expected_acc in [AccountType::Account(DEFAULT_ACCOUNT_INDEX), AccountType::UnusedAccount] {
+        for height in 10..20 {
+            let (acc, block_id) = new_tip_rx.recv().await.unwrap();
+
+            let expected_block_id = node
+                .get_block_id_at_height(BlockHeight::new(height as u64))
+                .await
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(acc, expected_acc);
+            assert_eq!(block_id, expected_block_id);
         }
     }
 }
