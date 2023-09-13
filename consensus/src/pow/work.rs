@@ -85,7 +85,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
         ConsensusPoWError::InvalidTargetBits(block_pow_data.bits(), work_required)
     );
 
-    if check_proof_of_work(header.block_id().get(), work_required)? {
+    if check_proof_of_work(header.block_id().to_hash(), work_required)? {
         Ok(())
     } else {
         Err(ConsensusPoWError::InvalidPoW(header.get_id()))
@@ -247,7 +247,7 @@ pub fn mine(
         data.update_nonce(nonce);
         block_header.update_consensus_data(ConsensusData::PoW(data.clone()));
 
-        if check_proof_of_work(block_header.get_id().get(), bits)? {
+        if check_proof_of_work(block_header.get_id().to_hash(), bits)? {
             return Ok(MiningResult::Success);
         }
 

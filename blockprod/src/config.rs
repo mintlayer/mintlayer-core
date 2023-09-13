@@ -16,6 +16,8 @@
 /// The blockprod subsystem configuration.
 #[derive(Debug)]
 pub struct BlockProdConfig {
+    /// Skip the initial block download check for block production.
+    pub skip_ibd_check: bool,
     /// Minimum number of connected peers to enable block production.
     pub min_peers_to_produce_blocks: usize,
 }

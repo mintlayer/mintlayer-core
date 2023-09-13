@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use common::{
     chain::config::create_unit_test_config, primitives::user_agent::mintlayer_core_user_agent,
@@ -37,6 +37,8 @@ fn unban_peer() {
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
         Arc::new(P2pConfig {
+            ban_duration: Duration::from_secs(60).into(),
+
             bind_addresses: Default::default(),
             socks5_proxy: None,
             disable_noise: Default::default(),
@@ -44,7 +46,6 @@ fn unban_peer() {
             reserved_nodes: Default::default(),
             max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
-            ban_duration: Duration::from_secs(60).into(),
             outbound_connection_timeout: Default::default(),
             ping_check_period: Default::default(),
             ping_timeout: Default::default(),
@@ -57,8 +58,9 @@ fn unban_peer() {
             user_agent: mintlayer_core_user_agent(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
-            max_unconnected_headers: Default::default(),
+            max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
+            enable_block_relay_peers: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,
@@ -130,4 +132,54 @@ fn connected_unknown() {
     // PeerDb should process that normally.
     peerdb.outbound_peer_connected(address);
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
+}
+
+#[test]
+fn anchor_peers() {
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
+    let p2p_config = Arc::new(test_p2p_config());
+
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let mut anchors =
+        [TestAddressMaker::new_random_address(), TestAddressMaker::new_random_address()]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    let new_address = TestAddressMaker::new_random_address();
+    anchors.insert(new_address);
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    let mut peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        peerdb.storage,
+    )
+    .unwrap();
+    assert_eq!(*peerdb.anchors(), anchors);
+
+    anchors.remove(&new_address);
+    peerdb.set_anchors(anchors.clone());
+    assert_eq!(*peerdb.anchors(), anchors);
+    let peerdb = PeerDb::new(
+        &chain_config,
+        Arc::clone(&p2p_config),
+        time_getter.get_time_getter(),
+        peerdb.storage,
+    )
+    .unwrap();
+    assert_eq!(*peerdb.anchors(), anchors);
 }

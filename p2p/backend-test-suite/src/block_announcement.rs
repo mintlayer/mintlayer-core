@@ -95,17 +95,17 @@ where
         )
         .unwrap();
 
-    let mut sync_rx_2 = match sync2.poll_next().await.unwrap() {
+    let mut sync_msg_rx_2 = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
-            services: _,
-            sync_rx,
-        } => sync_rx,
+            common_services: _,
+            sync_msg_rx,
+        } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
     // Poll an event from the network for server2.
-    let header = match sync_rx_2.recv().await.unwrap() {
+    let header = match sync_msg_rx_2.recv().await.unwrap() {
         SyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()
@@ -130,16 +130,16 @@ where
         )
         .unwrap();
 
-    let mut sync_rx_1 = match sync1.poll_next().await.unwrap() {
+    let mut sync_msg_rx_1 = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected {
             peer_id: _,
-            services: _,
-            sync_rx,
-        } => sync_rx,
+            common_services: _,
+            sync_msg_rx,
+        } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
     };
 
-    let header = match sync_rx_1.recv().await.unwrap() {
+    let header = match sync_msg_rx_1.recv().await.unwrap() {
         SyncMessage::HeaderList(l) => {
             assert_eq!(l.headers().len(), 1);
             l.into_headers().pop().unwrap()
@@ -165,6 +165,8 @@ where
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
+        node_type: NodeType::Inactive.into(),
+
         bind_addresses: Vec::new(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -177,7 +179,6 @@ where
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
-        node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
@@ -185,8 +186,9 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();

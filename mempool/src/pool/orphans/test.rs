@@ -51,8 +51,8 @@ fn check_integrity(orphans: &TxOrphanPool) {
     });
 }
 
-fn random_peer_origin(rng: &mut impl Rng) -> TxOrigin {
-    TxOrigin::Peer(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
+fn random_peer_origin(rng: &mut impl Rng) -> RemoteTxOrigin {
+    RemoteTxOrigin::new(p2p_types::PeerId::from_u64(rng.gen_range(0u64..20)))
 }
 
 fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
@@ -76,13 +76,7 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Time::from_secs(rng.gen());
-
-    let origin = match rng.gen_range(0..4) {
-        0 | 1 => random_peer_origin(rng),
-        2 => TxOrigin::LocalMempool,
-        3 => TxOrigin::LocalP2p,
-        _ => panic!("out of range"),
-    };
+    let origin = random_peer_origin(rng);
 
     TxEntry::new(transaction, insertion_time, origin)
 }
@@ -110,7 +104,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
     check_integrity(&orphans);
 
-    assert!(orphans.remove(tx_id).is_some());
+    assert!(orphans.entry(&tx_id).map(|e| e.take()).is_some());
 
     assert!(orphans.transactions.is_empty());
     assert!(orphans.maps.by_tx_id.is_empty());
@@ -149,7 +143,7 @@ fn simulation(#[case] seed: Seed) {
 
     for _ in 0..300 {
         let len_before = orphans.len();
-        match rng.gen_range(0..=5) {
+        match rng.gen_range(0..=4) {
             // Insert a random tx
             0..=1 => {
                 let entry = random_tx_entry(&mut rng);
@@ -168,23 +162,15 @@ fn simulation(#[case] seed: Seed) {
                 }
                 let i = rng.gen_range(0..orphans.transactions.len());
                 let id = *orphans.transactions[i].tx_id();
-                assert!(orphans.remove(id).is_some(), "Removal of {id:?} failed");
+                assert!(
+                    orphans.entry(&id).map(|e| e.take()).is_some(),
+                    "Removal of {id:?} failed"
+                );
                 assert_eq!(orphans.len(), len_before - 1);
             }
 
-            // Delete a non-existing tx
-            3..=3 => {
-                let id: Id<Transaction> = H256(rng.gen::<[u8; 32]>()).into();
-                assert_eq!(
-                    orphans.remove(id),
-                    None,
-                    "Removal of non-existent {id:?} failed"
-                );
-                assert_eq!(orphans.len(), len_before);
-            }
-
             // Enforce size limits
-            4..=4 => {
+            3..=3 => {
                 let limit = rng.gen_range(0..=150);
                 orphans.enforce_max_size(limit);
                 assert!(orphans.len() <= limit);
@@ -192,13 +178,8 @@ fn simulation(#[case] seed: Seed) {
             }
 
             // Delete all txs by origin
-            5..=5 => {
-                let origin = match rng.gen_range(0..=5) {
-                    0..=3 => random_peer_origin(&mut rng),
-                    4..=4 => TxOrigin::LocalMempool,
-                    5..=5 => TxOrigin::LocalP2p,
-                    _ => panic!("out of range"),
-                };
+            4..=4 => {
+                let origin = random_peer_origin(&mut rng);
                 orphans.remove_by_origin(origin);
                 let count = orphans
                     .maps

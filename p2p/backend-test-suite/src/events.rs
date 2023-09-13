@@ -95,7 +95,7 @@ where
             address: _,
             inbound: _,
             user_agent: _,
-            version: _,
+            software_version: _,
         }) => {
             assert_eq!(id, info.peer_id);
             assert_eq!(

@@ -19,7 +19,7 @@ use common::chain::config::create_unit_test_config;
 use crypto::key::secp256k1::Secp256k1PublicKey;
 use rstest::rstest;
 use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, seed_phrase::StoreSeedPhrase};
 
 // TODO: More tests
 
@@ -35,8 +35,14 @@ fn check_mine_methods(#[case] public: &str) {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        chain_config,
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
     let mut key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
         .unwrap();

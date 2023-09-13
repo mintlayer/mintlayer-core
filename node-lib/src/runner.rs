@@ -32,8 +32,8 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::{
     chain::{
         config::{
-            regtest::create_regtest_pos_genesis, Builder as ChainConfigBuilder, ChainConfig,
-            ChainType, EmissionScheduleTabular,
+            regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
+            Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
         },
         Destination, NetUpgrades,
     },
@@ -333,7 +333,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
     let ChainConfigOptions {
         chain_magic_bytes,
         chain_max_future_block_time_offset,
-        chain_version,
+        software_version: chain_software_version,
         chain_target_block_spacing,
         chain_coin_decimals,
         chain_emission_schedule,
@@ -341,6 +341,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_genesis_block_timestamp,
         chain_genesis_staking_settings,
     } = options;
 
@@ -376,7 +377,7 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
     };
     update_builder!(magic_bytes, magic_bytes_from_string, map_err);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
-    update_builder!(version, SemVer::try_from, map_err);
+    update_builder!(software_version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
     update_builder!(coin_decimals);
     if let Some(val) = chain_emission_schedule {
@@ -391,9 +392,15 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
             create_regtest_pos_genesis(
                 chain_genesis_staking_settings.clone(),
+                *chain_genesis_block_timestamp,
                 Destination::AnyoneCanSpend,
             ),
         );
+    } else {
+        builder = builder.genesis_custom(create_regtest_pow_genesis(
+            *chain_genesis_block_timestamp,
+            Destination::AnyoneCanSpend,
+        ));
     }
 
     Ok(builder.build())

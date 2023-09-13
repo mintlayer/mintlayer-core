@@ -70,7 +70,7 @@ where
     .unwrap();
 
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0]).unwrap();
+    conn1.connect(addr[0], None).unwrap();
 
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
@@ -80,9 +80,9 @@ where
     {
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, *config.version());
+        assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
-        assert_eq!(peer_info.services, NodeType::Full.into());
+        assert_eq!(peer_info.common_services, NodeType::Full.into());
     } else {
         panic!("invalid event received");
     }
@@ -144,7 +144,7 @@ where
     .unwrap();
 
     let bind_address = conn2.local_addresses();
-    conn1.connect(bind_address[0]).unwrap();
+    conn1.connect(bind_address[0], None).unwrap();
     let res2 = conn2.poll_next().await;
     match res2.unwrap() {
         ConnectivityEvent::InboundAccepted {
@@ -153,7 +153,7 @@ where
             receiver_address: _,
         } => {
             assert_eq!(peer_info.network, *config.magic_bytes());
-            assert_eq!(peer_info.version, *config.version());
+            assert_eq!(peer_info.software_version, *config.software_version());
             assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         }
         _ => panic!("invalid event received, expected incoming connection"),
@@ -215,7 +215,7 @@ where
     .await
     .unwrap();
 
-    conn1.connect(conn2.local_addresses()[0]).unwrap();
+    conn1.connect(conn2.local_addresses()[0], None).unwrap();
     let res2 = conn2.poll_next().await;
 
     match res2.unwrap() {
@@ -287,7 +287,7 @@ where
 
     // Try connect to self
     let addr = conn1.local_addresses();
-    conn1.connect(addr[0]).unwrap();
+    conn1.connect(addr[0], None).unwrap();
 
     // ConnectionError should be reported
     if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
@@ -299,7 +299,7 @@ where
 
     // Check that we can still connect normally after
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0]).unwrap();
+    conn1.connect(addr[0], None).unwrap();
     if let Ok(ConnectivityEvent::OutboundAccepted {
         address,
         peer_info,
@@ -307,11 +307,11 @@ where
     }) = conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
-        assert_eq!(peer_info.protocol, NETWORK_PROTOCOL_CURRENT);
+        assert_eq!(peer_info.protocol_version, NETWORK_PROTOCOL_CURRENT);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, *config.version());
+        assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
-        assert_eq!(peer_info.services, NodeType::Full.into());
+        assert_eq!(peer_info.common_services, NodeType::Full.into());
     } else {
         panic!("invalid event received");
     }
@@ -365,7 +365,7 @@ where
     .unwrap();
 
     // Try to connect to some broken peer
-    conn.connect(addr[0]).unwrap();
+    conn.connect(addr[0], None).unwrap();
     // `ConnectionError` should be reported
     let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
 

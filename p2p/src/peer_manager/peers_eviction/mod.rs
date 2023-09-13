@@ -13,22 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, hash::Hasher};
+use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
 use crypto::random::Rng;
 
-use crate::{net::types::Role, types::peer_id::PeerId};
+use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
-use super::{address_groups::AddressGroup, peer_context::PeerContext};
+use super::{address_groups::AddressGroup, peer_context::PeerContext, OUTBOUND_BLOCK_RELAY_COUNT};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
 const PRESERVED_COUNT_ADDRESS_GROUP: usize = 4;
 const PRESERVED_COUNT_PING: usize = 8;
+const PRESERVED_COUNT_NEW_BLOCKS: usize = 8;
+const PRESERVED_COUNT_NEW_TRANSACTIONS: usize = 4;
 
 #[cfg(test)]
-const PRESERVED_COUNT_TOTAL: usize = PRESERVED_COUNT_ADDRESS_GROUP + PRESERVED_COUNT_PING;
+const PRESERVED_COUNT_TOTAL: usize = PRESERVED_COUNT_ADDRESS_GROUP
+    + PRESERVED_COUNT_PING
+    + PRESERVED_COUNT_NEW_BLOCKS
+    + PRESERVED_COUNT_NEW_TRANSACTIONS;
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
@@ -37,14 +42,20 @@ const PRESERVED_COUNT_TOTAL: usize = PRESERVED_COUNT_ADDRESS_GROUP + PRESERVED_C
 pub struct EvictionCandidate {
     peer_id: PeerId,
 
+    age: Duration,
+
     /// Deterministically randomized address group ID
     net_group_keyed: NetGroupKeyed,
 
-    /// Minimum ping time in microseconds (or i64::MAX if not yet known yet)
+    /// Minimum ping time in microseconds (or i64::MAX if not known yet)
     ping_min: i64,
 
     /// Inbound or Outbound
-    role: Role,
+    peer_role: PeerRole,
+
+    last_tip_block_time: Option<Duration>,
+
+    last_tx_time: Option<Duration>,
 }
 
 pub struct RandomState(u64, u64);
@@ -62,21 +73,35 @@ impl RandomState {
 }
 
 impl EvictionCandidate {
-    pub fn new(peer: &PeerContext, random_state: &RandomState) -> Self {
+    pub fn new(peer: &PeerContext, random_state: &RandomState, now: Duration) -> Self {
         EvictionCandidate {
+            age: now.saturating_sub(peer.created_at),
             peer_id: peer.info.peer_id,
             net_group_keyed: NetGroupKeyed(random_state.get_hash(
                 &AddressGroup::from_peer_address(&peer.address.as_peer_address()),
             )),
             ping_min: peer.ping_min.map_or(i64::MAX, |val| val.as_micros() as i64),
-            role: peer.role,
+            peer_role: peer.peer_role,
+            last_tip_block_time: peer.last_tip_block_time,
+            last_tx_time: peer.last_tx_time,
         }
     }
 }
 
 // Only consider inbound connections for eviction (attackers have no control over outbound connections)
-fn filter_inbound(mut candidates: Vec<EvictionCandidate>) -> Vec<EvictionCandidate> {
-    candidates.retain(|peer| peer.role == Role::Inbound);
+fn filter_peer_role(
+    mut candidates: Vec<EvictionCandidate>,
+    peer_role: PeerRole,
+) -> Vec<EvictionCandidate> {
+    candidates.retain(|peer| peer.peer_role == peer_role);
+    candidates
+}
+
+fn filter_old_peers(
+    mut candidates: Vec<EvictionCandidate>,
+    age: Duration,
+) -> Vec<EvictionCandidate> {
+    candidates.retain(|peer| peer.age >= age);
     candidates
 }
 
@@ -98,6 +123,26 @@ fn filter_fast_ping(
     count: usize,
 ) -> Vec<EvictionCandidate> {
     candidates.sort_unstable_by_key(|peer| -peer.ping_min);
+    candidates.truncate(candidates.len().saturating_sub(count));
+    candidates
+}
+
+// Preserve the last nodes that sent us new blocks
+fn filter_by_last_tip_block_time(
+    mut candidates: Vec<EvictionCandidate>,
+    count: usize,
+) -> Vec<EvictionCandidate> {
+    candidates.sort_unstable_by_key(|peer| peer.last_tip_block_time);
+    candidates.truncate(candidates.len().saturating_sub(count));
+    candidates
+}
+
+// Preserve the last nodes that sent us new transactions
+fn filter_by_last_transaction_time(
+    mut candidates: Vec<EvictionCandidate>,
+    count: usize,
+) -> Vec<EvictionCandidate> {
+    candidates.sort_unstable_by_key(|peer| peer.last_tx_time);
     candidates.truncate(candidates.len().saturating_sub(count));
     candidates
 }
@@ -133,17 +178,39 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 /// fixed numbers of desirable peers per various criteria.
 /// If any eviction candidates remain, the selection logic chooses a peer to evict.
 #[must_use]
-pub fn select_for_eviction(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
+pub fn select_for_eviction_inbound(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
-    let candidates = filter_inbound(candidates);
+    let candidates = filter_peer_role(candidates, PeerRole::Inbound);
     let candidates = filter_address_group(candidates, PRESERVED_COUNT_ADDRESS_GROUP);
     let candidates = filter_fast_ping(candidates, PRESERVED_COUNT_PING);
-
-    // TODO: Preserve 4 nodes that most recently sent us novel transactions accepted into our mempool.
-    // TODO: Preserve up to 8 peers that have sent us novel blocks.
+    let candidates = filter_by_last_tip_block_time(candidates, PRESERVED_COUNT_NEW_BLOCKS);
+    let candidates = filter_by_last_transaction_time(candidates, PRESERVED_COUNT_NEW_TRANSACTIONS);
 
     find_group_most_connections(candidates)
+}
+
+#[must_use]
+pub fn select_for_eviction_block_relay(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
+    let candidates = filter_peer_role(candidates, PeerRole::OutboundBlockRelay);
+
+    // Give peers some time to have a chance to send blocks
+    let mut candidates = filter_old_peers(candidates, Duration::from_secs(120));
+    if candidates.len() < OUTBOUND_BLOCK_RELAY_COUNT {
+        return None;
+    }
+
+    // Starting from the youngest, disconnect the first peer that never sent a new blockchain tip
+    candidates.sort_by_key(|peer| peer.age);
+    for peer in candidates.iter() {
+        if peer.last_tip_block_time.is_none() {
+            return Some(peer.peer_id);
+        }
+    }
+
+    // Disconnect the peer who sent a new blockchain tip a long time ago
+    candidates.sort_by_key(|peer| peer.last_tip_block_time);
+    candidates.first().map(|peer| peer.peer_id)
 }
 
 #[cfg(test)]

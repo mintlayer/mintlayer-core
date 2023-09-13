@@ -17,17 +17,40 @@ use std::time::Duration;
 
 /// Activity with a peer.
 #[derive(Debug)]
-pub enum PeerActivity {
-    /// Node is pending for further actions with a peer.
-    Pending,
-    /// Node has sent a header list request to a peer and is expecting a header list response.
-    ExpectingHeaderList {
-        /// A time when the header list request was sent.
-        time: Duration,
-    },
-    /// Node has sent a block list request to a peer and is expecting block responses.
-    ExpectingBlocks {
-        /// A time when either the block list request was sent or last block response was received.
-        time: Duration,
-    },
+pub struct PeerActivity {
+    expecting_headers_since: Option<Duration>,
+    expecting_blocks_since: Option<Duration>,
+}
+
+impl PeerActivity {
+    pub fn new() -> PeerActivity {
+        PeerActivity {
+            expecting_headers_since: None,
+            expecting_blocks_since: None,
+        }
+    }
+
+    pub fn expecting_headers_since(&mut self) -> Option<Duration> {
+        self.expecting_headers_since
+    }
+
+    pub fn expecting_blocks_since(&mut self) -> Option<Duration> {
+        self.expecting_blocks_since
+    }
+
+    pub fn set_expecting_headers_since(&mut self, time: Option<Duration>) {
+        self.expecting_headers_since = time;
+    }
+
+    pub fn set_expecting_blocks_since(&mut self, time: Option<Duration>) {
+        self.expecting_blocks_since = time;
+    }
+
+    pub fn earliest_expected_activity_time(&self) -> Option<Duration> {
+        match (self.expecting_headers_since, self.expecting_blocks_since) {
+            (None, None) => None,
+            (Some(time), None) | (None, Some(time)) => Some(time),
+            (Some(time1), Some(time2)) => Some(std::cmp::min(time1, time2)),
+        }
+    }
 }

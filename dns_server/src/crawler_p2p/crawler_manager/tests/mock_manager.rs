@@ -44,7 +44,8 @@ use p2p::{
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
     types::{
-        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, socket_address::SocketAddress,
+        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, services::Services,
+        socket_address::SocketAddress,
     },
     P2pEventHandler,
 };
@@ -91,10 +92,10 @@ impl MockStateRef {
     }
 
     pub fn announce_address(&self, from: SocketAddress, announced_ip: SocketAddress) {
-        let peer = *self.connected.lock().unwrap().get(&from).unwrap();
+        let peer_id = *self.connected.lock().unwrap().get(&from).unwrap();
         self.conn_tx
             .send(ConnectivityEvent::Message {
-                peer,
+                peer_id,
                 message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: announced_ip.as_peer_address(),
                 }),
@@ -141,17 +142,17 @@ impl NetworkingService for MockNetworkingService {
 
 #[async_trait]
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
-    fn connect(&mut self, address: SocketAddress) -> p2p::Result<()> {
+    fn connect(&mut self, address: SocketAddress, _services: Option<Services>) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
         if let Some(node) = self.state.online.lock().unwrap().get(&address) {
             let peer_id = PeerId::new();
             let peer_info = PeerInfo {
                 peer_id,
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *node.chain_config.magic_bytes(),
-                version: SemVer::new(1, 2, 3),
+                software_version: SemVer::new(1, 2, 3),
                 user_agent: mintlayer_core_user_agent(),
-                services: NodeType::Full.into(),
+                common_services: NodeType::DnsServer.into(),
             };
             let old = self.state.connected.lock().unwrap().insert(address, peer_id);
             assert!(old.is_none());

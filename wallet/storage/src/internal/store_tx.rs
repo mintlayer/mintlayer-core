@@ -27,8 +27,11 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    keys::RootKeyConstant, keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo,
-    AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    chain_info::ChainInfo,
+    keys::{RootKeyConstant, RootKeys},
+    seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 use crate::{
@@ -40,6 +43,7 @@ use crate::{
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
+    use wallet_types::chain_info::ChainInfo;
 
     use super::Codec;
 
@@ -64,6 +68,7 @@ mod well_known {
     declare_entry!(StoreVersion: u32);
     declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
     declare_entry!(MedianTime: BlockTimestamp);
+    declare_entry!(StoreChainInfo: ChainInfo);
 }
 
 #[derive(PartialEq, Clone)]
@@ -146,6 +151,11 @@ macro_rules! impl_read_ops {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
             }
 
+            fn get_chain_info(&self) -> crate::Result<ChainInfo> {
+                self.read_value::<well_known::StoreChainInfo>()
+                    .and_then(|v| v.ok_or(crate::Error::WalletDbInconsistentState))
+            }
+
             fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>> {
                 self.read::<db::DBTxs, _, _>(id)
             }
@@ -203,6 +213,13 @@ macro_rules! impl_read_ops {
                     .prefix_iter_decoded(&())
                     .map_err(crate::Error::from)
                     .map(|item| item.map(|item| item.1).collect())
+            }
+
+            fn get_account_unconfirmed_tx_counter(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Option<u64>> {
+                self.read::<db::DBUnconfirmedTxCounters, _, _>(account_id)
             }
 
             fn get_keychain_usage_state(
@@ -315,6 +332,13 @@ macro_rules! impl_read_unlocked_ops {
                     }),
                 )
             }
+            fn get_seed_phrase(&self) -> crate::Result<Option<SerializableSeedPhrase>> {
+                Ok(
+                    self.read::<db::DBSeedPhrase, _, _>(&SeedPhraseConstant {})?.map(|v| {
+                        v.try_take(self.encryption_key).expect("key was checked when unlocked")
+                    }),
+                )
+            }
         }
     };
 }
@@ -330,6 +354,10 @@ macro_rules! impl_write_ops {
                 self.write_value::<well_known::StoreVersion>(&version)
             }
 
+            fn set_chain_info(&mut self, chain_info: &ChainInfo) -> crate::Result<()> {
+                self.write_value::<well_known::StoreChainInfo>(chain_info)
+            }
+
             fn set_transaction(
                 &mut self,
                 id: &AccountWalletTxId,
@@ -340,6 +368,21 @@ macro_rules! impl_write_ops {
 
             fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
+            }
+
+            fn clear_transactions(&mut self) -> crate::Result<()> {
+                let transactions: Vec<_> =
+                    self.storage.get::<db::DBTxs, _>().prefix_iter_keys(&())?.collect();
+
+                transactions.into_iter().try_for_each(|id| self.del_transaction(&id))
+            }
+
+            fn set_account_unconfirmed_tx_counter(
+                &mut self,
+                id: &AccountId,
+                counter: u64,
+            ) -> crate::Result<()> {
+                self.write::<db::DBUnconfirmedTxCounters, _, _, _>(id, counter)
             }
 
             fn set_user_transaction(
@@ -457,6 +500,26 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionWrite for StoreTxRwUnlocke
             .into_iter()
             .try_for_each(|(k, v)| self.write::<db::DBRootKeys, _, _, _>(k, v))
     }
+
+    fn encrypt_seed_phrase(
+        &mut self,
+        new_encryption_key: &Option<SymmetricKey>,
+    ) -> crate::Result<()> {
+        let encrypted_seed_phrase: Vec<_> = self
+            .storage
+            .get::<db::DBSeedPhrase, _>()
+            .prefix_iter_decoded(&())?
+            .map(|(k, v)| {
+                let decrypted =
+                    v.try_take(self.encryption_key).expect("key was checked when unlocked");
+                (k, MaybeEncrypted::new(&decrypted, new_encryption_key))
+            })
+            .collect();
+
+        encrypted_seed_phrase
+            .into_iter()
+            .try_for_each(|(k, v)| self.write::<db::DBSeedPhrase, _, _, _>(k, v))
+    }
 }
 
 /// Wallet data storage transaction
@@ -471,6 +534,20 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
             .get_mut::<db::DBRootKeys, _>()
             .del(&RootKeyConstant {})
             .map_err(Into::into)
+    }
+
+    fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> crate::Result<()> {
+        let value = MaybeEncrypted::new(&seed_phrase, self.encryption_key);
+        self.write::<db::DBSeedPhrase, _, _, _>(SeedPhraseConstant, value)
+    }
+
+    fn del_seed_phrase(&mut self) -> crate::Result<Option<SerializableSeedPhrase>> {
+        let phrase = self.get_seed_phrase()?;
+        // overwrite the old seed phrase
+        self.set_seed_phrase(SerializableSeedPhrase::zero_seed_phrase())?;
+        self.storage.get_mut::<db::DBSeedPhrase, _>().del(&SeedPhraseConstant {})?;
+        // TODO: probably will need to VACUUM the sqlite DB to make sure it is deleted
+        Ok(phrase)
     }
 }
 

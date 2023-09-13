@@ -16,6 +16,7 @@
 mod addresses;
 mod ban;
 mod connections;
+mod peer_types;
 mod ping;
 
 use std::{sync::Arc, time::Duration};
@@ -151,17 +152,17 @@ async fn get_connected_peers(tx: &UnboundedSender<PeerManagerEvent>) -> Vec<Conn
 
 /// Send some message to PeerManager and ensure it's processed
 async fn send_and_sync(
-    peer: PeerId,
+    peer_id: PeerId,
     message: PeerManagerMessage,
     conn_tx: &UnboundedSender<ConnectivityEvent>,
     cmd_rx: &mut UnboundedReceiver<Command>,
 ) {
-    conn_tx.send(ConnectivityEvent::Message { peer, message }).unwrap();
+    conn_tx.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 
     let sent_nonce = crypto::random::make_pseudo_rng().gen();
     conn_tx
         .send(ConnectivityEvent::Message {
-            peer,
+            peer_id,
             message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }),
         })
         .unwrap();
@@ -169,12 +170,12 @@ async fn send_and_sync(
     let event = expect_recv!(cmd_rx);
     match event {
         Command::SendMessage {
-            peer,
+            peer_id,
             message: Message::PingResponse(PingResponse { nonce }),
         } => {
             conn_tx
                 .send(ConnectivityEvent::Message {
-                    peer,
+                    peer_id,
                     message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
                 })
                 .unwrap();

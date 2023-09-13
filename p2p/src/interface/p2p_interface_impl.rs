@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::SignedTransaction;
-use mempool::TxOrigin;
+use mempool::tx_origin::LocalTxOrigin;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
     socket_address::SocketAddress,
@@ -115,13 +115,10 @@ where
         Ok(rx.await??)
     }
 
-    async fn submit_transaction(
-        &mut self,
-        tx: SignedTransaction,
-    ) -> crate::Result<mempool::TxStatus> {
+    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
         let res = self
             .mempool_handle
-            .call_mut(move |mempool| mempool.add_transaction(tx, TxOrigin::LocalP2p))
+            .call_mut(move |mempool| mempool.add_transaction_local(tx, LocalTxOrigin::P2p))
             .await??;
         Ok(res)
     }

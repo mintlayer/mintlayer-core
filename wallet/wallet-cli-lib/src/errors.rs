@@ -51,4 +51,6 @@ pub enum WalletCliError {
     AccountNotFound(U31),
     #[error("Address encoding error: {0}")]
     AddressEncodingError(#[from] AddressError),
+    #[error("Retrieving addresses with usage failed for account {0}: {1}")]
+    AddressesRetrievalFailed(U31, String),
 }

@@ -18,6 +18,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     detail::{
         self,
+        block_checking::BlockChecker,
+        block_invalidation::BlockInvalidator,
         bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
         calculate_median_time_past,
         tx_verification_strategy::TransactionVerificationStrategy,
@@ -35,7 +37,7 @@ use common::{
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SignedTransaction,
         Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id},
+    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
@@ -68,15 +70,26 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::ProcessBlockError)
     }
 
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        BlockInvalidator::new(&mut self.chainstate)
+            .invalidate_block(block_id, detail::block_invalidation::IsExplicit::Yes)
+            .map_err(ChainstateError::BlockInvalidatorError)
+    }
+
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        BlockInvalidator::new(&mut self.chainstate)
+            .reset_block_failure_flags(block_id)
+            .map_err(ChainstateError::BlockInvalidatorError)
+    }
+
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
-        self.chainstate
+        BlockChecker::new(&self.chainstate)
             .preliminary_header_check(header)
             .map_err(ChainstateError::ProcessBlockError)
     }
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
-        let block = self
-            .chainstate
+        let block = BlockChecker::new(&self.chainstate)
             .preliminary_block_check(block.into())
             .map_err(ChainstateError::ProcessBlockError)?;
         Ok(WithId::take(block))
@@ -95,6 +108,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .query()
             .map_err(ChainstateError::from)?
             .is_block_in_main_chain(block_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_min_height_with_allowed_reorg()
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -167,27 +188,49 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers(locator, header_count_limit)
+            .get_mainchain_headers_by_locator(locator, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn filter_already_existing_blocks(
+    fn get_mainchain_headers_since_latest_fork_point(
         &self,
-        headers: Vec<SignedBlockHeader>,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .filter_already_existing_blocks(headers)
+            .get_mainchain_headers_since_latest_fork_point(block_ids, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn split_off_leading_known_headers(
+        &self,
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
+        let first_non_existing_block_idx = {
+            let mut idx = 0;
+            for header in headers.iter() {
+                if self.get_block_index(&header.get_id())?.is_none() {
+                    break;
+                }
+                idx += 1;
+            }
+            idx
+        };
+
+        assert!(first_non_existing_block_idx <= headers.len());
+        let mut headers = headers;
+        let non_existing_block_headers = headers.split_off(first_non_existing_block_idx);
+        Ok((headers, non_existing_block_headers))
     }
 
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {
@@ -196,8 +239,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .query()
             .map_err(ChainstateError::from)?
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("Best block index could not be found");
+            .map_err(ChainstateError::FailedToReadProperty)?;
         Ok(best_block_index.block_height())
     }
 
@@ -210,13 +252,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
-        Ok(self
-            .chainstate
+        self.chainstate
             .query()
             .map_err(ChainstateError::from)?
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("Best block index could not be found"))
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_block_index(&self, block_id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {

@@ -117,15 +117,15 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
-        let (peer, mut sync_rx) = match sync2.poll_next().await.unwrap() {
+        let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,
-                services: _,
-                sync_rx,
-            } => (peer_id, sync_rx),
+                common_services: _,
+                sync_msg_rx,
+            } => (peer_id, sync_msg_rx),
             e => panic!("Unexpected event type: {e:?}"),
         };
-        match sync_rx.recv().await.unwrap() {
+        match sync_msg_rx.recv().await.unwrap() {
             SyncMessage::HeaderListRequest(_) => {}
             e => panic!("Unexpected event type: {e:?}"),
         };

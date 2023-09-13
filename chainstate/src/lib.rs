@@ -13,43 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod config;
+mod detail;
 mod interface;
-use detail::bootstrap::BootstrapError;
-pub use detail::tx_verification_strategy::*;
-pub use interface::chainstate_interface;
-use interface::chainstate_interface_impl;
-pub use interface::chainstate_interface_impl_delegation;
-use tx_verifier::transaction_verifier::storage::HasTxIndexDisabledError;
 
 pub mod rpc;
+
+use std::sync::Arc;
+
+use chainstate_interface::ChainstateInterface;
+use chainstate_interface_impl::ChainstateInterfaceImpl;
+use common::{
+    chain::{Block, ChainConfig, GenBlock},
+    primitives::{BlockHeight, Id},
+    time_getter::TimeGetter,
+};
+use detail::{bootstrap::BootstrapError, Chainstate};
+use interface::chainstate_interface_impl;
+use tx_verifier::transaction_verifier::storage::HasTxIndexDisabledError;
 
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
-        ban_score, calculate_median_time_past, check_nft_issuance_data, check_tokens_issuance_data,
-        is_rfc3986_valid_symbol, BlockError, BlockSource, ChainInfo, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError,
-        TokenIssuanceError, TokensError, TransactionVerifierStorageError, TxIndexError,
+        ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
+        check_nft_issuance_data, check_tokens_issuance_data, is_rfc3986_valid_symbol, BlockError,
+        BlockSource, ChainInfo, CheckBlockError, CheckBlockTransactionsError,
+        ConnectTransactionError, IOPolicyError, InitializationError, Locator, OrphanCheckError,
+        SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
+        TransactionVerifierStorageError, TxIndexError,
     },
 };
-
-mod config;
-mod detail;
-
-use std::sync::Arc;
-
 pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::{
-    chain::{Block, ChainConfig, GenBlock},
-    primitives::{BlockHeight, Id},
-};
+pub use detail::tx_verification_strategy::*;
+pub use interface::{chainstate_interface, chainstate_interface_impl_delegation};
 pub use tx_verifier;
-
-use chainstate_interface::ChainstateInterface;
-use chainstate_interface_impl::ChainstateInterfaceImpl;
-use common::time_getter::TimeGetter;
-use detail::Chainstate;
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -66,6 +63,8 @@ pub enum ChainstateError {
     FailedToReadProperty(#[from] PropertyQueryError),
     #[error("Block import error {0}")]
     BootstrapError(#[from] BootstrapError),
+    #[error("Error invoking block invalidator: {0}")]
+    BlockInvalidatorError(#[from] BlockInvalidatorError),
 }
 
 impl HasTxIndexDisabledError for ChainstateError {

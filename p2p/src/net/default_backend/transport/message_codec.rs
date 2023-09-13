@@ -13,77 +13,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
+use std::{marker::PhantomData, mem::size_of};
 
 use bytes::{Buf, BytesMut};
-use serialization::{DecodeAll, Encode};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{net::default_backend::types::Message, P2pError, Result};
+use crate::{error::MessageCodecError, P2pError, Result};
+use serialization::{DecodeAll, Encode};
 
-const HEADER_LEN: usize = 4;
+/// The header that precedes each message and specifies the size of the message, not including
+/// the header itself.
+type MsgLenHeader = u32;
 
-pub struct EncoderDecoder {
+pub struct MessageCodec<Msg> {
     max_message_size: usize,
+    _phantom_msg: PhantomData<Msg>,
 }
 
-impl EncoderDecoder {
+impl<Msg> MessageCodec<Msg> {
     pub fn new(max_message_size: usize) -> Self {
-        Self { max_message_size }
+        Self {
+            max_message_size,
+            _phantom_msg: PhantomData::<Msg>,
+        }
     }
 }
 
-impl Decoder for EncoderDecoder {
-    type Item = Message;
+impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
+    type Item = Msg;
     type Error = P2pError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
-        if src.len() < 4 {
+        if src.len() < size_of::<MsgLenHeader>() {
             return Ok(None);
         }
 
-        let (header, remaining_bytes) = src.split_at_mut(HEADER_LEN);
+        let (header, remaining_bytes) = src.split_at_mut(size_of::<MsgLenHeader>());
 
-        // Unwrap is safe here because the header size is 4 bytes
-        let length = u32::from_le_bytes(header.try_into().expect("valid size")) as usize;
+        // Unwrap is safe here because the header size is exactly size_of::<Header>().
+        let length = MsgLenHeader::from_le_bytes(header.try_into().expect("valid size")) as usize;
 
         if length > self.max_message_size {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Frame of length {length} is too large"),
-            )
+            return Err(MessageCodecError::MessageTooLarge {
+                actual_size: length,
+                max_size: self.max_message_size,
+            }
             .into());
         }
 
         if remaining_bytes.len() < length {
-            src.reserve(4 + length - src.len());
+            src.reserve(size_of::<MsgLenHeader>() + length - src.len());
             return Ok(None);
         }
 
         let (body, _extra_bytes) = remaining_bytes.split_at_mut(length);
 
-        let decode_res = Message::decode_all(&mut &body[..]);
+        let decode_res = Msg::decode_all(&mut &body[..]);
 
-        src.advance(4 + length);
+        src.advance(size_of::<MsgLenHeader>() + length);
 
         match decode_res {
             Ok(msg) => Ok(Some(msg)),
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()).into()),
+            Err(e) => Err(MessageCodecError::InvalidEncodedData(e).into()),
         }
     }
 }
 
-impl Encoder<Message> for EncoderDecoder {
+impl<Msg: Encode> Encoder<Msg> for MessageCodec<Msg> {
     type Error = P2pError;
 
-    fn encode(&mut self, msg: Message, dst: &mut BytesMut) -> Result<()> {
+    fn encode(&mut self, msg: Msg, dst: &mut BytesMut) -> Result<()> {
         let encoded = msg.encode();
 
         if encoded.len() > self.max_message_size {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Frame of length {} is too large", encoded.len()),
-            )
+            return Err(MessageCodecError::MessageTooLarge {
+                actual_size: encoded.len(),
+                max_size: self.max_message_size,
+            }
             .into());
         }
 
@@ -99,19 +105,16 @@ impl Encoder<Message> for EncoderDecoder {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::ErrorKind,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-    };
-
     use crypto::random::Rng;
+    use serialization::Decode;
     use test_utils::random::Seed;
 
     use super::*;
-    use crate::{
-        error::DialError,
-        message::{AddrListRequest, AnnounceAddrRequest, HeaderList, PingRequest},
-    };
+
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug)]
+    struct TestMessage {
+        data: u64,
+    }
 
     #[rstest::rstest]
     #[trace]
@@ -119,28 +122,27 @@ mod tests {
     fn size_limit_encode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = Message::AnnounceAddrRequest(AnnounceAddrRequest {
-            address: SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                rng.gen(),
-            )
-            .into(),
-        });
+        let message = TestMessage { data: rng.gen() };
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
-        EncoderDecoder::new(rng.gen_range(64..128))
+        MessageCodec::new(rng.gen_range(64..128))
             .encode(message.clone(), &mut buf)
             .unwrap();
-        assert!(buf.len() > HEADER_LEN);
-        let message_length = buf.len() - HEADER_LEN;
+        assert!(buf.len() > size_of::<MsgLenHeader>());
 
-        let mut encoder = EncoderDecoder::new(rng.gen_range(0..message_length));
+        let message_length = buf.len() - size_of::<MsgLenHeader>();
+        let max_length = rng.gen_range(0..message_length);
+        let mut encoder = MessageCodec::new(max_length);
+        let result = encoder.encode(message, &mut buf);
         assert_eq!(
-            Err(P2pError::DialError(DialError::IoError(
-                ErrorKind::InvalidData
-            ))),
-            encoder.encode(message, &mut buf)
+            result,
+            Err(P2pError::MessageCodecError(
+                MessageCodecError::MessageTooLarge {
+                    actual_size: message_length,
+                    max_size: max_length,
+                }
+            ))
         );
     }
 
@@ -150,24 +152,24 @@ mod tests {
     fn size_limit_decode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let message = Message::AnnounceAddrRequest(AnnounceAddrRequest {
-            address: SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                rng.gen(),
-            )
-            .into(),
-        });
+        let message = TestMessage { data: rng.gen() };
         let mut encoded = BytesMut::new();
-        EncoderDecoder::new(rng.gen_range(126..512))
+        MessageCodec::new(rng.gen_range(126..512))
             .encode(message, &mut encoded)
             .unwrap();
 
-        let mut decoder = EncoderDecoder::new(rng.gen_range(0..(encoded.len() - HEADER_LEN)));
+        let message_length = encoded.len() - size_of::<MsgLenHeader>();
+        let max_length = rng.gen_range(0..message_length);
+        let mut decoder = MessageCodec::<TestMessage>::new(max_length);
+        let result = decoder.decode(&mut encoded);
         assert_eq!(
-            Err(P2pError::DialError(DialError::IoError(
-                ErrorKind::InvalidData
-            ))),
-            decoder.decode(&mut encoded)
+            result,
+            Err(P2pError::MessageCodecError(
+                MessageCodecError::MessageTooLarge {
+                    actual_size: message_length,
+                    max_size: max_length,
+                }
+            ))
         );
     }
 
@@ -177,25 +179,13 @@ mod tests {
     fn roundtrip(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let messages = [
-            Message::PingRequest(PingRequest { nonce: 1 }),
-            Message::HeaderList(HeaderList::new(Vec::new())),
-            Message::AnnounceAddrRequest(AnnounceAddrRequest {
-                address: SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
-                    rng.gen(),
-                )
-                .into(),
-            }),
-            Message::AddrListRequest(AddrListRequest {}),
-        ];
+        let message = TestMessage { data: rng.gen() };
 
-        let mut encoder = EncoderDecoder::new(rng.gen_range(128..2048));
-        for message in messages {
-            let mut buf = BytesMut::new();
-            encoder.encode(message.clone(), &mut buf).unwrap();
-            let decoded = encoder.decode(&mut buf).unwrap().unwrap();
-            assert_eq!(message, decoded);
-        }
+        let mut encoder = MessageCodec::new(rng.gen_range(128..2048));
+
+        let mut buf = BytesMut::new();
+        encoder.encode(message.clone(), &mut buf).unwrap();
+        let decoded = encoder.decode(&mut buf).unwrap().unwrap();
+        assert_eq!(message, decoded);
     }
 }

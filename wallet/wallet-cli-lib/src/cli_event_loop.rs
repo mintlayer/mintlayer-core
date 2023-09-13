@@ -22,7 +22,6 @@ use wallet_controller::NodeRpcClient;
 use crate::{
     commands::{CommandHandler, ConsoleCommand, WalletCommand},
     errors::WalletCliError,
-    CliController,
 };
 
 #[derive(Debug)]
@@ -36,12 +35,12 @@ pub enum Event {
 pub async fn run(
     chain_config: &Arc<ChainConfig>,
     rpc_client: &NodeRpcClient,
-    mut controller_opt: Option<CliController>,
     mut event_rx: mpsc::UnboundedReceiver<Event>,
 ) {
     let mut command_handler = CommandHandler::new();
 
     loop {
+        let mut controller_opt = command_handler.controller_opt();
         let background_task = async {
             match controller_opt.as_mut() {
                 Some(controller) => controller.run().await,
@@ -53,7 +52,7 @@ pub async fn run(
             event_opt = event_rx.recv() => {
                 match event_opt {
                     Some(Event::HandleCommand { command, res_tx }) => {
-                        let res = command_handler.handle_wallet_command(chain_config, rpc_client, &mut controller_opt, command).await;
+                        let res = command_handler.handle_wallet_command(chain_config, rpc_client, command).await;
                         let _ = res_tx.send(res);
                     },
                     None => return,

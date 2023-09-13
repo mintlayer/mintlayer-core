@@ -38,11 +38,11 @@ pub fn peer_db(c: &mut Criterion) {
         peerdb.ban(TestAddressMaker::new_random_address().as_bannable());
     }
 
-    let normal_outbound =
+    let automatic_outbound =
         (0..5).map(|_| TestAddressMaker::new_random_address()).collect::<BTreeSet<_>>();
 
     c.bench_function("PeerDb", |b| {
-        b.iter(|| peerdb.select_new_outbound_addresses(&normal_outbound))
+        b.iter(|| peerdb.select_new_outbound_addresses(&automatic_outbound, 11))
     });
 }
 

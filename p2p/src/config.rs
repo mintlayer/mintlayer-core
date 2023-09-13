@@ -37,6 +37,7 @@ make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
 make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
+make_config_setting!(BlockRelayPeers, bool, true);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -59,7 +60,7 @@ impl From<NodeType> for Services {
             NodeType::Full => [Service::Blocks, Service::Transactions, Service::PeerAddresses]
                 .as_slice()
                 .into(),
-            NodeType::BlocksOnly => [Service::Blocks].as_slice().into(),
+            NodeType::BlocksOnly => [Service::Blocks, Service::PeerAddresses].as_slice().into(),
             NodeType::DnsServer => [Service::PeerAddresses].as_slice().into(),
             NodeType::Inactive => [].as_slice().into(),
         }
@@ -67,6 +68,13 @@ impl From<NodeType> for Services {
 }
 
 /// The p2p subsystem configuration.
+// TODO: some of these "configuration options" should never be changed in production code,
+// because their values are a part of the protocol, e.g. this includes msg_header_count_limit and
+// max_request_blocks_count. Some other, like msg_max_locator_count, are never changed even
+// in tests. It might be better to separate these "settings" off into a separate struct and/or
+// make some of them constants (and the constant corresponding to msg_max_locator_count may
+// even be moved to chainstate, where locators are actually produced).
+// See the issue https://git.mintlayer.org/mintlayer/mintlayer-core/-/issues/1111
 #[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
@@ -113,9 +121,13 @@ pub struct P2pConfig {
     pub max_message_size: MaxMessageSize,
     /// A maximum number of announcements (hashes) for which we haven't receive transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// A maximum number of unconnected headers (block announcements) that a peer can send before
+    /// A maximum number of singular unconnected headers that a peer can send before
     /// it will be considered malicious.
-    pub max_unconnected_headers: MaxUnconnectedHeaders,
+    // TODO: this is a legacy behavior that should be removed in the protocol v2.
+    // See the issue #1110.
+    pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,
+    /// Enable/disable block relay peers (only used in unit tests)
+    pub enable_block_relay_peers: BlockRelayPeers,
 }

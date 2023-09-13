@@ -16,25 +16,22 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::detail::BlockSource;
-use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
-
+use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
-
-use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::{AccountNonce, AccountType, SignedTransaction};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
-
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
@@ -44,10 +41,13 @@ pub trait ChainstateInterface: Send {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError>;
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
     fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;
     fn get_block_height_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,
@@ -79,22 +79,31 @@ pub trait ChainstateInterface: Send {
     /// Returns a locator starting from the specified height.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
 
-    /// Returns a list of block headers starting from the last locator's block that is in the main
-    /// chain.
+    /// Returns a list of mainchain block headers starting from the locator's highest block that
+    /// is in the main chain (or genesis, if there is no such block).
     ///
-    /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
-    /// header is returned in case there is no common ancestor with a better block height.
-    fn get_headers(
+    /// The number of returned headers is limited by `header_count_limit`.
+    fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
-    /// Removes all headers that are already known to the chain from the given vector.
-    fn filter_already_existing_blocks(
+    /// For each block id in the list, find its latest ancestor that is still on the main chain
+    /// (the fork point); among the obtained fork points choose the one with the biggest height;
+    /// return headers of all mainchain blocks above that height.
+    fn get_mainchain_headers_since_latest_fork_point(
+        &self,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+
+    /// Find the first header in the passed vector for which the block is not in the chainstate;
+    /// split the vector into two parts - first, all headers up to the found one, second, the rest.
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
     fn get_gen_block_index(

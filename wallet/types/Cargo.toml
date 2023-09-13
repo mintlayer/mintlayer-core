@@ -14,7 +14,9 @@ serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+hex.workspace = true
 parity-scale-codec.workspace = true
+itertools.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
 

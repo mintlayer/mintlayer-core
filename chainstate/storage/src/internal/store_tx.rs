@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
-use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
-        block::BlockReward,
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
@@ -31,7 +32,6 @@ use pos_accounting::{
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
-use std::collections::BTreeMap;
 use storage::schema;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
@@ -42,7 +42,7 @@ use crate::{
 };
 
 mod well_known {
-    use super::{ChainstateStorageVersion, Codec, GenBlock, Id};
+    use super::{BlockHeight, ChainstateStorageVersion, Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -68,6 +68,7 @@ mod well_known {
     declare_entry!(TxIndexEnabled: bool);
     declare_entry!(MagicBytes: [u8; 4]);
     declare_entry!(ChainType: String);
+    declare_entry!(MinHeightForReorg: BlockHeight);
 }
 
 /// Read-only chainstate storage transaction
@@ -131,6 +132,10 @@ macro_rules! impl_read_ops {
 
             fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
                 self.read_value::<well_known::TxIndexEnabled>()
+            }
+
+            fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>> {
+                self.read_value::<well_known::MinHeightForReorg>()
             }
 
             fn get_mainchain_tx_index(
@@ -425,6 +430,10 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()> {
         self.write_value::<well_known::TxIndexEnabled>(&enabled)
+    }
+
+    fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()> {
+        self.write_value::<well_known::MinHeightForReorg>(&height)
     }
 
     fn set_mainchain_tx_index(

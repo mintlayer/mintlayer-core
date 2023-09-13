@@ -15,19 +15,22 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::{
-    chain::block::timestamp::BlockTimestamp, primitives::user_agent::mintlayer_core_user_agent,
-};
+use common::primitives::{user_agent::mintlayer_core_user_agent, Idable};
 use crypto::random::Rng;
+use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
-use crate::{config::P2pConfig, sync::tests::helpers::SyncManagerHandle};
-
-use super::helpers::{
-    get_random_bytes, new_block, new_top_blocks, sync_managers, sync_managers_in_sync,
-    try_sync_managers_once,
+use crate::{
+    config::P2pConfig,
+    message::SyncMessage,
+    sync::tests::helpers::{
+        test_node_group::{MsgAction, TestNodeGroup},
+        TestNode,
+    },
 };
+
+use super::helpers::{make_new_block, make_new_blocks, make_new_top_blocks};
 
 #[rstest::rstest]
 #[trace]
@@ -62,72 +65,61 @@ async fn basic(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
 
-    let mut blocks = Vec::new();
-    for _ in 0..13 {
-        let block = new_block(
-            &chain_config,
-            blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
-        );
-        blocks.push(block.clone());
-    }
+    let blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        13,
+        &mut rng,
+    );
+    let top_block_id = blocks.last().unwrap().get_id();
 
-    // Start `manager1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
+    let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks)
         .build()
         .await;
+    let chainstate1 = node1.chainstate().clone();
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    let mut nodes = TestNodeGroup::new(vec![node1, node2]);
+    nodes.set_assert_no_peer_manager_events(true);
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
-    new_top_blocks(
-        manager1.chainstate(),
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        0,
-        1,
-    )
-    .await;
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1).await;
+    nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     for _ in 0..15 {
+        let mut top_block_id = None;
         for _ in 0..rng.gen_range(1..2) {
-            new_top_blocks(
-                manager1.chainstate(),
-                BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-                get_random_bytes(&mut rng),
-                0,
-                1,
-            )
-            .await;
+            top_block_id = Some(
+                make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1)
+                    .await,
+            );
         }
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+        nodes.sync_all(&top_block_id.unwrap().into(), &mut rng).await;
     }
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    nodes.join_subsystem_managers().await;
 }
 
-#[ignore = "This test sometimes breaks on CI, disabled until fixed"]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -139,73 +131,45 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
-        sync_stalling_timeout: Default::default(),
-    });
-
     let mut blocks = Vec::new();
     for _ in 0..1000 {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         time_getter.advance_time(Duration::from_secs(600));
         blocks.push(block.clone());
     }
+    let top_block_id = blocks.last().unwrap().get_id();
 
-    // Start `manager1` with up-to-date blockchain
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with up-to-date blockchain
+    let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks)
         .build()
         .await;
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    let mut nodes = TestNodeGroup::new(vec![node1, node2]);
+    nodes.set_assert_no_peer_manager_events(true);
 
     // Simulate a normal block sync process.
     // There should be no unexpected disconnects.
-    let mut managers = vec![&mut manager1, &mut manager2];
-    while !sync_managers_in_sync(&managers).await {
-        try_sync_managers_once(&mut rng, &mut managers, 50).await;
+    while !nodes.all_in_sync(&top_block_id.into()).await {
+        nodes.exchange_sync_messages(&mut rng).await;
         time_getter.advance_time(Duration::from_millis(10));
     }
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    nodes.join_subsystem_managers().await;
 }
 
 #[rstest::rstest]
@@ -219,108 +183,92 @@ async fn reorg(#[case] seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
-    let p2p_config = Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
-        socks5_proxy: Default::default(),
-        disable_noise: Default::default(),
-        boot_nodes: Default::default(),
-        reserved_nodes: Default::default(),
-        max_inbound_connections: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: Default::default(),
-        ping_check_period: Default::default(),
-        ping_timeout: Default::default(),
-        max_clock_diff: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        msg_header_count_limit: Default::default(),
-        msg_max_locator_count: Default::default(),
-        max_request_blocks_count: Default::default(),
-        user_agent: mintlayer_core_user_agent(),
-        max_message_size: Default::default(),
-        max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
-        sync_stalling_timeout: Default::default(),
-    });
-
     let mut blocks = Vec::new();
     for _ in 0..10 {
-        let block = new_block(
+        let block = make_new_block(
             &chain_config,
             blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
+            &time_getter.get_time_getter(),
+            &mut rng,
         );
         time_getter.advance_time(Duration::from_secs(60));
         blocks.push(block.clone());
     }
+    let top_block_id = blocks.last().unwrap().get_id();
 
-    // Start `manager1` with up-to-date blockchain
-    let mut manager1 = SyncManagerHandle::builder()
+    // Start `node1` with up-to-date blockchain
+    let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks.clone())
         .build()
         .await;
+    let chainstate1 = node1.chainstate().clone();
 
-    // Start `manager2` with up-to-date blockchain
-    let mut manager2 = SyncManagerHandle::builder()
+    // Start `node2` with up-to-date blockchain
+    let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .with_blocks(blocks)
         .build()
         .await;
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    let mut nodes = TestNodeGroup::new(vec![node1, node2]);
+    nodes.set_assert_no_peer_manager_events(true);
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     // First blockchain reorg
-    new_top_blocks(
-        manager1.chainstate(),
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        1,
-        2,
-    )
-    .await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 1, 2).await;
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
     // Second blockchain reorg
-    new_top_blocks(
-        manager1.chainstate(),
-        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-        get_random_bytes(&mut rng),
-        1,
-        2,
-    )
-    .await;
+    let top_block_id =
+        make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 1, 2).await;
 
-    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    nodes.sync_all(&top_block_id.into(), &mut rng).await;
 
-    manager1.join_subsystem_manager().await;
-    manager2.join_subsystem_manager().await;
+    nodes.join_subsystem_managers().await;
 }
 
+// A test for incorrect historical behavior, where a node would send disconnected headers
+// during block announcement.
+// The test scenario:
+// 1) A peer has requested the last portion of initially existing blocks from the node.
+// 2) The request is delayed.
+// 3) The node starts producing new blocks and sending updates to the peer.
+// 4) The peer would see all new headers as disconnected (due to peculiarities of the
+// old implementation and because of the state that the peer is in, i.e. it has already requested
+// blocks for all headers that it knew about).
+// Because of this, a variety of situations could happen, depending on the number of blocks
+// produced at each stage (which influences delays during message passing):
+// a) At a certain point, the number of disconnected headers would reach the maximum amount and
+// the peer would produce 'ProtocolError::DisconnectedHeaders'.
+// b) The peer, having received a disconnected header, would ignore it send a proper header request.
+// After doing that multiple times, it would get multiple header responses, which it may not expect,
+// depending on certain conditions, so it would produce 'ProtocolError(UnexpectedMessage("Headers list"))'.
+// c) Sometimes, in the case b the peer would actually send multiple block requests in that case
+// exceeding the node's requested block limit, so that it would produce ProtocolError(BlocksRequestLimitExceeded).
+// All of the above would increase the ban score of the other side.
+// Expected result: the ban score should not be increased.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn block_production(#[case] seed: Seed) {
+async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     logging::init_logging::<&std::path::Path>(None);
 
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let time_getter = P2pBasicTestTimeGetter::new();
 
+    const MAX_REQUEST_BLOCKS_COUNT: usize = 5;
+
     let p2p_config = Arc::new(P2pConfig {
-        msg_header_count_limit: 10.into(),
-        max_request_blocks_count: 5.into(),
+        msg_header_count_limit: (MAX_REQUEST_BLOCKS_COUNT * 2).into(),
+        max_request_blocks_count: MAX_REQUEST_BLOCKS_COUNT.into(),
 
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -340,71 +288,85 @@ async fn block_production(#[case] seed: Seed) {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
 
-    let mut blocks = Vec::new();
-    for _ in 0..10 {
-        let block = new_block(
-            &chain_config,
-            blocks.last(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
-        );
-        blocks.push(block.clone());
-    }
+    let initial_block_count = rng.gen_range(1..=MAX_REQUEST_BLOCKS_COUNT);
 
-    // Start `manager1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
-    let mut manager1 = SyncManagerHandle::builder()
+    let initial_blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        initial_block_count,
+        &mut rng,
+    );
+
+    // Start `node1` with some fresh blocks (timestamp less than 24 hours old) to make `is_initial_block_download` false there
+    let node1 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
-        .with_blocks(blocks)
+        .with_blocks(initial_blocks)
         .build()
         .await;
 
     // A new node is joining the network
-    let mut manager2 = SyncManagerHandle::builder()
+    let node2 = TestNode::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
         .with_time_getter(time_getter.get_time_getter())
         .build()
         .await;
 
-    let chainstate1 = manager1.chainstate().clone();
+    let chainstate1 = node1.chainstate().clone();
 
-    manager1.try_connect_peer(manager2.peer_id);
-    manager2.try_connect_peer(manager1.peer_id);
+    let mut nodes = TestNodeGroup::new(vec![node1, node2]);
+    nodes.set_assert_no_peer_manager_events(true);
 
-    let notification = Arc::new(tokio::sync::Notify::new());
-    let notification_copy = Arc::clone(&notification);
+    let mut delayed_msgs = Vec::new();
 
-    let sync_task = tokio::spawn(async move {
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    nodes
+        .exchange_sync_messages_while(&mut delayed_msgs, |_, delayed_msgs, msg| {
+            if msg.sender_node_idx == 1 {
+                if let SyncMessage::BlockListRequest(req) = &msg.message {
+                    assert_eq!(req.block_ids().len(), initial_block_count);
+                    log::debug!(
+                        "Got block list request from node idx {}, delaying it",
+                        msg.sender_node_idx
+                    );
+                    delayed_msgs.push(msg.clone());
+                    return MsgAction::Break;
+                }
+            }
 
-        notification.notified().await;
-
-        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
-
-        manager1.join_subsystem_manager().await;
-        manager2.join_subsystem_manager().await;
-    });
-
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    for _ in 0..20 {
-        new_top_blocks(
-            &chainstate1,
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
-            0,
-            1,
-        )
+            MsgAction::SendAndContinue
+        })
         .await;
+
+    nodes.delay_sync_messages_from_node(1, true);
+
+    let new_block_count = rng.gen_range(MAX_REQUEST_BLOCKS_COUNT..=MAX_REQUEST_BLOCKS_COUNT * 4);
+
+    log::debug!("Starting to produce new blocks");
+    let mut best_block_id = None;
+    for _ in 0..new_block_count {
+        best_block_id = Some(
+            make_new_top_blocks(&chainstate1, time_getter.get_time_getter(), &mut rng, 0, 1).await,
+        );
     }
 
-    notification_copy.notify_one();
+    log::debug!("Final best block is {}", best_block_id.unwrap());
+    nodes.exchange_sync_messages(&mut rng).await;
 
-    let () = tokio::time::timeout(Duration::from_secs(60), sync_task).await.unwrap().unwrap();
+    log::debug!("Sending delayed messages");
+    nodes.send_sync_messages(delayed_msgs).await;
+    nodes.delay_sync_messages_from_node(1, false);
+
+    log::debug!("Waiting until all is synced");
+    nodes.sync_all(&best_block_id.unwrap().into(), &mut rng).await;
+
+    log::debug!("Joining subsystem managers");
+    nodes.join_subsystem_managers().await;
 }

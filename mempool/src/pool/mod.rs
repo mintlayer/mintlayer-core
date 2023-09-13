@@ -15,7 +15,7 @@
 
 use parking_lot::RwLock;
 use std::{
-    collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap, VecDeque},
+    collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap},
     mem,
     num::NonZeroUsize,
     ops::Deref,
@@ -60,7 +60,8 @@ use crate::{
     error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
     event::{self, MempoolEvent},
     tx_accumulator::TransactionAccumulator,
-    TxOrigin, TxStatus,
+    tx_origin::{RemoteTxOrigin, TxOrigin},
+    TxStatus,
 };
 
 use crate::config::*;
@@ -75,6 +76,9 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
+mod work_queue;
+
+pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
     let fee = u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE)
@@ -155,7 +159,7 @@ impl<M> Mempool<M> {
         // Clear the orphan pool, returning the list of previous transactions.
         let orphan_txs = mem::replace(&mut self.orphans, TxOrphanPool::new()).into_transactions();
 
-        pool_txs.chain(orphan_txs)
+        pool_txs.chain(orphan_txs.map(|entry| entry.map_origin(TxOrigin::from)))
     }
 
     pub fn best_block_id(&self) -> Id<GenBlock> {
@@ -268,7 +272,9 @@ enum ValidationOutcome {
 
     /// Transaction is valid of acceptance to orphan pool.
     /// It may or may not end up being valid, depending on the validity of the missing inputs.
-    Orphan { transaction: TxEntry },
+    Orphan {
+        transaction: TxEntry<RemoteTxOrigin>,
+    },
 }
 
 /// Result of transaction validation
@@ -340,7 +346,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 transaction,
                 orphan_type,
             } => {
-                self.check_orphan_pool_policy(&transaction, orphan_type)?;
+                let transaction = self.check_orphan_pool_policy(transaction, orphan_type)?;
                 ValidationOutcome::Orphan { transaction }
             }
         };
@@ -460,9 +466,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
     fn check_orphan_pool_policy(
         &self,
-        transaction: &TxEntry,
+        transaction: TxEntry,
         orphan_type: OrphanType,
-    ) -> Result<(), OrphanPoolError> {
+    ) -> Result<TxEntry<RemoteTxOrigin>, OrphanPoolError> {
+        // Only remote transactions are allowed in the orphan pool
+        let transaction = transaction
+            .try_map_origin(|origin| match origin {
+                TxOrigin::Local(o) => Err(OrphanPoolError::NotSupportedForLocalOrigin(o)),
+                TxOrigin::Remote(o) => Ok(o),
+            })
+            .map_err(|(_, e)| e)?;
+
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.
         ensure!(
@@ -479,9 +493,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             );
         }
 
-        self.orphan_rbf_checks(transaction)?;
+        self.orphan_rbf_checks(&transaction)?;
 
-        Ok(())
+        Ok(transaction)
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
@@ -520,9 +534,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(())
     }
 
-    fn conflicting_tx_ids<'a>(
+    fn conflicting_tx_ids<'a, O: crate::tx_origin::IsOrigin>(
         &'a self,
-        entry: &'a TxEntry,
+        entry: &'a TxEntry<O>,
     ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
         entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
@@ -543,7 +557,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         }
     }
 
-    fn orphan_rbf_checks(&self, tx: &TxEntry) -> Result<(), OrphanPoolError> {
+    fn orphan_rbf_checks<O: crate::tx_origin::IsOrigin>(
+        &self,
+        tx: &TxEntry<O>,
+    ) -> Result<(), OrphanPoolError> {
         let mut conflicts = self.conflicting_tx_ids(tx).peekable();
         if conflicts.peek().is_none() {
             // Early exit if there are no conflicts
@@ -647,9 +664,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         Ok(total_conflict_fees)
     }
 
-    fn spends_no_new_unconfirmed_outputs(
+    fn spends_no_new_unconfirmed_outputs<O: crate::tx_origin::IsOrigin>(
         &self,
-        tx: &TxEntry,
+        tx: &TxEntry<O>,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), MempoolConflictError> {
         let inputs_spent_by_conflicts = conflicts
@@ -681,10 +698,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             || Ok(()),
             |conflict| {
                 Err(MempoolPolicyError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.tx_id().get(),
+                    replacement_tx: tx.tx_id().to_hash(),
                     replacement_fee,
                     original_fee: conflict.fee(),
-                    original_tx: conflict.tx_id().get(),
+                    original_tx: conflict.tx_id().to_hash(),
                 })
             },
         )
@@ -836,7 +853,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             // from the transaction verifier at the moment. To be addressed in the future.
 
             log::error!("Disconnecting {disc_id} failed with '{err}' during eviction of {tx_id}");
-            reorg::refresh_mempool(self, std::iter::empty());
+            reorg::refresh_mempool(self);
         }
     }
 }
@@ -847,45 +864,35 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         tx: SignedTransaction,
         origin: TxOrigin,
+        work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
-        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time, origin))
+        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time, origin), work_queue)
     }
 
     /// Add given transaction entry and potentially its descendants sourced from the orphan pool
-    fn add_transaction_and_descendants(&mut self, entry: TxEntry) -> Result<TxStatus, Error> {
+    fn add_transaction_and_descendants(
+        &mut self,
+        entry: TxEntry,
+        work_queue: &mut WorkQueue,
+    ) -> Result<TxStatus, Error> {
         let tx_id = *entry.tx_id();
         let status = self.add_transaction_entry(entry)?;
+        self.enqueue_children(&tx_id, work_queue);
+        Ok(status)
+    }
 
-        if status == TxStatus::InMempool {
-            let entry = self.store.get_entry(&tx_id).expect("just added");
-            let mut work_queue: VecDeque<Id<Transaction>> =
-                self.orphans.ready_children_of(entry.tx_entry()).collect();
-
-            while let Some(orphan_tx_id) = work_queue.pop_front() {
-                let orphan = match self.orphans.remove(orphan_tx_id) {
-                    None => continue,
-                    Some(orphan) => orphan,
-                };
-
-                match self.add_transaction_entry(orphan) {
-                    Ok(TxStatus::InMempool) => {
-                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
-                        let former_orphan =
-                            self.store.get_entry(&orphan_tx_id).expect("just added");
-                        work_queue.extend(self.orphans.ready_children_of(former_orphan.tx_entry()));
-                    }
-                    Ok(TxStatus::InOrphanPool) => {
-                        log::debug!("Orphan tx {orphan_tx_id} stays in the orphan pool");
-                    }
-                    Err(err) => {
-                        log::info!("Orphan transaction {orphan_tx_id} no longer validates: {err}");
-                    }
+    /// Enqueue children of a transaction if it's been included in the mempool
+    fn enqueue_children(&mut self, tx_id: &Id<Transaction>, work_queue: &mut WorkQueue) {
+        if let Some(entry) = self.store.get_entry(tx_id) {
+            for orphan in self.orphans.children_of(entry.tx_entry()) {
+                let orphan_id = *orphan.tx_id();
+                let peer_id = orphan.origin().peer_id();
+                if work_queue.insert(peer_id, orphan_id) {
+                    log::trace!("Added orphan {orphan_id:?} to peer{peer_id}'s work queue");
                 }
             }
         }
-
-        Ok(status)
     }
 
     fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
@@ -1083,11 +1090,12 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn process_chainstate_event(
         &mut self,
         evt: chainstate::ChainstateEvent,
+        work_queue: &mut WorkQueue,
     ) -> Result<(), reorg::ReorgError> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
             chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                self.on_new_tip(block_id, block_height)?;
+                self.on_new_tip(block_id, block_height, work_queue)?;
             }
         }
         Ok(())
@@ -1097,16 +1105,17 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         block_id: Id<Block>,
         block_height: BlockHeight,
+        work_queue: &mut WorkQueue,
     ) -> Result<(), reorg::ReorgError> {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
-        reorg::handle_new_tip(self, block_id)?;
+        reorg::handle_new_tip(self, block_id, work_queue)?;
         let event = event::NewTip::new(block_id, block_height);
         self.events_controller.broadcast(event.into());
         Ok(())
     }
 
     pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
-        self.orphans.remove_by_origin(TxOrigin::Peer(peer_id));
+        self.orphans.remove_by_origin(RemoteTxOrigin::new(peer_id));
     }
 
     pub fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, MempoolPolicyError> {
@@ -1134,6 +1143,40 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 },
             )
             .map(|feerate| std::cmp::max(feerate, INCREMENTAL_RELAY_FEE_RATE))
+    }
+
+    pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {
+        log::trace!("Performing orphan processing work");
+
+        let orphan_id = work_queue.perform(|peer, orphan_id| {
+            log::debug!("Processing orphan tx {orphan_id:?} coming from peer{peer}");
+
+            let orphan = match self.orphans.entry(&orphan_id) {
+                Some(orphan) => orphan,
+                None => {
+                    // The orphan may have been kicked out of the pool in the meantime.
+                    // Return with `None` in that case to indicate we've not really done any work.
+                    log::debug!("Orphan tx {orphan_id:?} no longer in the pool");
+                    return None;
+                }
+            };
+
+            if orphan.is_ready() {
+                // Take the transaction out of orphan pool and pass it to mempool processing code.
+                let orphan = orphan.take().map_origin(TxOrigin::from);
+                let result = self.add_transaction_entry(orphan);
+                log::debug!("Orphan tx {orphan_id:?} processed: {result:?}");
+            } else {
+                // Not all prerequisites are satisfied. The tx stays in the orphan pool.
+                log::debug!("Orphan tx {orphan_id:?} not ready");
+            }
+
+            Some(orphan_id)
+        });
+
+        if let Some(orphan_id) = orphan_id {
+            self.enqueue_children(&orphan_id, work_queue);
+        }
     }
 }
 

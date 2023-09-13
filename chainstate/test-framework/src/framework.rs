@@ -15,10 +15,17 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
+use rstest::rstest;
+
+use crate::{
+    pos_block_builder::PoSBlockBuilder,
+    utils::{outputs_from_block, outputs_from_genesis},
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
+};
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
+    chain::{Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -27,17 +34,10 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::VRFPrivateKey,
 };
-
-use rstest::rstest;
-
-use crate::{
-    pos_block_builder::PoSBlockBuilder,
-    utils::{outputs_from_block, outputs_from_genesis},
-    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
-};
 use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
+#[must_use]
 pub struct TestFramework {
     pub chainstate: TestChainstate,
     pub storage: TestStore,
@@ -56,8 +56,17 @@ impl TestFramework {
         TestFrameworkBuilder::new(rng)
     }
 
+    pub fn reload(self) -> Self {
+        TestFrameworkBuilder::from_existing_framework(self).build()
+    }
+
+    // TODO: remove this, because there is the 'into_chainstate' function below, which does the same.
     pub fn chainstate(self) -> TestChainstate {
         self.chainstate
+    }
+
+    pub fn chain_config(&self) -> &Arc<ChainConfig> {
+        self.chainstate.get_chain_config()
     }
 
     /// Returns a block builder instance that can be used for block construction and processing.
@@ -138,33 +147,45 @@ impl TestFramework {
         result
     }
 
-    /// Creates and processes a given amount of blocks. Returns the id of the last produced block.
+    /// Create and process a given amount of blocks. Return the ids of the produced blocks.
     ///
     /// Each block contains a single transaction that spends a random amount from the previous
     /// block outputs.
-    pub fn create_chain(
+    pub fn create_chain_return_ids(
         &mut self,
         parent_block: &Id<GenBlock>,
-        blocks: usize,
+        blocks_count: usize,
         rng: &mut impl Rng,
-    ) -> Result<Id<GenBlock>, ChainstateError> {
+    ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
-        let result = || -> Result<Id<GenBlock>, ChainstateError> {
-            for _ in 0..blocks {
+        let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
+            let mut ids = Vec::new();
+            for _ in 0..blocks_count {
                 let block = self
                     .make_block_builder()
                     .add_test_transaction_with_parent(prev_block_id, rng)
                     .with_parent(prev_block_id)
                     .build();
                 prev_block_id = block.get_id().into();
+                ids.push(prev_block_id);
                 self.do_process_block(block, BlockSource::Local)?;
             }
 
-            Ok(prev_block_id)
+            Ok(ids)
         }();
 
         self.refresh_block_indices()?;
         result
+    }
+
+    /// Same as `create_chain_return_ids`, but only return the id of the last produced block.
+    pub fn create_chain(
+        &mut self,
+        parent_block: &Id<GenBlock>,
+        blocks_count: usize,
+        rng: &mut impl Rng,
+    ) -> Result<Id<GenBlock>, ChainstateError> {
+        Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
 
     pub fn create_chain_pos(
@@ -213,6 +234,10 @@ impl TestFramework {
         self.best_block_index().block_id()
     }
 
+    pub fn parent_block_id(&self, id: &Id<GenBlock>) -> Id<GenBlock> {
+        self.block_index(id).prev_block_id().expect("The block has no parent")
+    }
+
     /// Returns a block identifier for the specified height.
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
@@ -221,6 +246,8 @@ impl TestFramework {
             .unwrap()
             .unwrap()
     }
+
+    // TODO: make the functions below accept block Id's by ref.
 
     /// Returns the list of outputs from the selected block.
     #[track_caller]
@@ -260,8 +287,12 @@ impl TestFramework {
         self.chainstate.is_block_in_main_chain(&(*block_id).into()).unwrap()
     }
 
-    pub fn make_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
+    pub fn to_chain_block_id(&self, block_id: &Id<GenBlock>) -> Id<Block> {
         block_id.classify(self.chainstate.get_chain_config()).chain_block_id().unwrap()
+    }
+
+    pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {
+        self.chainstate.get_min_height_with_allowed_reorg().unwrap()
     }
 }
 

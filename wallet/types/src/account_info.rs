@@ -80,6 +80,10 @@ impl AccountInfo {
         &self.name
     }
 
+    pub fn set_name(&mut self, new_name: Option<String>) {
+        self.name = new_name;
+    }
+
     pub fn update_best_block(
         &mut self,
         best_block_height: BlockHeight,

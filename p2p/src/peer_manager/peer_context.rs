@@ -19,7 +19,7 @@ use p2p_types::socket_address::SocketAddress;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::SetFlag};
 
 use crate::{
-    net::types::{self, Role},
+    net::types::{PeerInfo, PeerRole},
     utils::rate_limiter::RateLimiter,
 };
 
@@ -30,14 +30,15 @@ pub struct SentPing {
 }
 
 pub struct PeerContext {
+    pub created_at: Duration,
+
     /// Peer information
-    pub info: types::PeerInfo,
+    pub info: PeerInfo,
 
     /// Peer's address
     pub address: SocketAddress,
 
-    /// Peer's role (inbound or outbound)
-    pub role: Role,
+    pub peer_role: PeerRole,
 
     /// Peer score
     pub score: u32,
@@ -66,4 +67,8 @@ pub struct PeerContext {
     /// Expected listening address of this node (publicly routable IP + local listening port).
     /// Can be set for outbound connections only.
     pub discovered_own_address: Option<SocketAddress>,
+
+    pub last_tip_block_time: Option<Duration>,
+
+    pub last_tx_time: Option<Duration>,
 }

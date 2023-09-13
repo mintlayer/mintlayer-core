@@ -418,7 +418,7 @@ impl MempoolStore {
         tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
     ) -> Option<TxMempoolEntry> {
-        log::info!("remove_tx: {}", tx_id.get());
+        log::info!("remove_tx: {}", tx_id.to_hash());
         let entry = self.mem_tracker.modify(&mut self.txs_by_id, |by_id, _| by_id.remove(tx_id));
 
         if let Some(entry) = entry {
@@ -580,7 +580,8 @@ impl TxMempoolEntry {
         ancestors: BTreeSet<TxMempoolEntry>,
         creation_time: Time,
     ) -> Result<TxMempoolEntry, MempoolPolicyError> {
-        let entry = TxEntry::new(tx, creation_time, crate::TxOrigin::LocalMempool);
+        use crate::tx_origin::LocalTxOrigin;
+        let entry = TxEntry::new(tx, creation_time, LocalTxOrigin::Mempool.into());
         Self::new(TxEntryWithFee::new(entry, fee), parents, ancestors)
     }
 

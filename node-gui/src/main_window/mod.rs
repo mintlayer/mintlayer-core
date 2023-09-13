@@ -306,7 +306,7 @@ impl MainWindow {
                     address,
                     inbound,
                     user_agent,
-                    version,
+                    software_version: version,
                 }) => {
                     self.node_state.connected_peers.insert(
                         id,
@@ -439,14 +439,6 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::SendAmount(Ok(transaction_info)) => {
-                    match transaction_info.transaction_status {
-                        mempool::TxStatus::InMempool => {}
-                        mempool::TxStatus::InOrphanPool => {
-                            // Mempool should reject the transaction and not return `InOrphanPool`
-                            log::warn!("The transaction has been added to the orphan pool.");
-                        }
-                    }
-
                     self.show_info(
                         "Success. Please wait for your transaction to be included in a block."
                             .to_owned(),
@@ -467,14 +459,6 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::StakeAmount(Ok(transaction_info)) => {
-                    match transaction_info.transaction_status {
-                        mempool::TxStatus::InMempool => {}
-                        mempool::TxStatus::InOrphanPool => {
-                            // Mempool should reject the transaction and not return `InOrphanPool`
-                            log::warn!("The transaction has been added to the orphan pool.");
-                        }
-                    }
-
                     self.show_info(
                         "Success. Please wait for your transaction to be included in a block."
                             .to_owned(),
@@ -561,7 +545,7 @@ impl MainWindow {
                 file_path,
             } => {
                 self.file_dialog_active = false;
-                backend_sender.send(BackendRequest::CreateWallet {
+                backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
                     file_path,
                 });

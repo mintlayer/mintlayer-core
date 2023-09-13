@@ -29,16 +29,12 @@ use tokio::{
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
-    chain::{
-        block::{signed_block_header::SignedBlockHeader, Block},
-        config::ChainConfig,
-        Transaction,
-    },
+    chain::{config::ChainConfig, Block, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{event::TransactionProcessed, MempoolHandle, TxOrigin};
+use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
 use utils::atomics::AcqRelAtomicBool;
 use utils::sync::Arc;
 use utils::tap_error_log::LogError;
@@ -56,8 +52,9 @@ use crate::{
     PeerManagerEvent, Result,
 };
 
+#[derive(Debug)]
 pub enum LocalEvent {
-    ChainstateNewTip(SignedBlockHeader),
+    ChainstateNewTip(Id<Block>),
     MempoolNewTx(Id<Transaction>),
 }
 
@@ -76,7 +73,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     p2p_config: Arc<P2pConfig>,
 
     messaging_handle: T::MessagingHandle,
-    sync_event_receiver: T::SyncingEventReceiver,
+    syncing_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -106,7 +103,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::MessagingHandle,
-        sync_event_receiver: T::SyncingEventReceiver,
+        syncing_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
@@ -116,7 +113,7 @@ where
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             mempool_handle,
@@ -131,14 +128,8 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
-        self.is_initial_block_download.store(
-            self.chainstate_handle
-                .call(|c| c.is_initial_block_download())
-                .await
-                // This shouldn't fail unless the chainstate subsystem is down which shouldn't
-                // happen since subsystems are shutdown in reverse order.
-                .expect("Chainstate call failed"),
-        );
+        self.is_initial_block_download
+            .store(self.chainstate_handle.call(|c| c.is_initial_block_download()).await?);
 
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
@@ -155,7 +146,7 @@ where
                     self.handle_transaction_processed(&tx_proc)?;
                 },
 
-                event = self.sync_event_receiver.poll_next() => {
+                event = self.syncing_event_receiver.poll_next() => {
                     self.handle_peer_event(event?).await;
                 },
             }
@@ -166,8 +157,8 @@ where
     pub fn register_peer(
         &mut self,
         peer_id: PeerId,
-        remote_services: Services,
-        sync_rx: Receiver<SyncMessage>,
+        common_services: Services,
+        sync_msg_rx: Receiver<SyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
@@ -175,13 +166,13 @@ where
 
         let mut peer = Peer::<T>::new(
             peer_id,
-            remote_services,
+            common_services,
             Arc::clone(&self.chain_config),
             Arc::clone(&self.p2p_config),
             self.chainstate_handle.clone(),
             self.mempool_handle.clone(),
             self.peer_manager_sender.clone(),
-            sync_rx,
+            sync_msg_rx,
             self.messaging_handle.clone(),
             local_event_rx,
             Arc::clone(&self.is_initial_block_download),
@@ -226,16 +217,9 @@ where
             return Ok(());
         }
 
-        let header = self
-            .chainstate_handle
-            .call(move |c| c.get_block_header(block_id))
-            .await??
-            // This should never happen because this block has just been produced by chainstate.
-            .expect("A new tip block unavailable");
-
-        log::debug!("Broadcasting a new tip header {}", header.block_id());
+        log::debug!("Broadcasting a new tip {}", block_id);
         for peer in self.peers.values_mut() {
-            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(header.clone()));
+            let _ = peer.local_event_tx.send(LocalEvent::ChainstateNewTip(block_id));
         }
         Ok(())
     }
@@ -245,31 +229,31 @@ where
         let origin = tx_proc_event.origin();
 
         match tx_proc_event.result() {
-            Ok(()) => match origin {
-                TxOrigin::Peer(_) | TxOrigin::LocalP2p => {
+            Ok(()) => {
+                if origin.should_propagate() {
                     log::info!("Broadcasting transaction {tx_id} originating in {origin}");
                     for peer in self.peers.values_mut() {
                         let _ = peer.local_event_tx.send(LocalEvent::MempoolNewTx(tx_id));
                     }
-                }
-                TxOrigin::LocalMempool | TxOrigin::PastBlock => {
+                } else {
                     log::trace!("Not propagating transaction {tx_id} originating in {origin}");
                 }
-            },
+            }
             Err(_) => match origin {
-                TxOrigin::Peer(peer_id) => {
+                TxOrigin::Remote(remote_origin) => {
                     // Punish the original peer for submitting an invalid transaction according
                     // to mempool ban score.
                     let ban_score = tx_proc_event.ban_score();
                     if ban_score > 0 {
                         let (sx, _rx) = crate::utils::oneshot_nofail::channel();
+                        let peer_id = remote_origin.peer_id();
                         let event = PeerManagerEvent::AdjustPeerScore(peer_id, ban_score, sx);
                         self.peer_manager_sender
                             .send(event)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                 }
-                TxOrigin::PastBlock | TxOrigin::LocalMempool | TxOrigin::LocalP2p => (),
+                TxOrigin::Local(_) => (),
             },
         }
         Ok(())
@@ -280,9 +264,9 @@ where
         match event {
             SyncingEvent::Connected {
                 peer_id,
-                services,
-                sync_rx,
-            } => self.register_peer(peer_id, services, sync_rx),
+                common_services,
+                sync_msg_rx,
+            } => self.register_peer(peer_id, common_services, sync_msg_rx),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);

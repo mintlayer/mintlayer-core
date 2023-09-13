@@ -31,7 +31,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
@@ -102,13 +102,14 @@ impl Backend {
     async fn open_wallet(&mut self, file_path: PathBuf) -> Result<WalletInfo, BackendError> {
         log::debug!("Try to open wallet file {file_path:?}...");
 
-        let wallet = GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone())
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+        let wallet =
+            GuiController::open_wallet(Arc::clone(&self.chain_config), file_path.clone(), None)
+                .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         self.add_wallet(file_path, wallet).await
     }
 
-    async fn create_wallet(
+    async fn recover_wallet(
         &mut self,
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
@@ -121,11 +122,12 @@ impl Backend {
                 .map_err(|err| BackendError::WalletError(err.to_string()))?;
         }
 
-        let wallet = GuiController::create_wallet(
+        let wallet = GuiController::recover_wallet(
             Arc::clone(&self.chain_config),
             file_path.clone(),
             mnemonic,
             None,
+            StoreSeedPhrase::Store,
         )
         .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
@@ -313,7 +315,7 @@ impl Backend {
         })
     }
 
-    fn toggle_staking(
+    async fn toggle_staking(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
@@ -327,6 +329,7 @@ impl Backend {
             wallet
                 .controller
                 .start_staking(account_id.account_index())
+                .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
         } else {
             wallet
@@ -358,16 +361,14 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction_status = wallet
+        // TODO: add support for utxo selection in the GUI
+        wallet
             .controller
-            .send_to_address(account_id.account_index(), address, amount)
+            .send_to_address(account_id.account_index(), address, amount, vec![])
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo {
-            wallet_id,
-            transaction_status,
-        })
+        Ok(TransactionInfo { wallet_id })
     }
 
     async fn stake_amount(
@@ -388,23 +389,20 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let transaction_status = wallet
+        wallet
             .controller
             .create_stake_pool_tx(
                 account_id.account_index(),
                 amount,
                 None,
                 // TODO: get value from gui
-                PerThousand::new(1000).expect("Must not fail"),
+                PerThousand::new(10).expect("Must not fail"),
                 Amount::ZERO,
             )
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo {
-            wallet_id,
-            transaction_status,
-        })
+        Ok(TransactionInfo { wallet_id })
     }
 
     fn get_account_balance(
@@ -451,11 +449,11 @@ impl Backend {
                 let open_res = self.open_wallet(file_path).await;
                 Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
             }
-            BackendRequest::CreateWallet {
+            BackendRequest::RecoverWallet {
                 mnemonic,
                 file_path,
             } => {
-                let import_res = self.create_wallet(mnemonic, file_path).await;
+                let import_res = self.recover_wallet(mnemonic, file_path).await;
                 Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {
@@ -480,7 +478,7 @@ impl Backend {
                 Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
             }
             BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
-                let toggle_res = self.toggle_staking(wallet_id, account_id, enabled);
+                let toggle_res = self.toggle_staking(wallet_id, account_id, enabled).await;
                 Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
             }
             BackendRequest::SendAmount(send_request) => {

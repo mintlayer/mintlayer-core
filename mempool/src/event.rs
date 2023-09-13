@@ -20,7 +20,7 @@ use common::{
 
 use crate::{
     error::{Error, MempoolBanScore},
-    TxOrigin,
+    tx_origin::TxOrigin,
 };
 
 /// Event triggered when a transaction has been fully validated

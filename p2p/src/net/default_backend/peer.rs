@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use p2p_types::services::Services;
 use tokio::{
     sync::mpsc::{self, Sender},
     time::timeout,
@@ -30,7 +31,7 @@ use crate::{
     net::{
         default_backend::{
             transport::TransportSocket,
-            types::{self, Event, PeerEvent},
+            types::{BackendEvent, PeerEvent},
         },
         types::Role,
     },
@@ -40,22 +41,28 @@ use crate::{
 
 use super::{
     transport::BufferedTranscoder,
-    types::{HandshakeNonce, Message, P2pTimestamp},
+    types::{HandshakeMessage, HandshakeNonce, Message, P2pTimestamp},
 };
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PeerRole {
+pub enum ConnectionInfo {
     Inbound,
-    Outbound { handshake_nonce: HandshakeNonce },
+    Outbound {
+        handshake_nonce: HandshakeNonce,
+        local_services_override: Option<Services>,
+    },
 }
 
-impl From<PeerRole> for Role {
-    fn from(role: PeerRole) -> Self {
+impl From<ConnectionInfo> for Role {
+    fn from(role: ConnectionInfo) -> Self {
         match role {
-            PeerRole::Inbound => Role::Inbound,
-            PeerRole::Outbound { handshake_nonce: _ } => Role::Outbound,
+            ConnectionInfo::Inbound => Role::Inbound,
+            ConnectionInfo::Outbound {
+                handshake_nonce: _,
+                local_services_override: _,
+            } => Role::Outbound,
         }
     }
 }
@@ -69,8 +76,7 @@ pub struct Peer<T: TransportSocket> {
 
     p2p_config: Arc<P2pConfig>,
 
-    /// Is the connection inbound or outbound
-    peer_role: PeerRole,
+    connection_info: ConnectionInfo,
 
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
@@ -78,11 +84,11 @@ pub struct Peer<T: TransportSocket> {
     /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
     receiver_address: Option<PeerAddress>,
 
-    /// TX channel for communicating with backend
-    tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+    /// Channel sender for sending events to Backend
+    peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
 
-    /// RX channel for receiving commands from backend
-    rx: mpsc::UnboundedReceiver<Event>,
+    /// Channel receiver for receiving events from Backend.
+    backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
 }
 
 impl<T> Peer<T>
@@ -92,25 +98,25 @@ where
     #![allow(clippy::too_many_arguments)]
     pub fn new(
         peer_id: PeerId,
-        peer_role: PeerRole,
+        connection_info: ConnectionInfo,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         receiver_address: Option<PeerAddress>,
-        tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        rx: mpsc::UnboundedReceiver<Event>,
+        peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+        backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket, *p2p_config.max_message_size);
 
         Self {
             peer_id,
-            peer_role,
+            connection_info,
             chain_config,
             p2p_config,
             socket,
             receiver_address,
-            tx,
-            rx,
+            peer_event_tx,
+            backend_event_rx,
         }
     }
 
@@ -133,14 +139,14 @@ where
     }
 
     async fn handshake(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
-        match self.peer_role {
-            PeerRole::Inbound => {
-                let types::Message::Handshake(types::HandshakeMessage::Hello {
-                    protocol,
+        match self.connection_info {
+            ConnectionInfo::Inbound => {
+                let Message::Handshake(HandshakeMessage::Hello {
+                    protocol_version,
                     network,
-                    services,
+                    services: remote_services,
                     user_agent,
-                    version,
+                    software_version,
                     receiver_address,
                     current_time: remote_time,
                     handshake_nonce,
@@ -155,56 +161,64 @@ where
                     remote_time.as_duration_since_epoch(),
                 )?;
 
+                let local_services: Services = (*self.p2p_config.node_type).into();
+
+                let common_services = local_services & remote_services;
+
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
-                // It's required to reliable detect self-connects.
-                self.tx.send((
+                // It's required to reliably detect self-connects.
+                self.peer_event_tx.send((
                     self.peer_id,
                     PeerEvent::PeerInfoReceived {
-                        protocol,
+                        protocol_version,
                         network,
-                        services,
+                        common_services,
                         user_agent,
-                        version,
+                        software_version,
                         receiver_address,
                         handshake_nonce,
                     },
                 ))?;
 
                 self.socket
-                    .send(types::Message::Handshake(
-                        types::HandshakeMessage::HelloAck {
-                            protocol: NETWORK_PROTOCOL_CURRENT,
-                            network: *self.chain_config.magic_bytes(),
-                            user_agent: self.p2p_config.user_agent.clone(),
-                            version: *self.chain_config.version(),
-                            services: (*self.p2p_config.node_type).into(),
-                            receiver_address: self.receiver_address.clone(),
-                            current_time: local_time,
-                        },
-                    ))
+                    .send(Message::Handshake(HandshakeMessage::HelloAck {
+                        protocol_version: NETWORK_PROTOCOL_CURRENT,
+                        network: *self.chain_config.magic_bytes(),
+                        user_agent: self.p2p_config.user_agent.clone(),
+                        software_version: *self.chain_config.software_version(),
+                        services: (*self.p2p_config.node_type).into(),
+                        receiver_address: self.receiver_address.clone(),
+                        current_time: local_time,
+                    }))
                     .await?;
             }
-            PeerRole::Outbound { handshake_nonce } => {
+            ConnectionInfo::Outbound {
+                handshake_nonce,
+                local_services_override,
+            } => {
+                let local_services =
+                    local_services_override.unwrap_or_else(|| (*self.p2p_config.node_type).into());
+
                 self.socket
-                    .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        protocol: NETWORK_PROTOCOL_CURRENT,
+                    .send(Message::Handshake(HandshakeMessage::Hello {
+                        protocol_version: NETWORK_PROTOCOL_CURRENT,
                         network: *self.chain_config.magic_bytes(),
-                        services: (*self.p2p_config.node_type).into(),
+                        services: local_services,
                         user_agent: self.p2p_config.user_agent.clone(),
-                        version: *self.chain_config.version(),
+                        software_version: *self.chain_config.software_version(),
                         receiver_address: self.receiver_address.clone(),
                         current_time: local_time,
                         handshake_nonce,
                     }))
                     .await?;
 
-                let types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                    protocol,
+                let Message::Handshake(HandshakeMessage::HelloAck {
+                    protocol_version,
                     network,
                     user_agent,
-                    version,
-                    services,
+                    software_version,
+                    services: remote_services,
                     receiver_address,
                     current_time: remote_time,
                 }) = self.socket.recv().await?
@@ -218,14 +232,16 @@ where
                     remote_time.as_duration_since_epoch(),
                 )?;
 
-                self.tx.send((
+                let common_services = local_services & remote_services;
+
+                self.peer_event_tx.send((
                     self.peer_id,
                     PeerEvent::PeerInfoReceived {
-                        protocol,
+                        protocol_version,
                         network,
-                        services,
+                        common_services,
                         user_agent,
-                        version,
+                        software_version,
                         receiver_address,
                         handshake_nonce,
                     },
@@ -239,8 +255,8 @@ where
     async fn handle_socket_msg(
         peer: PeerId,
         msg: Message,
-        tx: &mut mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        sync_tx: &mut Sender<SyncMessage>,
+        peer_event_tx: &mut mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+        sync_msg_tx: &mut Sender<SyncMessage>,
     ) -> crate::Result<()> {
         // TODO: Use a bounded channel to send messages to the peer manager
         match msg {
@@ -248,31 +264,31 @@ where
                 log::error!("peer {peer} sent handshaking message");
             }
 
-            Message::PingRequest(r) => tx.send((
+            Message::PingRequest(r) => peer_event_tx.send((
                 peer,
                 PeerEvent::MessageReceived {
                     message: PeerManagerMessage::PingRequest(r),
                 },
             ))?,
-            Message::PingResponse(r) => tx.send((
+            Message::PingResponse(r) => peer_event_tx.send((
                 peer,
                 PeerEvent::MessageReceived {
                     message: PeerManagerMessage::PingResponse(r),
                 },
             ))?,
-            Message::AddrListRequest(r) => tx.send((
+            Message::AddrListRequest(r) => peer_event_tx.send((
                 peer,
                 PeerEvent::MessageReceived {
                     message: PeerManagerMessage::AddrListRequest(r),
                 },
             ))?,
-            Message::AddrListResponse(r) => tx.send((
+            Message::AddrListResponse(r) => peer_event_tx.send((
                 peer,
                 PeerEvent::MessageReceived {
                     message: PeerManagerMessage::AddrListResponse(r),
                 },
             ))?,
-            Message::AnnounceAddrRequest(r) => tx.send((
+            Message::AnnounceAddrRequest(r) => peer_event_tx.send((
                 peer,
                 PeerEvent::MessageReceived {
                     message: PeerManagerMessage::AnnounceAddrRequest(r),
@@ -280,18 +296,20 @@ where
             ))?,
 
             Message::HeaderListRequest(v) => {
-                sync_tx.send(SyncMessage::HeaderListRequest(v)).await?
+                sync_msg_tx.send(SyncMessage::HeaderListRequest(v)).await?
             }
-            Message::BlockListRequest(v) => sync_tx.send(SyncMessage::BlockListRequest(v)).await?,
+            Message::BlockListRequest(v) => {
+                sync_msg_tx.send(SyncMessage::BlockListRequest(v)).await?
+            }
             Message::TransactionRequest(v) => {
-                sync_tx.send(SyncMessage::TransactionRequest(v)).await?
+                sync_msg_tx.send(SyncMessage::TransactionRequest(v)).await?
             }
-            Message::NewTransaction(v) => sync_tx.send(SyncMessage::NewTransaction(v)).await?,
+            Message::NewTransaction(v) => sync_msg_tx.send(SyncMessage::NewTransaction(v)).await?,
             Message::TransactionResponse(v) => {
-                sync_tx.send(SyncMessage::TransactionResponse(v)).await?
+                sync_msg_tx.send(SyncMessage::TransactionResponse(v)).await?
             }
-            Message::HeaderList(v) => sync_tx.send(SyncMessage::HeaderList(v)).await?,
-            Message::BlockResponse(v) => sync_tx.send(SyncMessage::BlockResponse(v)).await?,
+            Message::HeaderList(v) => sync_msg_tx.send(SyncMessage::HeaderList(v)).await?,
+            Message::BlockResponse(v) => sync_msg_tx.send(SyncMessage::BlockResponse(v)).await?,
         }
 
         Ok(())
@@ -313,22 +331,27 @@ where
         }
 
         // The channel to the sync manager peer task (set when the peer is accepted)
-        let mut sync_tx_opt = None;
+        let mut sync_msg_tx_opt = None;
 
         loop {
             tokio::select! {
                 // Sending messages should have higher priority
                 biased;
 
-                event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    Event::Accepted{ sync_tx } => {
-                        sync_tx_opt = Some(sync_tx);
+                event = self.backend_event_rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
+                    BackendEvent::Accepted{ sync_msg_tx } => {
+                        sync_msg_tx_opt = Some(sync_msg_tx);
                     },
-                    Event::SendMessage(message) => self.socket.send(*message).await?,
+                    BackendEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
-                event = self.socket.recv(), if sync_tx_opt.is_some() => match event {
+                event = self.socket.recv(), if sync_msg_tx_opt.is_some() => match event {
                     Ok(message) => {
-                        Self::handle_socket_msg(self.peer_id, message, &mut self.tx, sync_tx_opt.as_mut().expect("sync_tx_opt is some")).await?;
+                        Self::handle_socket_msg(
+                            self.peer_id,
+                            message,
+                            &mut self.peer_event_tx,
+                            sync_msg_tx_opt.as_mut().expect("sync_msg_tx_opt is some")
+                        ).await?;
                     }
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
@@ -342,26 +365,21 @@ where
 
 impl<T: TransportSocket> Drop for Peer<T> {
     fn drop(&mut self) {
-        let _ = self.tx.send((self.peer_id, PeerEvent::ConnectionClosed));
+        let _ = self.peer_event_tx.send((self.peer_id, PeerEvent::ConnectionClosed));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::HeaderListRequest;
+    use crate::net::default_backend::transport::{
+        MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket,
+    };
     use crate::net::types::services::Service;
     use crate::testing_utils::{
-        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
-    };
-    use crate::{
-        message,
-        net::default_backend::{
-            transport::{
-                MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
-            },
-            types,
-        },
+        get_two_connected_sockets, test_p2p_config, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     };
     use chainstate::Locator;
     use futures::FutureExt;
@@ -380,7 +398,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -397,9 +415,9 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
-            .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                protocol: NETWORK_PROTOCOL_CURRENT,
-                version: *chain_config.version(),
+            .send(Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                software_version: *chain_config.software_version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
@@ -414,11 +432,11 @@ mod tests {
         assert_eq!(
             rx1.try_recv().unwrap().1,
             PeerEvent::PeerInfoReceived {
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
-                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
-                version: *chain_config.version(),
+                software_version: *chain_config.software_version(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }
@@ -454,7 +472,10 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            PeerRole::Outbound { handshake_nonce: 1 },
+            ConnectionInfo::Outbound {
+                handshake_nonce: 1,
+                local_services_override: None,
+            },
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -471,17 +492,15 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         socket2.recv().await.unwrap();
         assert!(socket2
-            .send(types::Message::Handshake(
-                types::HandshakeMessage::HelloAck {
-                    protocol: NETWORK_PROTOCOL_CURRENT,
-                    version: *chain_config.version(),
-                    network: *chain_config.magic_bytes(),
-                    user_agent: p2p_config.user_agent.clone(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
-                    receiver_address: None,
-                    current_time: P2pTimestamp::from_int_seconds(123456),
-                }
-            ))
+            .send(Message::Handshake(HandshakeMessage::HelloAck {
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                software_version: *chain_config.software_version(),
+                network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                receiver_address: None,
+                current_time: P2pTimestamp::from_int_seconds(123456),
+            }))
             .await
             .is_ok());
 
@@ -491,11 +510,11 @@ mod tests {
             Ok((
                 peer_id3,
                 PeerEvent::PeerInfoReceived {
-                    protocol: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: NETWORK_PROTOCOL_CURRENT,
                     network: *chain_config.magic_bytes(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     user_agent: p2p_config.user_agent.clone(),
-                    version: *chain_config.version(),
+                    software_version: *chain_config.software_version(),
                     receiver_address: None,
                     handshake_nonce: 1,
                 }
@@ -532,7 +551,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             socket1,
@@ -547,9 +566,9 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
-            .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                protocol: NETWORK_PROTOCOL_CURRENT,
-                version: *chain_config.version(),
+            .send(Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                software_version: *chain_config.software_version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
@@ -592,7 +611,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            PeerRole::Inbound,
+            ConnectionInfo::Inbound,
             chain_config,
             Arc::clone(&p2p_config),
             socket1,
@@ -607,9 +626,9 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
-            .send(types::Message::HeaderListRequest(
-                message::HeaderListRequest::new(Locator::new(vec![])),
-            ))
+            .send(Message::HeaderListRequest(HeaderListRequest::new(
+                Locator::new(vec![]),
+            )))
             .await
             .unwrap();
 
@@ -632,19 +651,5 @@ mod tests {
     #[tokio::test]
     async fn invalid_handshake_message_noise() {
         invalid_handshake_message::<TestTransportNoise, NoiseTcpTransport>().await;
-    }
-
-    pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
-    where
-        A: TestTransportMaker<Transport = T>,
-        T: TransportSocket,
-    {
-        let transport = A::make_transport();
-        let addr = A::make_address();
-        let mut server = transport.bind(vec![addr]).await.unwrap();
-        let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
-
-        let (res1, res2) = tokio::join!(server.accept(), peer_fut);
-        (res1.unwrap().0, res2.unwrap())
     }
 }

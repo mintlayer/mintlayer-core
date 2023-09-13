@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::{
+    chain::{Block, Transaction},
+    primitives::Id,
+};
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
     socket_address::SocketAddress,
@@ -55,6 +59,22 @@ pub enum PeerManagerEvent {
     ///
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
+
+    /// New tip block received.
+    /// In PoW all valid blocks have a cost, but in PoS new blocks are practically free.
+    /// So, unlike Bitcoin Core, we only consider new tips.
+    /// It is used as an eviction criterion.
+    NewTipReceived {
+        peer_id: PeerId,
+        block_id: Id<Block>,
+    },
+
+    /// New valid unseen transaction received.
+    /// It is used as an eviction criterion.
+    NewValidTransactionReceived {
+        peer_id: PeerId,
+        txid: Id<Transaction>,
+    },
 
     AddReserved(IpOrSocketAddress, oneshot_nofail::Sender<crate::Result<()>>),
 

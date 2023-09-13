@@ -16,7 +16,7 @@
 use p2p_types::socket_address::SocketAddress;
 use serde::{Deserialize, Serialize};
 
-use crate::types::peer_id::PeerId;
+use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
 /// Helper type used to return information about a connected peer from RPC.
 ///
@@ -27,13 +27,13 @@ pub struct ConnectedPeer {
 
     pub address: SocketAddress,
 
-    pub inbound: bool,
+    pub peer_role: PeerRole,
 
     pub ban_score: u32,
 
     pub user_agent: String,
 
-    pub version: String,
+    pub software_version: String,
 
     /// Time spent waiting for a current ping response, in milliseconds
     pub ping_wait: Option<u64>,

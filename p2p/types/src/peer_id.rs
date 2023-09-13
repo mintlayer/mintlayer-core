@@ -42,7 +42,7 @@ impl PeerId {
         Self(id)
     }
 
-    pub fn from_u64(n: u64) -> Self {
+    pub const fn from_u64(n: u64) -> Self {
         Self(n)
     }
 }

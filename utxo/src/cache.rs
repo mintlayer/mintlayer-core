@@ -190,7 +190,7 @@ impl<P: UtxosView> UtxosCache<P> {
 
         tx.inputs()
             .iter()
-            .zip(tx_undo.into_inner().into_iter())
+            .zip(tx_undo.into_inner())
             .filter_map(|(input, undo)| {
                 undo.map(|utxo| match input {
                     TxInput::Utxo(outpoint) => Ok((outpoint, utxo)),

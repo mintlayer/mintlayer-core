@@ -40,6 +40,7 @@ def rs_sources(exclude = []):
             if os.path.splitext(file)[1].lower() == '.rs':
                 yield os.path.join(top, file)
 
+
 # List Cargo config files
 def cargo_config_files(exclude = []):
     exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
@@ -51,6 +52,7 @@ def cargo_config_files(exclude = []):
             if os.path.splitext(file)[1].lower() == '.toml':
                 yield os.path.join(top, file)
 
+
 # Cargo.toml files
 def cargo_toml_files(exclude = []):
     exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
@@ -61,6 +63,21 @@ def cargo_toml_files(exclude = []):
         for file in files:
             if file == 'Cargo.toml':
                 yield os.path.join(top, file)
+
+
+# All files
+def all_files(exclude = []):
+    exclude_full_paths = [ os.path.normpath(dir) for dir in ['target', '.git'] + exclude ]
+    exclude_dir_names = ['__pycache__']
+
+    def is_excluded(top, d):
+        return (d in exclude_dir_names or
+                os.path.normpath(os.path.join(top, d).lower()) in exclude_full_paths)
+
+    for top, dirs, files in os.walk('.', topdown=True):
+        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
+        for file in files:
+            yield os.path.join(top, file)
 
 
 # Disallow certain pattern in source files, with exceptions
@@ -267,6 +284,41 @@ def check_todos():
     return ok
 
 
+# Check for trailing whitespaces
+def check_trailing_whitespaces():
+    print("==== Checking for trailing whitespaces:")
+
+    # list of files exempted from checks
+    exempted_files = [
+        'crypto/src/symkey/chacha20poly1305/XCHACHA20POLY1305_TEST_VECTORS.tv',
+        'script/src/test/test_vectors_4opc.csv.gz',
+        'wasm-crypto/pkg/wasm_crypto_bg.wasm',
+    ]
+
+    ok = True
+    for path in all_files():
+        # Note: some of the paths in exempted_files are temporary build artifacts, which
+        # may not exist when this script is run; this is why we need the os.path.exists
+        # check here.
+        if any((os.path.exists(exempted) and os.path.samefile(path, exempted))
+               for exempted in exempted_files):
+            continue
+
+        with open(path) as file:
+            try:
+                for line_idx, line in enumerate(file, start=1):
+                    line = line.rstrip('\n\r')
+                    if line != line.rstrip():
+                        ok = False
+                        print(f"{path}: trailing whitespaces at line {line_idx}")
+            except:
+                print(f"{path}: can't check for trailing whitespaces, "
+                      "perhaps it should be in 'exempted_files'?")
+
+    print()
+    return ok
+
+
 def run_checks():
     return all([
         disallow(SCALECODEC_RE, exclude = ['serialization/core', 'merkletree']),
@@ -275,7 +327,8 @@ def run_checks():
         check_crate_versions(),
         check_workspace_and_package_versions_equal(),
         check_dependency_versions_patch_version(),
-        check_todos()
+        check_todos(),
+        check_trailing_whitespaces()
     ])
 
 

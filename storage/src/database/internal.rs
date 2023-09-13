@@ -73,3 +73,12 @@ pub fn prefix_iter<DbMap: schema::DbMap, Tx: ReadOps>(
         })
     })
 }
+
+pub fn prefix_iter_keys<DbMap: schema::DbMap, Tx: ReadOps>(
+    dbtx: &Tx,
+    map_id: DbMapId,
+    prefix: Vec<u8>,
+) -> crate::Result<impl '_ + Iterator<Item = DbMap::Key>> {
+    dbtx.prefix_iter(map_id, prefix)
+        .map(|iter| iter.map(|(k, _v)| Encoded::from_bytes_unchecked(k).decode()))
+}

@@ -36,9 +36,9 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_max_future_block_time_offset: Option<u64>,
 
-    /// The chain version (major.minor.path).
+    /// The software version (major.minor.path).
     #[clap(long)]
-    pub chain_version: Option<String>,
+    pub software_version: Option<String>,
 
     /// Target block spacing in seconds.
     #[clap(long)]
@@ -66,6 +66,10 @@ pub struct ChainConfigOptions {
     /// PoS NetUpgrade override after Genesis
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
+
+    /// Genesis block timestamp in seconds since UNIX epoch.
+    #[clap(long)]
+    pub chain_genesis_block_timestamp: Option<u64>,
 
     /// PoS Genesis staking settings
     #[clap(long, default_value_t)]

@@ -38,13 +38,25 @@ mockall::mock! {
     }
 }
 
-pub trait TxOriginExt {
-    /// Origin that serves as a reasonable default for testing
-    const TEST: Self;
-}
+impl<M: MemoryUsageEstimator> Mempool<M> {
+    /// Add transaction method with some default values for testing.
+    ///
+    /// Origin is set to a default value and work queue is set to be temporary one and the orphans
+    /// are immediately processed. If the test needs to adjust the origin or a different orphan
+    /// behavior it should use [Mempool::add_transaction] directly.
+    pub fn add_transaction_test(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
+        let origin = TxOrigin::Remote(RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)));
+        let mut work_queue = WorkQueue::new();
+        let result = self.add_transaction(tx, origin, &mut work_queue);
+        self.process_queue(&mut work_queue);
+        result
+    }
 
-impl TxOriginExt for TxOrigin {
-    const TEST: Self = TxOrigin::LocalMempool;
+    pub fn process_queue(&mut self, work_queue: &mut WorkQueue) {
+        while !work_queue.is_empty() {
+            self.perform_work_unit(work_queue);
+        }
+    }
 }
 
 pub trait TxStatusExt: Sized {
@@ -53,10 +65,12 @@ pub trait TxStatusExt: Sized {
 
     /// Assert the status of the transaction that the tx is in mempool
     fn assert_in_mempool(&self);
+
+    /// Assert the status of the transaction that the tx is in orphan pool
+    fn assert_in_orphan_pool(&self);
 }
 
 impl TxStatusExt for TxStatus {
-    /// Fetch status of given instruction from mempool, doing some integrity checks
     fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
         let in_mempool = mempool.contains_transaction(tx_id);
         let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
@@ -68,9 +82,12 @@ impl TxStatusExt for TxStatus {
         }
     }
 
-    /// Assert the status of the transaction that the tx is in mempool
     fn assert_in_mempool(&self) {
         assert!(self.in_mempool());
+    }
+
+    fn assert_in_orphan_pool(&self) {
+        assert!(self.in_orphan_pool());
     }
 }
 
@@ -253,7 +270,8 @@ pub fn generate_transaction_graph(
                 .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
         );
 
-        let entry = TxEntry::new(tx, time, TxOrigin::TEST);
+        let origin = RemoteTxOrigin::new(p2p_types::PeerId::from_u64(1)).into();
+        let entry = TxEntry::new(tx, time, origin);
         TxEntryWithFee::new(entry, Fee::new(Amount::from_atoms(total)))
     })
 }

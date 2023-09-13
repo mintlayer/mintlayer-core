@@ -26,17 +26,37 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::{
     message::{PeerManagerMessage, SyncMessage},
-    protocol::NetworkProtocol,
+    protocol::NetworkProtocolVersion,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
 };
 
 use self::services::Services;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// TODO: Rename to ConnectionDirection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Inbound,
     Outbound,
+}
+
+// TODO: Rename to ConnectionType
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PeerRole {
+    Inbound,
+    OutboundFullRelay,
+    OutboundBlockRelay,
+    OutboundManual,
+}
+
+// TODO: Use something like enum_iterator
+impl PeerRole {
+    pub const ALL: [PeerRole; 4] = [
+        PeerRole::Inbound,
+        PeerRole::OutboundFullRelay,
+        PeerRole::OutboundBlockRelay,
+        PeerRole::OutboundManual,
+    ];
 }
 
 /// Peer information learned during handshaking
@@ -53,19 +73,21 @@ pub struct PeerInfo {
     /// Unique ID of the peer
     pub peer_id: PeerId,
 
-    pub protocol: NetworkProtocol,
+    pub protocol_version: NetworkProtocolVersion,
 
     /// Peer network
     pub network: [u8; 4],
 
     /// Peer software version
-    pub version: SemVer,
+    pub software_version: SemVer,
 
     /// User agent of the peer
     pub user_agent: UserAgent,
 
-    /// The announcements list that a peer interested is.
-    pub services: Services,
+    /// Intersection of requested (set by us) and available (set by the peer) services.
+    /// All services that will be enabled for this peer if it's accepted.
+    /// The Peer Manager can disconnect the peer if some required services are missing.
+    pub common_services: Services,
 }
 
 impl PeerInfo {
@@ -79,9 +101,9 @@ impl Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
-        writeln!(f, "--> Protocol: {:?}", self.protocol)?;
+        writeln!(f, "--> Protocol version: {:?}", self.protocol_version)?;
         writeln!(f, "--> Network: {:x?}", self.network)?;
-        writeln!(f, "--> Software version: {}", self.version)?;
+        writeln!(f, "--> Software version: {}", self.software_version)?;
         writeln!(f, "--> User agent: {}", self.user_agent)?;
 
         Ok(())
@@ -92,7 +114,7 @@ impl Display for PeerInfo {
 #[derive(Debug)]
 pub enum ConnectivityEvent {
     Message {
-        peer: PeerId,
+        peer_id: PeerId,
         message: PeerManagerMessage,
     },
     /// Outbound connection accepted
@@ -150,8 +172,8 @@ pub enum SyncingEvent {
     /// Peer connected
     Connected {
         peer_id: PeerId,
-        services: Services,
-        sync_rx: Receiver<SyncMessage>,
+        common_services: Services,
+        sync_msg_rx: Receiver<SyncMessage>,
     },
 
     /// Peer disconnected

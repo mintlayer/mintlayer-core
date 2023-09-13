@@ -43,6 +43,9 @@ async fn ping_timeout() {
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
+        ping_check_period: Duration::from_secs(1).into(),
+        ping_timeout: Duration::from_secs(5).into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -52,8 +55,6 @@ async fn ping_timeout() {
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        ping_check_period: Duration::from_secs(1).into(),
-        ping_timeout: Duration::from_secs(5).into(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -63,8 +64,9 @@ async fn ping_timeout() {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
@@ -96,11 +98,11 @@ async fn ping_timeout() {
             address: "123.123.123.123:12345".parse().unwrap(),
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
-                version: *chain_config.version(),
+                software_version: *chain_config.software_version(),
                 user_agent: p2p_config.user_agent.clone(),
-                services: NodeType::Full.into(),
+                common_services: NodeType::Full.into(),
             },
             receiver_address: None,
         })
@@ -119,11 +121,11 @@ async fn ping_timeout() {
         let event = expect_recv!(&mut cmd_rx);
         match event {
             Command::SendMessage {
-                peer,
+                peer_id,
                 message: Message::PingRequest(PingRequest { nonce }),
             } => {
                 send_and_sync(
-                    peer,
+                    peer_id,
                     PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     &conn_tx,
                     &mut cmd_rx,
@@ -139,7 +141,7 @@ async fn ping_timeout() {
     let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::SendMessage {
-            peer: _,
+            peer_id: _,
             message: Message::PingRequest(PingRequest { nonce: _ }),
         } => {}
         _ => panic!("unexpected event: {event:?}"),

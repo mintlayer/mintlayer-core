@@ -52,7 +52,6 @@ impl BanScore for BlockError {
             // Even though this should've been caught by orphans check, its mere presence means
             // a peer sent a block they're not supposed to send.
             BlockError::PrevBlockNotFoundForNewBlock(_) => 100,
-            BlockError::BlockAtHeightNotFound(_) => 0,
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
@@ -63,18 +62,17 @@ impl BanScore for BlockError {
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::EpochSealError(err) => err.ban_score(),
-            BlockError::BlockHeightTooBig(_) => 0,
+            BlockError::BlockDataMissingForValidBlockIndex(_) => 0,
+            BlockError::BestChainCandidatesAccessorError(_) => 0,
 
             BlockError::BestBlockIdQueryError(_) => 0,
-            BlockError::IsBlockInMainChainQueryError(_, _) => 0,
-            BlockError::BlockIdTreeTopQueryError(_, _) => 0,
+            BlockError::BestBlockIndexQueryError(_) => 0,
             BlockError::BlockIndexQueryError(_, _) => 0,
+            BlockError::IsBlockInMainChainQueryError(_, _) => 0,
+            BlockError::MinHeightForReorgQueryError(_) => 0,
 
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
-            BlockError::InvariantErrorBlockNotFoundAfterConnect(_) => 0,
-            BlockError::InvariantErrorBlockIndexNotFound(_) => 0,
-            BlockError::InvariantErrorBestBlockIndexNotFound(_) => 0,
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
         }
     }
@@ -240,7 +238,6 @@ impl BanScore for CheckBlockError {
         match self {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
-            CheckBlockError::WitnessMerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
@@ -251,7 +248,6 @@ impl BanScore for CheckBlockError {
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.ban_score(),
             CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
-            CheckBlockError::BlockTimeStrictOrderInvalid => 100,
             CheckBlockError::MerkleRootCalculationFailed(_, _) => 100,
             CheckBlockError::BlockRewardMaturityError(err) => err.ban_score(),
             CheckBlockError::PropertyQueryError(_) => 100,
@@ -286,7 +282,6 @@ impl BanScore for TokensError {
 impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
-            CheckBlockTransactionsError::StorageError(_) => 0,
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
@@ -466,6 +461,7 @@ impl BanScore for ChainstateError {
             ChainstateError::ProcessBlockError(e) => e.ban_score(),
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
+            ChainstateError::BlockInvalidatorError(_) => 0,
         }
     }
 }

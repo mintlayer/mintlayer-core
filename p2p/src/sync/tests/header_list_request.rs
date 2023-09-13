@@ -13,17 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Duration};
 
 use chainstate::{ban_score::BanScore, Locator};
 use chainstate_test_framework::TestFramework;
-use common::{chain::config::create_unit_test_config, primitives::Idable};
+use common::{
+    chain::config::create_unit_test_config,
+    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+};
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
 use crate::{
+    config::P2pConfig,
     error::ProtocolError,
-    message::{HeaderListRequest, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
+    message::{BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage},
+    sync::tests::helpers::{make_new_blocks, TestNode},
     types::peer_id::PeerId,
     P2pError,
 };
@@ -41,32 +46,31 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
     let headers = iter::repeat(block.get_id().into()).take(102).collect();
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
+    )
+    .await;
 
-    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    let (adjusted_peer, score) = node.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
         P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
     );
-    handle.assert_no_event().await;
+    node.assert_no_event().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -87,23 +91,22 @@ async fn valid_request(#[case] seed: Seed) {
         .get_locator_from_height(block_index.block_height().prev_height().unwrap())
         .unwrap();
 
-    let mut handle = SyncManagerHandle::builder()
+    let mut node = TestNode::builder()
         .with_chain_config(chain_config)
         .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
     let peer = PeerId::new();
-    handle.connect_peer(peer).await;
+    node.connect_peer(peer).await;
 
-    handle
-        .send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )
-        .await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+    )
+    .await;
 
-    let (sent_to, message) = handle.message().await;
+    let (sent_to, message) = node.message().await;
     assert_eq!(peer, sent_to);
     let headers = match message {
         SyncMessage::HeaderList(l) => l.into_headers(),
@@ -111,7 +114,120 @@ async fn valid_request(#[case] seed: Seed) {
     };
     assert_eq!(headers.len(), 1);
     assert_eq!(&headers[0], block_index.block_header());
-    handle.assert_no_error().await;
+    node.assert_no_error().await;
 
-    handle.join_subsystem_manager().await;
+    node.join_subsystem_manager().await;
+}
+
+// If the peer ignores our header requests, but asks us for blocks at the same time, we
+// should not disconnect it (we assume it's in IBD).
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(#[case] seed: Seed) {
+    logging::init_logging::<&std::path::Path>(None);
+
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let time_getter = P2pBasicTestTimeGetter::new();
+
+    const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
+    const DELAY: Duration = Duration::from_millis(400);
+
+    let chain_config = Arc::new(create_unit_test_config());
+    let p2p_config = Arc::new(P2pConfig {
+        // Note: max_request_blocks_count doesn't really matter here. But we'll be sending
+        // one block at a time, so it's better to pretend that we do that because of the limit
+        // (just in case it becomes important in the future, like it is for msg_header_count_limit).
+        max_request_blocks_count: 1.into(),
+        sync_stalling_timeout: STALLING_TIMEOUT.into(),
+
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        max_clock_diff: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
+        enable_block_relay_peers: Default::default(),
+    });
+
+    let blocks = make_new_blocks(
+        &chain_config,
+        None,
+        &time_getter.get_time_getter(),
+        3,
+        &mut rng,
+    );
+    let headers = blocks.iter().map(|b| b.header().clone()).collect();
+
+    let mut node = TestNode::builder()
+        .with_chain_config(chain_config)
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_time_getter(time_getter.get_time_getter())
+        .with_blocks(blocks.clone())
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    node.try_connect_peer(peer);
+
+    // The node will immediately send HeaderListRequest.
+    assert!(matches!(
+        node.message().await.1,
+        SyncMessage::HeaderListRequest(HeaderListRequest { .. })
+    ));
+
+    // Simulate the peer sending HeaderListRequest too.
+    let locator = node.get_locator_from_height(0.into()).await;
+    node.send_message(
+        peer,
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+    )
+    .await;
+
+    // The node should send the header list.
+    assert_eq!(
+        node.message().await.1,
+        SyncMessage::HeaderList(HeaderList::new(headers)),
+    );
+
+    // Now send each block after a delay.
+    for block in blocks.into_iter() {
+        time_getter.advance_time(DELAY);
+        node.send_message(
+            peer,
+            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
+        )
+        .await;
+
+        // Eventually, the total time passed will become bigger than the timeout. Still, the peer
+        // shouldn't be disconnected because it's been asking for blocks.
+        // Just in case, check that there were no peer manager events at all, not just disconnects.
+        // Also, do it on every iteration to make the test fail faster.
+        node.assert_no_peer_manager_event().await;
+
+        // The node should send the block.
+        assert_eq!(
+            node.message().await.1,
+            SyncMessage::BlockResponse(BlockResponse::new(block)),
+        );
+    }
+
+    node.assert_no_error().await;
+    node.assert_no_peer_manager_event().await;
+    node.join_subsystem_manager().await;
 }

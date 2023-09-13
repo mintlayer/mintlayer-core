@@ -19,25 +19,16 @@ use std::{
     sync::Arc,
 };
 
-use chainstate_types::Locator;
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
-use common::chain::{
-    block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
-    config::ChainConfig,
-    tokens::TokenAuxiliaryData,
-    AccountNonce, AccountType, OutPointSourceId, SignedTransaction, TxMainChainIndex,
-};
-use common::chain::{Transaction, UtxoOutPoint};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
-        tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
+        config::ChainConfig,
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        SignedTransaction, Transaction, TxInput, TxMainChainIndex, UtxoOutPoint,
     },
-    primitives::{BlockHeight, Id},
-};
-use common::{
-    chain::{DelegationId, PoolId, TxInput},
-    primitives::Amount,
+    primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
@@ -64,6 +55,14 @@ where
         self.deref_mut().process_block(block, source)
     }
 
+    fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.deref_mut().invalidate_block(block_id)
+    }
+
+    fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
+        self.deref_mut().reset_block_failure_flags(block_id)
+    }
+
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         self.deref().preliminary_block_check(block)
     }
@@ -78,6 +77,10 @@ where
 
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError> {
         self.deref().is_block_in_main_chain(block_id)
+    }
+
+    fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError> {
+        self.deref().get_min_height_with_allowed_reorg()
     }
 
     fn get_block_height_in_main_chain(
@@ -122,19 +125,28 @@ where
         self.deref().get_locator_from_height(height)
     }
 
-    fn get_headers(
+    fn get_mainchain_headers_by_locator(
         &self,
-        locator: Locator,
+        locator: &Locator,
         header_count_limit: usize,
     ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().get_headers(locator, header_count_limit)
+        self.deref().get_mainchain_headers_by_locator(locator, header_count_limit)
     }
 
-    fn filter_already_existing_blocks(
+    fn get_mainchain_headers_since_latest_fork_point(
+        &self,
+        block_ids: &[Id<GenBlock>],
+        header_count_limit: usize,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
+        self.deref()
+            .get_mainchain_headers_since_latest_fork_point(block_ids, header_count_limit)
+    }
+
+    fn split_off_leading_known_headers(
         &self,
         headers: Vec<SignedBlockHeader>,
-    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
-        self.deref().filter_already_existing_blocks(headers)
+    ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError> {
+        self.deref().split_off_leading_known_headers(headers)
     }
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {

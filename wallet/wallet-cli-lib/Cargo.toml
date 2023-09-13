@@ -32,6 +32,8 @@ shlex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 
+prettytable-rs = "0.10"
+
 [dev-dependencies]
 blockprod = { path = "../../blockprod" }
 chainstate = { path = "../../chainstate" }

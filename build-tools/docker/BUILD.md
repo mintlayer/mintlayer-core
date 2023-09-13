@@ -1,6 +1,6 @@
 # Building Docker Images for Mintlayer
 
-This document outlines the steps to build Docker images for the Mintlayer node daemon, wallet-cli, and node-gui. 
+This document outlines the steps to build Docker images for the Mintlayer node daemon, wallet-cli, and node-gui.
 
 Before building make sure you clone the repository and change the current directory in the root of the repository.
 

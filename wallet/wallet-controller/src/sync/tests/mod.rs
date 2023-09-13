@@ -31,7 +31,6 @@ use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
 use mempool::FeeRate;
-use mempool_types::TxStatus;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
@@ -71,11 +70,14 @@ impl MockWallet {
 }
 
 impl SyncingWallet for MockWallet {
-    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
-        BTreeMap::from([(
-            U31::ZERO,
-            (self.get_best_block_id(), self.get_block_height()),
-        )])
+    fn syncing_state(&self) -> WalletSyncingState {
+        WalletSyncingState {
+            account_best_blocks: BTreeMap::from([(
+                U31::ZERO,
+                (self.get_best_block_id(), self.get_block_height()),
+            )]),
+            unused_account_best_block: (self.get_best_block_id(), self.get_block_height()),
+        }
     }
 
     fn scan_blocks(
@@ -83,7 +85,7 @@ impl SyncingWallet for MockWallet {
         _account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        _wallet_events: &mut impl WalletEvents,
+        _wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(
@@ -105,6 +107,15 @@ impl SyncingWallet for MockWallet {
             self.get_block_height()
         );
 
+        Ok(())
+    }
+
+    fn scan_blocks_for_unused_account(
+        &mut self,
+        _common_block_height: BlockHeight,
+        _blocks: Vec<Block>,
+        _wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
         Ok(())
     }
 
@@ -202,7 +213,7 @@ impl NodeInterface for MockNode {
     async fn submit_block(&self, _block: Block) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<TxStatus, Self::Error> {
+    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<(), Self::Error> {
         unreachable!()
     }
 
@@ -264,7 +275,7 @@ async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<
 fn run_sync(chain_config: Arc<ChainConfig>, node: MockNode, mut wallet: MockWallet) {
     tokio::spawn(async move {
         loop {
-            let _ = sync_once(&chain_config, &node, &mut wallet, &mut WalletEventsNoOp).await;
+            let _ = sync_once(&chain_config, &node, &mut wallet, &WalletEventsNoOp).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     });

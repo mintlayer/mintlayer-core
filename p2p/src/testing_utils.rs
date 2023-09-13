@@ -31,6 +31,7 @@ use crate::{
     net::{
         default_backend::transport::{
             MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+            TransportListener, TransportSocket,
         },
         types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
@@ -65,7 +66,7 @@ impl TestTransportMaker for TestTransportTcp {
     }
 
     fn make_address() -> SocketAddress {
-        "[::1]:0".parse().unwrap()
+        "127.0.0.1:0".parse().unwrap()
     }
 }
 
@@ -130,7 +131,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0]).expect("dial to succeed");
+    conn1.connect(addr[0], None).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -249,7 +250,22 @@ pub fn test_p2p_config() -> P2pConfig {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     }
+}
+
+pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
+where
+    A: TestTransportMaker<Transport = T>,
+    T: TransportSocket,
+{
+    let transport = A::make_transport();
+    let addr = A::make_address();
+    let mut server = transport.bind(vec![addr]).await.unwrap();
+    let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
 }
