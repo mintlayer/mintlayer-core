@@ -35,7 +35,9 @@ pub mod storage;
 pub mod timelock_check;
 
 mod tx_source;
-use tokens_accounting::{TokensAccountingCache, TokensAccountingDB, TokensAccountingView};
+use tokens_accounting::{
+    TokensAccountingCache, TokensAccountingDB, TokensAccountingOperations, TokensAccountingView,
+};
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
 mod cached_operation;
@@ -66,9 +68,12 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_tokens_issuance_count, get_tokens_reissuance_count, TokenId},
+        tokens::{
+            get_tokens_issuance_count, get_tokens_reissuance_count, token_id, TokenData, TokenId,
+        },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
         TxOutput, UtxoOutPoint,
@@ -418,9 +423,8 @@ where
 
     fn spend_input_from_account(
         &mut self,
-        tx_source: TransactionSource,
         account_input: &AccountOutPoint,
-    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
+    ) -> Result<(), ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
         let expected_nonce = match self
@@ -446,17 +450,7 @@ where
             CachedOperation::Write(account_input.nonce()),
         );
 
-        match account {
-            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
-                // If the input spends from delegation account, this means the user is
-                // spending part of their share in the pool.
-                self.accounting_delta_adapter
-                    .operations(tx_source)
-                    .spend_share_from_delegation_id(delegation_id, withdraw_amount)
-                    .map_err(ConnectTransactionError::PoSAccountingError)
-            }
-            AccountSpending::Token(_, _) => todo!(),
-        }
+        Ok(())
     }
 
     fn spend_input_from_utxo(
@@ -507,11 +501,27 @@ where
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
                 TxInput::Account(account_input) => {
-                    check_for_delegation_cleanup = match account_input.account() {
-                        AccountSpending::Delegation(delegation_id, _) => Some(*delegation_id),
-                        AccountSpending::Token(_, _) => todo!(),
-                    };
-                    Some(self.spend_input_from_account(tx_source, account_input))
+                    match account_input.account() {
+                        AccountSpending::Delegation(delegation_id, withdraw_amount) => {
+                            check_for_delegation_cleanup = Some(*delegation_id);
+                            let res =
+                                self.spend_input_from_account(&account_input).and_then(|_| {
+                                    // If the input spends from delegation account, this means the user is
+                                    // spending part of their share in the pool.
+                                    self.accounting_delta_adapter
+                                        .operations(tx_source)
+                                        .spend_share_from_delegation_id(
+                                            *delegation_id,
+                                            *withdraw_amount,
+                                        )
+                                        .map_err(ConnectTransactionError::PoSAccountingError)
+                                });
+                            Some(res)
+                        }
+                        AccountSpending::TokenUnrealizedSupply(_, _)
+                        | AccountSpending::TokenCirculatingSupply(_, _)
+                        | AccountSpending::TokenSupplyLock(_) => None,
+                    }
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -679,6 +689,82 @@ where
         Ok(())
     }
 
+    fn connect_tokens_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let inputs_undos = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(_) => None,
+                TxInput::Account(account_input) => match account_input.account() {
+                    AccountSpending::Delegation(_, _) => None,
+                    AccountSpending::TokenUnrealizedSupply(token_id, mint_amount) => {
+                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .mint_tokens(*token_id, *mint_amount)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountSpending::TokenCirculatingSupply(token_id, burn_amount) => {
+                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .burn_tokens(*token_id, *burn_amount)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountSpending::TokenSupplyLock(token_id) => {
+                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .lock_total_supply(*token_id)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let outputs_undos =
+            tx.outputs()
+                .iter()
+                .filter_map(|output| match output {
+                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+                        OutputValue::Coin(_) => None,
+                        OutputValue::Token(token_data) => match token_data.as_ref() {
+                            TokenData::TokenTransfer(_)
+                            | TokenData::TokenIssuance(_)
+                            | TokenData::NftIssuance(_) => None,
+                            TokenData::TokenIssuanceV1(issuance_data) => {
+                                let res: Result<tokens_accounting::TokenAccountingUndo, _> =
+                                token_id(tx).ok_or(ConnectTransactionError::TokensError(TokensError::TokenIdCantBeCalculated)).and_then(
+                                    |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _>{
+                                        let data = tokens_accounting::TokenData::FungibleToken(
+                                            issuance_data.as_ref().clone().into(),
+                                        );
+                                        self.tokens_accounting_cache.issue_token(token_id, data).map_err(ConnectTransactionError::TokensAccountingError)
+                                    },
+                                );
+                                Some(res)
+                            }
+                        },
+                    },
+                    TxOutput::Burn(_)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => None,
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+        // FIXME: save undos
+        Ok(())
+    }
+
     pub fn connect_transaction(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -750,6 +836,8 @@ where
         )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
+
+        self.connect_tokens_outputs(tx_source.into(), tx.transaction())?;
 
         // spend utxos
         let tx_undo = self

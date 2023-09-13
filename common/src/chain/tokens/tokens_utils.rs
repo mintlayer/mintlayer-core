@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId, TokenIssuanceV1};
 use crate::{
-    chain::{output_value::OutputValue, Transaction, TxInput, TxOutput},
+    chain::{output_value::OutputValue, AccountSpending, Transaction, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -50,8 +50,20 @@ pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs.iter().filter(|&output| is_token_or_nft_issuance(output)).count()
 }
 
-pub fn get_tokens_reissuance_count(outputs: &[TxInput]) -> usize {
-    outputs.iter().filter(|&input| is_token_reissuance(input)).count()
+// FIXME: reissuance is not the common name for mint and burn
+pub fn get_tokens_reissuance_count(inputs: &[TxInput]) -> usize {
+    inputs
+        .iter()
+        .filter(|&input| match input {
+            TxInput::Utxo(_) => false,
+            TxInput::Account(account) => match account.account() {
+                AccountSpending::Delegation(_, _) => false,
+                AccountSpending::TokenUnrealizedSupply(_, _)
+                | AccountSpending::TokenCirculatingSupply(_, _)
+                | AccountSpending::TokenSupplyLock(_) => true,
+            },
+        })
+        .count()
 }
 
 pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
@@ -71,15 +83,5 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => false,
-    }
-}
-
-pub fn is_token_reissuance(input: &TxInput) -> bool {
-    match input {
-        TxInput::Utxo(_) => false,
-        TxInput::Account(account) => match account.account() {
-            crate::chain::AccountSpending::Delegation(_, _) => false,
-            crate::chain::AccountSpending::Token(_, _) => true,
-        },
     }
 }
