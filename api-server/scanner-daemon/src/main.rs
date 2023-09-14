@@ -88,7 +88,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
 
     let args = ApiServerScannerArgs::parse();
 
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
     logging::log::info!("Command line options: {args:?}");
 
     let ApiServerScannerArgs {

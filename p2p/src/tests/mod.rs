@@ -24,5 +24,5 @@ pub mod helpers;
 
 #[ctor::ctor]
 fn init() {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
 }

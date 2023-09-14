@@ -68,7 +68,7 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_time() {
-        logging::init_logging::<&std::path::Path>(None);
+        logging::init_logging();
         set(Duration::from_secs(1337)).unwrap();
 
         log::info!("p2p time: {}", get_time().as_secs());

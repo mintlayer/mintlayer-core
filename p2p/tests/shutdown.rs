@@ -26,7 +26,7 @@ use p2p::{
 
 #[ctor::ctor]
 fn init() {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
 }
 
 #[tracing::instrument]
