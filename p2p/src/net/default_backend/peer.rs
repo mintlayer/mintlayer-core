@@ -35,7 +35,7 @@ use crate::{
         },
         types::Role,
     },
-    protocol::ProtocolVersion,
+    protocol::{choose_common_protocol_version, ProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -171,13 +171,16 @@ where
 
                 let common_services = local_services & remote_services;
 
+                let common_protocol_version =
+                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
+
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
                 // It's required to reliably detect self-connects.
                 self.peer_event_tx.send((
                     self.peer_id,
                     PeerEvent::PeerInfoReceived {
-                        protocol_version,
+                        protocol_version: common_protocol_version,
                         network,
                         common_services,
                         user_agent,
@@ -240,10 +243,13 @@ where
 
                 let common_services = local_services & remote_services;
 
+                let common_protocol_version =
+                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
+
                 self.peer_event_tx.send((
                     self.peer_id,
                     PeerEvent::PeerInfoReceived {
-                        protocol_version,
+                        protocol_version: common_protocol_version,
                         network,
                         common_services,
                         user_agent,
@@ -285,6 +291,19 @@ where
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
                 log::debug!("handshake failed for peer {}: {err}", self.peer_id);
+
+                let send_result = self.peer_event_tx.send((
+                    self.peer_id,
+                    PeerEvent::HandshakeFailed { error: err.clone() },
+                ));
+                if let Err(send_error) = send_result {
+                    log::error!(
+                        "Cannot send PeerEvent::HandshakeFailed to peer {}: {}",
+                        self.peer_id,
+                        send_error
+                    );
+                }
+
                 return Err(err);
             }
             Err(_) => {
@@ -400,7 +419,7 @@ mod tests {
         assert_eq!(
             rx1.try_recv().unwrap().1,
             PeerEvent::PeerInfoReceived {
-                protocol_version: TEST_PROTOCOL_VERSION.into(),
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: *chain_config.magic_bytes(),
                 common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -479,7 +498,7 @@ mod tests {
             Ok((
                 peer_id3,
                 PeerEvent::PeerInfoReceived {
-                    protocol_version: TEST_PROTOCOL_VERSION.into(),
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *chain_config.magic_bytes(),
                     common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     user_agent: p2p_config.user_agent.clone(),

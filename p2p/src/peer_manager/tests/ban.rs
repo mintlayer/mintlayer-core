@@ -193,7 +193,12 @@ where
     pm2.handle_connectivity_event(event.unwrap());
 
     let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(remote_addr, OutboundConnectType::Manual { response: tx });
+    pm2.connect(
+        remote_addr,
+        OutboundConnectType::Manual {
+            response_sender: tx,
+        },
+    );
     let res = rx.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}

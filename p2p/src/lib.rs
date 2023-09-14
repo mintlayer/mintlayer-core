@@ -26,14 +26,10 @@ pub mod testing_utils;
 pub mod utils;
 
 mod peer_manager_event;
+#[cfg(test)]
+mod tests;
 
-pub use p2p_types as types;
 use types::socket_address::SocketAddress;
-
-pub use crate::{
-    peer_manager_event::PeerManagerEvent,
-    types::p2p_event::{P2pEvent, P2pEventHandler},
-};
 
 use std::{
     marker::PhantomData,
@@ -75,12 +71,19 @@ use crate::{
     },
 };
 
+pub use p2p_types as types;
+
+pub use crate::{
+    peer_manager_event::PeerManagerEvent,
+    types::p2p_event::{P2pEvent, P2pEventHandler},
+};
+
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
+    tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
     mempool_handle: MempoolHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,

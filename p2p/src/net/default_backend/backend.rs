@@ -47,7 +47,7 @@ use crate::{
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
     },
-    protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pEvent, P2pEventHandler,
 };
@@ -137,7 +137,7 @@ pub struct Backend<T: TransportSocket> {
     syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
 
     /// List of incoming commands to the backend; we put them in a queue
-    /// to make receiving commands can run concurrently with other backend operations
+    /// to make sure receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
     shutdown: Arc<SeqCstAtomicBool>,
@@ -533,25 +533,43 @@ where
                 software_version,
                 receiver_address,
                 handshake_nonce,
-            } => {
-                let common_protocol_version =
-                    choose_common_protocol_version(protocol_version, self.node_protocol_version)?;
-                self.create_peer(
+            } => self.create_peer(
+                peer_id,
+                handshake_nonce,
+                PeerInfo {
                     peer_id,
-                    handshake_nonce,
-                    PeerInfo {
-                        peer_id,
-                        protocol_version: common_protocol_version,
-                        network,
-                        software_version,
-                        user_agent,
-                        common_services,
-                    },
-                    receiver_address,
-                )
-            }
+                    protocol_version,
+                    network,
+                    software_version,
+                    user_agent,
+                    common_services,
+                },
+                receiver_address,
+            ),
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
+
+            PeerEvent::HandshakeFailed { error } => {
+                if let Some(pending_peer) = self.pending.get(&peer_id) {
+                    log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
+
+                    let send_result = self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
+                        address: pending_peer.address,
+                        error,
+                    });
+                    if let Err(send_error) = send_result {
+                        log::error!(
+                            "Unable to report a failed handshake for peer {} to the front end: {}",
+                            peer_id,
+                            send_error
+                        );
+                    }
+                } else {
+                    log::error!("Cannot find pending peer for peer id {peer_id}");
+                }
+
+                Ok(())
+            }
 
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {
