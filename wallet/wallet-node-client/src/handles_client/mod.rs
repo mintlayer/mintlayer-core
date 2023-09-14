@@ -53,7 +53,7 @@ impl std::fmt::Debug for WalletHandlesClient {
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum WalletHandlesClientError {
     #[error("Call error: {0}")]
-    CallError(#[from] subsystem::subsystem::CallError),
+    CallError(#[from] subsystem::error::CallError),
     #[error("Chainstate error: {0}")]
     Chainstate(#[from] ChainstateError),
     #[error("P2p error: {0}")]

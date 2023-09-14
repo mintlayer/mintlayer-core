@@ -39,7 +39,7 @@ use crate::{
     ChainstateError, ChainstateEvent,
 };
 
-impl<T: Deref + DerefMut + Send> ChainstateInterface for T
+impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
 where
     T::Target: ChainstateInterface,
 {

@@ -77,17 +77,18 @@ impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_chainstate<
-    S: chainstate_storage::BlockchainStorage + 'static,
-    V: TransactionVerificationStrategy + 'static,
->(
+pub fn make_chainstate<S, V>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: S,
     tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
-) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
+) -> Result<Box<dyn ChainstateInterface>, ChainstateError>
+where
+    S: chainstate_storage::BlockchainStorage + Sync + 'static,
+    V: TransactionVerificationStrategy + Sync + 'static,
+{
     let chainstate = Chainstate::new(
         chain_config,
         chainstate_config,

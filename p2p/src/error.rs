@@ -181,8 +181,8 @@ impl<T> From<tokio::sync::mpsc::error::SendError<T>> for P2pError {
     }
 }
 
-impl From<subsystem::subsystem::CallError> for P2pError {
-    fn from(_e: subsystem::subsystem::CallError) -> P2pError {
+impl From<subsystem::error::CallError> for P2pError {
+    fn from(_e: subsystem::error::CallError) -> P2pError {
         P2pError::ChannelClosed
     }
 }

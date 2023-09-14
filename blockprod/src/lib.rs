@@ -35,7 +35,7 @@ use detail::{
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use p2p::P2pHandle;
-use subsystem::subsystem::CallError;
+use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {

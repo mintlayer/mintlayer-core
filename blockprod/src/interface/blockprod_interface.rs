@@ -19,7 +19,7 @@ use consensus::GenerateBlockInputData;
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 
 #[async_trait::async_trait]
-pub trait BlockProductionInterface: Send {
+pub trait BlockProductionInterface: Send + Sync {
     /// When called, the job manager will be notified to send a signal
     /// to all currently running jobs to stop running
     async fn stop_all(&mut self) -> Result<usize, BlockProductionError>;

@@ -45,7 +45,7 @@ use mempool::{
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
 use rstest::rstest;
-use subsystem::subsystem::{CallError, CallRequest};
+use subsystem::{error::ResponseError, subsystem::CallRequest};
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::{
     sync::{mpsc::unbounded_channel, oneshot},
@@ -78,7 +78,7 @@ mod collect_transactions {
         let mut mock_mempool = MockMempoolInterface::default();
         mock_mempool.expect_collect_txs().return_once(|_| {
             Err(Error::Validity(TxValidationError::CallError(
-                CallError::ResultFetchFailed,
+                ResponseError::NoResponse.into(),
             )))
         });
 
@@ -129,10 +129,13 @@ mod collect_transactions {
             }
         });
 
-        mock_mempool_subsystem.call({
-            let shutdown = manager.make_shutdown_trigger();
-            move |_| shutdown.initiate()
-        });
+        mock_mempool_subsystem
+            .call({
+                let shutdown = manager.make_shutdown_trigger();
+                move |_| shutdown.initiate()
+            })
+            .submit_only()
+            .unwrap();
 
         // shutdown straight after startup, *then* call collect_transactions()
         manager.main().await;
@@ -807,7 +810,7 @@ mod produce_block {
 
         mock_mempool.expect_collect_txs().return_once(|_| {
             Err(Error::Validity(TxValidationError::CallError(
-                CallError::ResultFetchFailed,
+                ResponseError::NoResponse.into(),
             )))
         });
 

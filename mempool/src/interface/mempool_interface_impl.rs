@@ -112,7 +112,7 @@ impl MempoolSubsystemInterface for MempoolInit {
                 Some(evt) = chainstate_events_rx.recv() => mempool.process_chainstate_event(evt),
 
                 // Calls from other subsystems or RPC go next.
-                call = call_rq.recv() => call(&mut mempool).await,
+                call = call_rq.recv() => call.handle_call_mut(&mut mempool).await,
 
                 // Finally, if there's nothing else to do, handle orphan tx processing.
                 () = work_signal => mempool.perform_work_unit(),

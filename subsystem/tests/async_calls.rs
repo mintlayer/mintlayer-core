@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use subsystem::subsystem::{CallError, CallRequest};
+use subsystem::{error::CallError, subsystem::CallRequest};
 
 mod helpers;
 

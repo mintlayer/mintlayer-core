@@ -34,6 +34,7 @@
 //! 3. The main task waits for all subsystems to terminate.
 
 pub mod blocking;
+pub mod error;
 pub mod manager;
 pub mod subsystem;
 

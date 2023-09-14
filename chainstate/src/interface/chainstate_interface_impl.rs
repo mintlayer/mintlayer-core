@@ -53,8 +53,10 @@ impl<S, V> ChainstateInterfaceImpl<S, V> {
     }
 }
 
-impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterface
-    for ChainstateInterfaceImpl<S, V>
+impl<S, V> ChainstateInterface for ChainstateInterfaceImpl<S, V>
+where
+    S: BlockchainStorage + Sync,
+    V: TransactionVerificationStrategy + Sync,
 {
     fn subscribe_to_events(&mut self, handler: EventHandler<ChainstateEvent>) {
         self.chainstate.subscribe_to_events(handler)
