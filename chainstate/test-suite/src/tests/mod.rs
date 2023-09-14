@@ -36,6 +36,7 @@ mod delegation_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
+mod fungible_tokens_v1;
 mod history_iteration;
 mod homomorphism;
 mod initialization;
