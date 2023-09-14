@@ -444,6 +444,7 @@ impl OutputCache {
                             (
                                 output,
                                 token_id.and_then(|token_id| {
+                                    // FIXME: is this correct for v1?
                                     is_token_or_nft_issuance(output).then_some(token_id)
                                 }),
                             ),
