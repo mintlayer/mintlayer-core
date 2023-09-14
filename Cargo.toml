@@ -168,12 +168,12 @@ rand_chacha = "0.3"
 reedline = "0.23"
 ref-cast = "1.0"
 replace_with = "0.1"
-rfd = { version = "0.11", default-features = false }
+rfd = { version = "0.12", default-features = false }
 ripemd = "0.1"
 rlimit = "0.10"
 rstest = "0.18"
 rusqlite = "0.29"
-schnorrkel = "0.10"
+schnorrkel = "0.11"
 serde = "1.0"
 serde_json = "1.0"
 serde_test = "1.0"
@@ -197,7 +197,7 @@ thiserror = "1.0"
 tokio = { version = "1.27", default-features = false }
 tokio-socks = "0.5"
 tokio-util = { version = "0.7", default-features = false }
-toml = "0.7"
+toml = "0.8"
 tower = "0.4"
 tower-http = "0.4"
 trust-dns-client = "0.22"
