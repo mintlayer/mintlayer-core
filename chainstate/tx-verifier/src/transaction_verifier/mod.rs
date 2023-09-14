@@ -76,8 +76,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{
-            get_token_supply_change_count, get_tokens_issuance_count, get_tokens_issuance_v1,
-            token_id, TokenId,
+            get_token_supply_change_count, get_tokens_issuance_count,
+            get_tokens_issuance_versioned, token_id, TokenId,
         },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
@@ -265,7 +265,8 @@ where
                     | TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::TokenIssuance(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -292,7 +293,8 @@ where
                     | TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::TokenIssuance(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -322,7 +324,8 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokenIssuance(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -345,7 +348,8 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokenIssuance(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -503,7 +507,8 @@ where
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_) => Ok(None),
+            | TxOutput::Burn(_)
+            | TxOutput::TokenIssuance(_) => Ok(None),
         }
     }
 
@@ -617,7 +622,8 @@ where
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::TokenIssuance(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -748,7 +754,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let outputs_undos = get_tokens_issuance_v1(tx.outputs())
+        let outputs_undos = get_tokens_issuance_versioned(tx.outputs())
             .iter()
             .map(|issuance_data| {
                 token_id(tx)

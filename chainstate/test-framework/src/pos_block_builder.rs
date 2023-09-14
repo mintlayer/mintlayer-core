@@ -78,7 +78,8 @@ impl<'f> PoSBlockBuilder<'f> {
                     | TxOutput::Burn(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::TokenIssuance(_) => None,
                     | TxOutput::CreateStakePool(pool_id, _) => Some(*pool_id),
                 },
             );
@@ -250,7 +251,8 @@ impl<'f> PoSBlockBuilder<'f> {
                             | TxOutput::Burn(..)
                             | TxOutput::ProduceBlockFromStake(..)
                             | TxOutput::CreateDelegationId(..)
-                            | TxOutput::DelegateStaking(..) => false,
+                            | TxOutput::DelegateStaking(..)
+                            | TxOutput::TokenIssuance(..) => false,
                             TxOutput::CreateStakePool(pool_id, _) => *pool_id == staking_pool,
                         })
                         .unwrap();

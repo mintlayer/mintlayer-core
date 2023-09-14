@@ -50,6 +50,7 @@ pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
         TxOutput::ProduceBlockFromStake(_, _) => UtxoType::ProduceBlockFromStake,
         TxOutput::CreateDelegationId(_, _) => UtxoType::CreateDelegationId,
         TxOutput::DelegateStaking(_, _) => UtxoType::DelegateStaking,
+        TxOutput::TokenIssuance(_) => todo!(),
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {

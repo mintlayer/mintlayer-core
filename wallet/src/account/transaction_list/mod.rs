@@ -113,11 +113,12 @@ fn own_output(key_chain: &AccountKeyChain, output: &TxOutput) -> bool {
         TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => KeyPurpose::ALL
             .iter()
             .any(|purpose| key_chain.get_leaf_key_chain(*purpose).is_destination_mine(dest)),
-        TxOutput::Burn(_) => false,
-        TxOutput::CreateStakePool(_, _) => false,
-        TxOutput::ProduceBlockFromStake(_, _) => false,
-        TxOutput::CreateDelegationId(_, _) => false,
-        TxOutput::DelegateStaking(_, _) => false,
+        TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::TokenIssuance(_) => false,
     }
 }
 

@@ -50,7 +50,7 @@ use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, Trans
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
-use crate::{BlockError, ChainstateConfig};
+use crate::{detail::tokens::check_tokens_issuance_versioned, BlockError, ChainstateConfig};
 
 use self::tx_verifier_storage::gen_block_index_getter;
 
@@ -633,7 +633,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::ProduceBlockFromStake(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::DelegateStaking(_, _) => Err(
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::TokenIssuance(_) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -646,7 +647,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::CreateStakePool(_, _)
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DelegateStaking(_, _) => Err(
+                            | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::TokenIssuance(_) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -753,22 +755,34 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Check tokens
             tx.outputs()
                 .iter()
-                .filter_map(|output| match output {
+                .try_for_each(|output| match output {
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => v.token_data(),
+                    | TxOutput::Burn(v) => {
+                        if let Some(token_data) = v.token_data() {
+                            check_tokens_data(
+                                self.chain_config,
+                                token_data,
+                                tx.transaction(),
+                                block.get_id(),
+                            )?;
+                        }
+                        Ok(())
+                    }
+                    TxOutput::TokenIssuance(issuance) => {
+                        check_tokens_issuance_versioned(self.chain_config, issuance.as_ref())
+                            .map_err(|e| {
+                                TokensError::IssueError(
+                                    e,
+                                    tx.transaction().get_id(),
+                                    block.get_id(),
+                                )
+                            })
+                    }
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
-                })
-                .try_for_each(|token_data| {
-                    check_tokens_data(
-                        self.chain_config,
-                        token_data,
-                        tx.transaction(),
-                        block.get_id(),
-                    )
+                    | TxOutput::DelegateStaking(_, _) => Ok(()),
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)
                 .log_err()?;

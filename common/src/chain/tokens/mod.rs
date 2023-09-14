@@ -17,27 +17,17 @@ use super::{Block, Destination, Transaction};
 use crate::primitives::{Amount, Id};
 use serialization::{Decode, Encode};
 
+mod issuance;
 mod nft;
 mod rpc;
 mod token_id;
 mod tokens_utils;
 
+pub use issuance::*;
 pub use nft::*;
 pub use rpc::*;
 pub use token_id::TokenId;
 pub use tokens_utils::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct TokenIssuanceVersion(u32);
-
-impl TokenIssuanceVersion {
-    /// Initial issuance implementation
-    pub const V0: Self = Self(0);
-    /// Add reissuance support
-    pub const V1: Self = Self(1);
-
-    pub const CURRENT: Self = Self::V1;
-}
 
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
@@ -77,22 +67,6 @@ pub struct TokenIssuance {
     pub metadata_uri: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub enum TokenTotalSupply {
-    Fixed(Amount), // fixed to a certain amount
-    Lockable,      // not known in advance but can be locked at some point in time
-    Unlimited,     // limited only by the Amount data type
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub struct TokenIssuanceV1 {
-    pub token_ticker: Vec<u8>,
-    pub number_of_decimals: u8,
-    pub metadata_uri: Vec<u8>,
-    pub supply_limit: TokenTotalSupply,
-    pub reissuance_controller: Destination,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
@@ -104,9 +78,6 @@ pub enum TokenData {
     // A new NFT creation
     #[codec(index = 3)]
     NftIssuance(Box<NftIssuance>),
-    /// New token creation with supply support
-    #[codec(index = 4)]
-    TokenIssuanceV1(Box<TokenIssuanceV1>),
 }
 
 impl From<NftIssuance> for TokenData {
@@ -118,11 +89,5 @@ impl From<NftIssuance> for TokenData {
 impl From<TokenIssuance> for TokenData {
     fn from(d: TokenIssuance) -> Self {
         Self::TokenIssuance(Box::new(d))
-    }
-}
-
-impl From<TokenIssuanceV1> for TokenData {
-    fn from(d: TokenIssuanceV1) -> Self {
-        Self::TokenIssuanceV1(Box::new(d))
     }
 }

@@ -18,7 +18,7 @@ use self::check_utils::check_media_hash;
 use super::transaction_verifier::error::TokensError;
 use common::{
     chain::{
-        tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceV1},
+        tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceVersioned},
         Block, ChainConfig, Transaction,
     },
     primitives::{Amount, Id, Idable},
@@ -128,29 +128,34 @@ pub fn check_tokens_issuance_data_v0(
     Ok(())
 }
 
-pub fn check_tokens_issuance_data_v1(
+pub fn check_tokens_issuance_versioned(
     chain_config: &ChainConfig,
-    issuance_data: &TokenIssuanceV1,
+    issuance_data: &TokenIssuanceVersioned,
 ) -> Result<(), TokenIssuanceError> {
-    // Check token ticker
-    check_token_ticker(chain_config, &issuance_data.token_ticker)?;
+    match issuance_data {
+        TokenIssuanceVersioned::V1(issuance_data) => {
+            // Check token ticker
+            check_token_ticker(chain_config, &issuance_data.token_ticker)?;
 
-    // Check decimals
-    ensure!(
-        &issuance_data.number_of_decimals <= &chain_config.token_max_dec_count(),
-        TokenIssuanceError::IssueErrorTooManyDecimals
-    );
+            // Check decimals
+            ensure!(
+                &issuance_data.number_of_decimals <= &chain_config.token_max_dec_count(),
+                TokenIssuanceError::IssueErrorTooManyDecimals
+            );
 
-    // Check URI
-    ensure!(
-        is_uri_valid(&issuance_data.metadata_uri),
-        TokenIssuanceError::IssueErrorIncorrectMetadataURI
-    );
+            // Check URI
+            ensure!(
+                is_uri_valid(&issuance_data.metadata_uri),
+                TokenIssuanceError::IssueErrorIncorrectMetadataURI
+            );
 
-    ensure!(
-        &issuance_data.metadata_uri.len() <= &chain_config.token_max_uri_len(),
-        TokenIssuanceError::IssueErrorIncorrectMetadataURI
-    );
+            ensure!(
+                &issuance_data.metadata_uri.len() <= &chain_config.token_max_uri_len(),
+                TokenIssuanceError::IssueErrorIncorrectMetadataURI
+            );
+        }
+    };
+
     Ok(())
 }
 
@@ -170,9 +175,5 @@ pub fn check_tokens_data(
         }
         TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
             .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
-        TokenData::TokenIssuanceV1(issuance) => {
-            check_tokens_issuance_data_v1(chain_config, &issuance)
-                .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id))
-        }
     }
 }

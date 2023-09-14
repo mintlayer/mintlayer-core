@@ -18,8 +18,8 @@
 use std::{cmp, mem};
 
 use common::chain::{
-    signature::inputsig::InputWitness, stakelock::StakePoolData, SignedTransaction, TxInput,
-    TxOutput,
+    signature::inputsig::InputWitness, stakelock::StakePoolData, tokens::TokenIssuanceVersioned,
+    SignedTransaction, TxInput, TxOutput,
 };
 use logging::log;
 
@@ -341,6 +341,7 @@ impl MemoryUsage for TxOutput {
             TxOutput::ProduceBlockFromStake(_, _) => 0,
             TxOutput::CreateDelegationId(_, _) => 0,
             TxOutput::DelegateStaking(_, _) => 0,
+            TxOutput::TokenIssuance(issuance) => issuance.indirect_memory_usage(),
         }
     }
 }
@@ -354,7 +355,7 @@ impl MemoryUsage for InputWitness {
     }
 }
 
-impl_no_indirect_memory_usage!(StakePoolData, TxDependency, TxInput);
+impl_no_indirect_memory_usage!(StakePoolData, TxDependency, TxInput, TokenIssuanceVersioned);
 
 /// Types where the object created by T::default() takes no indirect memory.
 pub trait ZeroUsageDefault: MemoryUsage + Default {}

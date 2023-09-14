@@ -97,7 +97,9 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => {
                                 Ok(d.clone())
                             }
-                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                            TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::TokenIssuance(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
@@ -182,7 +184,9 @@ impl<'a> SignatureDestinationGetter<'a> {
                             | TxOutput::DelegateStaking(_, _) => {
                                 Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                             }
-                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                            TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::TokenIssuance(_) => {
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                             }
 
