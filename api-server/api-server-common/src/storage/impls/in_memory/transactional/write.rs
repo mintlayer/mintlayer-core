@@ -88,7 +88,7 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 
     fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        self.transaction.get_storage_version()
+        Ok(Some(self.transaction.get_storage_version()?))
     }
 
     fn get_best_block(&mut self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {

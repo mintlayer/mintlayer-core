@@ -48,7 +48,7 @@ impl Postgres {
             .pool
             .get()
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        Ok(ApiServerPostgresTransactionalRo::from_connection(conn)?)
+        ApiServerPostgresTransactionalRo::from_connection(conn)
     }
 
     pub fn begin_rw_transaction<'a>(
@@ -58,6 +58,6 @@ impl Postgres {
             .pool
             .get()
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        Ok(ApiServerPostgresTransactionalRw::from_connection(conn)?)
+        ApiServerPostgresTransactionalRw::from_connection(conn)
     }
 }

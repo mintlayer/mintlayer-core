@@ -32,24 +32,27 @@ struct ApiServerInMemoryStorage {
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, SignedTransaction)>,
     best_block: (BlockHeight, Id<GenBlock>),
-    storage_version: Option<u32>,
+    storage_version: u32,
 }
 
 impl ApiServerInMemoryStorage {
     pub fn new(chain_config: &ChainConfig) -> Self {
-        Self {
+        let mut result = Self {
             block_table: BTreeMap::new(),
             block_aux_data_table: BTreeMap::new(),
             main_chain_blocks_table: BTreeMap::new(),
             transaction_table: BTreeMap::new(),
             best_block: (0.into(), chain_config.genesis_block_id()),
-            storage_version: None,
-        }
+            storage_version: super::CURRENT_STORAGE_VERSION,
+        };
+        result
+            .initialize_storage(chain_config)
+            .expect("In-memory initialization must succeed");
+        result
     }
 
     fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
-        let storage_version_handle = self.storage_version;
-        Ok(storage_version_handle.is_some())
+        Ok(true)
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
@@ -74,7 +77,7 @@ impl ApiServerInMemoryStorage {
         Ok(Some(tx.clone()))
     }
 
-    fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
+    fn get_storage_version(&self) -> Result<u32, ApiServerStorageError> {
         let version_table_handle = self.storage_version;
         Ok(version_table_handle)
     }
@@ -115,7 +118,7 @@ impl ApiServerInMemoryStorage {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         self.best_block = (0.into(), chain_config.genesis_block_id());
-        self.storage_version = Some(CURRENT_STORAGE_VERSION);
+        self.storage_version = CURRENT_STORAGE_VERSION;
 
         Ok(())
     }

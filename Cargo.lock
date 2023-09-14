@@ -219,6 +219,8 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 name = "api-server-backend-test-suite"
 version = "0.1.1"
 dependencies = [
+ "api-server-common",
+ "common",
  "libtest-mimic",
  "logging",
  "proptest",

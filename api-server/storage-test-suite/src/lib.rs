@@ -14,25 +14,31 @@
 // limitations under the License.
 
 //! Test suite for storage backends
-
 #![allow(clippy::unwrap_used)]
 
+mod basic;
+
+use api_server_common::storage::storage_api::ApiServerStorage;
+use std::sync::Arc;
+
 /// Get all tests
-// fn tests<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mimic::Trial> {
-//     let backend_fn = Arc::new(backend_fn);
-//     std::iter::empty()
-//         // .chain(basic::tests(Arc::clone(&backend_fn)))
-//         // .chain(concurrent::tests(Arc::clone(&backend_fn)))
-//         // .chain(property::tests(backend_fn))
-//         .collect()
-// }
+fn tests<S: ApiServerStorage, F: Fn() -> S + Send + Sync + 'static>(
+    storage_maker: F,
+) -> Vec<libtest_mimic::Trial> {
+    let storage_maker = Arc::new(storage_maker);
+    std::iter::empty()
+        .chain(basic::build_tests(storage_maker))
+        // .chain(concurrent::tests(Arc::clone(&backend_fn)))
+        // .chain(property::tests(backend_fn))
+        .collect()
+}
 
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn main<B /*: 'static + Backend, F: BackendFn<B>*/>(// backend_fn: F,
+pub fn run<S: ApiServerStorage, F: Fn() -> S + Send + Sync + 'static>(
+    storage_maker: F,
 ) -> libtest_mimic::Conclusion {
-    // logging::init_logging::<&str>(None);
-    // let args = libtest_mimic::Arguments::from_args();
-    // libtest_mimic::run(&args, tests(backend_fn))
-    todo!()
+    logging::init_logging::<&str>(None);
+    let args = libtest_mimic::Arguments::from_args();
+    libtest_mimic::run(&args, tests(storage_maker))
 }
