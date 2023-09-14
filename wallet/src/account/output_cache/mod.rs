@@ -236,6 +236,7 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
+                TxOutput::TokenIssuance(_) => todo!(),
             };
         }
         Ok(())

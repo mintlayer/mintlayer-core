@@ -97,7 +97,8 @@ impl ConstrainedValueAccumulator {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
                                 .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TxOutput::CreateDelegationId(..) => { /* do nothing */ }
+                        TxOutput::CreateDelegationId(..) | TxOutput::TokenIssuance(_) => { /* do nothing */
+                        }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let block_distance = chain_config
@@ -170,9 +171,9 @@ impl ConstrainedValueAccumulator {
                                     .ok_or(IOPolicyError::AmountOverflow)?;
                             }
                         }
-                        TokenData::TokenIssuance(_)
-                        | TokenData::NftIssuance(_)
-                        | TokenData::TokenIssuanceV1(_) => todo!("Error??"),
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
+                            todo!("this has to handle TokenV1??")
+                        }
                     },
                 },
                 TxOutput::DelegateStaking(coins, _) => {
@@ -183,7 +184,9 @@ impl ConstrainedValueAccumulator {
                     self.unconstrained_value = (self.unconstrained_value - data.value())
                         .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
                 }
-                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => {
+                TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::TokenIssuance(_) => {
                     /* do nothing as these outputs cannot produce values */
                 }
                 TxOutput::LockThenTransfer(value, _, timelock) => match timelock {

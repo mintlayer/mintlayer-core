@@ -116,7 +116,9 @@ fn get_output_value<P: PoSAccountingView>(
                 .pledge_amount();
             OutputValue::Coin(pledge_amount)
         }
-        TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
+        TxOutput::CreateDelegationId(_, _) | TxOutput::TokenIssuance(_) => {
+            OutputValue::Coin(Amount::ZERO)
+        }
         TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
     };
     Ok(res)
@@ -154,7 +156,8 @@ where
                 }
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => {
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::TokenIssuance(_) => {
                     return Err(ConnectTransactionError::IOPolicyError(
                         super::IOPolicyError::InvalidInputTypeInTx,
                         inputs_source.clone(),
@@ -238,7 +241,6 @@ fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
-            TokenData::TokenIssuanceV1(_) => None,
         },
     })
 }
@@ -267,9 +269,6 @@ where
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 )),
-            TokenData::TokenIssuanceV1(_) => Err(ConnectTransactionError::TokensError(
-                TokensError::TokenIssuanceV1OutputSpending,
-            )),
         },
     }
 }

@@ -64,7 +64,8 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _) => None,
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::TokenIssuance(_) => None,
     }
 }
 
@@ -105,9 +106,6 @@ pub fn create_utxo_data(
             }
             TokenData::NftIssuance(_issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
-            }
-            TokenData::TokenIssuanceV1(_) => {
-                panic!("Unsupported output type, use Account::Token");
             }
         },
     };
@@ -236,7 +234,6 @@ pub fn create_multiple_utxo_data(
                     vec![new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))]
                 }
             }
-            TokenData::TokenIssuanceV1(_) => todo!(),
         },
     };
 
