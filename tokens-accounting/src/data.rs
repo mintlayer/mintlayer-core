@@ -24,14 +24,8 @@ use crate::Error;
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct TokensAccountingDeltaData {
-    pub token_data: DeltaDataCollection<TokenId, TokenData>,
-    pub circulating_supply: DeltaAmountCollection<TokenId>,
-}
-
-#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
-pub struct TokensAccountingDeltaUndoData {
-    pub token_data: DeltaDataUndoCollection<TokenId, TokenData>,
-    pub circulating_supply: DeltaAmountCollection<TokenId>,
+    pub(crate) token_data: DeltaDataCollection<TokenId, TokenData>,
+    pub(crate) circulating_supply: DeltaAmountCollection<TokenId>,
 }
 
 impl TokensAccountingDeltaData {
@@ -55,6 +49,21 @@ impl TokensAccountingDeltaData {
             token_data: token_data_undo,
             circulating_supply: circulating_supply_undo,
         })
+    }
+}
+
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
+pub struct TokensAccountingDeltaUndoData {
+    pub(crate) token_data: DeltaDataUndoCollection<TokenId, TokenData>,
+    pub(crate) circulating_supply: DeltaAmountCollection<TokenId>,
+}
+
+impl TokensAccountingDeltaUndoData {
+    pub fn new() -> Self {
+        Self {
+            token_data: DeltaDataUndoCollection::new(),
+            circulating_supply: DeltaAmountCollection::new(),
+        }
     }
 }
 

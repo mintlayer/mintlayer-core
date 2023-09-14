@@ -27,6 +27,7 @@ use mockall::predicate::eq;
 use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, DeltaMergeUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
+use tokens_accounting::TokensAccountingDeltaUndoData;
 use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
@@ -73,6 +74,10 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -152,6 +157,10 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -219,6 +228,10 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -321,6 +334,10 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -377,6 +394,10 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -439,6 +460,10 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -499,6 +524,10 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -589,6 +618,10 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -647,6 +680,10 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -709,6 +746,10 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -784,6 +825,10 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -851,6 +896,10 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -946,6 +995,10 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -1025,6 +1078,10 @@ fn nonce_set_hierarchy(#[case] seed: Seed) {
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -1077,6 +1134,10 @@ fn nonce_del_hierarchy(#[case] seed: Seed) {
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
