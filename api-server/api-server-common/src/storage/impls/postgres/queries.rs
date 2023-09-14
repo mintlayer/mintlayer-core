@@ -335,6 +335,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
