@@ -123,6 +123,21 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .map_err(Into::into)
     }
 
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> crate::Result<()> {
+        self.write::<db::DBTokensAccountingBlockUndo, _, _, _>(id, undo)
+    }
+
+    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBTokensAccountingBlockUndo, _>()
+            .del(id)
+            .map_err(Into::into)
+    }
+
     fn set_accounting_undo_data(
         &mut self,
         id: Id<Block>,

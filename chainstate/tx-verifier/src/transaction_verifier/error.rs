@@ -92,7 +92,7 @@ pub enum ConnectTransactionError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
-    #[error("accounting BlockUndo error: {0}")]
+    #[error("PoS accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
@@ -156,6 +156,8 @@ pub enum ConnectTransactionError {
     IOPolicyError(IOPolicyError, OutPointSourceId),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Tokens accounting BlockUndo error: {0}")]
+    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

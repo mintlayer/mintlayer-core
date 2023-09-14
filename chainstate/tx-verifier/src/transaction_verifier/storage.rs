@@ -62,6 +62,8 @@ pub enum TransactionVerifierStorageError {
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Tokens accounting BlockUndo error: {0}")]
+    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
 }
 
 pub trait HasTxIndexDisabledError {
@@ -112,6 +114,11 @@ where
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_account_nonce_count(
         &self,
@@ -195,6 +202,17 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T
@@ -236,6 +254,14 @@ where
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_accounting_undo(id)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
+    {
+        self.deref().get_tokens_accounting_undo(id)
     }
 
     fn get_account_nonce_count(

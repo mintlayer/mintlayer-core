@@ -118,6 +118,12 @@ pub trait BlockchainStorageRead:
         start_from: BlockHeight,
     ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
+    /// Get tokens accounting undo for specific block
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
@@ -204,6 +210,16 @@ pub trait BlockchainStorageWrite:
 
     /// Remove token id
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<()>;
+
+    // Set tokens accounting block undo data for specific block
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<()>;
+
+    // Remove tokens accounting block undo data for specific block
+    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Set accounting block undo data for specific block
     fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo)

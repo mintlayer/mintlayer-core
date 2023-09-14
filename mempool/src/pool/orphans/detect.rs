@@ -88,6 +88,7 @@ impl OrphanType {
             | CTE::AttemptToCreateDelegationFromAccounts
             | CTE::FailedToIncrementAccountNonce
             | CTE::TokensAccountingError(_)
+            | CTE::TokensAccountingBlockUndoError(_)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

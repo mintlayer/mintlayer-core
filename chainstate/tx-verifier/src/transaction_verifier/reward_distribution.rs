@@ -28,7 +28,7 @@ use pos_accounting::{
 };
 use utils::ensure;
 
-use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
+use super::pos_accounting_delta_adapter::PoSAccountingDeltaAdapter;
 
 /// Distribute reward among the pool's owner and delegations
 pub fn distribute_pos_reward<P: PoSAccountingView>(

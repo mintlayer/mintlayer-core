@@ -807,14 +807,14 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     let _ = verifier1
-        .accounting_delta_adapter
+        .pos_accounting_adapter
         .operations(TransactionSource::Mempool)
         .create_pool(pool_id_1, pool_data1.into())
         .unwrap();
 
     let mut verifier2 = verifier1.derive_child();
     let _ = verifier2
-        .accounting_delta_adapter
+        .pos_accounting_adapter
         .operations(TransactionSource::Mempool)
         .create_pool(pool_id_2, pool_data2.into())
         .unwrap();
@@ -877,7 +877,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let undo = verifier
-            .accounting_delta_adapter
+            .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
             .create_pool(pool_id, pool_data1.into())
             .unwrap();
@@ -888,10 +888,10 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             None,
         );
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: block_undo,
                     is_fresh: true,
                 },
@@ -903,7 +903,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let pool_id = pos_accounting::make_pool_id(&outpoint2);
         let mut verifier = verifier1.derive_child();
         let undo = verifier
-            .accounting_delta_adapter
+            .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
             .create_pool(pool_id, pool_data2.into())
             .unwrap();
@@ -914,10 +914,10 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             None,
         );
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: block_undo,
                     is_fresh: true,
                 },
@@ -968,10 +968,10 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: Default::default(),
                     is_fresh: false,
                 },
@@ -982,10 +982,10 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: Default::default(),
                     is_fresh: false,
                 },

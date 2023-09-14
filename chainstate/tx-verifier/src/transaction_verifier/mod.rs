@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod accounting_delta_adapter;
-mod accounting_undo_cache;
 mod amounts_map;
 mod cached_inputs_operation;
 mod input_output_policy;
 mod optional_tx_index_cache;
+mod pos_accounting_delta_adapter;
+mod pos_accounting_undo_cache;
 mod reward_distribution;
 mod signature_check;
 mod token_issuance_cache;
+mod tokens_accounting_undo_cache;
 mod transferred_amount_check;
 mod tx_index_cache;
 mod utxos_undo_cache;
@@ -49,15 +50,18 @@ pub use input_output_policy::IOPolicyError;
 use std::collections::BTreeMap;
 
 use self::{
-    accounting_delta_adapter::PoSAccountingDeltaAdapter,
-    accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
     cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
+    pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
+    pos_accounting_undo_cache::{PoSAccountingBlockUndoCache, PoSAccountingBlockUndoEntry},
     signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
+    tokens_accounting_undo_cache::{
+        TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
+    },
     transferred_amount_check::{
         check_transferred_amount_in_reward, check_transferred_amounts_and_get_fee,
     },
@@ -104,10 +108,11 @@ pub struct TransactionVerifierDelta {
     utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
     accounting_delta: PoSAccountingDeltaData,
-    accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
-    accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
+    pos_accounting_delta_undo: BTreeMap<TransactionSource, PoSAccountingBlockUndoEntry>,
+    pos_accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
     tokens_accounting_delta: TokensAccountingDeltaData,
+    tokens_accounting_delta_undo: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>,
 }
 
 impl TransactionVerifierDelta {
@@ -128,10 +133,11 @@ pub struct TransactionVerifier<C, S, U, A, T> {
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: UtxosBlockUndoCache,
 
-    accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
-    accounting_block_undo: AccountingBlockUndoCache,
+    pos_accounting_adapter: PoSAccountingDeltaAdapter<A>,
+    pos_accounting_block_undo: PoSAccountingBlockUndoCache,
 
     tokens_accounting_cache: TokensAccountingCache<T>,
+    tokens_accounting_block_undo: TokensAccountingBlockUndoCache,
 
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
@@ -157,9 +163,10 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             token_issuance_cache: TokenIssuanceCache::new(),
             utxo_cache,
             utxo_block_undo: UtxosBlockUndoCache::new(),
-            accounting_delta_adapter,
-            accounting_block_undo: AccountingBlockUndoCache::new(),
+            pos_accounting_adapter: accounting_delta_adapter,
+            pos_accounting_block_undo: PoSAccountingBlockUndoCache::new(),
             tokens_accounting_cache,
+            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -195,9 +202,10 @@ where
             token_issuance_cache: TokenIssuanceCache::new(),
             utxo_cache: UtxosCache::new(utxos).expect("Utxo cache setup failed"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
-            accounting_delta_adapter: PoSAccountingDeltaAdapter::new(accounting),
-            accounting_block_undo: AccountingBlockUndoCache::new(),
+            pos_accounting_adapter: PoSAccountingDeltaAdapter::new(accounting),
+            pos_accounting_block_undo: PoSAccountingBlockUndoCache::new(),
             tokens_accounting_cache: TokensAccountingCache::new(tokens_accounting),
+            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -228,11 +236,12 @@ where
             utxo_cache: UtxosCache::new(&self.utxo_cache).expect("construct"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta_adapter: PoSAccountingDeltaAdapter::new(
-                self.accounting_delta_adapter.accounting_delta(),
+            pos_accounting_adapter: PoSAccountingDeltaAdapter::new(
+                self.pos_accounting_adapter.accounting_delta(),
             ),
+            pos_accounting_block_undo: PoSAccountingBlockUndoCache::new(),
             tokens_accounting_cache: TokensAccountingCache::new(&self.tokens_accounting_cache),
-            accounting_block_undo: AccountingBlockUndoCache::new(),
+            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
@@ -319,7 +328,7 @@ where
             )),
             TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id) => self
-                .accounting_delta_adapter
+                .pos_accounting_adapter
                 .accounting_delta()
                 .get_pool_data(*pool_id)?
                 .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
@@ -414,7 +423,7 @@ where
             Subsidy(self.chain_config.as_ref().block_subsidy_at_height(&block_height));
         check_transferred_amount_in_reward(
             &self.utxo_cache,
-            &self.accounting_delta_adapter.accounting_delta(),
+            &self.pos_accounting_adapter.accounting_delta(),
             &block.block_reward_transactable(),
             block.get_id(),
             block.consensus_data(),
@@ -455,6 +464,21 @@ where
         Ok(())
     }
 
+    fn unspend_input_from_account(
+        &mut self,
+        account_input: &AccountOutPoint,
+    ) -> Result<(), ConnectTransactionError> {
+        let account: AccountType = (*account_input.account()).into();
+        let new_nonce = self
+            .get_account_nonce_count(account)
+            .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
+            .ok_or(ConnectTransactionError::MissingTransactionNonce(account))?
+            .decrement()
+            .map_or(CachedOperation::Erase, CachedOperation::Write);
+        self.account_nonce.insert(account, new_nonce);
+        Ok(())
+    }
+
     fn spend_input_from_utxo(
         &mut self,
         tx_source: TransactionSource,
@@ -469,7 +493,7 @@ where
                 // If the input spends `CreateStakePool` or `ProduceBlockFromStake` utxo,
                 // this means the user is decommissioning the pool.
                 let undo = self
-                    .accounting_delta_adapter
+                    .pos_accounting_adapter
                     .operations(tx_source)
                     .decommission_pool(*pool_id)
                     .map_err(ConnectTransactionError::PoSAccountingError)?;
@@ -510,7 +534,7 @@ where
                                 self.spend_input_from_account(&account_input).and_then(|_| {
                                     // If the input spends from delegation account, this means the user is
                                     // spending part of their share in the pool.
-                                    self.accounting_delta_adapter
+                                    self.pos_accounting_adapter
                                         .operations(tx_source)
                                         .spend_share_from_delegation_id(
                                             *delegation_id,
@@ -539,7 +563,7 @@ where
                         let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
                         let res = if expected_pool_id == *pool_id {
                             if data.value() >= self.chain_config.as_ref().min_stake_pool_pledge() {
-                                self.accounting_delta_adapter
+                                self.pos_accounting_adapter
                                     .operations(tx_source)
                                     .create_pool(*pool_id, data.as_ref().clone().into())
                                     .map_err(ConnectTransactionError::PoSAccountingError)
@@ -566,7 +590,7 @@ where
                     match input_utxo_outpoint {
                         Some(input_utxo_outpoint) => {
                             let res = self
-                                .accounting_delta_adapter
+                                .pos_accounting_adapter
                                 .operations(tx_source)
                                 .create_delegation_id(
                                     *target_pool,
@@ -584,7 +608,7 @@ where
                 }
                 TxOutput::DelegateStaking(amount, delegation_id) => {
                     let res = self
-                        .accounting_delta_adapter
+                        .pos_accounting_adapter
                         .operations(tx_source)
                         .delegate_staking(*delegation_id, *amount)
                         .map_err(ConnectTransactionError::PoSAccountingError);
@@ -600,7 +624,7 @@ where
         // delete delegation if the balance is 0 and the pool has been decommissioned
         let delete_delegation_undo = match check_for_delegation_cleanup {
             Some(delegation_id) => {
-                let accounting_view = self.accounting_delta_adapter.accounting_delta();
+                let accounting_view = self.pos_accounting_adapter.accounting_delta();
                 let delegation_balance =
                     accounting_view.get_delegation_balance(delegation_id)?.ok_or(
                         ConnectTransactionError::DelegationDataNotFound(delegation_id),
@@ -618,7 +642,7 @@ where
                         );
 
                         Some(
-                            self.accounting_delta_adapter
+                            self.pos_accounting_adapter
                                 .operations(tx_source)
                                 .delete_delegation_id(delegation_id)?,
                         )
@@ -640,7 +664,7 @@ where
                 .chain(outputs_undos)
                 .chain(delete_delegation_undo)
                 .collect();
-            self.accounting_block_undo
+            self.pos_accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
                 .map_err(ConnectTransactionError::AccountingBlockUndoError)
@@ -659,14 +683,7 @@ where
             match input {
                 TxInput::Utxo(_) => { /* do nothing */ }
                 TxInput::Account(account_input) => {
-                    let account: AccountType = (*account_input.account()).into();
-                    let new_nonce = self
-                        .get_account_nonce_count(account)
-                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
-                        .ok_or(ConnectTransactionError::MissingTransactionNonce(account))?
-                        .decrement()
-                        .map_or(CachedOperation::Erase, CachedOperation::Write);
-                    self.account_nonce.insert(account, new_nonce);
+                    self.unspend_input_from_account(&account_input)?;
                 }
             };
         }
@@ -677,14 +694,14 @@ where
                 .get_accounting_undo(id)
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         };
-        let undos = self.accounting_block_undo.take_tx_undo(
+        let undos = self.pos_accounting_block_undo.take_tx_undo(
             &tx_source,
             &tx.get_id(),
             block_undo_fetcher,
         )?;
         if let Some(undos) = undos {
             undos.into_inner().into_iter().try_for_each(|undo| {
-                self.accounting_delta_adapter.operations(tx_source).undo(undo)
+                self.pos_accounting_adapter.operations(tx_source).undo(undo)
             })?;
         }
 
@@ -751,7 +768,51 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // FIXME: save undos to cache
+        // Store pos accounting operations undos
+        if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
+            let tx_undos = inputs_undos.into_iter().chain(outputs_undos).collect();
+            self.tokens_accounting_block_undo
+                .get_or_create_block_undo(&tx_source)
+                .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))
+                .map_err(ConnectTransactionError::TokensAccountingBlockUndoError)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn disconnect_tokens_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        // decrement nonce if disconnected input spent from account
+        for input in tx.inputs() {
+            match input {
+                TxInput::Utxo(_) => { /* do nothing */ }
+                TxInput::Account(account_input) => {
+                    self.unspend_input_from_account(&account_input)?;
+                }
+            };
+        }
+
+        // apply undos to accounting
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_tokens_accounting_undo(id)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        };
+        let undos = self.tokens_accounting_block_undo.take_tx_undo(
+            &tx_source,
+            &tx.get_id(),
+            block_undo_fetcher,
+        )?;
+        if let Some(undos) = undos {
+            undos
+                .into_inner()
+                .into_iter()
+                .try_for_each(|undo| self.tokens_accounting_cache.undo(undo))?;
+        }
+
         Ok(())
     }
 
@@ -785,7 +846,7 @@ where
         // check for attempted money printing
         let fee = check_transferred_amounts_and_get_fee(
             &self.utxo_cache,
-            &self.accounting_delta_adapter.accounting_delta(),
+            &self.pos_accounting_adapter.accounting_delta(),
             tx.transaction(),
             issuance_token_id_getter,
         )?;
@@ -794,7 +855,7 @@ where
             tx.transaction(),
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
-            &self.accounting_delta_adapter.accounting_delta(),
+            &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
         )?;
 
@@ -821,7 +882,7 @@ where
             tx,
             SignatureDestinationGetter::new_for_transaction(
                 &self.tokens_accounting_cache,
-                &self.accounting_delta_adapter.accounting_delta(),
+                &self.pos_accounting_adapter.accounting_delta(),
                 &self.utxo_cache,
             ),
         )?;
@@ -937,13 +998,13 @@ where
                     .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
                 let undos = reward_distribution::distribute_pos_reward(
-                    &mut self.accounting_delta_adapter,
+                    &mut self.pos_accounting_adapter,
                     block_id,
                     *pos_data.stake_pool_id(),
                     total_reward,
                 )?;
 
-                self.accounting_block_undo
+                self.pos_accounting_block_undo
                     .get_or_create_block_undo(&TransactionSource::Chain(block_id))
                     .set_reward_undo(undos);
             }
@@ -1037,6 +1098,8 @@ where
 
         self.disconnect_pos_accounting_outputs(*tx_source, tx.transaction())?;
 
+        self.disconnect_tokens_accounting_outputs(*tx_source, tx.transaction())?;
+
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
         // pre-cache token ids before removing them
@@ -1102,13 +1165,13 @@ where
                         .get_accounting_undo(id)
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                 };
-                let reward_undo = self.accounting_block_undo.take_block_reward_undo(
+                let reward_undo = self.pos_accounting_block_undo.take_block_reward_undo(
                     &TransactionSource::Chain(block.get_id()),
                     block_undo_fetcher,
                 )?;
                 if let Some(reward_undo) = reward_undo {
                     reward_undo.into_inner().into_iter().try_for_each(|undo| {
-                        self.accounting_delta_adapter.operations(tx_source).undo(undo)
+                        self.pos_accounting_adapter.operations(tx_source).undo(undo)
                     })?;
                 }
             }
@@ -1122,17 +1185,18 @@ where
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
-        let (accounting_delta, accounting_block_deltas) = self.accounting_delta_adapter.consume();
+        let (accounting_delta, accounting_block_deltas) = self.pos_accounting_adapter.consume();
         Ok(TransactionVerifierDelta {
             tx_index_cache: self.tx_index_cache.take_always().consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo.consume(),
             token_issuance_cache: self.token_issuance_cache.consume(),
             accounting_delta,
-            accounting_delta_undo: self.accounting_block_undo.consume(),
-            accounting_block_deltas,
+            pos_accounting_delta_undo: self.pos_accounting_block_undo.consume(),
+            pos_accounting_block_deltas: accounting_block_deltas,
             account_nonce: self.account_nonce,
             tokens_accounting_delta: self.tokens_accounting_cache.consume(),
+            tokens_accounting_delta_undo: self.tokens_accounting_block_undo.consume(),
         })
     }
 }
