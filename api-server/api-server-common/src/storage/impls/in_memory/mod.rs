@@ -26,6 +26,7 @@ use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorage
 
 use super::CURRENT_STORAGE_VERSION;
 
+#[derive(Debug, Clone)]
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, Block>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,

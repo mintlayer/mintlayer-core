@@ -47,12 +47,16 @@ impl<'t> ApiServerTransactionRo for ApiServerInMemoryStorageTransactionalRo<'t> 
 
 pub struct ApiServerInMemoryStorageTransactionalRw<'t> {
     transaction: RwLockWriteGuard<'t, ApiServerInMemoryStorage>,
+    initial_data_before_tx: ApiServerInMemoryStorage,
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
     fn new(storage: &'t mut TransactionalApiServerInMemoryStorage) -> Self {
+        let transaction = storage.tx_rw();
+        let initial_data_before_tx = transaction.clone();
         Self {
-            transaction: storage.tx_rw(),
+            transaction,
+            initial_data_before_tx,
         }
     }
 }
@@ -62,9 +66,10 @@ impl<'t> ApiTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
         Ok(())
     }
 
-    fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
-        // TODO(PR): make this work by having transactions copy the whole storage into the transaction object, then copy them back on commit
-        unimplemented!()
+    fn rollback(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+        // We restore the original data that was there when the transaction started
+        std::mem::swap(&mut *self.transaction, &mut self.initial_data_before_tx);
+        Ok(())
     }
 }
 
