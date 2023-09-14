@@ -20,10 +20,11 @@ use std::{
     sync::Mutex,
 };
 
-use log_style::{get_log_style_from_env, LogStyle, TextColoring};
 use tracing_subscriber::{
     fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
+
+use log_style::{get_log_style_from_env, LogStyle, TextColoring};
 
 pub use log;
 
@@ -61,20 +62,20 @@ fn init_logging_impl<MW>(make_writer: MW, is_terminal: bool)
 where
     MW: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
-    let (log_style, log_style_parse_err) = get_log_style_from_env(LOG_STYLE_ENV_VAR_NAME);
-
-    let logging_layer: Box<dyn Layer<_> + Send + Sync> = match log_style {
-        LogStyle::Json => {
-            Box::new(tracing_subscriber::fmt::Layer::new().json().with_writer(make_writer))
-        }
-        LogStyle::Text(preferred_coloring) => Box::new(
-            tracing_subscriber::fmt::Layer::new()
-                .with_writer(make_writer)
-                .with_ansi(should_use_coloring(preferred_coloring, is_terminal)),
-        ),
-    };
-
     INITIALIZE_LOGGER_ONCE_FLAG.call_once(move || {
+        let (log_style, log_style_parse_err) = get_log_style_from_env(LOG_STYLE_ENV_VAR_NAME);
+
+        let logging_layer: Box<dyn Layer<_> + Send + Sync> = match log_style {
+            LogStyle::Json => {
+                Box::new(tracing_subscriber::fmt::Layer::new().json().with_writer(make_writer))
+            }
+            LogStyle::Text(preferred_coloring) => Box::new(
+                tracing_subscriber::fmt::Layer::new()
+                    .with_writer(make_writer)
+                    .with_ansi(should_use_coloring(preferred_coloring, is_terminal)),
+            ),
+        };
+
         Registry::default()
             .with(logging_layer)
             // This will construct EnvFilter using the default env variable RUST_LOG
@@ -83,13 +84,13 @@ where
             // initializes a 'log' compatibility layer, so that 'log' macros continue to work
             // (this requires the "tracing-log" feature to be enabled, but it is enabled by default).
             .init();
-    });
 
-    // Now that we've initialized logging somehow, we can complain about the env var parsing error,
-    // if any.
-    if let Some(err) = log_style_parse_err {
-        log::error!("Couldn't get log style from {LOG_STYLE_ENV_VAR_NAME} - {err}");
-    }
+        // Now that we've initialized logging somehow, we can complain about the env var parsing error,
+        // if any.
+        if let Some(err) = log_style_parse_err {
+            log::error!("Couldn't get log style from {LOG_STYLE_ENV_VAR_NAME} - {err}");
+        }
+    });
 }
 
 fn should_use_coloring(preferred_coloring: TextColoring, is_terminal: bool) -> bool {
