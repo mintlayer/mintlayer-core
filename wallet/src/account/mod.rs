@@ -599,7 +599,8 @@ impl Account {
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::TokenIssuance(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -630,7 +631,8 @@ impl Account {
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::Burn(_)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::TokenIssuance(_) => panic!("Unexpected UTXO"),
                 };
                 pool_id == utxo_pool_id
             })
@@ -771,6 +773,7 @@ impl Account {
             | TxOutput::CreateDelegationId(d, _)
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+            TxOutput::TokenIssuance(issuance) => todo!(),
             TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
     }
@@ -1211,7 +1214,7 @@ fn group_outputs<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::CreateDelegationId(_, _) => continue,
+            TxOutput::CreateDelegationId(_, _) | TxOutput::TokenIssuance(_) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
@@ -1234,7 +1237,6 @@ fn group_outputs<T, Grouped: Clone>(
                         combiner(total_token_amount, &output, token_transfer.amount)?;
                     }
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
-                    TokenData::TokenIssuanceV1(_) => todo!(),
                 }
             }
         }
@@ -1263,7 +1265,8 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokenIssuance(_) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
@@ -1300,7 +1303,6 @@ fn group_utxos_for_input<T, Grouped: Clone>(
 
                         combiner(total_token_amount, &output, Amount::from_atoms(1))?;
                     }
-                    TokenData::TokenIssuanceV1(_) => todo!(),
                 }
             }
         }

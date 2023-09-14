@@ -15,7 +15,7 @@
 
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::chain::{
-    tokens::{TokenId, TokenIssuanceV1, TokenTotalSupply},
+    tokens::{TokenId, TokenIssuanceVersioned, TokenTotalSupply},
     Destination,
 };
 use serialization::{Decode, Encode};
@@ -122,15 +122,17 @@ impl FungibleTokenData {
     }
 }
 
-impl From<TokenIssuanceV1> for FungibleTokenData {
-    fn from(issuance: TokenIssuanceV1) -> Self {
-        Self {
-            token_ticker: issuance.token_ticker,
-            number_of_decimals: issuance.number_of_decimals,
-            metadata_uri: issuance.metadata_uri,
-            supply_limit: issuance.supply_limit,
-            locked: false,
-            reissuance_controller: issuance.reissuance_controller,
+impl From<TokenIssuanceVersioned> for FungibleTokenData {
+    fn from(issuance: TokenIssuanceVersioned) -> Self {
+        match issuance {
+            TokenIssuanceVersioned::V1(issuance) => Self {
+                token_ticker: issuance.token_ticker,
+                number_of_decimals: issuance.number_of_decimals,
+                metadata_uri: issuance.metadata_uri,
+                supply_limit: issuance.supply_limit,
+                locked: false,
+                reissuance_controller: issuance.reissuance_controller,
+            },
         }
     }
 }

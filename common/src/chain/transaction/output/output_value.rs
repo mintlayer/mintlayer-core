@@ -16,7 +16,7 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceV1, TokenTransfer},
+    chain::tokens::{NftIssuance, TokenData, TokenIssuance, TokenTransfer},
     primitives::Amount,
 };
 
@@ -24,6 +24,7 @@ use crate::{
 pub enum OutputValue {
     Coin(Amount),
     Token(Box<TokenData>),
+    // FIXME: add TokenV1 with just amount
 }
 
 impl OutputValue {
@@ -63,11 +64,5 @@ impl From<NftIssuance> for OutputValue {
 impl From<TokenIssuance> for OutputValue {
     fn from(d: TokenIssuance) -> Self {
         TokenData::TokenIssuance(Box::new(d)).into()
-    }
-}
-
-impl From<TokenIssuanceV1> for OutputValue {
-    fn from(d: TokenIssuanceV1) -> Self {
-        TokenData::TokenIssuanceV1(Box::new(d)).into()
     }
 }

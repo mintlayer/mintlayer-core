@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{TokenData, TokenId, TokenIssuanceV1};
+use super::{TokenData, TokenId, TokenIssuanceVersioned};
 use crate::{
     chain::{output_value::OutputValue, AccountSpending, Transaction, TxInput, TxOutput},
     primitives::id::hash_encoded,
@@ -23,25 +23,18 @@ pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(TokenId::new(hash_encoded(tx.inputs().get(0)?)))
 }
 
-pub fn get_tokens_issuance_v1(outputs: &[TxOutput]) -> Vec<&TokenIssuanceV1> {
+pub fn get_tokens_issuance_versioned(outputs: &[TxOutput]) -> Vec<&TokenIssuanceVersioned> {
     outputs
         .iter()
         .filter_map(|output| match output {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-                match v {
-                    OutputValue::Token(data) => match data.as_ref() {
-                        TokenData::TokenIssuance(_)
-                        | TokenData::NftIssuance(_)
-                        | TokenData::TokenTransfer(_) => None,
-                        TokenData::TokenIssuanceV1(issuance) => Some(issuance.as_ref()),
-                    },
-                    OutputValue::Coin(_) => None,
-                }
-            }
-            TxOutput::CreateStakePool(_, _)
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::TokenIssuance(v) => Some(v.as_ref()),
         })
         .collect()
 }
@@ -58,7 +51,7 @@ pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
                 match v {
                     OutputValue::Token(data) => match data.as_ref() {
                         TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
-                        TokenData::TokenTransfer(_) | TokenData::TokenIssuanceV1(_) => false,
+                        TokenData::TokenTransfer(_) => false,
                     },
                     OutputValue::Coin(_) => false,
                 }
@@ -66,7 +59,8 @@ pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
             TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => false,
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokenIssuance(_) => false,
         })
         .count()
 }
@@ -91,14 +85,13 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             match v {
                 OutputValue::Token(data) => match data.as_ref() {
-                    TokenData::TokenIssuance(_)
-                    | TokenData::NftIssuance(_)
-                    | TokenData::TokenIssuanceV1(_) => true,
+                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
                     TokenData::TokenTransfer(_) => false,
                 },
                 OutputValue::Coin(_) => false,
             }
         }
+        TxOutput::TokenIssuance(_) => true,
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)

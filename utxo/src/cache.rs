@@ -493,21 +493,14 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
 
 fn can_be_spent(output: &TxOutput) -> bool {
     match output {
-        TxOutput::Transfer(v, _) => match v {
-            OutputValue::Coin(_) => true,
-            OutputValue::Token(data) => match data.as_ref() {
-                TokenData::TokenTransfer(_)
-                | TokenData::TokenIssuance(_)
-                | TokenData::NftIssuance(_) => true,
-                TokenData::TokenIssuanceV1(_) => false,
-            },
-        },
-        TxOutput::LockThenTransfer(..)
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
-        TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
-            false
-        }
+        TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..)
+        | TxOutput::Burn(..)
+        | TxOutput::TokenIssuance(..) => false,
     }
 }
 
