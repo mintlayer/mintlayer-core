@@ -50,12 +50,6 @@ impl ChainstateHandle {
         self.handle.call(move |cs| func(cs)).await?
     }
 
-    // FIXME: here we call cs.is_initial_block_download if the previous result was true,
-    // but stop doing it once it becomes false.
-    // The original implementation though used to go further with the optimization, always
-    // returning the cached value and updating it in the NewTip event handler.
-    // Technically, we could do it here too, e.g. by moving sync::subscribe_to_new_tip to
-    // this struct. But does it make sense?
     pub async fn is_initial_block_download(&self) -> crate::Result<bool> {
         // Note: is_initial_block_download can only go from true to false.
         if !self.is_initial_block_download.load() {
