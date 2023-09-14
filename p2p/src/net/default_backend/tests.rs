@@ -13,21 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{transport::NoiseTcpTransport, *};
+use std::time::Duration;
+use std::{fmt::Debug, sync::Arc};
+
+use common::time_getter::TimeGetter;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::oneshot;
+use tokio::time::timeout;
+use utils::atomics::SeqCstAtomicBool;
+
+use super::transport::TransportListener;
+use super::{
+    transport::{NoiseTcpTransport, TransportSocket},
+    *,
+};
+use crate::net::default_backend::default_networking_service::get_preferred_protocol_version_for_tests;
 use crate::{
     config::NodeType,
     error::DialError,
     net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
-    protocol::SupportedProtocolVersion,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
 };
-use std::fmt::Debug;
-use std::time::Duration;
-use tokio::io::AsyncWriteExt;
-use tokio::time::timeout;
 
 async fn connect_to_remote_impl<A, T>(
     remote_protocol_version: ProtocolVersion,
@@ -355,7 +365,10 @@ where
     }) = conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
-        assert_eq!(peer_info.protocol_version, CURRENT_PROTOCOL_VERSION);
+        assert_eq!(
+            peer_info.protocol_version,
+            get_preferred_protocol_version_for_tests()
+        );
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.software_version, *config.software_version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);

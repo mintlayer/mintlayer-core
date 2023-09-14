@@ -147,7 +147,8 @@ pub struct Backend<T: TransportSocket> {
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
 
     /// The protocol version that this node is running. Normally this will be
-    /// equal to CURRENT_PROTOCOL_VERSION, but it can be overridden for testing purposes.
+    /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
+    /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
 }
 

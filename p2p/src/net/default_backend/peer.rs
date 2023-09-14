@@ -91,7 +91,8 @@ pub struct Peer<T: TransportSocket> {
     backend_event_rx: mpsc::UnboundedReceiver<BackendEvent>,
 
     /// The protocol version that this node is running. Normally this will be
-    /// equal to CURRENT_PROTOCOL_VERSION, but it can be overridden for testing purposes.
+    /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
+    /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
 }
 
