@@ -21,7 +21,9 @@ use crate::{
 use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
+        output_value::OutputValue,
         signature::Signable,
+        tokens::TokenData,
         GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -491,8 +493,16 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
 
 fn can_be_spent(output: &TxOutput) -> bool {
     match output {
-        TxOutput::Transfer(..)
-        | TxOutput::LockThenTransfer(..)
+        TxOutput::Transfer(v, _) => match v {
+            OutputValue::Coin(_) => true,
+            OutputValue::Token(data) => match data.as_ref() {
+                TokenData::TokenTransfer(_)
+                | TokenData::TokenIssuance(_)
+                | TokenData::NftIssuance(_) => true,
+                TokenData::TokenIssuanceV1(_) => false,
+            },
+        },
+        TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
         TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
