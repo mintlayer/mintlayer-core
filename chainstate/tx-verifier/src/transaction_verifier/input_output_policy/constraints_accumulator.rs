@@ -163,12 +163,12 @@ impl ConstrainedValueAccumulator {
                     }
                     OutputValue::Token(token_data) => match token_data.as_ref() {
                         TokenData::TokenTransfer(data) => {
-                            let constrained_amount = self
-                                .burn_constrained
-                                .get_mut(&data.token_id)
-                                .ok_or(IOPolicyError::AmountOverflow)?;
-                            *constrained_amount = (*constrained_amount - data.amount)
-                                .ok_or(IOPolicyError::AmountOverflow)?;
+                            if let Some(constrained_amount) =
+                                self.burn_constrained.get_mut(&data.token_id)
+                            {
+                                *constrained_amount = (*constrained_amount - data.amount)
+                                    .ok_or(IOPolicyError::AmountOverflow)?;
+                            }
                         }
                         TokenData::TokenIssuance(_)
                         | TokenData::NftIssuance(_)
