@@ -50,8 +50,28 @@ pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs.iter().filter(|&output| is_token_or_nft_issuance(output)).count()
 }
 
-// FIXME: reissuance is not the common name for mint and burn
-pub fn get_tokens_reissuance_count(inputs: &[TxInput]) -> usize {
+pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
+    outputs
+        .iter()
+        .filter(|&output| match output {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                match v {
+                    OutputValue::Token(data) => match data.as_ref() {
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
+                        TokenData::TokenTransfer(_) | TokenData::TokenIssuanceV1(_) => false,
+                    },
+                    OutputValue::Coin(_) => false,
+                }
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => false,
+        })
+        .count()
+}
+
+pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
     inputs
         .iter()
         .filter(|&input| match input {

@@ -69,11 +69,11 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
-        output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{
-            get_tokens_issuance_count, get_tokens_reissuance_count, token_id, TokenData, TokenId,
+            get_token_supply_change_count, get_tokens_issuance_count, get_tokens_issuance_v1,
+            token_id, TokenId,
         },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
@@ -271,8 +271,8 @@ where
         }
 
         // Check if the fee is enough for reissuance
-        let reissuance_count = get_tokens_reissuance_count(tx.inputs());
-        if reissuance_count > 0 {
+        let supply_change_count = get_token_supply_change_count(tx.inputs());
+        if supply_change_count > 0 {
             let total_burned = tx
                 .outputs()
                 .iter()
@@ -288,8 +288,8 @@ where
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
-            let required_fee = (self.chain_config.as_ref().token_min_reissuance_fee()
-                * reissuance_count as u128)
+            let required_fee = (self.chain_config.as_ref().token_min_supply_change_fee()
+                * supply_change_count as u128)
                 .expect("overflow");
             ensure!(
                 total_burned >= required_fee,
@@ -731,39 +731,27 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let outputs_undos =
-            tx.outputs()
-                .iter()
-                .filter_map(|output| match output {
-                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
-                        OutputValue::Coin(_) => None,
-                        OutputValue::Token(token_data) => match token_data.as_ref() {
-                            TokenData::TokenTransfer(_)
-                            | TokenData::TokenIssuance(_)
-                            | TokenData::NftIssuance(_) => None,
-                            TokenData::TokenIssuanceV1(issuance_data) => {
-                                let res: Result<tokens_accounting::TokenAccountingUndo, _> =
-                                token_id(tx).ok_or(ConnectTransactionError::TokensError(TokensError::TokenIdCantBeCalculated)).and_then(
-                                    |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _>{
-                                        let data = tokens_accounting::TokenData::FungibleToken(
-                                            issuance_data.as_ref().clone().into(),
-                                        );
-                                        self.tokens_accounting_cache.issue_token(token_id, data).map_err(ConnectTransactionError::TokensAccountingError)
-                                    },
-                                );
-                                Some(res)
-                            }
+        let outputs_undos = get_tokens_issuance_v1(tx.outputs())
+            .iter()
+            .map(|issuance_data| {
+                token_id(tx)
+                    .ok_or(ConnectTransactionError::TokensError(
+                        TokensError::TokenIdCantBeCalculated,
+                    ))
+                    .and_then(
+                        |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
+                            let data = tokens_accounting::TokenData::FungibleToken(
+                                (*issuance_data).clone().into(),
+                            );
+                            self.tokens_accounting_cache
+                                .issue_token(token_id, data)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
                         },
-                    },
-                    TxOutput::Burn(_)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+                    )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        // FIXME: save undos
+        // FIXME: save undos to cache
         Ok(())
     }
 
@@ -776,6 +764,7 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
+        // FIXME: forbid v0 tokens at some height?
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache.precache_token_issuance(
             |id| {

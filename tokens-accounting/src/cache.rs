@@ -56,7 +56,7 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
     type Error = Error;
 
     fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error> {
-        match self.data.token_data.get_data(&id) {
+        match self.data.token_data.get_data(id) {
             accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
             accounting::GetDataResult::Deleted => Ok(None),
             accounting::GetDataResult::Missing => {
@@ -67,7 +67,7 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         let parent_supply = self.parent.get_circulating_supply(id).map_err(|_| Error::ViewFail)?;
-        let local_delta = self.data.circulating_supply.data().get(&id).cloned();
+        let local_delta = self.data.circulating_supply.data().get(id).cloned();
         combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)
     }
 }
