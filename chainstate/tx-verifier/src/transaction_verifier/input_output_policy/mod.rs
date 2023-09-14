@@ -53,7 +53,7 @@ pub enum IOPolicyError {
     MissingOutputOrSpent(UtxoOutPoint),
     #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
-    #[error("PoS accounting error")]
+    #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
     PledgeAmountNotFound(PoolId),

@@ -34,6 +34,7 @@ use common::{
         config::{self, ChainType},
         create_unittest_pos_config,
         output_value::OutputValue,
+        pos_initial_difficulty,
         stakelock::StakePoolData,
         ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
     },
@@ -149,7 +150,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: common::chain::initial_difficulty(ChainType::Regtest).into(),
+                initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                 config: pos_config,
             }),
         ),

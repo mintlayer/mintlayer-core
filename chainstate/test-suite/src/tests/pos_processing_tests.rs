@@ -24,7 +24,7 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
     CheckBlockError, ConnectTransactionError, SpendStakeError,
 };
-use chainstate_storage::{SealedStorageTag, TipStorageTag, Transactional};
+use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -48,9 +48,9 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade, Destination, GenBlock,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, TxInput, TxOutput, UpgradeVersion,
-        UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
+        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSConsensusVersion, PoolId,
+        RequiredConsensus, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -165,7 +165,7 @@ fn setup_test_chain_with_staked_pool(
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -212,7 +212,7 @@ fn setup_test_chain_with_2_staked_pools(
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -295,6 +295,15 @@ fn produce_kernel_signature(
     .unwrap()
 }
 
+fn get_pos_chain_config(chain_config: &ChainConfig, block_height: BlockHeight) -> PoSChainConfig {
+    match chain_config.net_upgrade().consensus_status(block_height) {
+        RequiredConsensus::PoS(status) => status.get_chain_config().clone(),
+        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+            panic!("Invalid consensus")
+        }
+    }
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -306,7 +315,7 @@ fn pos_enforce_strict_time_ordering(#[case] seed: Seed) {
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
     let block_timestamp = tf.chainstate.get_chain_config().genesis_block().timestamp();
 
     // skip kernel inputs
@@ -363,20 +372,20 @@ fn pos_basic(#[case] seed: Seed) {
     );
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         1,
         current_difficulty,
     )
@@ -452,20 +461,20 @@ fn pos_block_signature(#[case] seed: Seed) {
         setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint.clone(),
         InputWitness::NoSignature(None),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         1,
         current_difficulty,
     )
@@ -540,15 +549,18 @@ fn pos_block_signature(#[case] seed: Seed) {
         tf.best_block_id(),
         stake_pool_outpoint.clone(),
     );
+    let new_block_height = tf.best_block_index().block_height().next_height();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         1,
         current_difficulty,
     )
@@ -573,6 +585,8 @@ fn pos_block_signature(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let upgrades = vec![
         (
@@ -582,40 +596,39 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: create_unittest_pos_config(),
             }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-    let chain_config = ConfigBuilder::test_chain()
+    let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk);
+    let chain_config = ConfigBuilder::new(ChainType::Testnet)
         .net_upgrades(net_upgrades)
-        .epoch_length(NonZeroU64::new(1).unwrap())
-        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .genesis_custom(genesis)
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let genesis_id = tf.genesis().get_id();
-    let (staking_sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(
-        OutPointSourceId::BlockReward(genesis_id.into()),
-        0,
-    ));
+    let pool_id = H256::zero().into();
 
     let invalid_kernel_input =
         UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
         invalid_kernel_input,
         InputWitness::NoSignature(None),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -682,20 +695,20 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         stake_pool_outpoint.clone(),
     );
 
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (valid_pos_data, valid_block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(valid_prev_randomness),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         valid_epoch,
         current_difficulty,
     )
@@ -837,20 +850,20 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     );
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (valid_pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         1,
         current_difficulty,
     )
@@ -911,7 +924,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -932,15 +945,19 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::NoSignature(None),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
-        Amount::from_atoms(1),
+        final_supply,
         0,
         current_difficulty,
     )
@@ -1002,8 +1019,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
@@ -1011,7 +1032,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1043,8 +1064,10 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         block_2_reward_outpoint.clone(),
     );
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_2_reward_outpoint,
         InputWitness::Standard(kernel_sig),
@@ -1052,7 +1075,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1088,20 +1111,20 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     // sealed epoch randomness can be used
     let sealed_epoch_randomness =
         tf.storage.transaction_ro().unwrap().get_epoch_data(1).unwrap().unwrap();
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_3_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         *sealed_epoch_randomness.randomness(),
         pool_id,
-        sealed_pool_balance,
+        final_supply,
         2,
         current_difficulty,
     )
@@ -1143,20 +1166,20 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     // kernel refers to pool1, while block reward refers to pool2
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id1)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::NoSignature(None),
         &vrf_sk_1,
         PoSRandomness::new(initial_randomness),
         pool_id1,
-        sealed_pool_balance,
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1392,8 +1415,12 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::Standard(kernel_sig),
@@ -1401,7 +1428,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id1,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1434,8 +1461,10 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         0,
     );
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint2,
         InputWitness::Standard(kernel_sig),
@@ -1443,7 +1472,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id2,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1498,7 +1527,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
@@ -1506,6 +1535,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     50.into(),
                     5,
                     PerThousand::new(100).unwrap(),
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -1513,7 +1543,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: None,
                 config: PoSChainConfig::new(
                     Uint256::MAX,
                     target_block_time,
@@ -1521,6 +1551,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     50.into(),
                     5,
                     PerThousand::new(100).unwrap(),
+                    PoSConsensusVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -1550,8 +1581,13 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
 
     // prepare and process block_a <- block_b with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let current_difficulty = calculate_new_target(&mut tf, block_a_height.next_height()).unwrap();
+    let current_difficulty = calculate_new_target(&tf, block_a_height.next_height()).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::Standard(kernel_sig),
@@ -1559,7 +1595,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id1,
-        Amount::from_atoms(1),
+        final_supply,
         1,
         current_difficulty,
     )
@@ -1638,7 +1674,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
+                initial_difficulty: Some(MIN_DIFFICULTY.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -1674,20 +1710,20 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     );
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let pool_balance =
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, genesis_pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         genesis_pool_id,
-        pool_balance,
+        final_supply,
         0,
         current_difficulty,
     )
@@ -1726,20 +1762,20 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     );
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let pool_balance =
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, genesis_pool_id)
-            .unwrap()
-            .unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
+    let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
+
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &tf.storage,
+        &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_1_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         genesis_pool_id,
-        pool_balance,
+        final_supply,
         0,
         current_difficulty,
     )

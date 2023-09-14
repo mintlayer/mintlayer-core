@@ -63,9 +63,18 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_max_block_size_with_smart_contracts: Option<usize>,
 
+    /// Initial difficulty for the chain in Compact representation.
+    #[clap(long)]
+    pub chain_initial_difficulty: Option<u32>,
+
     /// PoS NetUpgrade override after Genesis
     #[clap(long)]
     pub chain_pos_netupgrades: Option<bool>,
+
+    /// PoS NetUpgrade override after Genesis with upgrade of consensus version from V0 to V1
+    /// at specific height
+    #[clap(long)]
+    pub chain_pos_netupgrades_v0_to_v1: Option<u64>,
 
     /// Genesis block timestamp in seconds since UNIX epoch.
     #[clap(long)]

@@ -15,7 +15,7 @@
 #  limitations under the License.
 
 from hashlib import blake2b
-from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
+from scalecodec.base import ScaleBytes, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,

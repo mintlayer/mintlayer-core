@@ -88,6 +88,7 @@ def init_mintlayer_types():
             },
 
             "PoolId": "H256",
+            "DelegationId": "H256",
 
             "StakePoolData": {
                 "type": "struct",

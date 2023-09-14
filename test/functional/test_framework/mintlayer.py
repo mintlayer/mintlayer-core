@@ -37,6 +37,9 @@ def mintlayer_hash(data):
 def hash_object(obj, data):
     return scalecodec.ScaleBytes(mintlayer_hash(obj.encode(data).data)).to_hex()[2:]
 
+def hex_to_dec_array(hex_string):
+    return [int(hex_string[i:i+2], 16) for i in range(0, len(hex_string), 2)]
+
 
 def reward_input(block_id, index = 0):
     return { 'Utxo' : {
@@ -130,3 +133,21 @@ def mine_pow_block(parent_id, transactions = [], timestamp = None):
         if block_id[-2] in "0123456":
             return (block, block_id)
     assert False, "Cannot mine block"
+
+def make_pool_id(outpoint):
+    # Include PoolId pre-image suffix of [0, 0, 0, 0]
+    blake2b_hasher = hashlib.blake2b()
+    blake2b_hasher.update(bytes.fromhex(outpoint))
+    blake2b_hasher.update(bytes.fromhex("00000000"))
+
+    # Truncate output to match Rust's split()
+    return hex_to_dec_array(blake2b_hasher.hexdigest()[:64])
+
+def make_delegation_id(outpoint):
+    # Include DelegationId pre-image suffix of [1, 0, 0, 0]
+    blake2b_hasher = hashlib.blake2b()
+    blake2b_hasher.update(bytes.fromhex(outpoint))
+    blake2b_hasher.update(bytes.fromhex("01000000"))
+
+    # Truncate output to match Rust's split()
+    return hex_to_dec_array(blake2b_hasher.hexdigest()[:64])

@@ -23,7 +23,7 @@ use common::{
         stakelock::StakePoolData,
         transaction::TxInput,
         ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
-        PoSChainConfig, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
+        PoSChainConfig, PoSConsensusVersion, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -1245,6 +1245,7 @@ mod produce_block {
                 2000.into(),
                 5,
                 PerThousand::new(1).expect("must be valid"),
+                PoSConsensusVersion::V1,
             )
             .expect("Valid PoS config values");
 
@@ -1254,7 +1255,7 @@ mod produce_block {
                     initial_difficulty: Uint256::MAX.into(),
                 },
                 ConsensusUpgrade::PoS {
-                    initial_difficulty: Uint256::MAX.into(),
+                    initial_difficulty: Some(Uint256::MAX.into()),
                     config: easy_pos_config,
                 },
             ];

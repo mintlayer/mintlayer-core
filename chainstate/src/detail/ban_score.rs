@@ -364,6 +364,11 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::FutureTimestampInThePast => 0,
             ConsensusPoSError::FailedToSignKernel => 0,
             ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(_) => 100,
+            ConsensusPoSError::FiniteTotalSupplyIsRequired => 100,
+            ConsensusPoSError::UnsupportedConsensusVersion => 100,
+            ConsensusPoSError::EffectivePoolBalanceError(_) => 100,
+            ConsensusPoSError::EmptyTimespan => 100,
+            ConsensusPoSError::FailedToCalculateCappedBalance => 100,
         }
     }
 }

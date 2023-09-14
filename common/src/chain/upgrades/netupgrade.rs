@@ -17,7 +17,9 @@ use std::ops::Range;
 
 use crate::chain::config::ChainType;
 use crate::chain::pow::limit;
-use crate::chain::{create_regtest_pos_config, initial_difficulty, PoSChainConfig};
+use crate::chain::{
+    create_regtest_pos_config, pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion,
+};
 use crate::primitives::{BlockHeight, Compact};
 
 #[derive(Debug, Clone)]
@@ -49,8 +51,8 @@ impl NetUpgrades<UpgradeVersion> {
             (
                 BlockHeight::new(1),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
-                    config: create_regtest_pos_config(),
+                    initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                    config: create_regtest_pos_config(PoSConsensusVersion::V1),
                 }),
             ),
         ])
@@ -81,7 +83,8 @@ pub enum ConsensusUpgrade {
         initial_difficulty: Compact,
     },
     PoS {
-        initial_difficulty: Compact,
+        // If None the value will be taken from the network's current difficulty
+        initial_difficulty: Option<Compact>,
         config: PoSChainConfig,
     },
     IgnoreConsensus,
@@ -104,7 +107,8 @@ pub enum PoWStatus {
 pub enum PoSStatus {
     Ongoing(PoSChainConfig),
     Threshold {
-        initial_difficulty: Compact,
+        // If None the value will be taken from the network's current difficulty
+        initial_difficulty: Option<Compact>,
         config: PoSChainConfig,
     },
 }
@@ -352,7 +356,7 @@ mod tests {
             (
                 first_pos_upgrade,
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Uint256::from_u64(1500).into(),
+                    initial_difficulty: Some(Uint256::from_u64(1500).into()),
                     config: create_unittest_pos_config(),
                 }),
             ),
@@ -387,7 +391,7 @@ mod tests {
         assert_eq!(
             upgrades.consensus_status(10_000.into()),
             RequiredConsensus::PoS(PoSStatus::Threshold {
-                initial_difficulty: Uint256::from_u64(1500).into(),
+                initial_difficulty: Some(Uint256::from_u64(1500).into()),
                 config: create_unittest_pos_config(),
             },)
         );

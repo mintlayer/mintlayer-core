@@ -18,7 +18,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, output_value::OutputValue, stakelock::StakePoolData,
-        Destination, Genesis, RequiredConsensus, TxOutput,
+        Destination, Genesis, Mlt, RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, H256},
 };
@@ -32,7 +32,7 @@ use crypto::{
 use super::block_index_handle_impl::TestBlockIndexHandle;
 
 pub fn calculate_new_target(
-    tf: &mut TestFramework,
+    tf: &TestFramework,
     block_height: BlockHeight,
 ) -> Result<Compact, ConsensusPoSError> {
     let pos_status =
@@ -81,7 +81,7 @@ pub fn create_custom_genesis_with_stake_pool(
     staker_pk: PublicKey,
     vrf_pk: VRFPublicKey,
 ) -> Genesis {
-    let initial_amount = Amount::from_atoms(100_000_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let initial_amount = Mlt::from_mlt(100_000_000).to_amount_atoms();
     let initial_pool_amount = (initial_amount / 3).unwrap();
     let mint_output_amount = (initial_amount - initial_pool_amount).unwrap();
 

@@ -99,6 +99,7 @@ TEST_FRAMEWORK_MODULES = [
 EXTENDED_SCRIPTS = [
     # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel
+    'blockprod_pos_pledge_incentives.py',
 ]
 
 BASE_SCRIPTS = [

@@ -35,9 +35,10 @@ use common::{
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        Destination, NetUpgrades,
+        create_regtest_pos_config, pos_initial_difficulty, ConsensusUpgrade, Destination,
+        NetUpgrades, PoSConsensusVersion, UpgradeVersion,
     },
-    primitives::semver::SemVer,
+    primitives::{semver::SemVer, BlockHeight},
 };
 use logging::log;
 
@@ -341,6 +342,8 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
         chain_pos_netupgrades,
+        chain_pos_netupgrades_v0_to_v1,
+        chain_initial_difficulty,
         chain_genesis_block_timestamp,
         chain_genesis_staking_settings,
     } = options;
@@ -401,6 +404,42 @@ fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Resu
             *chain_genesis_block_timestamp,
             Destination::AnyoneCanSpend,
         ));
+    }
+
+    if let Some(upgrade_height) = chain_pos_netupgrades_v0_to_v1 {
+        builder = builder
+            .net_upgrades(
+                NetUpgrades::initialize(vec![
+                    (
+                        BlockHeight::zero(),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+                    ),
+                    (
+                        BlockHeight::new(1),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: Some(
+                                chain_initial_difficulty
+                                    .map(common::primitives::Compact)
+                                    .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
+                            ),
+                            config: create_regtest_pos_config(PoSConsensusVersion::V0),
+                        }),
+                    ),
+                    (
+                        (*upgrade_height).into(),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: None,
+                            config: create_regtest_pos_config(PoSConsensusVersion::V1),
+                        }),
+                    ),
+                ])
+                .expect("NetUpgrades init cannot fail"),
+            )
+            .genesis_custom(create_regtest_pos_genesis(
+                chain_genesis_staking_settings.clone(),
+                *chain_genesis_block_timestamp,
+                Destination::AnyoneCanSpend,
+            ));
     }
 
     Ok(builder.build())

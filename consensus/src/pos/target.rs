@@ -27,7 +27,6 @@ use utils::ensure;
 use crate::pos::error::ConsensusPoSError;
 
 fn calculate_average_block_time<F>(
-    chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
     block_index: &BlockIndex,
     get_ancestor: F,
@@ -35,28 +34,20 @@ fn calculate_average_block_time<F>(
 where
     F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
-    // Determine net upgrade version that current block belongs to.
-    // Across versions config parameters might change so it's invalid to mix versions for target calculations
-    let (_, net_version) = chain_config
-        .net_upgrade()
-        .version_at_height(block_index.block_height())
-        .expect("NetUpgrade must've been initialized");
-    let net_version_range = chain_config
-        .net_upgrade()
-        .height_range(net_version)
-        .expect("NetUpgrade must've been initialized");
-
     // Average is calculated based on 2 timestamps and then is divided by number of blocks in between.
     // Choose a block from the history that would be the start of a timespan.
-    // It shouldn't cross net version range or genesis.
+    // It can cross net version but not genesis.
     let block_distance_to_average =
         BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64 - 1);
     let block_height_to_start_averaging =
         (block_index.block_height() - block_distance_to_average).unwrap_or(BlockHeight::zero());
-    let timespan_start_height =
-        std::cmp::max(net_version_range.start, block_height_to_start_averaging);
 
-    let time_span_start = get_ancestor(block_index, timespan_start_height)?
+    ensure!(
+        block_index.block_height() > block_height_to_start_averaging,
+        ConsensusPoSError::EmptyTimespan
+    );
+
+    let time_span_start = get_ancestor(block_index, block_height_to_start_averaging)?
         .block_timestamp()
         .as_int_seconds();
     let current_block_time = block_index.block_timestamp().as_int_seconds();
@@ -64,7 +55,8 @@ where
     let timespan_difference = current_block_time
         .checked_sub(time_span_start)
         .ok_or(ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime)?;
-    let block_distance_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
+    let block_distance_in_timespan: i64 = (block_index.block_height()
+        - block_height_to_start_averaging)
         .expect("cannot be negative")
         .into();
 
@@ -116,8 +108,11 @@ where
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+            config,
+        } => match initial_difficulty {
+            Some(difficulty) => return Ok(*difficulty),
+            None => config,
+        },
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -138,8 +133,11 @@ pub fn calculate_target_required(
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
-            config: _,
-        } => return Ok(*initial_difficulty),
+            config,
+        } => match initial_difficulty {
+            Some(difficulty) => return Ok(*difficulty),
+            None => config,
+        },
         PoSStatus::Ongoing(config) => config,
     };
 
@@ -174,7 +172,11 @@ where
             PoSStatus::Threshold {
                 initial_difficulty,
                 config: _,
-            } => return Ok(initial_difficulty),
+            } => {
+                if let Some(difficulty) = initial_difficulty {
+                    return Ok(difficulty);
+                }
+            }
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
@@ -197,7 +199,7 @@ where
     };
 
     let average_block_time =
-        calculate_average_block_time(chain_config, pos_config, prev_block_index, get_ancestor)?;
+        calculate_average_block_time(pos_config, prev_block_index, get_ancestor)?;
 
     calculate_new_target(pos_config, &prev_target, average_block_time)
 }
@@ -214,7 +216,7 @@ mod tests {
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::Builder as ConfigBuilder,
             create_unittest_pos_config, Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades,
-            PoolId, UpgradeVersion,
+            PoSConsensusVersion, PoolId, UpgradeVersion,
         },
         primitives::{per_thousand::PerThousand, Idable, H256},
     };
@@ -407,6 +409,7 @@ mod tests {
                 1.into(),
                 2,
                 PerThousand::new(100).unwrap(),
+                PoSConsensusVersion::V1,
             )
             .unwrap();
             let new_target =
@@ -428,6 +431,7 @@ mod tests {
                 1.into(),
                 2,
                 PerThousand::new(100).unwrap(),
+                PoSConsensusVersion::V1,
             )
             .unwrap();
             let new_target =
@@ -448,6 +452,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let prev_target = H256::random_using(&mut rng).into();
@@ -466,6 +471,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let prev_target = Uint256::MAX;
@@ -486,12 +492,13 @@ mod tests {
             2000.into(),
             5,
             PerThousand::new(100).expect("must be valid"),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -516,7 +523,6 @@ mod tests {
         };
 
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(1)).unwrap(),
             get_ancestor,
@@ -525,7 +531,6 @@ mod tests {
         assert_eq!(average_block_time, 10);
 
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(2)).unwrap(),
             get_ancestor,
@@ -534,7 +539,6 @@ mod tests {
         assert_eq!(average_block_time, 10);
 
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(5)).unwrap(),
             get_ancestor,
@@ -543,7 +547,6 @@ mod tests {
         assert_eq!(average_block_time, 22);
 
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(8)).unwrap(),
             get_ancestor,
@@ -565,12 +568,13 @@ mod tests {
             2000.into(),
             2, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -593,7 +597,6 @@ mod tests {
 
         // calculating average between 2 blocks with timestamps 10 and 30 should give 20
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(2)).unwrap(),
             get_ancestor,
@@ -614,12 +617,13 @@ mod tests {
             2000.into(),
             3, // block_count_to_average
             PerThousand::new(100).expect("must be valid"),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
             }),
         )];
@@ -641,7 +645,6 @@ mod tests {
         };
 
         let average_block_time = calculate_average_block_time(
-            &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(3)).unwrap(),
             get_ancestor,
@@ -676,13 +679,8 @@ mod tests {
             block_index_handle.get_ancestor(block_index, ancestor_height)
         };
 
-        let res = calculate_average_block_time(
-            &chain_config,
-            &pos_config,
-            &random_block_index,
-            get_ancestor,
-        )
-        .unwrap_err();
+        let res = calculate_average_block_time(&pos_config, &random_block_index, get_ancestor)
+            .unwrap_err();
         assert_eq!(
             res,
             ConsensusPoSError::PropertyQueryError(PropertyQueryError::GetAncestorError(
@@ -714,6 +712,7 @@ mod tests {
             1.into(),
             2,
             PerThousand::new(100).unwrap(),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let pos_config_2 = PoSChainConfig::new(
@@ -723,20 +722,21 @@ mod tests {
             1.into(),
             5,
             PerThousand::new(100).unwrap(),
+            PoSConsensusVersion::V1,
         )
         .unwrap();
         let upgrades = vec![
             (
                 BlockHeight::new(0),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Compact::from(target_limit_1),
+                    initial_difficulty: Some(Compact::from(target_limit_1)),
                     config: pos_config_1,
                 }),
             ),
             (
                 BlockHeight::new(3),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Compact::from(target_limit_2),
+                    initial_difficulty: Some(Compact::from(target_limit_2)),
                     config: pos_config_2,
                 }),
             ),
@@ -837,7 +837,7 @@ mod tests {
             .net_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
-                BlockTimestamp::from_int_seconds(0),
+                BlockTimestamp::from_int_seconds(50),
                 vec![],
             ))
             .build();
@@ -849,14 +849,78 @@ mod tests {
             block_index_handle.get_ancestor(block_index, ancestor_height)
         };
 
-        let res = calculate_average_block_time(
-            &chain_config,
-            &pos_config,
-            block_index_handle.get_block_index_by_height(BlockHeight::new(3)).unwrap(),
-            get_ancestor,
+        for i in 1..4 {
+            let res = calculate_average_block_time(
+                &pos_config,
+                block_index_handle.get_block_index_by_height(BlockHeight::new(i)).unwrap(),
+                get_ancestor,
+            )
+            .unwrap_err();
+            assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_target_through_netupgrade(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let target_limit = Uint256::from_u64(rng.gen::<u64>());
+        let pos_config = PoSChainConfig::new(
+            target_limit,
+            10,
+            1.into(),
+            1.into(),
+            3,
+            PerThousand::new(100).unwrap(),
+            PoSConsensusVersion::V1,
         )
-        .unwrap_err();
-        assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);
+        .unwrap();
+        let upgrades = vec![
+            (
+                BlockHeight::new(0),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(Compact::from(target_limit)),
+                    config: pos_config.clone(),
+                }),
+            ),
+            (
+                BlockHeight::new(3),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: pos_config,
+                }),
+            ),
+        ];
+        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let chain_config = ConfigBuilder::test_chain()
+            .net_upgrades(net_upgrades)
+            .genesis_custom(Genesis::new(
+                "msg".to_owned(),
+                BlockTimestamp::from_int_seconds(0),
+                vec![],
+            ))
+            .build();
+
+        let block_index_handle = TestBlockIndexHandle::new_with_blocks(
+            &mut rng,
+            &chain_config,
+            &[1, 2, 6, 8, 10, 12, 14],
+        );
+
+        let pos_status = get_pos_status(&chain_config, BlockHeight::new(4));
+        let block_header = block_index_handle
+            .get_block_index_by_height(BlockHeight::new(4))
+            .unwrap()
+            .block_header();
+        let target = calculate_target_required(
+            &chain_config,
+            &pos_status,
+            *block_header.prev_block_id(),
+            &block_index_handle,
+        )
+        .unwrap();
+        assert_ne!(target, Compact::from(target_limit));
     }
 
     // The test can be enabled on demand to simulate the work of current DAA.

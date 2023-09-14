@@ -15,9 +15,13 @@
 
 pub mod block_sig;
 pub mod error;
+pub mod hash_check;
 pub mod input_data;
 pub mod kernel;
 pub mod target;
+
+mod effective_pool_balance;
+pub use effective_pool_balance::EffectivePoolBalanceError;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
@@ -31,18 +35,17 @@ use common::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
-        config::EpochIndex,
-        ChainConfig, PoSStatus, TxOutput,
+        ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Idable},
-    Uint256, Uint512,
+    primitives::{BlockHeight, Idable},
 };
-use crypto::vrf::VRFPublicKey;
 use logging::log;
 use pos_accounting::PoSAccountingView;
 use std::sync::Arc;
-use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
-use utils::ensure;
+use utils::{
+    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
+    ensure,
+};
 use utxo::UtxosView;
 
 use crate::{
@@ -56,40 +59,6 @@ pub enum StakeResult {
     Success,
     Failed,
     Stopped,
-}
-
-pub fn check_pos_hash(
-    epoch_index: EpochIndex,
-    random_seed: &PoSRandomness,
-    pos_data: &PoSData,
-    vrf_pub_key: &VRFPublicKey,
-    block_timestamp: BlockTimestamp,
-    pool_balance: Amount,
-) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
-    let hash: Uint256 = PoSRandomness::from_block(
-        epoch_index,
-        block_timestamp,
-        random_seed,
-        pos_data,
-        vrf_pub_key,
-    )?
-    .value()
-    .into();
-
-    let hash: Uint512 = hash.into();
-    let pool_balance: Uint512 = pool_balance.into();
-
-    ensure!(
-        hash <= pool_balance * target.into(),
-        ConsensusPoSError::StakeKernelHashTooHigh
-    );
-
-    Ok(())
 }
 
 fn randomness_of_sealed_epoch<S: EpochStorageRead>(
@@ -202,14 +171,24 @@ where
     let pool_balance = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
+    let pledge_amount = pos_accounting_view
+        .get_pool_data(stake_pool_id)?
+        .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?
+        .pledge_amount();
+    let final_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    check_pos_hash(
+    hash_check::check_pos_hash(
+        pos_status.get_chain_config().consensus_version(),
         current_epoch_index,
         &random_seed,
         pos_data,
         &vrf_pub_key,
         header.timestamp(),
+        pledge_amount,
         pool_balance,
+        final_supply.to_amount_atoms(),
     )?;
 
     Ok(())
@@ -217,6 +196,7 @@ where
 
 pub fn stake(
     chain_config: &ChainConfig,
+    pos_config: &PoSChainConfig,
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
@@ -225,6 +205,9 @@ pub fn stake(
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
+    let final_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
     let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
@@ -254,13 +237,16 @@ pub fn stake(
 
         pos_data.update_vrf_data(vrf_data);
 
-        if check_pos_hash(
+        if hash_check::check_pos_hash(
+            pos_config.consensus_version(),
             finalize_pos_data.epoch_index(),
             sealed_epoch_randomness,
             pos_data,
             &vrf_pk,
             block_timestamp,
+            finalize_pos_data.pledge_amount(),
             finalize_pos_data.pool_balance(),
+            final_supply.to_amount_atoms(),
         )
         .is_ok()
         {
