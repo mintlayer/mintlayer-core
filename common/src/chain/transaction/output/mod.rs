@@ -17,7 +17,10 @@ use crate::{
     address::{
         hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
     },
-    chain::{output_value::OutputValue, ChainConfig, DelegationId, PoolId},
+    chain::{
+        output_value::OutputValue, tokens::TokenIssuanceVersioned, ChainConfig, DelegationId,
+        PoolId,
+    },
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -100,6 +103,8 @@ pub enum TxOutput {
     CreateDelegationId(Destination, PoolId),
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
+    #[codec(index = 7)]
+    TokenIssuance(Box<TokenIssuanceVersioned>),
 }
 
 impl TxOutput {
@@ -110,7 +115,8 @@ impl TxOutput {
             | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => None,
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokenIssuance(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
