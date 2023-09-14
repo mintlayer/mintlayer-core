@@ -261,6 +261,10 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 
+        fn get_tokens_accounting_undo( &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+
         fn get_block_tree_by_height(
             &self,
             start_from: BlockHeight,
@@ -428,6 +432,13 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
 
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
+
+        fn set_tokens_accounting_undo_data(
+            &mut self,
+            id: Id<Block>,
+            undo: &tokens_accounting::BlockUndo,
+        ) -> crate::Result<()>;
+        fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_undo_data(
             &mut self,

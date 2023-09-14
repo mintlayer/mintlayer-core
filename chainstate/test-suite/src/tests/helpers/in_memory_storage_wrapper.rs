@@ -105,6 +105,15 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        self.storage
+            .get_tokens_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
