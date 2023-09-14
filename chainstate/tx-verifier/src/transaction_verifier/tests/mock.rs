@@ -70,6 +70,11 @@ mockall::mock! {
             id: Id<Block>,
         ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
 
+        fn get_tokens_accounting_undo(
+            &self,
+            id: Id<Block>,
+        ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError>;
+
         fn get_account_nonce_count(
             &self,
             account: AccountType,
@@ -138,6 +143,17 @@ mockall::mock! {
         fn del_account_nonce_count(
             &mut self,
             account: AccountType,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_tokens_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+            undo: &tokens_accounting::BlockUndo,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_tokens_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;
     }
 

@@ -537,7 +537,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let undo = verifier
-            .accounting_delta_adapter
+            .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
             .create_pool(pool_id_1, pool_data1.clone().into())
             .unwrap();
@@ -548,10 +548,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             None,
         );
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: block_undo,
                     is_fresh: true,
                 },
@@ -562,7 +562,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         let undo = verifier
-            .accounting_delta_adapter
+            .pos_accounting_adapter
             .operations(TransactionSource::Mempool)
             .create_pool(pool_id_2, pool_data2.clone().into())
             .unwrap();
@@ -573,10 +573,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             None,
         );
 
-        verifier.accounting_block_undo =
-            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+        verifier.pos_accounting_block_undo =
+            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                AccountingBlockUndoEntry {
+                PoSAccountingBlockUndoEntry {
                     undo: block_undo,
                     is_fresh: true,
                 },

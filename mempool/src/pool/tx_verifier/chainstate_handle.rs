@@ -234,6 +234,13 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {
         self.call(move |c| c.get_account_nonce_count(account))
     }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        _id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, Error> {
+        panic!("Mempool should not undo stuff in chainstate")
+    }
 }
 
 impl UtxosView for ChainstateHandle {

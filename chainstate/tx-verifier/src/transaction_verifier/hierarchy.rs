@@ -111,9 +111,20 @@ where
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        match self.accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
+        match self.pos_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage.get_accounting_undo(id),
+        }
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
+    {
+        match self.tokens_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
+            Some(v) => Ok(Some(v.undo.clone())),
+            None => self.storage.get_tokens_accounting_undo(id),
         }
     }
 
@@ -249,7 +260,7 @@ where
         tx_source: TransactionSource,
         new_undo: &AccountingBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_block_undo
+        self.pos_accounting_block_undo
             .set_undo_data(tx_source, new_undo)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
@@ -258,7 +269,7 @@ where
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_block_undo
+        self.pos_accounting_block_undo
             .del_undo_data(tx_source)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
@@ -268,7 +279,7 @@ where
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .apply_accounting_delta(tx_source, delta)
             .map_err(TransactionVerifierStorageError::from)?;
         Ok(())
@@ -289,6 +300,25 @@ where
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.account_nonce.insert(account, CachedOperation::<AccountNonce>::Erase);
         Ok(())
+    }
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        new_undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.tokens_accounting_block_undo
+            .set_undo_data(tx_source, new_undo)
+            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
+    }
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.tokens_accounting_block_undo
+            .del_undo_data(tx_source)
+            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
     }
 }
 
@@ -313,22 +343,22 @@ impl<
     type Error = pos_accounting::Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.accounting_delta_adapter.accounting_delta().pool_exists(pool_id)
+        self.pos_accounting_adapter.accounting_delta().pool_exists(pool_id)
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter.accounting_delta().get_pool_balance(pool_id)
+        self.pos_accounting_adapter.accounting_delta().get_pool_balance(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.accounting_delta_adapter.accounting_delta().get_pool_data(pool_id)
+        self.pos_accounting_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_balance(delegation_id)
     }
@@ -337,7 +367,7 @@ impl<
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_data(delegation_id)
     }
@@ -346,7 +376,7 @@ impl<
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegations_shares(pool_id)
     }
@@ -356,7 +386,7 @@ impl<
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegation_share(pool_id, delegation_id)
     }
@@ -369,7 +399,7 @@ impl<C, S, U, A: PoSAccountingView, T> FlushablePoSAccountingView
         &mut self,
         data: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
-        self.accounting_delta_adapter.batch_write_delta(data)
+        self.pos_accounting_adapter.batch_write_delta(data)
     }
 }
 
