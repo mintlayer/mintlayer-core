@@ -151,6 +151,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -197,6 +198,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
+            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 100,
         }
     }
 }

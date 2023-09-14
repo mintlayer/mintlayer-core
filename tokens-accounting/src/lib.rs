@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_undo;
 mod cache;
 mod data;
 mod error;
@@ -21,6 +22,7 @@ mod storage;
 mod view;
 
 pub use {
+    block_undo::{BlockUndo, BlockUndoError, TxUndo},
     cache::TokensAccountingCache,
     data::{
         FungibleTokenData, TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,

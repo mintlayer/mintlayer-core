@@ -175,6 +175,13 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
     }
 
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+        self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
+    }
+
     fn get_block_tree_by_height(
         &self,
         start_from: BlockHeight,
@@ -402,6 +409,13 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
 
     fn get_token_id(&self, issuance_tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>> {
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+        self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
     fn get_block_tree_by_height(

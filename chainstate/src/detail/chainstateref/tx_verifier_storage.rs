@@ -90,6 +90,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
             .map_err(TransactionVerifierStorageError::from)
     }
 
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        self.db_tx
+            .get_tokens_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
+
     fn get_account_nonce_count(
         &self,
         account: AccountType,
@@ -325,6 +334,39 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         self.db_tx
             .del_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
+    }
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_tokens_accounting_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_tokens_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 }
 

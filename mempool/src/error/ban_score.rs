@@ -124,6 +124,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TxIndexError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TransactionVerifierError(err) => err.mempool_ban_score(),
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::TokensAccountingError(_) => todo!(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::MissingTxInputs => 100,
@@ -175,9 +177,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
-            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::TokensAccountingError(_) => todo!(),
+            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
         }
     }
 }
@@ -217,6 +218,7 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 0,
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 0,
+            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 0,
         }
     }
 }
