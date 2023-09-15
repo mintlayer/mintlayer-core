@@ -13,18 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::{extract::Path, response::IntoResponse, routing::get, Json, Router};
+use api_server_common::storage::storage_api::{ApiServerStorage, ApiServerStorageRead};
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
 use common::{
-    chain::{Block, Genesis, Transaction},
-    primitives::{BlockHeight, Id, H256},
+    chain::{Block, Transaction, TxOutput},
+    primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{make_true_rng, Rng};
 use serde_json::json;
-use web_server::{error::APIServerWebServerError, APIServerWebServerState};
+use std::{str::FromStr, sync::Arc};
+use web_server::{
+    error::{
+        APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerServerError,
+    },
+    APIServerWebServerState,
+};
 
 pub const API_VERSION: &str = "1.0.0";
 
-pub fn routes() -> Router<APIServerWebServerState> {
+pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
+) -> Router<APIServerWebServerState<Arc<T>>> {
     let router = Router::new();
 
     let router = router
@@ -68,74 +81,173 @@ pub fn routes() -> Router<APIServerWebServerState> {
 //
 
 #[allow(clippy::unused_async)]
-pub async fn block(
-    Path(_block_id): Path<Id<String>>,
+pub async fn block<T: ApiServerStorage>(
+    Path(block_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let block = {
+        let block_id: Id<Block> = H256::from_str(&block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+            })?
+            .into();
 
-    let mut rng = make_true_rng();
+        state
+            .db
+            .transaction_ro()
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_block(block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+    };
 
-    Ok(Json(json!({
-        "previous_block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-        "height": BlockHeight::from(rng.gen_range(1..1_000_000)),
-        "timestamp": rng.gen_range(1..1_000_000_000),
-        "merkle_root": H256::random_using(&mut rng),
-        "reward": (0..rng.gen_range(1..5)).map(|_| { json!({
-                "destination": H256::random_using(&mut rng),
-                "amount": rng.gen_range(1..100_000_000),
-            })
-        }).collect::<Vec<_>>(),
-        "transaction_ids": (0..rng.gen_range(1..100)).map(|_| {
-            Id::<Transaction>::new(H256::random_using(&mut rng)
-        )}).collect::<Vec<_>>(),
-    })))
+    match block {
+        Some(block) => {
+            //: TODO expand this with a usable JSON response
+            let transactions: Vec<Transaction> = vec![];
+
+            Ok(Json(json!({
+            "previous_block_id": block.prev_block_id(),
+            "timestamp": block.timestamp(),
+            "merkle_root": block.merkle_root(),
+            "transactions": transactions,
+            })))
+        }
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 #[allow(clippy::unused_async)]
-pub async fn block_header(
-    Path(_block_id): Path<Id<String>>,
+pub async fn block_header<T: ApiServerStorage>(
+    Path(block_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let block = {
+        let block_id: Id<Block> = H256::from_str(&block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+            })?
+            .into();
 
-    let mut rng = make_true_rng();
+        state
+            .db
+            .transaction_ro()
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_block(block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+    };
 
-    Ok(Json(json!({
-        "previous_block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-        "height": BlockHeight::from(rng.gen_range(1..1_000_000)),
-        "timestamp": rng.gen_range(1..1_000_000_000),
-        "merkle_root": H256::random_using(&mut rng),
-    })))
+    match block {
+        Some(block) => Ok(Json(json!({
+            "previous_block_id": block.prev_block_id(),
+            "timestamp": block.timestamp(),
+            "merkle_root": block.merkle_root(),
+        }))),
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 #[allow(clippy::unused_async)]
-pub async fn block_reward(
-    Path(_block_id): Path<Id<String>>,
+pub async fn block_reward<T: ApiServerStorage>(
+    Path(block_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let block = {
+        let block_id: Id<Block> = H256::from_str(&block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+            })?
+            .into();
 
-    let mut rng = make_true_rng();
+        state
+            .db
+            .transaction_ro()
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_block(block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+    };
 
-    Ok(Json(json!([(0..rng.gen_range(1..5))
-        .map(|_| {
-            json!({
-                "destination": H256::random_using(&mut rng),
-                "amount": rng.gen_range(1..100_000_000),
-            })
-        })
-        .collect::<Vec<_>>()])))
+    match block {
+        Some(_block) => Ok(Json(json!({
+            // TODO: expand this with a usable JSON response
+        }))),
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 #[allow(clippy::unused_async)]
-pub async fn block_transaction_ids(
-    Path(_block_id): Path<Id<String>>,
+pub async fn block_transaction_ids<T: ApiServerStorage>(
+    Path(block_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let block = {
+        let block_id: Id<Block> = H256::from_str(&block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+            })?
+            .into();
 
-    let mut rng = make_true_rng();
+        state
+            .db
+            .transaction_ro()
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_block(block_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+    };
 
-    Ok(Json(json!([(0..rng.gen_range(1..100))
-        .map(|_| Id::<Transaction>::new(H256::random_using(&mut rng)))
-        .collect::<Vec<_>>()])))
+    match block {
+        Some(block) => {
+            let transaction_ids = block
+                .transactions()
+                .iter()
+                .map(|tx| tx.transaction().get_id())
+                .collect::<Vec<_>>();
+
+            Ok(Json(json!({
+                "transaction_ids": transaction_ids,
+            })))
+        }
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 //
@@ -143,40 +255,68 @@ pub async fn block_transaction_ids(
 //
 
 #[allow(clippy::unused_async)]
-pub async fn chain_genesis() -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+pub async fn chain_genesis<T: ApiServerStorage>(
+    State(state): State<APIServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, APIServerWebServerError> {
+    let genesis = state.chain_config.genesis_block();
 
-    let mut rng = make_true_rng();
+    // TODO: expand this with a usable JSON response
+    let utxos: Vec<TxOutput> = vec![];
 
     Ok(Json(json!({
-        "block_id": Id::<Genesis>::new(H256::random_using(&mut rng)),
-        "merkle_root": H256::random_using(&mut rng),
-        "transaction_ids": (0..rng.gen_range(1..100)).map(|_| {
-            Id::<Transaction>::new(H256::random_using(&mut rng)
-        )}).collect::<Vec<_>>(),
+        "block_id": genesis.get_id(),
+        "fun_message": genesis.fun_message(),
+        "timestamp": genesis.timestamp(),
+        "utxos": utxos,
     })))
 }
 
 #[allow(clippy::unused_async)]
-pub async fn chain_at_height(
-    Path(_block_height): Path<String>,
+pub async fn chain_at_height<T: ApiServerStorage>(
+    Path(block_height): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let block_height = block_height.parse::<BlockHeight>().map_err(|_| {
+        APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+    })?;
 
-    let mut rng = make_true_rng();
+    let block_id = state
+        .db
+        .transaction_ro()
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .get_main_chain_block_id(block_height)
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?;
 
-    Ok(Json(json!(Id::<Block>::new(H256::random_using(&mut rng)))))
+    match block_id {
+        Some(block_id) => Ok(Json(block_id)),
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 #[allow(clippy::unused_async)]
-pub async fn chain_tip() -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
-
-    let mut rng = make_true_rng();
+pub async fn chain_tip<T: ApiServerStorage>(
+    State(state): State<APIServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, APIServerWebServerError> {
+    let best_block = state
+        .db
+        .transaction_ro()
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .get_best_block()
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?;
 
     Ok(Json(json!({
-        "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-        "block_height": BlockHeight::from(rng.gen_range(1..1_000_000)),
+      "block_height": best_block.0,
+      "block_id": best_block.1,
     })))
 }
 
@@ -185,24 +325,52 @@ pub async fn chain_tip() -> Result<impl IntoResponse, APIServerWebServerError> {
 //
 
 #[allow(clippy::unused_async)]
-pub async fn transaction(
-    Path(_transaction_id): Path<String>,
+pub async fn transaction<T: ApiServerStorage>(
+    Path(transaction_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let transaction = {
+        let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .into();
 
-    let mut rng = make_true_rng();
+        state
+            .db
+            .transaction_ro()
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .get_transaction(transaction_id)
+            .map_err(|_| {
+                APIServerWebServerError::ServerError(
+                    APIServerWebServerServerError::InternalServerError,
+                )
+            })?
+    };
 
-    Ok(Json(json!({
-        "timestamp": rng.gen_range(1..1_000_000_000),
-        "inputs":  (0..rng.gen_range(1..20)).map(|_| { json!({
-            "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-            "index": rng.gen_range(1..100),
-        })}).collect::<Vec<_>>(),
-        "outputs": (0..rng.gen_range(1..20)).map(|_| { json!({
-            "destination": H256::random_using(&mut rng),
-            "amount": rng.gen_range(1..100_000_000),
-        })}).collect::<Vec<_>>(),
-    })))
+    match transaction {
+        Some((block_id, transaction)) => {
+            let transaction = transaction.transaction();
+
+            Ok(Json(json!({
+            "block_id": if let Some(block_id) = block_id { block_id.to_string() } else { "".into() },
+            "version_byte": transaction.version_byte(),
+            "is_replaceable": transaction.is_replaceable(),
+            "flags": transaction.flags(),
+            "inputs": transaction.inputs(),
+            "outputs": transaction.outputs(),
+                })))
+        }
+        None => Err(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BadRequest,
+        )),
+    }
 }
 
 #[allow(clippy::unused_async)]

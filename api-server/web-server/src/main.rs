@@ -17,11 +17,14 @@ mod api;
 mod config;
 mod error;
 
-use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
+use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
+use axum::{response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
+use common::chain::config::create_unit_test_config;
 use config::ApiServerWebServerConfig;
 use logging::log;
 use serde_json::json;
+use std::sync::Arc;
 use web_server::{
     error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState,
 };
@@ -37,8 +40,13 @@ async fn main() {
     let args = ApiServerWebServerConfig::parse();
     log::info!("Command line options: {args:?}");
 
+    // TODO: generalize network configuration
+    let chain_config = Arc::new(create_unit_test_config());
+
+    // TODO: point database to PostgreSQL from command line arguments
     let state = APIServerWebServerState {
-        example_shared_value: "test value".to_string(),
+        db: Arc::new(TransactionalApiServerInMemoryStorage::new(&chain_config)),
+        chain_config,
     };
 
     let routes = Router::new()
@@ -54,9 +62,7 @@ async fn main() {
 }
 
 #[allow(clippy::unused_async)]
-async fn server_status(
-    State(_state): State<APIServerWebServerState>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
     Ok(Json(json!({
         "versions": [api::v1::API_VERSION]
         //"network": "testnet",

@@ -40,6 +40,10 @@ impl Genesis {
         }
     }
 
+    pub fn fun_message(&self) -> &str {
+        &self.fun_message
+    }
+
     pub fn utxos(&self) -> &[TxOutput] {
         &self.utxos
     }
