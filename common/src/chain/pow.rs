@@ -117,7 +117,7 @@ impl PoWChainConfigBuilder {
             reward_maturity_distance: self
                 .reward_maturity_distance
                 .unwrap_or_else(|| BlockDistance::new(500)),
-            token_issuance_version: TokenIssuanceVersion::CURRENT,
+            token_issuance_version: TokenIssuanceVersion::V1,
         }
     }
 }

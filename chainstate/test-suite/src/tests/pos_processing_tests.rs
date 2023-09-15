@@ -1537,7 +1537,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -1554,7 +1554,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),

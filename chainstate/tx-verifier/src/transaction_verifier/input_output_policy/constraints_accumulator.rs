@@ -469,7 +469,7 @@ mod tests {
                     2,
                     PerThousand::new(0).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),

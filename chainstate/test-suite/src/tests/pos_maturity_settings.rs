@@ -59,7 +59,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -76,7 +76,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -211,7 +211,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),
@@ -228,7 +228,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
                     5,
                     PerThousand::new(100).unwrap(),
                     PoSConsensusVersion::V1,
-                    TokenIssuanceVersion::CURRENT,
+                    TokenIssuanceVersion::V1,
                 )
                 .unwrap(),
             }),

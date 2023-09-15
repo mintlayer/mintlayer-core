@@ -21,9 +21,7 @@ use crate::{
 use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
-        output_value::OutputValue,
         signature::Signable,
-        tokens::TokenData,
         GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},

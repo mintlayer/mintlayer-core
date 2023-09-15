@@ -179,7 +179,7 @@ pub fn create_testnet_pos_config(consensus_version: PoSConsensusVersion) -> PoSC
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version,
-        token_issuance_version: TokenIssuanceVersion::CURRENT,
+        token_issuance_version: TokenIssuanceVersion::V1,
     }
 }
 
@@ -192,7 +192,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version: PoSConsensusVersion::V1,
-        token_issuance_version: TokenIssuanceVersion::CURRENT,
+        token_issuance_version: TokenIssuanceVersion::V1,
     }
 }
 
@@ -208,7 +208,7 @@ pub fn create_regtest_pos_config(consensus_version: PoSConsensusVersion) -> PoSC
         block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
         difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
         consensus_version,
-        token_issuance_version: TokenIssuanceVersion::CURRENT,
+        token_issuance_version: TokenIssuanceVersion::V1,
     }
 }
 

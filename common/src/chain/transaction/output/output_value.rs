@@ -23,7 +23,9 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(Box<TokenData>), // FIXME: add check that this type is not used after upgrade
+    // FIXME: add check that new tokens cannot be issued after upgrade;
+    // transfers of existing v0 tokens are allowed?
+    Token(Box<TokenData>),
     TokenV1((TokenId, Amount)),
 }
 

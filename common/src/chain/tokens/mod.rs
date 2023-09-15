@@ -67,6 +67,7 @@ pub struct TokenIssuance {
     pub metadata_uri: Vec<u8>,
 }
 
+// FIXME: support upgrade from v0 to v1?
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.

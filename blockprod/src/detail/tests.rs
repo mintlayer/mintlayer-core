@@ -1250,7 +1250,7 @@ mod produce_block {
                 5,
                 PerThousand::new(1).expect("must be valid"),
                 PoSConsensusVersion::V1,
-                TokenIssuanceVersion::CURRENT,
+                TokenIssuanceVersion::V1,
             )
             .expect("Valid PoS config values");
 
