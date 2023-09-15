@@ -29,7 +29,6 @@ use tokio::{
     sync::mpsc::{self, Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
-use tracing::Instrument;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -179,12 +178,9 @@ where
                         self.time_getter.clone(),
                     );
 
-                    tokio::spawn(
-                        async move {
-                            peer.run().await;
-                        }
-                        .instrument(tracing::Span::current()),
-                    )
+                    logging::spawn_in_current_span(async move {
+                        peer.run().await;
+                    })
                 }
 
                 SupportedProtocolVersion::V2 => {
@@ -202,12 +198,9 @@ where
                         self.time_getter.clone(),
                     );
 
-                    tokio::spawn(
-                        async move {
-                            peer.run().await;
-                        }
-                        .instrument(tracing::Span::current()),
-                    )
+                    logging::spawn_in_current_span(async move {
+                        peer.run().await;
+                    })
                 }
             }
         };

@@ -28,7 +28,6 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::Instrument;
 
 use crate::{
     config::P2pConfig,
@@ -128,18 +127,15 @@ where
             peerdb_inmemory_store(),
         )
         .unwrap();
-        let peer_mgr_join_handle = tokio::spawn(
-            async move {
-                let mut peer_mgr = peer_mgr;
-                let err = match peer_mgr.run_without_consuming_self().await {
-                    Err(err) => err,
-                    Ok(never) => match never {},
-                };
+        let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
+            let mut peer_mgr = peer_mgr;
+            let err = match peer_mgr.run_without_consuming_self().await {
+                Err(err) => err,
+                Ok(never) => match never {},
+            };
 
-                (peer_mgr, err)
-            }
-            .instrument(tracing::Span::current()),
-        );
+            (peer_mgr, err)
+        });
 
         let sync_mgr = BlockSyncManager::<DefaultNetworkingService<TTM::Transport>>::new(
             Arc::clone(&chain_config),
@@ -151,15 +147,12 @@ where
             peer_mgr_event_tx.clone(),
             time_getter.get_time_getter(),
         );
-        let sync_mgr_join_handle = tokio::spawn(
-            async move {
-                match sync_mgr.run().await {
-                    Err(err) => err,
-                    Ok(never) => match never {},
-                }
+        let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
+            match sync_mgr.run().await {
+                Err(err) => err,
+                Ok(never) => match never {},
             }
-            .instrument(tracing::Span::current()),
-        );
+        });
 
         TestNode {
             time_getter,

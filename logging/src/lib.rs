@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod log_style;
+mod tracing_utils;
 
 use std::{
     io::{IsTerminal, Write},
@@ -27,6 +28,8 @@ use tracing_subscriber::{
 use log_style::{get_log_style_from_env, LogStyle, TextColoring};
 
 pub use log;
+
+pub use tracing_utils::spawn_in_current_span;
 
 pub fn is_only_terminal_output_logging() -> bool {
     true

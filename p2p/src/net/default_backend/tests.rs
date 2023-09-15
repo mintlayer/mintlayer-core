@@ -402,13 +402,10 @@ where
     let transport = A::make_transport();
     let mut listener = transport.bind(vec![A::make_address()]).await.unwrap();
     let addr = listener.local_addresses().unwrap();
-    tokio::spawn(
-        async move {
-            let (mut socket, _address) = listener.accept().await.unwrap();
-            let _ = socket.write_all(b"invalid message").await;
-        }
-        .instrument(tracing::Span::current()),
-    );
+    logging::spawn_in_current_span(async move {
+        let (mut socket, _address) = listener.accept().await.unwrap();
+        let _ = socket.write_all(b"invalid message").await;
+    });
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());

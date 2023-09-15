@@ -22,7 +22,6 @@ use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
-use tracing::Instrument;
 
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
@@ -130,14 +129,11 @@ where
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
-    tokio::spawn(
-        async move {
-            loop {
-                assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
-            }
+    logging::spawn_in_current_span(async move {
+        loop {
+            assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
-        .instrument(tracing::Span::current()),
-    );
+    });
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
@@ -452,7 +448,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await }.instrument(tracing::Span::current()));
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -673,12 +669,9 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .unwrap();
 
-    tokio::spawn(
-        async move {
-            peer_manager.run().await.unwrap();
-        }
-        .instrument(tracing::Span::current()),
-    );
+    logging::spawn_in_current_span(async move {
+        peer_manager.run().await.unwrap();
+    });
 
     let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::Connect(

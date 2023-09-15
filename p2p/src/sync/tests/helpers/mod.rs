@@ -27,7 +27,6 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::Instrument;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -137,13 +136,10 @@ impl TestNode {
         let sync_manager_chanstate_handle = sync_manager.chainstate().clone();
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = tokio::spawn(
-            async move {
-                let e = sync_manager.run().await.unwrap_err();
-                let _ = error_sender.send(e);
-            }
-            .instrument(tracing::Span::current()),
-        );
+        let sync_manager_handle = logging::spawn_in_current_span(async move {
+            let e = sync_manager.run().await.unwrap_err();
+            let _ = error_sender.send(e);
+        });
 
         let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chanstate_handle).await.unwrap();
 
