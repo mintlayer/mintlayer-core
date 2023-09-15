@@ -40,7 +40,7 @@ async fn main() {
     let args = ApiServerWebServerConfig::parse();
     log::info!("Command line options: {args:?}");
 
-    // TODO: generalise network configuration
+    // TODO: generalize network configuration
     let chain_config = Arc::new(create_unit_test_config());
 
     // TODO: point database to PostgreSQL from command line arguments
