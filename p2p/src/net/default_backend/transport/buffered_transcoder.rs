@@ -91,6 +91,7 @@ mod tests {
             transport::MpscChannelTransport,
             types::{HandshakeMessage, P2pTimestamp},
         },
+        protocol::ProtocolVersion,
         testing_utils::{get_two_connected_sockets, test_p2p_config, TestTransportChannel},
     };
 
@@ -110,7 +111,7 @@ mod tests {
 
         let messages = [
             Message::Handshake(HandshakeMessage::Hello {
-                protocol_version: rng.gen(),
+                protocol_version: ProtocolVersion::new(rng.gen()),
                 network: [rng.gen(), rng.gen(), rng.gen(), rng.gen()],
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -130,7 +131,7 @@ mod tests {
                 handshake_nonce: rng.gen(),
             }),
             Message::Handshake(HandshakeMessage::HelloAck {
-                protocol_version: rng.gen(),
+                protocol_version: ProtocolVersion::new(rng.gen()),
                 network: [rng.gen(), rng.gen(), rng.gen(), rng.gen()],
                 services: [Service::Blocks].as_slice().into(),
                 user_agent: p2p_config.user_agent.clone(),

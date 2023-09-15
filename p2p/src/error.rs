@@ -25,14 +25,14 @@ use common::{
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 
-use crate::protocol::NetworkProtocolVersion;
+use crate::protocol::ProtocolVersion;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ProtocolError {
     #[error("Peer has an unsupported network protocol: {0:?}")]
-    UnsupportedProtocol(NetworkProtocolVersion),
+    UnsupportedProtocol(ProtocolVersion),
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer is unresponsive")]
@@ -64,7 +64,7 @@ pub enum ProtocolError {
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum PeerError {
     #[error("Peer doesn't exist")]
     PeerDoesntExist,
@@ -90,7 +90,7 @@ pub enum PeerError {
 }
 
 /// Errors related to establishing a connection with a remote peer
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DialError {
     #[error("Tried to dial self")]
     AttemptToDialSelf,
@@ -105,7 +105,7 @@ pub enum DialError {
 }
 
 /// Conversion errors
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ConversionError {
     #[error("Invalid address: {0}")]
     InvalidAddress(String),
@@ -121,7 +121,7 @@ pub enum MessageCodecError {
     InvalidEncodedData(serialization::Error),
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum P2pError {
     #[error("Protocol violation: {0}")]
     ProtocolError(ProtocolError),

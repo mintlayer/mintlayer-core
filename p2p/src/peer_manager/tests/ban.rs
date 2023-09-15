@@ -22,20 +22,16 @@ use crate::{
         types::{services::Service, PeerInfo, PeerRole, Role},
     },
     peer_manager::{OutboundConnectType, PeerManager},
-    protocol::{NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::{
-    chain::config,
-    primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
-};
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
@@ -197,7 +193,12 @@ where
     pm2.handle_connectivity_event(event.unwrap());
 
     let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(remote_addr, OutboundConnectType::Manual { response: tx });
+    pm2.connect(
+        remote_addr,
+        OutboundConnectType::Manual {
+            response_sender: tx,
+        },
+    );
     let res = rx.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
@@ -236,26 +237,6 @@ where
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
                 .await;
 
-        // invalid protocol
-        let peer_id = PeerId::new();
-        let res = peer_manager.try_accept_connection(
-            TestAddressMaker::new_random_address(),
-            peer_role,
-            net::types::PeerInfo {
-                peer_id,
-                protocol_version: 0,
-                network: *config.magic_bytes(),
-                software_version: *config.software_version(),
-                user_agent: mintlayer_core_user_agent(),
-                common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
-                    .as_slice()
-                    .into(),
-            },
-            None,
-        );
-        assert!(res.is_err());
-        assert!(!peer_manager.is_peer_connected(peer_id));
-
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
@@ -263,7 +244,7 @@ where
             peer_role,
             net::types::PeerInfo {
                 peer_id,
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: [1, 2, 3, 4],
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -275,35 +256,6 @@ where
         );
         assert!(res.is_err());
         assert!(!peer_manager.is_peer_connected(peer_id));
-
-        // valid connections
-        const NETWORK_PROTOCOL_FUTURE: u32 = u32::MAX; // Some future version of the node is trying to connect to us
-        for protocol in [NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN, NETWORK_PROTOCOL_FUTURE] {
-            let address = TestAddressMaker::new_random_address();
-            let peer_id = PeerId::new();
-            let res = peer_manager.try_accept_connection(
-                address,
-                peer_role,
-                net::types::PeerInfo {
-                    peer_id,
-                    protocol_version: protocol,
-                    network: *config.magic_bytes(),
-                    software_version: SemVer::new(123, 123, 12345),
-                    user_agent: mintlayer_core_user_agent(),
-                    common_services: [
-                        Service::Blocks,
-                        Service::Transactions,
-                        Service::PeerAddresses,
-                    ]
-                    .as_slice()
-                    .into(),
-                },
-                None,
-            );
-            assert!(res.is_ok());
-            assert!(peer_manager.is_peer_connected(peer_id));
-            assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
-        }
     }
 }
 
@@ -424,7 +376,7 @@ fn ban_and_disconnect() {
     let address_1 = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol_version: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),

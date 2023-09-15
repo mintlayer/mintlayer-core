@@ -64,7 +64,8 @@ impl TestNodeGroup {
             for j in 0..self.data.len() {
                 if i != j {
                     let dest_peer_id = self.data[j].node.peer_id;
-                    self.data[i].node.try_connect_peer(dest_peer_id);
+                    let dest_peer_protocol_version = self.data[j].node.protocol_version;
+                    self.data[i].node.try_connect_peer(dest_peer_id, dest_peer_protocol_version);
                 }
             }
         }

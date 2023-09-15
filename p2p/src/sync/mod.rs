@@ -16,7 +16,9 @@
 //! This module is responsible for both initial syncing and further blocks processing (the reaction
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
-mod peer;
+mod peer_common;
+mod peer_v1;
+mod peer_v2;
 mod types;
 
 use std::collections::HashMap;
@@ -47,7 +49,7 @@ use crate::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    sync::peer::Peer,
+    protocol::SupportedProtocolVersion,
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
@@ -158,30 +160,58 @@ where
         &mut self,
         peer_id: PeerId,
         common_services: Services,
+        protocol_version: SupportedProtocolVersion,
         sync_msg_rx: Receiver<SyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
         let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
 
-        let mut peer = Peer::<T>::new(
-            peer_id,
-            common_services,
-            Arc::clone(&self.chain_config),
-            Arc::clone(&self.p2p_config),
-            self.chainstate_handle.clone(),
-            self.mempool_handle.clone(),
-            self.peer_manager_sender.clone(),
-            sync_msg_rx,
-            self.messaging_handle.clone(),
-            local_event_rx,
-            Arc::clone(&self.is_initial_block_download),
-            self.time_getter.clone(),
-        );
+        let peer_task = {
+            match protocol_version {
+                SupportedProtocolVersion::V1 => {
+                    let mut peer = peer_v1::Peer::<T>::new(
+                        peer_id,
+                        common_services,
+                        Arc::clone(&self.chain_config),
+                        Arc::clone(&self.p2p_config),
+                        self.chainstate_handle.clone(),
+                        self.mempool_handle.clone(),
+                        self.peer_manager_sender.clone(),
+                        sync_msg_rx,
+                        self.messaging_handle.clone(),
+                        local_event_rx,
+                        Arc::clone(&self.is_initial_block_download),
+                        self.time_getter.clone(),
+                    );
 
-        let peer_task = tokio::spawn(async move {
-            peer.run().await;
-        });
+                    tokio::spawn(async move {
+                        peer.run().await;
+                    })
+                }
+
+                SupportedProtocolVersion::V2 => {
+                    let mut peer = peer_v2::Peer::<T>::new(
+                        peer_id,
+                        common_services,
+                        Arc::clone(&self.chain_config),
+                        Arc::clone(&self.p2p_config),
+                        self.chainstate_handle.clone(),
+                        self.mempool_handle.clone(),
+                        self.peer_manager_sender.clone(),
+                        sync_msg_rx,
+                        self.messaging_handle.clone(),
+                        local_event_rx,
+                        Arc::clone(&self.is_initial_block_download),
+                        self.time_getter.clone(),
+                    );
+
+                    tokio::spawn(async move {
+                        peer.run().await;
+                    })
+                }
+            }
+        };
 
         let peer_context = PeerContext {
             task: peer_task,
@@ -265,8 +295,9 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services,
+                protocol_version,
                 sync_msg_rx,
-            } => self.register_peer(peer_id, common_services, sync_msg_rx),
+            } => self.register_peer(peer_id, common_services, protocol_version, sync_msg_rx),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);
