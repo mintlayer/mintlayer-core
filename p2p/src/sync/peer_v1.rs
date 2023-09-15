@@ -35,7 +35,6 @@ use common::{
 };
 use logging::log;
 use mempool::MempoolHandle;
-use utils::atomics::AcqRelAtomicBool;
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
@@ -51,16 +50,21 @@ use crate::{
         NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    sync::{peer_common, types::PeerActivity},
+    sync::{
+        peer_common::{
+            choose_peers_best_block, handle_message_processing_result, KnownTransactions,
+        },
+        types::PeerActivity,
+        LocalEvent,
+    },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::{peer_common::KnownTransactions, LocalEvent};
+use super::chainstate_handle::ChainstateHandle;
 
 // TODO: Take into account the chain work when syncing.
-// TODO: rename this struct to PeerState/PeerManager or similar.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
@@ -69,16 +73,12 @@ pub struct Peer<T: NetworkingService> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_msg_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
-    // TODO: this is an optimization to avoid extra subsystem calls. But there is no need for it
-    // to be an atomic; instead, we can receive it as a non-atomic bool during construction and
-    // update it on every "new tip" event.
-    is_initial_block_download: Arc<AcqRelAtomicBool>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
@@ -134,13 +134,12 @@ where
         common_services: Services,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         sync_msg_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
-        is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
         let known_transactions = KnownTransactions::new();
@@ -156,7 +155,6 @@ where
             messaging_handle,
             sync_msg_rx,
             local_event_rx,
-            is_initial_block_download,
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
@@ -240,7 +238,7 @@ where
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
         // This function is not supposed to be called when in IBD.
-        debug_assert!(!self.is_initial_block_download.load());
+        debug_assert!(!self.chainstate_handle.is_initial_block_download().await?);
 
         let best_sent_block_id =
             self.outgoing.best_sent_block.as_ref().map(|index| (*index.block_id()).into());
@@ -289,9 +287,9 @@ where
 
                         let headers =
                             c.get_mainchain_headers_since_latest_fork_point(&block_ids, limit)?;
-                        Result::<_>::Ok((headers, best_block_id))
+                        Ok((headers, best_block_id))
                     })
-                    .await??;
+                    .await?;
 
                 if headers.is_empty() {
                     log::warn!(
@@ -362,7 +360,7 @@ where
     }
 
     async fn request_headers(&mut self) -> Result<()> {
-        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
+        let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
         if locator.len() > *self.p2p_config.msg_max_locator_count {
             // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
             // so we should never get here in production code. Moreover, currently it's not
@@ -401,7 +399,7 @@ where
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        peer_common::handle_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -415,7 +413,7 @@ where
             )));
         }
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
             // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
             // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
@@ -451,9 +449,9 @@ where
                     Some(c.get_best_block_id()?)
                 };
 
-                Result::<_>::Ok((headers, peers_best_block_that_we_have))
+                Ok((headers, peers_best_block_that_we_have))
             })
-            .await??;
+            .await?;
         debug_assert!(headers.len() <= header_count_limit);
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
@@ -484,7 +482,7 @@ where
         // Assume this is the case if it asks us for blocks.
         self.peer_activity.set_expecting_headers_since(None);
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             // Note: currently this is not a normal situation, because a node in IBD wouldn't
             // send block headers to the peer in the first place, which means that the peer won't
             // be able to ask it for blocks.
@@ -541,9 +539,9 @@ where
                     }
                 }
 
-                Result::<_>::Ok(())
+                Ok(())
             })
-            .await??;
+            .await?;
 
         self.outgoing.blocks_queue.extend(block_ids.into_iter());
 
@@ -621,8 +619,8 @@ where
 
         let first_header_is_connected_to_chainstate = self
             .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&first_header_prev_id))
-            .await??
+            .call(move |c| Ok(c.get_gen_block_index(&first_header_prev_id)?))
+            .await?
             .is_some();
 
         let first_header_is_connected_to_pending_headers = {
@@ -711,9 +709,9 @@ where
                     existing_block_headers.last().map(|header| header.get_id().into()),
                 )?;
 
-                Result::<_>::Ok((new_block_headers, peers_best_block_that_we_have))
+                Ok((new_block_headers, peers_best_block_that_we_have))
             })
-            .await??;
+            .await?;
 
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
@@ -736,8 +734,8 @@ where
                 .expect("Headers shouldn't be empty")
                 .clone();
             self.chainstate_handle
-                .call(|c| c.preliminary_header_check(first_header))
-                .await??;
+                .call(|c| Ok(c.preliminary_header_check(first_header)?))
+                .await?;
         }
 
         self.request_blocks(new_block_headers)
@@ -761,7 +759,7 @@ where
             )));
         }
 
-        let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
+        let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
 
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let peer_id = self.id();
@@ -788,9 +786,9 @@ where
                     Some(block_id.into()),
                 )?;
 
-                Result::Ok((best_block, new_tip_received))
+                Ok((best_block, new_tip_received))
             })
-            .await??;
+            .await?;
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
@@ -809,8 +807,8 @@ where
                 headers
             } else {
                 self.chainstate_handle
-                    .call(|c| c.split_off_leading_known_headers(headers))
-                    .await??
+                    .call(|c| Ok(c.split_off_leading_known_headers(headers)?))
+                    .await?
                     .1
             };
 
@@ -896,7 +894,7 @@ where
 
         self.add_known_transaction(tx);
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             log::debug!(
                 "[peer id = {}] Ignoring transaction announcement because the node is in initial block download", self.id()
             );
@@ -974,7 +972,7 @@ where
             .call(move |c| {
                 let index = c.get_block_index(&id);
                 let block = c.get_block(id);
-                (block, index)
+                Ok((block, index))
             })
             .await?;
         // All requested blocks are already checked while processing `BlockListRequest`.
@@ -1030,31 +1028,6 @@ where
                 self.id(),
                 err
             );
-        }
-    }
-}
-
-/// This function is used to update peers_best_block_that_we_have.
-/// The "better" block is the one that is on the main chain and has bigger height.
-/// In the case of a tie, new_block_id is preferred.
-fn choose_peers_best_block(
-    chainstate: &dyn ChainstateInterface,
-    old_block_id: Option<Id<GenBlock>>,
-    new_block_id: Option<Id<GenBlock>>,
-) -> Result<Option<Id<GenBlock>>> {
-    match (old_block_id, new_block_id) {
-        (None, None) => Ok(None),
-        (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
-        (Some(old_id), Some(new_id)) => {
-            let old_height =
-                chainstate.get_block_height_in_main_chain(&old_id)?.unwrap_or(0.into());
-            let new_height =
-                chainstate.get_block_height_in_main_chain(&new_id)?.unwrap_or(0.into());
-            if new_height >= old_height {
-                Ok(Some(new_id))
-            } else {
-                Ok(Some(old_id))
-            }
         }
     }
 }

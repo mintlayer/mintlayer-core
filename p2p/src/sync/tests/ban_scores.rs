@@ -74,8 +74,12 @@ async fn peer_handle_result() {
         )),
         P2pError::MempoolError(mempool::error::Error::Validity(TxValidationError::TipMoved)),
     ] {
-        let handle_res =
-            peer_common::handle_result(&peer_manager_sender, PeerId::new(), Err(err)).await;
+        let handle_res = peer_common::handle_message_processing_result(
+            &peer_manager_sender,
+            PeerId::new(),
+            Err(err),
+        )
+        .await;
         assert_eq!(handle_res, Ok(()));
     }
 }
