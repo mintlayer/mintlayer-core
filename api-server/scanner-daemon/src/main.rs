@@ -18,7 +18,7 @@ use std::sync::Arc;
 use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::{
-        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiTransactionRw,
+        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
     },
 };
 use blockchain_scanner_lib::blockchain_state::BlockchainState;

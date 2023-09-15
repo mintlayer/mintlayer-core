@@ -18,7 +18,7 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use common::chain::ChainConfig;
 
 use crate::storage::storage_api::{
-    ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo, ApiTransactionRw,
+    ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo, ApiServerTransactionRw,
     Transactional,
 };
 
@@ -61,7 +61,7 @@ impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 }
 
-impl<'t> ApiTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
+impl<'t> ApiServerTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
     fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }

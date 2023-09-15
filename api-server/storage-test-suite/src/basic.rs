@@ -22,7 +22,7 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead,
-        ApiServerStorageWrite, ApiTransactionRw,
+        ApiServerStorageWrite, ApiServerTransactionRw,
     },
 };
 use crypto::random::Rng;

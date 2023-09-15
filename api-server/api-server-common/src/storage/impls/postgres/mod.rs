@@ -24,19 +24,22 @@ use r2d2_postgres::r2d2;
 use r2d2_postgres::PostgresConnectionManager;
 
 use crate::storage::storage_api::ApiServerStorageError;
+use crate::storage::storage_api::ApiServerStorageRead;
+use crate::storage::storage_api::ApiServerStorageWrite;
 
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
 
-pub struct Postgres {
+pub struct TransactionalApiServerPostgresStorage {
     pool: r2d2::Pool<PostgresConnectionManager<NoTls>>,
 }
 
-impl Postgres {
+impl TransactionalApiServerPostgresStorage {
     pub fn new(
         host: &str,
         user: &str,
         max_connections: u32,
+        chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
         let config: postgres::Config = format!("host={host} user={user}").parse().map_err(
             |e: <postgres::Config as FromStr>::Err| {
@@ -53,7 +56,23 @@ impl Postgres {
                 e
             ))
         })?;
-        Ok(Self { pool })
+
+        let result = Self { pool };
+
+        result.initialize_if_not(chain_config)?;
+
+        Ok(result)
+    }
+
+    fn initialize_if_not(
+        &self,
+        chain_config: &common::chain::ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut tx = self.begin_rw_transaction()?;
+        if !tx.is_initialized()? {
+            tx.initialize_storage(chain_config)?;
+        }
+        Ok(())
     }
 
     pub fn begin_ro_transaction(

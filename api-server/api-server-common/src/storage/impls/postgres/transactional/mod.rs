@@ -23,18 +23,23 @@ use common::{
 use postgres::NoTls;
 use r2d2_postgres::{r2d2::PooledConnection, PostgresConnectionManager};
 
-use crate::storage::storage_api::{block_aux_data::BlockAuxData, ApiServerStorageError};
+use crate::storage::storage_api::{
+    block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageError, ApiServerTransactionRo,
+    ApiServerTransactionRw, Transactional,
+};
 
-use super::queries::QueryFromConnection;
+use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
 
 #[ouroboros::self_referencing]
 pub struct ApiServerPostgresTransactionalRo {
     connection: PooledConnection<PostgresConnectionManager<NoTls>>,
     #[borrows(mut connection)]
-    #[covariant]
     // TODO(PR): Dear reviewer, is the lifetime below covariant? It does look covariant to me.
+    #[covariant]
     transaction: postgres::Transaction<'this>,
 }
+
+const TX_ERR: &str = "Transaction must exist until destruction";
 
 impl ApiServerPostgresTransactionalRo {
     pub(super) fn from_connection(
@@ -134,9 +139,10 @@ impl ApiServerPostgresTransactionalRo {
 pub struct ApiServerPostgresTransactionalRw {
     connection: PooledConnection<PostgresConnectionManager<NoTls>>,
     #[borrows(mut connection)]
-    #[covariant]
     // TODO(PR): Dear reviewer, is the lifetime below covariant? It does look covariant to me.
-    transaction: postgres::Transaction<'this>,
+    #[covariant]
+    // Note: This Option is required to make destruction by value possible. See commit() method.
+    transaction: Option<postgres::Transaction<'this>>,
 }
 
 impl ApiServerPostgresTransactionalRw {
@@ -149,6 +155,7 @@ impl ApiServerPostgresTransactionalRw {
                 conn.build_transaction()
                     .read_only(true)
                     .start()
+                    .map(Some)
                     .map_err(|e| ApiServerStorageError::RwTxBeginFailed(e.to_string()))
             },
         }
@@ -156,3 +163,40 @@ impl ApiServerPostgresTransactionalRw {
         Ok(tx)
     }
 }
+
+impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw {
+    fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+        self.with_transaction_mut(|tx| {
+            let mut tx_taker = None;
+            std::mem::swap(tx, &mut tx_taker);
+            tx_taker.expect(TX_ERR).commit()
+        })
+        .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))
+    }
+
+    fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+        Ok(())
+    }
+}
+
+impl ApiServerTransactionRo for ApiServerPostgresTransactionalRo {
+    fn close(self) -> Result<(), ApiServerStorageError> {
+        Ok(())
+    }
+}
+
+impl<'t> Transactional<'t> for TransactionalApiServerPostgresStorage {
+    type TransactionRo = ApiServerPostgresTransactionalRo;
+
+    type TransactionRw = ApiServerPostgresTransactionalRw;
+
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError> {
+        self.begin_ro_transaction()
+    }
+
+    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError> {
+        self.begin_rw_transaction()
+    }
+}
+
+impl ApiServerStorage for TransactionalApiServerPostgresStorage {}

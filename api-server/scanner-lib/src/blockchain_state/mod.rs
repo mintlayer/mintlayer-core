@@ -16,7 +16,7 @@
 use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiTransactionRw,
+    ApiServerTransactionRw,
 };
 use common::{
     chain::{Block, GenBlock},

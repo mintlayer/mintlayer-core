@@ -13,4 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {}
+// TODO: uncomment when the container stuff is ready.
+
+// use api_server_common::storage::{
+//     impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
+// };
+// use common::chain::{config::create_unit_test_config, ChainConfig};
+
+// #[must_use]
+// fn make_postgres_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
+//     TransactionalApiServerPostgresStorage::new("127.0.0.1", "some-user", 4, chain_config).unwrap()
+// }
+
+// TODO: Make sure to guard this with some feature to prevent running these tests by default
+
+fn main() {
+    //     let storage_maker = || make_postgres_storage(&create_unit_test_config());
+    //     let result = api_server_backend_test_suite::run(storage_maker);
+
+    //     result.exit()
+}
