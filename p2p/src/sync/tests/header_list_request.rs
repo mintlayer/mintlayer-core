@@ -34,6 +34,7 @@ use crate::{
     P2pError,
 };
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -77,6 +78,7 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -128,6 +130,7 @@ async fn valid_request(#[case] seed: Seed) {
 
 // If the peer ignores our header requests, but asks us for blocks at the same time, we
 // should not disconnect it (we assume it's in IBD).
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

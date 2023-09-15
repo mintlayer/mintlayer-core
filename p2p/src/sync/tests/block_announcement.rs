@@ -46,6 +46,7 @@ use super::helpers::{make_new_blocks, make_new_top_blocks_return_headers};
 // V1: the header list request is sent if the parent of the singular announced block is unknown.
 // However, if max_singular_unconnected_headers is exceeded, the DisconnectedHeaders error
 // is generated.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -127,6 +128,7 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
 // Same as single_header_with_unknown_prev_block_v1, but here a connected header list is sent
 // in between the two attempts to send unconnected ones. This should reset the number of
 // singular unconnected headers, so no error should be generated.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -220,6 +222,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
 }
 
 // In V2 sending even 1 singular unconnected header should produce the DisconnectedHeaders error.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -262,6 +265,7 @@ async fn single_header_with_unknown_prev_block_v2(#[case] seed: Seed) {
 }
 
 // The peer ban score is increased if it sends an invalid header.
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_timestamp() {
     for_each_protocol_version(|protocol_version| async move {
@@ -308,6 +312,7 @@ async fn invalid_timestamp() {
 }
 
 // The peer ban score is increased if it sends an invalid header.
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_consensus_data() {
     for_each_protocol_version(|protocol_version| async move {
@@ -359,6 +364,7 @@ async fn invalid_consensus_data() {
 }
 
 // The peer ban score is increased if the parent of the first announced block is unknown.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -403,6 +409,7 @@ async fn multiple_headers_with_unknown_prev_block(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -446,14 +453,13 @@ async fn valid_block(#[case] seed: Seed) {
 }
 
 // Check that the best known header is taken into account when making block announcements.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn best_known_header_is_considered(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        logging::init_logging::<&std::path::Path>(None);
-
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());

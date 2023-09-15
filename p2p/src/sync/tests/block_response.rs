@@ -35,6 +35,7 @@ use crate::{
     P2pConfig, P2pError,
 };
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -74,6 +75,7 @@ async fn unrequested_block(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -130,6 +132,7 @@ async fn valid_response(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -204,6 +207,7 @@ async fn disconnect(#[case] seed: Seed) {
 // Respond to a block request with a delay that is only slightly less than the timeout.
 // Then respond to the following HeaderListRequest with the same delay.
 // The peer should not be disconnected.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -312,6 +316,7 @@ async fn slow_response(#[case] seed: Seed) {
 // to figure out if it's because of a reorg. To do so, it will compare the requested block
 // id with the id of the mainchain block at the same height. But there is no mainchain block
 // at that height anymore. The code should not panic.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

@@ -116,6 +116,7 @@ mod tests {
         data: u64,
     }
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -146,6 +147,7 @@ mod tests {
         );
     }
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -173,6 +175,7 @@ mod tests {
         );
     }
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]

@@ -108,6 +108,7 @@ where
 }
 
 // Test only TestTransportChannel because actual networking is not used
+#[tracing::instrument]
 #[tokio::test]
 async fn test_address_rate_limiter_channels() {
     test_address_rate_limiter::<
@@ -117,6 +118,7 @@ async fn test_address_rate_limiter_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[test]
 fn test_addr_list_handling_inbound() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
@@ -199,9 +201,9 @@ fn test_addr_list_handling_inbound() {
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
 
+#[tracing::instrument]
 #[test]
 fn test_addr_list_handling_outbound() {
-    logging::init_logging::<std::path::PathBuf>(None);
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
@@ -312,6 +314,7 @@ fn test_addr_list_handling_outbound() {
 }
 
 // Verify that the node periodically resends its own address
+#[tracing::instrument]
 #[tokio::test]
 async fn resend_own_addresses() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;

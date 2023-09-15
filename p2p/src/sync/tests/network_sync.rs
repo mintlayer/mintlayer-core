@@ -32,6 +32,7 @@ use crate::{
     testing_utils::for_each_protocol_version,
 };
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -127,6 +128,7 @@ async fn basic(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -180,6 +182,7 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -262,6 +265,7 @@ async fn reorg(#[case] seed: Seed) {
 // exceeding the node's requested block limit, so that it would produce ProtocolError(BlocksRequestLimitExceeded).
 // All of the above would increase the ban score of the other side.
 // Expected result: the ban score should not be increased.
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

@@ -41,6 +41,7 @@ use crate::{
     P2pConfig, P2pError,
 };
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -100,6 +101,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
 // an error or misbehavior.
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
     for_each_protocol_version(|protocol_version| async move {
@@ -125,6 +127,7 @@ async fn initial_block_download() {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -193,6 +196,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -262,6 +266,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -318,6 +323,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -369,6 +375,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

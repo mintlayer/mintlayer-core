@@ -436,16 +436,19 @@ mod tests {
         );
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_inbound_tcp() {
         handshake_inbound::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_inbound_channels() {
         handshake_inbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_inbound_noise() {
         handshake_inbound::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -516,16 +519,19 @@ mod tests {
         );
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_outbound_tcp() {
         handshake_outbound::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_outbound_channels() {
         handshake_outbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_outbound_noise() {
         handshake_outbound::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -578,16 +584,19 @@ mod tests {
         assert_eq!(handle.await.unwrap(), Ok(()));
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_different_network_tcp() {
         handshake_different_network::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_different_network_channels() {
         handshake_different_network::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn handshake_different_network_noise() {
         handshake_different_network::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -636,16 +645,19 @@ mod tests {
         ),);
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn invalid_handshake_message_tcp() {
         invalid_handshake_message::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn invalid_handshake_message_channels() {
         invalid_handshake_message::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
+    #[tracing::instrument]
     #[tokio::test]
     async fn invalid_handshake_message_noise() {
         invalid_handshake_message::<TestTransportNoise, NoiseTcpTransport>().await;

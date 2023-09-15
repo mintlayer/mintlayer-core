@@ -39,6 +39,7 @@ use crate::{
     PeerManagerEvent,
 };
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;

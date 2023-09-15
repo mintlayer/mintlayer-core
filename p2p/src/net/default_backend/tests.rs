@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc, time::Duration};
+
+use tokio::{io::AsyncWriteExt, sync::oneshot, time::timeout};
 
 use common::time_getter::TimeGetter;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::oneshot;
-use tokio::time::timeout;
 use utils::atomics::SeqCstAtomicBool;
 
 use super::transport::TransportListener;
@@ -122,16 +120,19 @@ where
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_remote_tcp() {
     connect_to_remote::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_remote_channels() {
     connect_to_remote::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_remote_noise() {
     connect_to_remote::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -218,16 +219,19 @@ where
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn accept_incoming_tcp() {
     accept_incoming::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn accept_incoming_channels() {
     accept_incoming::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn accept_incoming_noise() {
     accept_incoming::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -288,16 +292,19 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn disconnect_tcp() {
     disconnect::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn disconnect_channels() {
     disconnect::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn disconnect_noise() {
     disconnect::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -378,16 +385,19 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn self_connect_tcp() {
     self_connect::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn self_connect_channels() {
     self_connect::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn self_connect_noise() {
     self_connect::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -449,16 +459,19 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn invalid_outbound_peer_connect_tcp() {
     invalid_outbound_peer_connect::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn invalid_outbound_peer_connect_channels() {
     invalid_outbound_peer_connect::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn invalid_outbound_peer_connect_noise() {
     invalid_outbound_peer_connect::<TestTransportNoise, NoiseTcpTransport>().await;
@@ -576,16 +589,19 @@ where
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn general_protocol_version_selection_tcp() {
     general_protocol_version_selection::<TestTransportTcp, TcpTransportSocket>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn general_protocol_version_selection_channels() {
     general_protocol_version_selection::<TestTransportChannel, MpscChannelTransport>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn general_protocol_version_selection_noise() {
     general_protocol_version_selection::<TestTransportNoise, NoiseTcpTransport>().await;

@@ -283,8 +283,6 @@ where
     Func: Fn(ProtocolVersion) -> Res,
     Res: Future<Output = ()>,
 {
-    logging::init_logging::<&std::path::Path>(None);
-
     for version in enum_iterator::all::<SupportedProtocolVersion>() {
         log::info!("---------- Testing protocol version {version:?} ----------");
         func(version.into()).await;

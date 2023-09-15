@@ -31,6 +31,7 @@ use crate::{
 };
 
 // Check that the header list request is sent to a newly connected peer.
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn connect_peer() {
     for_each_protocol_version(|protocol_version| async move {
@@ -45,6 +46,7 @@ async fn connect_peer() {
 }
 
 // Check that the attempt to connect the peer twice results in an error.
+#[tracing::instrument]
 #[rstest::rstest]
 #[trace]
 #[case(SupportedProtocolVersion::V1.into())]
@@ -62,6 +64,7 @@ async fn connect_peer_twice(#[case] protocol_version: ProtocolVersion) {
     node.resume_panic().await;
 }
 
+#[tracing::instrument]
 #[rstest::rstest]
 #[trace]
 #[case(SupportedProtocolVersion::V1.into())]
@@ -77,6 +80,7 @@ async fn disconnect_nonexistent_peer(#[case] protocol_version: ProtocolVersion) 
     node.resume_panic().await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_peer() {
     for_each_protocol_version(|protocol_version| async move {
@@ -92,6 +96,7 @@ async fn disconnect_peer() {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

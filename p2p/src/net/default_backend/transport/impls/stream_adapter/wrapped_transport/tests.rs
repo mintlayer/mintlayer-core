@@ -76,6 +76,7 @@ async fn test<A: TestTransportMaker, T: TransportSocket>(transport: T) {
     send_recv(&mut server_stream, &mut peer_stream, 70000).await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_send_recv() {
     test::<TestTransportTcp, TcpTransportSocket>(TcpTransportSocket::new()).await;
@@ -182,6 +183,7 @@ impl Drop for TestListener {
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 // Test that the base listener is dropped after AdaptedTransport::Listener is dropped.
 async fn test_bind_port_closed() {
@@ -199,6 +201,7 @@ async fn test_bind_port_closed() {
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -230,6 +233,7 @@ async fn send_2_reqs(#[case] seed: Seed) {
     assert_eq!(server_stream.recv().await.unwrap(), message_2);
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn pending_handshakes() {
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
@@ -271,6 +275,7 @@ async fn pending_handshakes() {
     join_handle.abort();
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn handshake_timeout() {
     let time_getter = P2pBasicTestTimeGetter::new();

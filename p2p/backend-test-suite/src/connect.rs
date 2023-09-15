@@ -30,6 +30,7 @@ use utils::atomics::SeqCstAtomicBool;
 tests![connect, connect_address_in_use, connect_accept,];
 
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn connect<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,
@@ -63,6 +64,7 @@ where
 
 // Check that connecting twice to the same address isn't possible.
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn connect_address_in_use<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,
@@ -120,6 +122,7 @@ where
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
 // trying to connect to `service1`.
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn connect_accept<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,
