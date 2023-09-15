@@ -1239,6 +1239,12 @@ fn group_outputs<T, Grouped: Clone>(
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
                 }
             }
+            OutputValue::TokenV1((id, amount)) => {
+                let total_token_amount =
+                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+
+                combiner(total_token_amount, &output, amount)?;
+            }
         }
     }
 
@@ -1304,6 +1310,12 @@ fn group_utxos_for_input<T, Grouped: Clone>(
                         combiner(total_token_amount, &output, Amount::from_atoms(1))?;
                     }
                 }
+            }
+            OutputValue::TokenV1((id, amount)) => {
+                let total_token_amount =
+                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+
+                combiner(total_token_amount, &output, amount)?;
             }
         }
     }

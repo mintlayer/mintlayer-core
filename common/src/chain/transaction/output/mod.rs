@@ -105,6 +105,7 @@ pub enum TxOutput {
     DelegateStaking(Amount, DelegationId),
     #[codec(index = 7)]
     TokenIssuance(Box<TokenIssuanceVersioned>),
+    // FIXME: add NftIssuance at once?
 }
 
 impl TxOutput {
