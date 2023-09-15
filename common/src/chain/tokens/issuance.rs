@@ -23,17 +23,14 @@ pub struct TokenIssuanceVersion(u32);
 impl TokenIssuanceVersion {
     /// Initial issuance implementation
     pub const V0: Self = Self(0);
-    /// Add reissuance support
+    /// Enable modifying token supply
     pub const V1: Self = Self(1);
-
-    // FIXME: get rid of CURRENT
-    pub const CURRENT: Self = Self::V1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenTotalSupply {
     Fixed(Amount), // fixed to a certain amount
-    Lockable,      // not known in advance but can be locked at some point in time
+    Lockable,      // not known in advance but can be locked once at some point in time
     Unlimited,     // limited only by the Amount data type
 }
 
