@@ -199,10 +199,7 @@ fn output_coin_amount(output: &TxOutput) -> Amount {
         TxOutput::LockThenTransfer(val, _, _) => val,
         _ => return Amount::ZERO,
     };
-    match val {
-        OutputValue::Coin(amt) => *amt,
-        OutputValue::Token(_) => Amount::ZERO,
-    }
+    val.coin_amount().unwrap_or(Amount::ZERO)
 }
 
 pub fn make_tx(

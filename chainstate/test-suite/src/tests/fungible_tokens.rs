@@ -791,8 +791,6 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
     })
 }
 
-// FIXME: token_reissuance_with_insufficient_fee
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

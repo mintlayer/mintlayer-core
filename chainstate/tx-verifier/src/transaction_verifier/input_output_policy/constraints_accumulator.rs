@@ -162,19 +162,13 @@ impl ConstrainedValueAccumulator {
                             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
                         )?;
                     }
-                    OutputValue::Token(token_data) => match token_data.as_ref() {
-                        TokenData::TokenTransfer(data) => {
-                            if let Some(constrained_amount) =
-                                self.burn_constrained.get_mut(&data.token_id)
-                            {
-                                *constrained_amount = (*constrained_amount - data.amount)
-                                    .ok_or(IOPolicyError::AmountOverflow)?;
-                            }
+                    OutputValue::Token(_) => { /* do nothing */ }
+                    OutputValue::TokenV1((id, value)) => {
+                        if let Some(constrained_amount) = self.burn_constrained.get_mut(id) {
+                            *constrained_amount = (*constrained_amount - *value)
+                                .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                            todo!("this has to handle TokenV1??")
-                        }
-                    },
+                    }
                 },
                 TxOutput::DelegateStaking(coins, _) => {
                     self.unconstrained_value = (self.unconstrained_value - *coins)

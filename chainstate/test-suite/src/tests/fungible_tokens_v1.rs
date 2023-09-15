@@ -245,3 +245,6 @@ fn token_issue_test(#[case] seed: Seed) {
         // FIXME: check that token account was created
     });
 }
+
+// FIXME: more tests
+// FIXME: token_reissuance_with_insufficient_fee

@@ -16,28 +16,28 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuance, TokenData, TokenIssuance, TokenTransfer},
+    chain::tokens::{NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer},
     primitives::Amount,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(Box<TokenData>),
-    // FIXME: add TokenV1 with just amount
+    Token(Box<TokenData>), // FIXME: add check that this type is not used after upgrade
+    TokenV1((TokenId, Amount)),
 }
 
 impl OutputValue {
     pub fn coin_amount(&self) -> Option<Amount> {
         match self {
             OutputValue::Coin(v) => Some(*v),
-            OutputValue::Token(_) => None,
+            OutputValue::Token(_) | OutputValue::TokenV1(_) => None,
         }
     }
 
     pub fn token_data(&self) -> Option<&TokenData> {
         match self {
-            OutputValue::Coin(_) => None,
+            OutputValue::Coin(_) | OutputValue::TokenV1(_) => None,
             OutputValue::Token(d) => Some(d),
         }
     }

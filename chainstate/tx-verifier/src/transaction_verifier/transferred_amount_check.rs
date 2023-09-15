@@ -242,6 +242,7 @@ fn get_output_token_id_and_amount(
                 None => None,
             },
         },
+        OutputValue::TokenV1((id, amount)) => Some((CoinOrTokenId::TokenId(*id), *amount)),
     })
 }
 
@@ -270,6 +271,7 @@ where
                     TokensError::TokenIdCantBeCalculated,
                 )),
         },
+        OutputValue::TokenV1((id, amount)) => Ok((CoinOrTokenId::TokenId(*id), *amount)),
     }
 }
 
