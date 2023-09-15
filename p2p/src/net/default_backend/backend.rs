@@ -25,6 +25,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
+use tracing::Instrument;
 
 use common::{
     chain::ChainConfig,
@@ -365,13 +366,16 @@ where
         );
         let shutdown = Arc::clone(&self.shutdown);
         let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
-        let handle = tokio::spawn(async move {
-            match peer.run(local_time).await {
-                Ok(()) => {}
-                Err(P2pError::ChannelClosed) if shutdown.load() => {}
-                Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
+        let handle = tokio::spawn(
+            async move {
+                match peer.run(local_time).await {
+                    Ok(()) => {}
+                    Err(P2pError::ChannelClosed) if shutdown.load() => {}
+                    Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
 
         self.pending.insert(
             remote_peer_id,

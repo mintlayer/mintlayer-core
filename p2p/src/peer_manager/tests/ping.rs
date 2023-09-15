@@ -15,6 +15,8 @@
 
 use std::{sync::Arc, time::Duration};
 
+use tracing::Instrument;
+
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::{assert_matches, assert_matches_return_val};
@@ -90,9 +92,12 @@ async fn ping_timeout() {
     )
     .unwrap();
 
-    tokio::spawn(async move {
-        let _ = peer_manager.run().await;
-    });
+    tokio::spawn(
+        async move {
+            let _ = peer_manager.run().await;
+        }
+        .instrument(tracing::Span::current()),
+    );
 
     // Notify about new inbound connection
     conn_tx

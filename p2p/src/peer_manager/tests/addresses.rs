@@ -15,6 +15,8 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
+use tracing::Instrument;
+
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::socket_address::SocketAddress;
@@ -379,7 +381,9 @@ async fn resend_own_addresses() {
     assert_eq!(pm.peers.len(), OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT);
 
     let (started_tx, started_rx) = oneshot_nofail::channel();
-    tokio::spawn(async move { pm.run_internal(Some(started_tx)).await });
+    tokio::spawn(
+        async move { pm.run_internal(Some(started_tx)).await }.instrument(tracing::Span::current()),
+    );
     started_rx.await.unwrap();
 
     // Flush all pending messages

@@ -16,14 +16,15 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use common::time_getter::TimeGetter;
-use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
+use tracing::Instrument;
 
+use common::time_getter::TimeGetter;
 use logging::log;
+use p2p_types::socket_address::SocketAddress;
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
@@ -91,18 +92,21 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             subscribers_receiver,
             protocol_version,
         );
-        let backend_task = tokio::spawn(async move {
-            match backend.run().await {
-                Ok(never) => match never {},
-                Err(P2pError::ChannelClosed) if shutdown.load() => {
-                    log::info!("Backend is shut down");
-                }
-                Err(e) => {
-                    shutdown.store(true);
-                    log::error!("Failed to run backend: {e}");
+        let backend_task = tokio::spawn(
+            async move {
+                match backend.run().await {
+                    Ok(never) => match never {},
+                    Err(P2pError::ChannelClosed) if shutdown.load() => {
+                        log::info!("Backend is shut down");
+                    }
+                    Err(e) => {
+                        shutdown.store(true);
+                        log::error!("Failed to run backend: {e}");
+                    }
                 }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
 
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_event_rx),

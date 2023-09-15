@@ -16,6 +16,7 @@
 use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument;
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use common::{
@@ -113,33 +114,37 @@ where
     )
     .unwrap();
 
-    let sync1_handle = tokio::spawn(async move { sync1.run().await });
+    let sync1_handle =
+        tokio::spawn(async move { sync1.run().await }.instrument(tracing::Span::current()));
 
     // spawn `sync2` into background and spam an orphan block on the network
-    tokio::spawn(async move {
-        let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
-            SyncingEvent::Connected {
-                peer_id,
-                common_services: _,
-                protocol_version: _,
-                sync_msg_rx,
-            } => (peer_id, sync_msg_rx),
-            e => panic!("Unexpected event type: {e:?}"),
-        };
-        match sync_msg_rx.recv().await.unwrap() {
-            SyncMessage::HeaderListRequest(_) => {}
-            e => panic!("Unexpected event type: {e:?}"),
-        };
-        messaging_handle_2
-            .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
-            .unwrap();
-        messaging_handle_2
-            .send_message(
-                peer,
-                SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-            )
-            .unwrap();
-    });
+    tokio::spawn(
+        async move {
+            let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
+                SyncingEvent::Connected {
+                    peer_id,
+                    common_services: _,
+                    protocol_version: _,
+                    sync_msg_rx,
+                } => (peer_id, sync_msg_rx),
+                e => panic!("Unexpected event type: {e:?}"),
+            };
+            match sync_msg_rx.recv().await.unwrap() {
+                SyncMessage::HeaderListRequest(_) => {}
+                e => panic!("Unexpected event type: {e:?}"),
+            };
+            messaging_handle_2
+                .send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())))
+                .unwrap();
+            messaging_handle_2
+                .send_message(
+                    peer,
+                    SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+                )
+                .unwrap();
+        }
+        .instrument(tracing::Span::current()),
+    );
 
     match rx_peer_manager.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {

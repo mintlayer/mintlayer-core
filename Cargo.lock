@@ -4414,6 +4414,8 @@ dependencies = [
  "tokio",
  "tokio-socks",
  "tokio-util",
+ "tracing",
+ "tracing-subscriber",
  "utils",
 ]
 
@@ -4433,6 +4435,7 @@ dependencies = [
  "serialization",
  "subsystem",
  "tokio",
+ "tracing",
  "utils",
 ]
 
@@ -6518,6 +6521,7 @@ dependencies = [
  "testing_logger",
  "thiserror",
  "tokio",
+ "tracing",
  "utils",
 ]
 

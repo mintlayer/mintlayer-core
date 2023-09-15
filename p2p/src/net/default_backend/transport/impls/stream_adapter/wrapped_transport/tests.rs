@@ -239,11 +239,14 @@ async fn pending_handshakes() {
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let local_addr = server.local_addresses().unwrap();
 
-    let join_handle = tokio::spawn(async move {
-        loop {
-            _ = server.accept().await;
+    let join_handle = tokio::spawn(
+        async move {
+            loop {
+                _ = server.accept().await;
+            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
 
     // Connect MAX_CONCURRENT_HANDSHAKES amount of idle clients
     let mut sockets = futures::stream::iter(0..MAX_CONCURRENT_HANDSHAKES)
@@ -281,11 +284,14 @@ async fn handshake_timeout() {
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let local_addr = server.local_addresses().unwrap();
 
-    let join_handle = tokio::spawn(async move {
-        loop {
-            _ = server.accept().await;
+    let join_handle = tokio::spawn(
+        async move {
+            loop {
+                _ = server.accept().await;
+            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
 
     let mut bad_client = tokio::net::TcpStream::connect(local_addr[0].socket_addr()).await.unwrap();
     for _ in 0..30 {

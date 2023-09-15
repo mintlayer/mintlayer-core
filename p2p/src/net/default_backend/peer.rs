@@ -358,6 +358,9 @@ impl<T: TransportSocket> Drop for Peer<T> {
 
 #[cfg(test)]
 mod tests {
+    use futures::FutureExt;
+    use tracing::Instrument;
+
     use super::*;
     use crate::{
         message::HeaderListRequest,
@@ -373,7 +376,6 @@ mod tests {
         },
     };
     use chainstate::Locator;
-    use futures::FutureExt;
 
     async fn handshake_inbound<A, T>()
     where
@@ -399,10 +401,13 @@ mod tests {
             TEST_PROTOCOL_VERSION.into(),
         );
 
-        let handle = tokio::spawn(async move {
-            peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
-            peer
-        });
+        let handle = tokio::spawn(
+            async move {
+                peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
+                peer
+            }
+            .instrument(tracing::Span::current()),
+        );
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
@@ -477,10 +482,13 @@ mod tests {
             TEST_PROTOCOL_VERSION.into(),
         );
 
-        let handle = tokio::spawn(async move {
-            peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
-            peer
-        });
+        let handle = tokio::spawn(
+            async move {
+                peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
+                peer
+            }
+            .instrument(tracing::Span::current()),
+        );
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         socket2.recv().await.unwrap();
@@ -555,7 +563,9 @@ mod tests {
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
+        let handle = tokio::spawn(
+            async move { peer.handshake(local_time).await }.instrument(tracing::Span::current()),
+        );
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
@@ -616,7 +626,9 @@ mod tests {
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
+        let handle = tokio::spawn(
+            async move { peer.handshake(local_time).await }.instrument(tracing::Span::current()),
+        );
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
