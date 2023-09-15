@@ -77,6 +77,7 @@ impl OutputGroup {
                     TokenData::NftIssuance(_) => Amount::from_atoms(1),
                 }
             }
+            OutputValue::TokenV1((_, output_amount)) => output_amount,
         };
 
         Ok(Self {

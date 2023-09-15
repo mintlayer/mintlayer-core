@@ -53,7 +53,7 @@ pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
                         TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
                         TokenData::TokenTransfer(_) => false,
                     },
-                    OutputValue::Coin(_) => false,
+                    OutputValue::Coin(_) | OutputValue::TokenV1(_) => false,
                 }
             }
             TxOutput::CreateStakePool(_, _)
@@ -88,7 +88,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
                     TokenData::TokenTransfer(_) => false,
                 },
-                OutputValue::Coin(_) => false,
+                OutputValue::Coin(_) | OutputValue::TokenV1(_) => false,
             }
         }
         TxOutput::TokenIssuance(_) => true,
