@@ -167,8 +167,7 @@ impl ApiServerPostgresTransactionalRw {
 impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw {
     fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         self.with_transaction_mut(|tx| {
-            let mut tx_taker = None;
-            std::mem::swap(tx, &mut tx_taker);
+            let tx_taker = tx.take();
             tx_taker.expect(TX_ERR).commit()
         })
         .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))
