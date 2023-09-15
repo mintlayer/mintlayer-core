@@ -7,8 +7,11 @@ rust-version.workspace = true
 
 [dependencies]
 api-server-common = { path = "../api-server-common" }
+chainstate-test-framework = { path = '../../chainstate/test-framework' }
 common = { path = '../../common' }
+crypto = { path = '../../crypto/' }
 logging = { path = "../../logging" }
+test-utils = {path = '../../test-utils'}
 utils = { path = "../../utils" }
 
 libtest-mimic.workspace = true

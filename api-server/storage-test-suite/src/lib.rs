@@ -18,11 +18,14 @@
 
 mod basic;
 
+#[macro_use]
+pub mod helpers;
+
 use api_server_common::storage::storage_api::ApiServerStorage;
 use std::sync::Arc;
 
 /// Get all tests
-fn tests<S: ApiServerStorage, F: Fn() -> S + Send + Sync + 'static>(
+fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: F,
 ) -> Vec<libtest_mimic::Trial> {
     let storage_maker = Arc::new(storage_maker);
@@ -35,7 +38,7 @@ fn tests<S: ApiServerStorage, F: Fn() -> S + Send + Sync + 'static>(
 
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn run<S: ApiServerStorage, F: Fn() -> S + Send + Sync + 'static>(
+pub fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: F,
 ) -> libtest_mimic::Conclusion {
     logging::init_logging::<&str>(None);

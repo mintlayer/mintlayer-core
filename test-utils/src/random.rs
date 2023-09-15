@@ -26,8 +26,18 @@ impl Seed {
         Seed(crypto::random::make_true_rng().gen::<u64>())
     }
 
+    pub fn from_entropy_and_print(test_name: &str) -> Self {
+        let result = Seed(crypto::random::make_true_rng().gen::<u64>());
+        result.print_with_decoration(test_name);
+        result
+    }
+
     pub fn from_u64(v: u64) -> Self {
         Seed(v)
+    }
+
+    pub fn print_with_decoration(&self, test_name: &str) {
+        println!("{test_name} seed: {}", self.0);
     }
 }
 
