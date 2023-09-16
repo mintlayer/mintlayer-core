@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-mod key_chain;
-pub mod send_request;
-pub mod version;
-pub mod wallet;
-pub mod wallet_events;
+use std::process::Command;
 
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
 
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+    let git_hash = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
+
+    if let Ok(git_hash) = git_hash {
+        println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+    }
+}
