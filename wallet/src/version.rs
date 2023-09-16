@@ -15,11 +15,18 @@
 
 /// Get the Wallet version and optionally git hash
 pub fn get_version() -> String {
-    let git_hash = env!("GIT_HASH");
+    let git_head_hash = env!("GIT_HEAD_HASH");
+    let git_tree_clean = env!("GIT_TREE_CLEAN").is_empty();
     let version = env!("CARGO_PKG_VERSION");
 
-    match git_hash {
-        "" => version.to_owned(),
-        git_hash => format!("{version} (HEAD hash: {git_hash})"),
-    }
+    let version_string = version;
+    let git_hash_string = format!("(HEAD hash: {})", git_head_hash);
+    let tree_clean_string = git_tree_clean.then_some("").unwrap_or("(dirty)");
+
+    [version_string, &git_hash_string, tree_clean_string]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+        .join(" ")
 }
