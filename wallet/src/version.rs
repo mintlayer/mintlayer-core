@@ -13,15 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-mod key_chain;
-pub mod send_request;
-pub mod version;
-pub mod wallet;
-pub mod wallet_events;
+/// Get the Wallet version and optionally git hash
+pub fn get_version() -> String {
+    let git_hash = env!("GIT_HASH");
+    let version = env!("CARGO_PKG_VERSION");
 
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
-
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+    match git_hash {
+        "" => version.to_owned(),
+        git_hash => format!("{version} hash: {git_hash}"),
+    }
+}
