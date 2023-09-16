@@ -16,14 +16,26 @@
 /// Get the Wallet version and optionally git hash
 pub fn get_version() -> String {
     let git_head_hash = env!("GIT_HEAD_HASH");
-    let git_tree_clean = env!("GIT_TREE_CLEAN").is_empty();
+    let git_tree_clean = env!("GIT_TREE_CLEAN");
     let version = env!("CARGO_PKG_VERSION");
 
     let version_string = version;
-    let git_hash_string = format!("(HEAD hash: {})", git_head_hash);
-    let tree_clean_string = git_tree_clean.then_some("").unwrap_or("(dirty)");
 
-    [version_string, &git_hash_string, tree_clean_string]
+    // If the git hash is not available, we don't want to print anything
+    let git_hash_string = if git_head_hash.trim().is_empty() {
+        "".to_string()
+    } else {
+        format!("(HEAD hash: {})", git_head_hash)
+    };
+
+    // If the git tree is clean, we don't want to print anything
+    let git_tree_clean_string = if git_tree_clean.trim().is_empty() {
+        ""
+    } else {
+        "(dirty)"
+    };
+
+    [version_string, &git_hash_string, git_tree_clean_string]
         .iter()
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
