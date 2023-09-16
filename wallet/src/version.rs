@@ -20,6 +20,6 @@ pub fn get_version() -> String {
 
     match git_hash {
         "" => version.to_owned(),
-        git_hash => format!("{version} hash: {git_hash}"),
+        git_hash => format!("{version} (HEAD hash: {git_hash})"),
     }
 }
