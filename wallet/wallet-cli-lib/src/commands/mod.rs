@@ -29,7 +29,7 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::{account::Currency, wallet_events::WalletEventsNoOp};
+use wallet::{account::Currency, version::get_version, wallet_events::WalletEventsNoOp};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
 
 use crate::{errors::WalletCliError, CliController};
@@ -324,6 +324,9 @@ pub enum WalletCommand {
     RemoveReservedPeer {
         address: IpOrSocketAddress,
     },
+
+    /// Print the version of the software and optionally the git commit hash
+    Version,
 
     /// Quit the REPL
     Exit,
@@ -1210,6 +1213,8 @@ impl CommandHandler {
 
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
+
+            WalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
 
             WalletCommand::Exit => Ok(ConsoleCommand::Exit),
             WalletCommand::History => Ok(ConsoleCommand::PrintHistory),
