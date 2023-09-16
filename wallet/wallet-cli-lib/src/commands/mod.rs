@@ -326,7 +326,7 @@ pub enum WalletCommand {
     },
 
     /// Print the version of the software and optionally the git commit hash
-    PrintVersion,
+    Version,
 
     /// Quit the REPL
     Exit,
@@ -1214,7 +1214,7 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
-            WalletCommand::PrintVersion => Ok(ConsoleCommand::Print(get_version())),
+            WalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
 
             WalletCommand::Exit => Ok(ConsoleCommand::Exit),
             WalletCommand::History => Ok(ConsoleCommand::PrintHistory),
