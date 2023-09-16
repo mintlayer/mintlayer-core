@@ -16,14 +16,20 @@
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-
-    let git_hash = Command::new("git")
+    let git_head_hash = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
 
-    if let Ok(git_hash) = git_hash {
-        println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+    let git_tree_clean = Command::new("git")
+        .args(["status", "--untracked-files=no", "--porcelain"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
+
+    if let Ok(git_hash) = git_head_hash {
+        println!("cargo:rustc-env=GIT_HEAD_HASH={}", git_hash);
+    }
+    if let Ok(git_tree_clean) = git_tree_clean {
+        println!("cargo:rustc-env=GIT_TREE_CLEAN={}", git_tree_clean);
     }
 }
