@@ -44,6 +44,7 @@ pub enum ApiServerStorageError {
     TxRwRollbackFailed(String),
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerStorageRead {
     fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError>;
 
@@ -70,8 +71,9 @@ pub trait ApiServerStorageRead {
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerStorageWrite: ApiServerStorageRead {
-    fn initialize_storage(
+    async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError>;

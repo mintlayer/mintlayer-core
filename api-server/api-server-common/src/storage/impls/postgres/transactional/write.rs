@@ -28,8 +28,9 @@ use crate::storage::{
 
 use super::{ApiServerPostgresTransactionalRw, TX_ERR};
 
+#[async_trait::async_trait]
 impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
-    fn initialize_storage(
+    async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {

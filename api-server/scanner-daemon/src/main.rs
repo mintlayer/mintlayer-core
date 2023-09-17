@@ -54,6 +54,7 @@ pub async fn run<S: ApiServerStorage>(
         {
             db_tx
                 .initialize_storage(chain_config)
+                .await
                 .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
         }
         db_tx

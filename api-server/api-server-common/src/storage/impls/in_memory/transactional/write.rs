@@ -25,8 +25,9 @@ use crate::storage::storage_api::{
 
 use super::ApiServerInMemoryStorageTransactionalRw;
 
+#[async_trait::async_trait]
 impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
-    fn initialize_storage(
+    async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {

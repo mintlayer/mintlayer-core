@@ -35,7 +35,7 @@ pub struct TransactionalApiServerPostgresStorage {
 }
 
 impl TransactionalApiServerPostgresStorage {
-    pub fn new(
+    pub async fn new(
         host: &str,
         user: &str,
         max_connections: u32,
@@ -59,18 +59,18 @@ impl TransactionalApiServerPostgresStorage {
 
         let result = Self { pool };
 
-        result.initialize_if_not(chain_config)?;
+        result.initialize_if_not(chain_config).await?;
 
         Ok(result)
     }
 
-    fn initialize_if_not(
+    async fn initialize_if_not(
         &self,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let mut tx = self.begin_rw_transaction()?;
         if !tx.is_initialized()? {
-            tx.initialize_storage(chain_config)?;
+            tx.initialize_storage(chain_config).await?;
         }
         Ok(())
     }
