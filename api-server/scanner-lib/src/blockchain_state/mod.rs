@@ -45,7 +45,7 @@ impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
         let mut db_tx = self.storage.transaction_ro().await?;
-        let best_block = db_tx.get_best_block()?;
+        let best_block = db_tx.get_best_block().await?;
         Ok(best_block)
     }
 
@@ -57,25 +57,27 @@ impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
         let mut db_tx = self.storage.transaction_rw().await?;
 
         // Disconnect blocks from main-chain
-        while db_tx.get_best_block()?.0 > common_block_height {
-            let current_best = db_tx.get_best_block()?;
+        while db_tx.get_best_block().await?.0 > common_block_height {
+            let current_best = db_tx.get_best_block().await?;
             logging::log::info!("Disconnecting block: {:?}", current_best);
-            db_tx.del_main_chain_block_id(current_best.0)?;
+            db_tx.del_main_chain_block_id(current_best.0).await?;
         }
 
         // Connect the new blocks in the new chain
         for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
 
-            db_tx.set_main_chain_block_id(block_height, block.get_id())?;
+            db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
             logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
 
             for tx in block.transactions() {
-                db_tx.set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)?;
+                db_tx
+                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
+                    .await?;
             }
 
-            db_tx.set_block(block.get_id(), &block)?;
-            db_tx.set_best_block(block_height, block.get_id().into())?;
+            db_tx.set_block(block.get_id(), &block).await?;
+            db_tx.set_best_block(block_height, block.get_id().into()).await?;
         }
 
         db_tx.commit().await?;

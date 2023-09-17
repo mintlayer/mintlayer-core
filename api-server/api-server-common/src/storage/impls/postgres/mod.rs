@@ -69,7 +69,7 @@ impl TransactionalApiServerPostgresStorage {
         chain_config: &common::chain::ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let mut tx = self.begin_rw_transaction()?;
-        if !tx.is_initialized()? {
+        if !tx.is_initialized().await? {
             tx.initialize_storage(chain_config).await?;
         }
         Ok(())

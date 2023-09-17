@@ -50,6 +50,7 @@ pub async fn run<S: ApiServerStorage>(
             .unwrap_or_else(|e| panic!("Initial transaction for initialization failed {}", e));
         if !db_tx
             .is_initialized()
+            .await
             .unwrap_or_else(|e| panic!("Storage initialization checking failed {}", e))
         {
             db_tx

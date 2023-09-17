@@ -19,8 +19,9 @@ use crate::storage::{
 
 use super::ApiServerPostgresTransactionalRo;
 
+#[async_trait::async_trait]
 impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
-    fn is_initialized(
+    async fn is_initialized(
         &mut self,
     ) -> Result<bool, crate::storage::storage_api::ApiServerStorageError> {
         let res = self.with_transaction_mut(|tx| {
@@ -31,7 +32,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Ok(res)
     }
 
-    fn get_storage_version(
+    async fn get_storage_version(
         &mut self,
     ) -> Result<Option<u32>, crate::storage::storage_api::ApiServerStorageError> {
         let res = self.with_transaction_mut(|tx| {
@@ -42,7 +43,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Ok(res)
     }
 
-    fn get_best_block(
+    async fn get_best_block(
         &mut self,
     ) -> Result<
         (
@@ -59,7 +60,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Ok(res)
     }
 
-    fn get_block(
+    async fn get_block(
         &mut self,
         block_id: common::primitives::Id<common::chain::Block>,
     ) -> Result<Option<common::chain::Block>, crate::storage::storage_api::ApiServerStorageError>
@@ -72,7 +73,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Ok(res)
     }
 
-    fn get_block_aux_data(
+    async fn get_block_aux_data(
         &mut self,
         block_id: common::primitives::Id<common::chain::Block>,
     ) -> Result<
@@ -87,7 +88,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Ok(res)
     }
 
-    fn get_main_chain_block_id(
+    async fn get_main_chain_block_id(
         &mut self,
         block_height: common::primitives::BlockHeight,
     ) -> Result<
@@ -97,7 +98,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         self.get_main_chain_block_id(block_height)
     }
 
-    fn get_transaction(
+    async fn get_transaction(
         &mut self,
         transaction_id: common::primitives::Id<common::chain::Transaction>,
     ) -> Result<
