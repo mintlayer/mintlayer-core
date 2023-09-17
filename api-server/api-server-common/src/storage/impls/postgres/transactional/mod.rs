@@ -30,49 +30,34 @@ use crate::storage::storage_api::{
 
 use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
 
-#[ouroboros::self_referencing]
 pub struct ApiServerPostgresTransactionalRo<'a> {
     connection: PooledConnection<'a, PostgresConnectionManager<NoTls>>,
-    #[borrows(mut connection)]
-    // TODO(PR): Dear reviewer, is the lifetime below covariant? It does look covariant to me.
-    #[covariant]
-    transaction: tokio_postgres::Transaction<'this>,
+    finished: bool,
 }
-
-const TX_ERR: &str = "Transaction must exist until destruction";
 
 impl<'a> ApiServerPostgresTransactionalRo<'a> {
     pub(super) async fn from_connection(
         connection: PooledConnection<'a, PostgresConnectionManager<NoTls>>,
     ) -> Result<ApiServerPostgresTransactionalRo, ApiServerStorageError> {
-        let tx = ApiServerPostgresTransactionalRoAsyncTryBuilder {
+        let tx = Self {
             connection,
-            transaction_builder: |conn| {
-                Box::pin(async {
-                    conn.build_transaction()
-                        .read_only(true)
-                        .start()
-                        .await
-                        .map_err(|e| ApiServerStorageError::RoTxBeginFailed(e.to_string()))
-                })
-            },
-        }
-        .try_build()
-        .await?;
+            finished: false,
+        };
+        tx.connection.batch_execute("BEGIN READ ONLY").await.map_err(|e| {
+            ApiServerStorageError::RoTxBeginFailed(format!("Transaction begin failed: {}", e))
+        })?;
         Ok(tx)
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
     pub async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_storage_version().await?;
 
         Ok(res)
@@ -81,8 +66,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
     pub async fn get_best_block(
         &mut self,
     ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_best_block().await?;
 
         Ok(res)
@@ -92,8 +76,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
@@ -103,8 +86,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<Block>, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_block(block_id).await?;
 
         Ok(res)
@@ -115,8 +97,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
@@ -126,43 +107,43 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let tx = self.borrow_transaction();
-        let mut conn = QueryFromConnection::new(tx);
+        let mut conn = QueryFromConnection::new(&self.connection);
         let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
     }
 }
 
-#[ouroboros::self_referencing]
 pub struct ApiServerPostgresTransactionalRw<'a> {
     connection: PooledConnection<'a, PostgresConnectionManager<NoTls>>,
-    #[borrows(mut connection)]
-    // TODO(PR): Dear reviewer, is the lifetime below covariant? It does look covariant to me.
-    #[covariant]
-    // Note: This Option is required to make destruction by value possible. See commit() method.
-    transaction: Option<tokio_postgres::Transaction<'this>>,
+    finished: bool,
+}
+
+impl<'a> Drop for ApiServerPostgresTransactionalRw<'a> {
+    fn drop(&mut self) {
+        if !self.finished {
+            futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
+                |e| {
+                    logging::log::error!(
+                        "CRITICAL ERROR: failed to rollback failed postgres RW transaction: {e}"
+                    )
+                },
+            );
+        }
+    }
 }
 
 impl<'a> ApiServerPostgresTransactionalRw<'a> {
     pub(super) async fn from_connection(
         connection: PooledConnection<'a, PostgresConnectionManager<NoTls>>,
     ) -> Result<ApiServerPostgresTransactionalRw<'a>, ApiServerStorageError> {
-        let tx = ApiServerPostgresTransactionalRwAsyncTryBuilder {
+        let tx = Self {
             connection,
-            transaction_builder: |conn| {
-                Box::pin(async {
-                    conn.build_transaction()
-                        .read_only(true)
-                        .start()
-                        .await
-                        .map(Some)
-                        .map_err(|e| ApiServerStorageError::RwTxBeginFailed(e.to_string()))
-                })
-            },
-        }
-        .try_build()
-        .await?;
+            finished: false,
+        };
+        tx.connection.batch_execute("BEGIN READ WRITE").await.map_err(|e| {
+            ApiServerStorageError::RwTxBeginFailed(format!("Transaction begin failed: {}", e))
+        })?;
         Ok(tx)
     }
 }
@@ -170,15 +151,20 @@ impl<'a> ApiServerPostgresTransactionalRw<'a> {
 #[async_trait::async_trait]
 impl<'a> ApiServerTransactionRw for ApiServerPostgresTransactionalRw<'a> {
     async fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_taker = tx.take();
-            tx_taker.expect(TX_ERR).commit()
-        })
-        .await
-        .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))
+        self.connection
+            .batch_execute("COMMIT")
+            .await
+            .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))?;
+        self.finished = true;
+        Ok(())
     }
 
-    async fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn rollback(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+        self.connection
+            .batch_execute("ROLLBACK")
+            .await
+            .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))?;
+        self.finished = true;
         Ok(())
     }
 }
@@ -187,6 +173,20 @@ impl<'a> ApiServerTransactionRw for ApiServerPostgresTransactionalRw<'a> {
 impl<'a> ApiServerTransactionRo for ApiServerPostgresTransactionalRo<'a> {
     async fn close(self) -> Result<(), ApiServerStorageError> {
         Ok(())
+    }
+}
+
+impl<'a> Drop for ApiServerPostgresTransactionalRo<'a> {
+    fn drop(&mut self) {
+        if !self.finished {
+            futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
+                |e| {
+                    logging::log::error!(
+                        "CRITICAL ERROR: failed to rollback failed postgres RO transaction: {e}"
+                    )
+                },
+            );
+        }
     }
 }
 
@@ -199,18 +199,13 @@ impl<'t> Transactional<'t> for TransactionalApiServerPostgresStorage {
     async fn transaction_ro<'s: 't>(
         &'s self,
     ) -> Result<Self::TransactionRo, ApiServerStorageError> {
-        // TODO(PR): finish this
-        // let t = self.begin_ro_transaction().await?;
-        // Ok(t)
-        todo!()
+        self.begin_ro_transaction().await
     }
 
     async fn transaction_rw<'s: 't>(
         &'s mut self,
     ) -> Result<Self::TransactionRw, ApiServerStorageError> {
-        // TODO(PR): finish this
-        // self.begin_rw_transaction().await
-        todo!()
+        self.begin_rw_transaction().await
     }
 }
 

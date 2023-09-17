@@ -14,11 +14,11 @@ logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
 async-trait.workspace = true
+futures = { workspace = true, default-features = false }
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-postgres = "0.7"
-ouroboros = "0.18"
 bb8-postgres = "0.8"
 
 [dev-dependencies]

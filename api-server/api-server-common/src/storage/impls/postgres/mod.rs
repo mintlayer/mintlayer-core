@@ -88,9 +88,9 @@ impl TransactionalApiServerPostgresStorage {
         ApiServerPostgresTransactionalRo::from_connection(conn).await
     }
 
-    pub async fn begin_rw_transaction<'a>(
-        &'a self,
-    ) -> Result<ApiServerPostgresTransactionalRw<'a>, ApiServerStorageError> {
+    pub async fn begin_rw_transaction(
+        &self,
+    ) -> Result<ApiServerPostgresTransactionalRw, ApiServerStorageError> {
         let conn = self
             .pool
             .get()

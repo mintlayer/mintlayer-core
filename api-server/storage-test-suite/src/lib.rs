@@ -25,12 +25,12 @@ use api_server_common::storage::storage_api::ApiServerStorage;
 use std::sync::Arc;
 
 /// Get all tests
-async fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: F,
 ) -> Vec<libtest_mimic::Trial> {
     let storage_maker = Arc::new(storage_maker);
     std::iter::empty()
-        .chain(basic::build_tests(storage_maker).await)
+        .chain(basic::build_tests(storage_maker))
         // .chain(concurrent::tests(Arc::clone(&backend_fn)))
         // .chain(property::tests(backend_fn))
         .collect()
@@ -38,10 +38,10 @@ async fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'stat
 
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub async fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+pub fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: F,
 ) -> libtest_mimic::Conclusion {
     logging::init_logging::<&str>(None);
     let args = libtest_mimic::Arguments::from_args();
-    libtest_mimic::run(&args, tests(storage_maker).await)
+    libtest_mimic::run(&args, tests(storage_maker))
 }

@@ -266,10 +266,7 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
     Ok(())
 }
 
-pub async fn build_tests<
-    S: ApiServerStorage + Send + 'static,
-    F: Fn() -> S + Send + Sync + 'static,
->(
+pub fn build_tests<S: ApiServerStorage + Send + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: Arc<F>,
 ) -> impl Iterator<Item = libtest_mimic::Trial> {
     vec![

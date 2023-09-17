@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use serialization::{DecodeAll, Encode};
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
+use tokio_postgres::NoTls;
 
 use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
@@ -26,7 +28,7 @@ use crate::storage::{
 };
 
 pub struct QueryFromConnection<'a, 'b> {
-    tx: &'a tokio_postgres::Transaction<'b>,
+    tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>,
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
@@ -43,7 +45,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 }
 
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
-    pub fn new(tx: &'a tokio_postgres::Transaction<'b>) -> Self {
+    pub fn new(tx: &'a PooledConnection<'b, PostgresConnectionManager<NoTls>>) -> Self {
         Self { tx }
     }
 
