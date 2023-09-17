@@ -122,6 +122,7 @@ pub trait ApiServerTransactionRo: ApiServerStorageRead {
     fn close(self) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
     type TransactionRo: ApiServerTransactionRo + 't;
@@ -130,10 +131,13 @@ pub trait Transactional<'t> {
     type TransactionRw: ApiServerTransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError>;
+    async fn transaction_ro<'s: 't>(&'s self)
+        -> Result<Self::TransactionRo, ApiServerStorageError>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError>;
+    async fn transaction_rw<'s: 't>(
+        &'s mut self,
+    ) -> Result<Self::TransactionRw, ApiServerStorageError>;
 }
 
 pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send + Sync {}

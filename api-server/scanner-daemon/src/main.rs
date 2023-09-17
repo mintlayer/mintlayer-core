@@ -46,6 +46,7 @@ pub async fn run<S: ApiServerStorage>(
     {
         let mut db_tx = storage
             .transaction_rw()
+            .await
             .unwrap_or_else(|e| panic!("Initial transaction for initialization failed {}", e));
         if !db_tx
             .is_initialized()

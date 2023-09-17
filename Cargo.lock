@@ -234,6 +234,7 @@ dependencies = [
 name = "api-server-common"
 version = "0.1.2"
 dependencies = [
+ "async-trait",
  "chainstate-test-framework",
  "common",
  "crypto",

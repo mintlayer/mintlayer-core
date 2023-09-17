@@ -184,16 +184,21 @@ impl ApiServerTransactionRo for ApiServerPostgresTransactionalRo {
     }
 }
 
+#[async_trait::async_trait]
 impl<'t> Transactional<'t> for TransactionalApiServerPostgresStorage {
     type TransactionRo = ApiServerPostgresTransactionalRo;
 
     type TransactionRw = ApiServerPostgresTransactionalRw;
 
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError> {
+    async fn transaction_ro<'s: 't>(
+        &'s self,
+    ) -> Result<Self::TransactionRo, ApiServerStorageError> {
         self.begin_ro_transaction()
     }
 
-    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError> {
+    async fn transaction_rw<'s: 't>(
+        &'s mut self,
+    ) -> Result<Self::TransactionRw, ApiServerStorageError> {
         self.begin_rw_transaction()
     }
 }

@@ -13,6 +13,7 @@ crypto = { path = '../../crypto/' }
 logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
+async-trait.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

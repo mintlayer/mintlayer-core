@@ -44,7 +44,7 @@ impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let mut db_tx = self.storage.transaction_ro()?;
+        let mut db_tx = self.storage.transaction_ro().await?;
         let best_block = db_tx.get_best_block()?;
         Ok(best_block)
     }
@@ -54,7 +54,7 @@ impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        let mut db_tx = self.storage.transaction_rw()?;
+        let mut db_tx = self.storage.transaction_rw().await?;
 
         // Disconnect blocks from main-chain
         while db_tx.get_best_block()?.0 > common_block_height {

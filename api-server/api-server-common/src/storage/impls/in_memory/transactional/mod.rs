@@ -32,9 +32,11 @@ pub struct ApiServerInMemoryStorageTransactionalRo<'t> {
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
-    fn new(storage: &'t TransactionalApiServerInMemoryStorage) -> Self {
+    async fn new(
+        storage: &'t TransactionalApiServerInMemoryStorage,
+    ) -> ApiServerInMemoryStorageTransactionalRo<'t> {
         Self {
-            transaction: storage.tx_ro(),
+            transaction: storage.tx_ro().await,
         }
     }
 }
@@ -84,7 +86,7 @@ impl TransactionalApiServerInMemoryStorage {
         }
     }
 
-    fn tx_ro(&self) -> RwLockReadGuard<'_, ApiServerInMemoryStorage> {
+    async fn tx_ro(&self) -> RwLockReadGuard<'_, ApiServerInMemoryStorage> {
         self.storage.read().expect("Poisoned mutex")
     }
 
@@ -93,16 +95,21 @@ impl TransactionalApiServerInMemoryStorage {
     }
 }
 
+#[async_trait::async_trait]
 impl<'t> Transactional<'t> for TransactionalApiServerInMemoryStorage {
     type TransactionRo = ApiServerInMemoryStorageTransactionalRo<'t>;
 
     type TransactionRw = ApiServerInMemoryStorageTransactionalRw<'t>;
 
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError> {
-        Ok(ApiServerInMemoryStorageTransactionalRo::new(self))
+    async fn transaction_ro<'s: 't>(
+        &'s self,
+    ) -> Result<Self::TransactionRo, ApiServerStorageError> {
+        Ok(ApiServerInMemoryStorageTransactionalRo::new(self).await)
     }
 
-    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError> {
+    async fn transaction_rw<'s: 't>(
+        &'s mut self,
+    ) -> Result<Self::TransactionRw, ApiServerStorageError> {
         Ok(ApiServerInMemoryStorageTransactionalRw::new(self))
     }
 }
