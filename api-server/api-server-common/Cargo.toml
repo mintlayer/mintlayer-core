@@ -17,9 +17,9 @@ async-trait.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-postgres = "0.19"
-r2d2_postgres = "0.18"
+tokio-postgres = "0.7"
 ouroboros = "0.18"
+bb8-postgres = "0.8"
 
 [dev-dependencies]
 chainstate-test-framework = { path = '../../chainstate/test-framework' }

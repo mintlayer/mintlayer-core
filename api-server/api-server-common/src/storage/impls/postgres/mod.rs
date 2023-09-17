@@ -19,9 +19,11 @@ mod queries;
 
 use std::str::FromStr;
 
-use postgres::NoTls;
-use r2d2_postgres::r2d2;
-use r2d2_postgres::PostgresConnectionManager;
+use bb8_postgres::bb8::Pool;
+use bb8_postgres::PostgresConnectionManager;
+use tokio_postgres::NoTls;
+// use r2d2_postgres::r2d2;
+// use r2d2_postgres::PostgresConnectionManager;
 
 use crate::storage::storage_api::ApiServerStorageError;
 use crate::storage::storage_api::ApiServerStorageRead;
@@ -31,7 +33,7 @@ use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
 
 pub struct TransactionalApiServerPostgresStorage {
-    pool: r2d2::Pool<PostgresConnectionManager<NoTls>>,
+    pool: Pool<PostgresConnectionManager<NoTls>>,
 }
 
 impl TransactionalApiServerPostgresStorage {
@@ -41,8 +43,8 @@ impl TransactionalApiServerPostgresStorage {
         max_connections: u32,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
-        let config: postgres::Config = format!("host={host} user={user}").parse().map_err(
-            |e: <postgres::Config as FromStr>::Err| {
+        let config: tokio_postgres::Config = format!("host={host} user={user}").parse().map_err(
+            |e: <tokio_postgres::Config as FromStr>::Err| {
                 ApiServerStorageError::InitializationError(format!(
                     "Postgres configuration parsing error: {}",
                     e
@@ -50,7 +52,7 @@ impl TransactionalApiServerPostgresStorage {
             },
         )?;
         let manager = PostgresConnectionManager::new(config, NoTls);
-        let pool = r2d2::Pool::builder().max_size(max_connections).build(manager).map_err(|e| {
+        let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(
                 "Postgres connection pool creation error: {}",
                 e
@@ -68,30 +70,32 @@ impl TransactionalApiServerPostgresStorage {
         &self,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        let mut tx = self.begin_rw_transaction()?;
+        let mut tx = self.begin_rw_transaction().await?;
         if !tx.is_initialized().await? {
             tx.initialize_storage(chain_config).await?;
         }
         Ok(())
     }
 
-    pub fn begin_ro_transaction(
+    pub async fn begin_ro_transaction(
         &self,
     ) -> Result<ApiServerPostgresTransactionalRo, ApiServerStorageError> {
         let conn = self
             .pool
             .get()
+            .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRo::from_connection(conn)
+        ApiServerPostgresTransactionalRo::from_connection(conn).await
     }
 
-    pub fn begin_rw_transaction(
-        &self,
-    ) -> Result<ApiServerPostgresTransactionalRw, ApiServerStorageError> {
+    pub async fn begin_rw_transaction<'a>(
+        &'a self,
+    ) -> Result<ApiServerPostgresTransactionalRw<'a>, ApiServerStorageError> {
         let conn = self
             .pool
             .get()
+            .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRw::from_connection(conn)
+        ApiServerPostgresTransactionalRw::from_connection(conn).await
     }
 }

@@ -20,14 +20,13 @@ use crate::storage::{
 use super::ApiServerPostgresTransactionalRo;
 
 #[async_trait::async_trait]
-impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
+impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn is_initialized(
         &mut self,
     ) -> Result<bool, crate::storage::storage_api::ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let mut conn = QueryFromConnection::new(tx);
-            conn.is_initialized()
-        })?;
+        let tx = self.borrow_transaction();
+        let mut conn = QueryFromConnection::new(tx);
+        let res = conn.is_initialized().await?;
 
         Ok(res)
     }
@@ -35,10 +34,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
     async fn get_storage_version(
         &mut self,
     ) -> Result<Option<u32>, crate::storage::storage_api::ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let mut conn = QueryFromConnection::new(tx);
-            conn.get_storage_version()
-        })?;
+        let tx = self.borrow_transaction();
+        let mut conn = QueryFromConnection::new(tx);
+        let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
@@ -52,10 +50,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         ),
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        let res = self.with_transaction_mut(|tx| {
-            let mut conn = QueryFromConnection::new(tx);
-            conn.get_best_block()
-        })?;
+        let tx = self.borrow_transaction();
+        let mut conn = QueryFromConnection::new(tx);
+        let res = conn.get_best_block().await?;
 
         Ok(res)
     }
@@ -65,10 +62,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         block_id: common::primitives::Id<common::chain::Block>,
     ) -> Result<Option<common::chain::Block>, crate::storage::storage_api::ApiServerStorageError>
     {
-        let res = self.with_transaction_mut(|tx| {
-            let mut conn = QueryFromConnection::new(tx);
-            conn.get_block(block_id)
-        })?;
+        let tx = self.borrow_transaction();
+        let mut conn = QueryFromConnection::new(tx);
+        let res = conn.get_block(block_id).await?;
 
         Ok(res)
     }
@@ -80,10 +76,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Option<crate::storage::storage_api::block_aux_data::BlockAuxData>,
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        let res = self.with_transaction_mut(|tx| {
-            let mut conn = QueryFromConnection::new(tx);
-            conn.get_block_aux_data(block_id)
-        })?;
+        let tx = self.borrow_transaction();
+        let mut conn = QueryFromConnection::new(tx);
+        let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
     }
@@ -95,7 +90,7 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         Option<common::primitives::Id<common::chain::Block>>,
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        self.get_main_chain_block_id(block_height)
+        self.get_main_chain_block_id(block_height).await
     }
 
     async fn get_transaction(
@@ -108,6 +103,6 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRo {
         )>,
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        self.get_transaction(transaction_id)
+        self.get_transaction(transaction_id).await
     }
 }

@@ -29,16 +29,14 @@ use crate::storage::{
 use super::{ApiServerPostgresTransactionalRw, TX_ERR};
 
 #[async_trait::async_trait]
-impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
+impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.initialize_database(chain_config)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.initialize_database(chain_config).await?;
 
         Ok(())
     }
@@ -48,11 +46,9 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         block_height: BlockHeight,
         block_id: Id<GenBlock>,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_best_block(block_height, block_id)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.set_best_block(block_height, block_id).await?;
 
         Ok(())
     }
@@ -62,11 +58,9 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         block_id: Id<Block>,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_block(block_id, block)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.set_block(block_id, block).await?;
 
         Ok(())
     }
@@ -77,11 +71,9 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_transaction(transaction_id, owning_block, transaction)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.set_transaction(transaction_id, owning_block, transaction).await?;
 
         Ok(())
     }
@@ -91,11 +83,9 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         block_id: Id<Block>,
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_block_aux_data(block_id, block_aux_data)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.set_block_aux_data(block_id, block_aux_data).await?;
 
         Ok(())
     }
@@ -105,11 +95,9 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         block_height: BlockHeight,
         block_id: Id<Block>,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_main_chain_block_id(block_height, block_id)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.set_main_chain_block_id(block_height, block_id).await?;
 
         Ok(())
     }
@@ -118,34 +106,28 @@ impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.del_main_chain_block_id(block_height)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        conn.del_main_chain_block_id(block_height).await?;
 
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
+impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.is_initialized()
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
     async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_storage_version()
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
@@ -153,11 +135,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
     async fn get_best_block(
         &mut self,
     ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_best_block()
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_best_block().await?;
 
         Ok(res)
     }
@@ -166,11 +146,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<Block>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_block(block_id)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_block(block_id).await?;
 
         Ok(res)
     }
@@ -179,11 +157,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_block_aux_data(block_id)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
     }
@@ -192,11 +168,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_main_chain_block_id(block_height)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
     }
@@ -205,11 +179,9 @@ impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_transaction(transaction_id)
-        })?;
+        let tx_ref = self.borrow_transaction().as_ref().expect(TX_ERR);
+        let mut conn = QueryFromConnection::new(&tx_ref);
+        let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
     }
