@@ -58,6 +58,7 @@ pub async fn run<S: ApiServerStorage>(
         }
         db_tx
             .commit()
+            .await
             .unwrap_or_else(|e| panic!("Storage initialization commit failed {}", e));
     }
 

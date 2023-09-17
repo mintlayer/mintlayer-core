@@ -66,12 +66,13 @@ impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 }
 
+#[async_trait::async_trait]
 impl<'t> ApiServerTransactionRw for ApiServerInMemoryStorageTransactionalRw<'t> {
-    fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn commit(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 
-    fn rollback(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn rollback(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         // We restore the original data that was there when the transaction started
         std::mem::swap(&mut *self.transaction, &mut self.initial_data_before_tx);
         Ok(())

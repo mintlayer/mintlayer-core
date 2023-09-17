@@ -78,7 +78,7 @@ impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
             db_tx.set_best_block(block_height, block.get_id().into())?;
         }
 
-        db_tx.commit()?;
+        db_tx.commit().await?;
 
         logging::log::info!("Database commit completed successfully");
 

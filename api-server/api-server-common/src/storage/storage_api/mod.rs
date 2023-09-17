@@ -113,9 +113,10 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerTransactionRw: ApiServerStorageWrite + ApiServerStorageRead {
-    fn commit(self) -> Result<(), ApiServerStorageError>;
-    fn rollback(self) -> Result<(), ApiServerStorageError>;
+    async fn commit(self) -> Result<(), ApiServerStorageError>;
+    async fn rollback(self) -> Result<(), ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -126,10 +127,10 @@ pub trait ApiServerTransactionRo: ApiServerStorageRead {
 #[async_trait::async_trait]
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: ApiServerTransactionRo + 't;
+    type TransactionRo: ApiServerTransactionRo + Send + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: ApiServerTransactionRw + 't;
+    type TransactionRw: ApiServerTransactionRw + Send + 't;
 
     /// Start a read-only transaction.
     async fn transaction_ro<'s: 't>(&'s self)

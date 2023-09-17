@@ -164,8 +164,9 @@ impl ApiServerPostgresTransactionalRw {
     }
 }
 
+#[async_trait::async_trait]
 impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw {
-    fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn commit(mut self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         self.with_transaction_mut(|tx| {
             let tx_taker = tx.take();
             tx_taker.expect(TX_ERR).commit()
@@ -173,7 +174,7 @@ impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw {
         .map_err(|e| ApiServerStorageError::TxCommitFailed(e.to_string()))
     }
 
-    fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn rollback(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 }
