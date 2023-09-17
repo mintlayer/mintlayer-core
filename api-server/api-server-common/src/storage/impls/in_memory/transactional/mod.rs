@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use common::chain::ChainConfig;
 
@@ -28,7 +28,7 @@ pub mod read;
 pub mod write;
 
 pub struct ApiServerInMemoryStorageTransactionalRo<'t> {
-    transaction: RwLockReadGuard<'t, ApiServerInMemoryStorage>,
+    transaction: tokio::sync::RwLockReadGuard<'t, ApiServerInMemoryStorage>,
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
@@ -41,8 +41,9 @@ impl<'t> ApiServerInMemoryStorageTransactionalRo<'t> {
     }
 }
 
+#[async_trait::async_trait]
 impl<'t> ApiServerTransactionRo for ApiServerInMemoryStorageTransactionalRo<'t> {
-    fn close(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
+    async fn close(self) -> Result<(), crate::storage::storage_api::ApiServerStorageError> {
         Ok(())
     }
 }
@@ -53,8 +54,10 @@ pub struct ApiServerInMemoryStorageTransactionalRw<'t> {
 }
 
 impl<'t> ApiServerInMemoryStorageTransactionalRw<'t> {
-    fn new(storage: &'t mut TransactionalApiServerInMemoryStorage) -> Self {
-        let transaction = storage.tx_rw();
+    async fn new(
+        storage: &'t mut TransactionalApiServerInMemoryStorage,
+    ) -> ApiServerInMemoryStorageTransactionalRw<'t> {
+        let transaction = storage.tx_rw().await;
         let initial_data_before_tx = transaction.clone();
         Self {
             transaction,
@@ -87,11 +90,11 @@ impl TransactionalApiServerInMemoryStorage {
     }
 
     async fn tx_ro(&self) -> RwLockReadGuard<'_, ApiServerInMemoryStorage> {
-        self.storage.read().expect("Poisoned mutex")
+        self.storage.read().await
     }
 
-    fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiServerInMemoryStorage> {
-        self.storage.write().expect("Poisoned mutex")
+    async fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiServerInMemoryStorage> {
+        self.storage.write().await
     }
 }
 
@@ -110,7 +113,7 @@ impl<'t> Transactional<'t> for TransactionalApiServerInMemoryStorage {
     async fn transaction_rw<'s: 't>(
         &'s mut self,
     ) -> Result<Self::TransactionRw, ApiServerStorageError> {
-        Ok(ApiServerInMemoryStorageTransactionalRw::new(self))
+        Ok(ApiServerInMemoryStorageTransactionalRw::new(self).await)
     }
 }
 

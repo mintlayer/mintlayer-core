@@ -178,8 +178,9 @@ impl ApiServerTransactionRw for ApiServerPostgresTransactionalRw {
     }
 }
 
+#[async_trait::async_trait]
 impl ApiServerTransactionRo for ApiServerPostgresTransactionalRo {
-    fn close(self) -> Result<(), ApiServerStorageError> {
+    async fn close(self) -> Result<(), ApiServerStorageError> {
         Ok(())
     }
 }

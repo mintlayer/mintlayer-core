@@ -118,8 +118,9 @@ pub trait ApiServerTransactionRw: ApiServerStorageWrite + ApiServerStorageRead {
     fn rollback(self) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerTransactionRo: ApiServerStorageRead {
-    fn close(self) -> Result<(), ApiServerStorageError>;
+    async fn close(self) -> Result<(), ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
