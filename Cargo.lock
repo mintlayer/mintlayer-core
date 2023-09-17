@@ -223,6 +223,7 @@ dependencies = [
  "chainstate-test-framework",
  "common",
  "crypto",
+ "futures",
  "libtest-mimic",
  "logging",
  "proptest",
