@@ -22,8 +22,6 @@ use std::str::FromStr;
 use bb8_postgres::bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use tokio_postgres::NoTls;
-// use r2d2_postgres::r2d2;
-// use r2d2_postgres::PostgresConnectionManager;
 
 use crate::storage::storage_api::ApiServerStorageError;
 use crate::storage::storage_api::ApiServerStorageRead;
