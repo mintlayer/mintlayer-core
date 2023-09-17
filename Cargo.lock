@@ -217,7 +217,7 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "api-server-backend-test-suite"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "api-server-common",
  "chainstate-test-framework",
