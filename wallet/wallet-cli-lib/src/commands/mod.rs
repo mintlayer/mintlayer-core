@@ -30,7 +30,10 @@ use crypto::key::{hdkd::u31::U31, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::{account::Currency, version::get_version, wallet_events::WalletEventsNoOp};
-use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX};
+use wallet_controller::{
+    read::ReadOnlyController, synced_controller::SyncedController, NodeInterface, NodeRpcClient,
+    PeerId, DEFAULT_ACCOUNT_INDEX,
+};
 
 use crate::{errors::WalletCliError, CliController};
 
@@ -462,6 +465,22 @@ impl CommandHandler {
             .ok_or(WalletCliError::NoWallet)
     }
 
+    async fn get_synced_controller(
+        &mut self,
+    ) -> Result<SyncedController<'_, NodeRpcClient, WalletEventsNoOp>, WalletCliError> {
+        let (controller, state) = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
+        controller
+            .synced_controller(state.selected_account)
+            .await
+            .map_err(WalletCliError::Controller)
+    }
+    fn get_readonly_controller(
+        &mut self,
+    ) -> Result<ReadOnlyController<'_, NodeRpcClient>, WalletCliError> {
+        let (controller, state) = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
+        Ok(controller.readonly_controller(state.selected_account))
+    }
+
     pub fn tx_submitted_command() -> ConsoleCommand {
         let status_text = "The transaction was submitted successfully";
         ConsoleCommand::Print(status_text.to_owned())
@@ -529,7 +548,9 @@ impl CommandHandler {
                         rpc_client.clone(),
                         wallet,
                         WalletEventsNoOp,
-                    ),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?,
                     CliWalletState {
                         selected_account: DEFAULT_ACCOUNT_INDEX,
                     },
@@ -564,7 +585,9 @@ impl CommandHandler {
                         rpc_client.clone(),
                         wallet,
                         WalletEventsNoOp,
-                    ),
+                    )
+                    .await
+                    .map_err(WalletCliError::Controller)?,
                     CliWalletState {
                         selected_account: DEFAULT_ACCOUNT_INDEX,
                     },
@@ -703,10 +726,9 @@ impl CommandHandler {
             }
 
             WalletCommand::StartStaking => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .start_staking(selected_account)
-                    .await
+                self.get_synced_controller()
+                    .await?
+                    .start_staking()
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(
                     "Staking started successfully".to_owned(),
@@ -746,9 +768,9 @@ impl CommandHandler {
             }
 
             WalletCommand::AbandonTransaction { transaction_id } => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .abandon_transaction(selected_account, transaction_id.take())
+                self.get_synced_controller()
+                    .await?
+                    .abandon_transaction(transaction_id.take())
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(
                     "The transaction was marked as abandoned successfully".to_owned(),
@@ -765,10 +787,10 @@ impl CommandHandler {
                 let amount_to_issue = parse_token_amount(number_of_decimals, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let token_id = controller
+                let token_id = self
+                    .get_synced_controller()
+                    .await?
                     .issue_new_token(
-                        selected_account,
                         destination_address,
                         token_ticker.into_bytes(),
                         amount_to_issue,
@@ -810,9 +832,10 @@ impl CommandHandler {
                     media_hash: media_hash.into_bytes(),
                 };
 
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let token_id = controller
-                    .issue_new_nft(selected_account, destination_address, metadata)
+                let token_id = self
+                    .get_synced_controller()
+                    .await?
+                    .issue_new_nft(destination_address, metadata)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
@@ -840,10 +863,9 @@ impl CommandHandler {
                 utxo_states,
                 with_locked,
             } => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let mut balances = controller
+                let mut balances = self
+                    .get_readonly_controller()?
                     .get_balance(
-                        selected_account,
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
@@ -855,7 +877,8 @@ impl CommandHandler {
                 {
                     let out = match currency {
                         Currency::Token(token_id) => {
-                            let token_number_of_decimals = controller
+                            let token_number_of_decimals = self
+                                .controller()?
                                 .get_token_number_of_decimals(token_id)
                                 .await
                                 .map_err(WalletCliError::Controller)?;
@@ -883,10 +906,9 @@ impl CommandHandler {
                 utxo_states,
                 with_locked,
             } => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let utxos = controller
+                let utxos = self
+                    .get_readonly_controller()?
                     .get_utxos(
-                        selected_account,
                         utxo_type.to_wallet_types(),
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
@@ -896,32 +918,36 @@ impl CommandHandler {
             }
 
             WalletCommand::ListPendingTransactions => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let utxos = controller
-                    .pending_transactions(selected_account)
+                let utxos = self
+                    .get_readonly_controller()?
+                    .pending_transactions()
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
             }
 
             WalletCommand::NewAddress => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let address =
-                    controller.new_address(selected_account).map_err(WalletCliError::Controller)?;
+                let address = self
+                    .get_synced_controller()
+                    .await?
+                    .new_address()
+                    .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(address.1.get().to_owned()))
             }
 
             WalletCommand::NewPublicKey => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let public_key = controller
-                    .new_public_key(selected_account)
+                let public_key = self
+                    .get_synced_controller()
+                    .await?
+                    .new_public_key()
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(public_key.hex_encode()))
             }
 
             WalletCommand::GetVrfPublicKey => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let vrf_public_key = controller
-                    .get_vrf_public_key(selected_account)
+                let vrf_public_key = self
+                    .get_synced_controller()
+                    .await?
+                    .get_vrf_public_key()
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
             }
@@ -937,9 +963,9 @@ impl CommandHandler {
                     .collect::<Result<Vec<_>, WalletCliError>>()?;
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let address = parse_address(chain_config, &address)?;
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .send_to_address(selected_account, address, amount, utxos)
+                self.get_synced_controller()
+                    .await?
+                    .send_to_address(address, amount, utxos)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -961,9 +987,9 @@ impl CommandHandler {
                     parse_token_amount(token_number_of_decimals, &amount)?
                 };
 
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .send_tokens_to_address(selected_account, token_id, address, amount)
+                self.get_synced_controller()
+                    .await?
+                    .send_tokens_to_address(token_id, address, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -973,13 +999,10 @@ impl CommandHandler {
                 let address = parse_address(chain_config, &address)?;
                 let pool_id_address = Address::from_str(chain_config, &pool_id)?;
 
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let delegation_id = controller
-                    .create_delegation(
-                        selected_account,
-                        address,
-                        pool_id_address.decode_object(chain_config)?,
-                    )
+                let delegation_id = self
+                    .get_synced_controller()
+                    .await?
+                    .create_delegation(address, pool_id_address.decode_object(chain_config)?)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(format!(
@@ -995,13 +1018,9 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
 
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .delegate_staking(
-                        selected_account,
-                        amount,
-                        delegation_id_address.decode_object(chain_config)?,
-                    )
+                self.get_synced_controller()
+                    .await?
+                    .delegate_staking(amount, delegation_id_address.decode_object(chain_config)?)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(ConsoleCommand::Print(
@@ -1018,10 +1037,9 @@ impl CommandHandler {
                 let amount = parse_coin_amount(chain_config, &amount)?;
                 let delegation_id_address = Address::from_str(chain_config, &delegation_id)?;
                 let address = parse_address(chain_config, &address)?;
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
+                self.get_synced_controller()
+                    .await?
                     .send_to_address_from_delegation(
-                        selected_account,
                         address,
                         amount,
                         delegation_id_address.decode_object(chain_config)?,
@@ -1044,10 +1062,9 @@ impl CommandHandler {
                 let cost_per_block = parse_coin_amount(chain_config, &cost_per_block)?;
                 let margin_ratio_per_thousand =
                     to_per_thousand(&margin_ratio_per_thousand, "margin ratio")?;
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
+                self.get_synced_controller()
+                    .await?
                     .create_stake_pool_tx(
-                        selected_account,
                         amount,
                         decommission_key,
                         margin_ratio_per_thousand,
@@ -1061,9 +1078,9 @@ impl CommandHandler {
 
             WalletCommand::DecommissionStakePool { pool_id } => {
                 let pool_id = parse_pool_id(chain_config, pool_id.as_str())?;
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                controller
-                    .decommission_stake_pool(selected_account, pool_id)
+                self.get_synced_controller()
+                    .await?
+                    .decommission_stake_pool(pool_id)
                     .await
                     .map_err(WalletCliError::Controller)?;
                 Ok(Self::tx_submitted_command())
@@ -1101,9 +1118,9 @@ impl CommandHandler {
             }
 
             WalletCommand::ListPoolIds => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let pool_ids: Vec<_> = controller
-                    .get_pool_ids(chain_config, selected_account)
+                let pool_ids: Vec<_> = self
+                    .get_readonly_controller()?
+                    .get_pool_ids()
                     .await
                     .map_err(WalletCliError::Controller)?
                     .into_iter()
@@ -1121,9 +1138,9 @@ impl CommandHandler {
             }
 
             WalletCommand::ListDelegationIds => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
-                let delegations: Vec<_> = controller
-                    .get_delegations(selected_account)
+                let delegations: Vec<_> = self
+                    .get_readonly_controller()?
+                    .get_delegations()
                     .await
                     .map_err(WalletCliError::Controller)?
                     .into_iter()
@@ -1186,12 +1203,14 @@ impl CommandHandler {
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
             WalletCommand::ShowReceiveAddresses => {
-                let (controller, selected_account) = self.get_controller_and_selected_acc()?;
+                let controller = self.get_readonly_controller()?;
 
-                let addresses_with_usage =
-                    controller.get_addresses_with_usage(selected_account).map_err(|e| {
-                        WalletCliError::AddressesRetrievalFailed(selected_account, e.to_string())
-                    })?;
+                let addresses_with_usage = controller.get_addresses_with_usage().map_err(|e| {
+                    WalletCliError::AddressesRetrievalFailed(
+                        controller.account_index(),
+                        e.to_string(),
+                    )
+                })?;
 
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
