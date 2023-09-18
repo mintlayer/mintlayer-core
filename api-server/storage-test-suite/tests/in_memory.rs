@@ -13,20 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use api_server_common::storage::{
-//     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
-//     storage_api::ApiServerStorage,
-// };
-// use common::chain::{config::create_unit_test_config, ChainConfig};
+use api_server_common::storage::{
+    impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+    storage_api::ApiServerStorage,
+};
+use common::chain::{config::create_unit_test_config, ChainConfig};
 
-// #[must_use]
-// pub fn make_in_memory_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
-//     TransactionalApiServerInMemoryStorage::new(chain_config)
-// }
+#[must_use]
+pub fn make_in_memory_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
+    TransactionalApiServerInMemoryStorage::new(chain_config)
+}
 
 fn main() {
-    // let storage_maker = || make_in_memory_storage(&create_unit_test_config());
-    // let result = api_server_backend_test_suite::run(storage_maker);
+    let storage_maker = || make_in_memory_storage(&create_unit_test_config());
+    let result = api_server_backend_test_suite::run(storage_maker);
 
-    // result.exit()
+    result.exit()
 }
