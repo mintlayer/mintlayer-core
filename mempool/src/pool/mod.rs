@@ -811,7 +811,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 .store
                 .txs_by_descendant_score
                 .iter()
-                .map(|(_score, entry)| *entry.deref())
+                .map(|(_score, entry)| *entry)
                 .next()
                 .expect("pool not empty");
             let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
