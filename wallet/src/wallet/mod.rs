@@ -329,7 +329,25 @@ impl<B: storage::Backend> Wallet<B> {
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
         let mut db_tx = self.db.transaction_rw(None)?;
-        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)
+        Self::reset_wallet_transactions(self.chain_config.clone(), &mut db_tx)?;
+        db_tx.commit()?;
+
+        let db_tx = self.db.transaction_ro()?;
+        let mut accounts: BTreeMap<U31, Account> = db_tx
+            .get_accounts_info()?
+            .keys()
+            .map(|account_id| {
+                Account::load_from_database(self.chain_config.clone(), &db_tx, account_id)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|account| (account.account_index(), account))
+            .collect();
+
+        self.next_unused_account = accounts.pop_last().ok_or(WalletError::WalletNotInitialized)?;
+        self.accounts = accounts;
+
+        Ok(())
     }
 
     fn reset_wallet_transactions(
