@@ -100,19 +100,19 @@ impl TransactionalApiServerInMemoryStorage {
 }
 
 #[async_trait::async_trait]
-impl<'tx> Transactional<'tx> for TransactionalApiServerInMemoryStorage {
-    type TransactionRo = ApiServerInMemoryStorageTransactionalRo<'tx>;
+impl<'t> Transactional<'t> for TransactionalApiServerInMemoryStorage {
+    type TransactionRo = ApiServerInMemoryStorageTransactionalRo<'t>;
 
-    type TransactionRw = ApiServerInMemoryStorageTransactionalRw<'tx>;
+    type TransactionRw = ApiServerInMemoryStorageTransactionalRw<'t>;
 
-    async fn transaction_ro<'db: 'tx>(
-        &'db self,
+    async fn transaction_ro<'s: 't>(
+        &'s self,
     ) -> Result<Self::TransactionRo, ApiServerStorageError> {
         Ok(ApiServerInMemoryStorageTransactionalRo::new(self).await)
     }
 
-    async fn transaction_rw<'db: 'tx>(
-        &'db mut self,
+    async fn transaction_rw<'s: 't>(
+        &'s mut self,
     ) -> Result<Self::TransactionRw, ApiServerStorageError> {
         Ok(ApiServerInMemoryStorageTransactionalRw::new(self).await)
     }
