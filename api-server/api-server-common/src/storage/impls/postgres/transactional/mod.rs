@@ -39,6 +39,8 @@ pub struct ApiServerPostgresTransactionalRo<'a> {
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
         PooledConnection<'static, PostgresConnectionManager<NoTls>>,
     >,
+    // Note: This exists to enforce that a transaction never outlives the database object,
+    //       given that all connections have 'static lifetimes
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
@@ -138,6 +140,8 @@ pub struct ApiServerPostgresTransactionalRw<'a> {
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
         PooledConnection<'static, PostgresConnectionManager<NoTls>>,
     >,
+    // Note: This exists to enforce that a transaction never outlives the database object,
+    //       given that all connections have 'static lifetimes
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
