@@ -217,7 +217,7 @@ impl<'a> Drop for ApiServerPostgresTransactionalRo<'a> {
                 .send(self.connection.take().expect(CONN_ERR))
                 .unwrap_or_else(|e| {
                     logging::log::error!(
-                        "CRITICAL ERROR: failed to return postgres RO transaction connection: {e}"
+                        "CRITICAL ERROR: failed to send postgres RO transaction connection for closure: {e}"
                     )
                 });
         }
