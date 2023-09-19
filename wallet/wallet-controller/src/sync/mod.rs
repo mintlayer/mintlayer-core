@@ -145,13 +145,16 @@ pub async fn sync_once<T: NodeInterface>(
         )
         .await?;
 
-        let lowest_acc_height =
-            accounts_grouped.first().expect("empty accounts").0.common_block_height;
-        log::info!(
-            "Syncing the wallet from height: {} to {}",
-            lowest_acc_height,
-            chain_info.best_block_height
-        );
+        {
+            let lowest_acc_height =
+                accounts_grouped.first().expect("empty accounts").0.common_block_height;
+            log::info!(
+                "Syncing the wallet from height: {} to {}",
+                lowest_acc_height,
+                chain_info.best_block_height
+            );
+        }
+
         // Sync all account groups together from last to first,
         // where the last has the lowest block height.
         // Once a group is synced with the next one, merge them,
@@ -180,6 +183,8 @@ pub async fn sync_once<T: NodeInterface>(
             wallet_events,
         )
         .await?;
+
+        log::info!("Wallet syncing done to {}", chain_info.best_block_height);
     }
 }
 
