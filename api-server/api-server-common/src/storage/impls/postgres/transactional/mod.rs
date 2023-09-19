@@ -33,6 +33,7 @@ use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage}
 const CONN_ERR: &str = "CRITICAL ERROR: failed to get postgres tx connection. Invariant broken.";
 
 pub struct ApiServerPostgresTransactionalRo<'a> {
+    // Note: This is an Option due to needing to pry the connection out of Self in Drop
     connection: Option<PooledConnection<'static, PostgresConnectionManager<NoTls>>>,
     finished: bool,
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
@@ -131,6 +132,7 @@ impl<'a> ApiServerPostgresTransactionalRo<'a> {
 }
 
 pub struct ApiServerPostgresTransactionalRw<'a> {
+    // Note: This is an Option due to needing to pry the connection out of Self in Drop
     connection: Option<PooledConnection<'static, PostgresConnectionManager<NoTls>>>,
     finished: bool,
     db_tx_sender: tokio::sync::mpsc::UnboundedSender<
