@@ -53,6 +53,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use itertools::Itertools;
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
@@ -450,7 +451,7 @@ impl Account {
             amount,
             current_block_height,
         )?;
-        let delegation_data = self.output_cache.delegation_data(delegation_id)?;
+        let delegation_data = self.find_delegation(&delegation_id)?;
         let nonce = delegation_data
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
@@ -527,11 +528,16 @@ impl Account {
     }
 
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
-        self.output_cache.delegation_ids()
+        self.output_cache
+            .delegation_ids()
+            .filter(|(_, data)| self.is_mine_or_watched_destination(&data.destination))
     }
 
-    pub fn find_delegation(&self, delegation_id: DelegationId) -> WalletResult<&DelegationData> {
-        self.output_cache.delegation_data(delegation_id)
+    pub fn find_delegation(&self, delegation_id: &DelegationId) -> WalletResult<&DelegationData> {
+        self.output_cache
+            .delegation_data(delegation_id)
+            .filter(|data| self.is_mine_or_watched_destination(&data.destination))
+            .ok_or(WalletError::DelegationNotFound(*delegation_id))
     }
 
     pub fn create_stake_pool_tx(
@@ -765,12 +771,18 @@ impl Account {
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        Self::get_tx_output_destination(txo).map_or(false, |d| match d {
+        Self::get_tx_output_destination(txo)
+            .map_or(false, |d| self.is_mine_or_watched_destination(d))
+    }
+
+    /// Return true if this destination can be spent by this account or if it is being watched.
+    fn is_mine_or_watched_destination(&self, destination: &Destination) -> bool {
+        match destination {
             Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
-        })
+        }
     }
 
     fn mark_outputs_as_seen(
@@ -862,14 +874,17 @@ impl Account {
         wallet_events: &impl WalletEvents,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
-        let revoked_txs = self
+        let mut revoked_txs = self
             .output_cache
             .txs_with_unconfirmed()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
-                TxState::Confirmed(height, _, _) => {
+                TxState::Confirmed(height, _, idx) => {
                     if height > common_block_height {
-                        Some(AccountWalletTxId::new(self.get_account_id(), id.clone()))
+                        Some((
+                            AccountWalletTxId::new(self.get_account_id(), id.clone()),
+                            (height, idx),
+                        ))
                     } else {
                         None
                     }
@@ -881,7 +896,10 @@ impl Account {
             })
             .collect::<Vec<_>>();
 
-        for tx_id in revoked_txs {
+        // sort from latest tx down to remove them in order
+        revoked_txs.sort_by_key(|&(_, height_idx)| Reverse(height_idx));
+
+        for (tx_id, _) in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             wallet_events.del_transaction(&tx_id);
             self.output_cache.remove_tx(&tx_id.into_item_id())?;
@@ -905,7 +923,7 @@ impl Account {
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::Delegation(delegation_id, _) => {
-                    self.output_cache.owns_delegation(delegation_id)
+                    self.find_delegation(delegation_id).is_ok()
                 }
             },
         });
