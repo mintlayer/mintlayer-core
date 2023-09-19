@@ -87,6 +87,15 @@ def calc_tx_id(tx):
     return hash_object(base_tx_obj, tx)
 
 
+def calc_block_id(block):
+    # If block is a full block, we need block['header']['header'] to strip out body and signature
+    # If block is a header with signature, we need block['header'] to strip out the signature
+    # If block is already a header without signature, we keep the object as is (no 'header' field)
+    while 'header' in block:
+        block = block['header']
+    return hash_object(block_header_obj, tx)
+
+
 def make_tx(inputs, outputs, flags = 0):
     signed_tx = make_tx_dict(inputs, outputs, flags)
     tx_id = calc_tx_id(signed_tx)
