@@ -30,7 +30,10 @@ use wallet::{
     account::{transaction_list::TransactionList, Currency},
     DefaultWallet,
 };
-use wallet_controller::{HandlesController, UtxoState, WalletHandlesClient};
+use wallet_controller::{
+    read::ReadOnlyController, synced_controller::SyncedController, HandlesController, UtxoState,
+    WalletHandlesClient,
+};
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
 use super::{
@@ -147,16 +150,17 @@ impl Backend {
             .nth(account_index.into_u32() as usize)
             .cloned()
             .flatten();
+        let controller = controller.readonly_controller(account_index);
         let transaction_list = controller
-            .get_transaction_list(account_index, 0, TRANSACTION_LIST_PAGE_COUNT)
+            .get_transaction_list(0, TRANSACTION_LIST_PAGE_COUNT)
             .expect("load_transaction_list failed");
         AccountInfo {
             name,
             addresses: controller
-                .get_all_issued_addresses(account_index)
+                .get_all_issued_addresses()
                 .expect("get_all_issued_addresses should not fail normally"),
             staking_enabled: false,
-            balance: Self::get_account_balance(controller, account_index),
+            balance: Self::get_account_balance(&controller),
             staking_balance: BTreeMap::new(),
             transaction_list,
         }
@@ -192,7 +196,10 @@ impl Backend {
             handles_client,
             wallet,
             wallet_events,
-        );
+        )
+        .await
+        .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
         let best_block = controller.best_block();
 
         let accounts_info = account_indexes
@@ -294,18 +301,15 @@ impl Backend {
         Ok((wallet_id, account_id, account_info))
     }
 
-    fn new_address(
+    async fn new_address(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
     ) -> Result<AddressInfo, BackendError> {
-        let wallet = self
-            .wallets
-            .get_mut(&wallet_id)
-            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
-        let (index, address) = wallet
-            .controller
-            .new_address(account_id.account_index())
+        let (index, address) = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .new_address()
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
         Ok(AddressInfo {
             wallet_id,
@@ -321,18 +325,15 @@ impl Backend {
         account_id: AccountId,
         enabled: bool,
     ) -> Result<(WalletId, AccountId, bool), BackendError> {
-        let wallet = self
-            .wallets
-            .get_mut(&wallet_id)
-            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
         if enabled {
-            wallet
-                .controller
-                .start_staking(account_id.account_index())
-                .await
+            self.synced_wallet_controller(wallet_id, account_id.account_index())
+                .await?
+                .start_staking()
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
         } else {
-            wallet
+            self.wallets
+                .get_mut(&wallet_id)
+                .ok_or(BackendError::UnknownWalletIndex(wallet_id))?
                 .controller
                 .stop_staking(account_id.account_index())
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
@@ -351,24 +352,33 @@ impl Backend {
             amount,
         } = send_request;
 
-        let wallet = self
-            .wallets
-            .get_mut(&send_request.wallet_id)
-            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
-
         let address = parse_address(&self.chain_config, &address)
             .map_err(|err| BackendError::AddressError(err.to_string()))?;
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
         // TODO: add support for utxo selection in the GUI
-        wallet
-            .controller
-            .send_to_address(account_id.account_index(), address, amount, vec![])
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .send_to_address(address, amount, vec![])
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
         Ok(TransactionInfo { wallet_id })
+    }
+
+    async fn synced_wallet_controller(
+        &mut self,
+        wallet_id: WalletId,
+        account_index: U31,
+    ) -> Result<SyncedController<'_, WalletHandlesClient, GuiWalletEvents>, BackendError> {
+        self.wallets
+            .get_mut(&wallet_id)
+            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?
+            .controller
+            .synced_controller(account_index)
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))
     }
 
     async fn stake_amount(
@@ -381,18 +391,12 @@ impl Backend {
             amount,
         } = stake_request;
 
-        let wallet = self
-            .wallets
-            .get_mut(&stake_request.wallet_id)
-            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
-
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        wallet
-            .controller
+        self.synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
             .create_stake_pool_tx(
-                account_id.account_index(),
                 amount,
                 None,
                 // TODO: get value from gui
@@ -406,15 +410,10 @@ impl Backend {
     }
 
     fn get_account_balance(
-        controller: &GuiController,
-        account_index: U31,
+        controller: &ReadOnlyController<WalletHandlesClient>,
     ) -> BTreeMap<Currency, Amount> {
         controller
-            .get_balance(
-                account_index,
-                UtxoState::Confirmed.into(),
-                WithLocked::Unlocked,
-            )
+            .get_balance(UtxoState::Confirmed.into(), WithLocked::Unlocked)
             .expect("get_balance should not fail normally")
     }
 
@@ -435,11 +434,8 @@ impl Backend {
         account.transaction_list_skip = skip;
         wallet
             .controller
-            .get_transaction_list(
-                account_id.account_index(),
-                account.transaction_list_skip,
-                TRANSACTION_LIST_PAGE_COUNT,
-            )
+            .readonly_controller(account_id.account_index())
+            .get_transaction_list(account.transaction_list_skip, TRANSACTION_LIST_PAGE_COUNT)
             .map_err(|e| BackendError::WalletError(e.to_string()))
     }
 
@@ -474,7 +470,7 @@ impl Backend {
             }
 
             BackendRequest::NewAddress(wallet_id, account_id) => {
-                let address_res = self.new_address(wallet_id, account_id);
+                let address_res = self.new_address(wallet_id, account_id).await;
                 Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
             }
             BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
@@ -533,10 +529,11 @@ impl Backend {
             }
 
             for (account_id, account_data) in wallet_data.accounts.iter_mut() {
+                let controller =
+                    wallet_data.controller.readonly_controller(account_id.account_index());
                 // GuiWalletEvents will notify about wallet balance update
                 // (when a wallet transaction is added/updated/removed)
-                let balance =
-                    Self::get_account_balance(&wallet_data.controller, account_id.account_index());
+                let balance = Self::get_account_balance(&controller);
                 Self::send_event(
                     &self.event_tx,
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
@@ -548,8 +545,7 @@ impl Backend {
 
                 // GuiWalletEvents will notify about transaction list
                 // (when a wallet transaction is added/updated/removed)
-                let transaction_list_res = wallet_data.controller.get_transaction_list(
-                    account_id.account_index(),
+                let transaction_list_res = controller.get_transaction_list(
                     account_data.transaction_list_skip,
                     TRANSACTION_LIST_PAGE_COUNT,
                 );

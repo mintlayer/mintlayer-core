@@ -29,8 +29,6 @@ impl<F: FnOnce()> OnceDestructor<F> {
 
 impl<F: FnOnce()> Drop for OnceDestructor<F> {
     fn drop(&mut self) {
-        let mut finalizer: Option<F> = None;
-        std::mem::swap(&mut finalizer, &mut self.call_on_drop);
-        finalizer.expect("Must exist")();
+        self.call_on_drop.take().expect("Must exist")();
     }
 }
