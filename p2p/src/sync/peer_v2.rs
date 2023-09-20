@@ -115,8 +115,6 @@ struct OutgoingDataState {
     /// The index of the best block that we've sent to the peer.
     best_sent_block: Option<BlockIndex>,
     /// The id of the best block header that we've sent to the peer.
-    // Note: at this moment this field is only informational, i.e. we only print it to the log,
-    // see the comment in handle_new_tip.
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
@@ -255,13 +253,9 @@ where
         if self.send_tip_updates {
             debug_assert!(self.common_services.has_service(Service::Blocks));
 
-            // Note: an intermediate implementation also used to use best_sent_block_header
-            // here when determining the latest fork point. But it doesn't seem to be a good
-            // idea to use it in the v1 protocol, because legacy peers may not maintain their
-            // "received pending headers" correctly. So, they may see the announced header list
-            // as disconnected. But they can only tolerate disconnected lists of length 1,
-            // therefore, they might ban us eventually.
-            if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block_id.is_some()
+            if self.incoming.peers_best_block_that_we_have.is_some()
+                || best_sent_block_id.is_some()
+                || self.outgoing.best_sent_block_header.is_some()
             {
                 let limit = *self.p2p_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
@@ -271,6 +265,7 @@ where
                     .peers_best_block_that_we_have
                     .iter()
                     .chain(best_sent_block_id.iter())
+                    .chain(self.outgoing.best_sent_block_header.iter())
                     .copied()
                     .collect();
 
