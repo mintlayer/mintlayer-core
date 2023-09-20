@@ -17,6 +17,9 @@ utils = { path = "../../utils" }
 futures = { workspace = true, default-features = false }
 libtest-mimic.workspace = true
 proptest.workspace = true
+tokio.workspace = true
+
+testcontainers = "0.14.0"
 
 [[test]]
 name = "postgres"

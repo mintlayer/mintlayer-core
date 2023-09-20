@@ -122,13 +122,13 @@ pub struct ApiServerPostgresTransactionalRw<'a> {
 impl<'a> Drop for ApiServerPostgresTransactionalRw<'a> {
     fn drop(&mut self) {
         if !self.finished {
-            futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
-                |e| {
-                    logging::log::error!(
-                        "CRITICAL ERROR: failed to rollback failed postgres RW transaction: {e}"
-                    )
-                },
-            );
+            // futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
+            //     |e| {
+            //         logging::log::error!(
+            //             "CRITICAL ERROR: failed to rollback failed postgres RW transaction: {e}"
+            //         )
+            //     },
+            // );
         }
     }
 }
@@ -179,13 +179,13 @@ impl<'a> ApiServerTransactionRo for ApiServerPostgresTransactionalRo<'a> {
 impl<'a> Drop for ApiServerPostgresTransactionalRo<'a> {
     fn drop(&mut self) {
         if !self.finished {
-            futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
-                |e| {
-                    logging::log::error!(
-                        "CRITICAL ERROR: failed to rollback failed postgres RO transaction: {e}"
-                    )
-                },
-            );
+            // futures::executor::block_on(self.connection.batch_execute("ROLLBACK")).unwrap_or_else(
+            //     |e| {
+            //         logging::log::error!(
+            //             "CRITICAL ERROR: failed to rollback failed postgres RO transaction: {e}"
+            //         )
+            //     },
+            // );
         }
     }
 }

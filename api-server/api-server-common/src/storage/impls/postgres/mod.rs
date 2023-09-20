@@ -37,18 +37,19 @@ pub struct TransactionalApiServerPostgresStorage {
 impl TransactionalApiServerPostgresStorage {
     pub async fn new(
         host: &str,
+        port: u16,
         user: &str,
         max_connections: u32,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
-        let config: tokio_postgres::Config = format!("host={host} user={user}").parse().map_err(
-            |e: <tokio_postgres::Config as FromStr>::Err| {
+        let config: tokio_postgres::Config = format!("host={host} port={port} user={user}")
+            .parse()
+            .map_err(|e: <tokio_postgres::Config as FromStr>::Err| {
                 ApiServerStorageError::InitializationError(format!(
                     "Postgres configuration parsing error: {}",
                     e
                 ))
-            },
-        )?;
+            })?;
         let manager = PostgresConnectionManager::new(config, NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(

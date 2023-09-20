@@ -34,11 +34,11 @@ pub struct QueryFromConnection<'a, 'b> {
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
     fn get_table_exists_query(table_name: &str) -> String {
         format!(
-            "SELECT EXISTS (
+            "SELECT COALESCE( (
             SELECT 1
             FROM information_schema.tables
             WHERE table_name = '{}'
-        ) THEN 1 ELSE 0 END AS count;",
+        ), 0) AS count;",
             table_name
         )
     }
@@ -65,7 +65,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        let row_count: i64 = row_count.get(0);
+        let row_count: i32 = row_count.get(0);
 
         if row_count == 0 {
             return Ok(false);
@@ -144,15 +144,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES (?, ?)
+                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)
                     ON CONFLICT (name) DO UPDATE
                     SET value = $2;",
-                &[&(block_height, block_id).encode()],
+                &[&block_height.encode(), &block_id.encode()],
+		//		[vec![1u8], vec![2u8]],
+		//&[],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-
-        Ok(())
+panic!("CCC");
+	Ok(())
     }
 
     async fn just_execute(&mut self, query: &str) -> Result<(), ApiServerStorageError> {
@@ -170,7 +172,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml_misc_data (
             name TEXT PRIMARY KEY,
-            value BLOB NOT NULL
+            value bytea NOT NULL
         );",
         )
         .await?;
@@ -178,32 +180,32 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml_main_chain_blocks (
             block_height bigint PRIMARY KEY,
-            block_id BLOB NOT NULL
+            block_id TEXT NOT NULL
         );",
         )
         .await?;
 
         self.just_execute(
             "CREATE TABLE ml_blocks (
-                block_id BLOB PRIMARY KEY,
-                block_data BLOB NOT NULL
+                block_id TEXT PRIMARY KEY,
+                block_data TEXT NOT NULL
             );",
         )
         .await?;
 
         self.just_execute(
             "CREATE TABLE ml_transactions (
-                    transaction_id BLOB PRIMARY KEY,
-                    owning_block_id BLOB,
-                    transaction_data BLOB NOT NULL
+                    transaction_id TEXT PRIMARY KEY,
+                    owning_block_id TEXT,
+                    transaction_data TEXT NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
         )
         .await?;
 
         self.just_execute(
             "CREATE TABLE ml_block_aux_data (
-                    block_id BLOB PRIMARY KEY,
-                    aux_data BLOB NOT NULL
+                    block_id TEXT PRIMARY KEY,
+                    aux_data TEXT NOT NULL
                 );",
         )
         .await?;
@@ -222,8 +224,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // Insert row to the table
         self.tx
             .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES (?, ?)",
-                &[&"version", &CURRENT_STORAGE_VERSION.encode()],
+                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)",
+		//&[&"version", &"1.0"]
+		&[&"version", &CURRENT_STORAGE_VERSION.encode()],
+	//	&[],
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
@@ -242,7 +246,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_id FROM ml_main_chain_blocks WHERE block_height = ?;",
+                "SELECT block_id FROM ml_main_chain_blocks WHERE block_height = $1;",
                 &[&height],
             )
             .await
@@ -312,7 +316,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_data FROM ml_blocks WHERE block_id = ?;",
+                "SELECT block_data FROM ml_blocks WHERE block_id = $1;",
                 &[&block_id.encode()],
             )
             .await
@@ -361,7 +365,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         let row = self.tx.query_opt(
-                "SELECT owning_block_id, transaction_data FROM ml_transactions WHERE transaction_id = ?;",&[&transaction_id.encode()]
+                "SELECT owning_block_id, transaction_data FROM ml_transactions WHERE transaction_id = $1;",&[&transaction_id.encode()]
             ).await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
@@ -424,7 +428,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT aux_data FROM ml_block_aux_data WHERE block_id = ?;",
+                "SELECT aux_data FROM ml_block_aux_data WHERE block_id = $1;",
                 &[&block_id.encode()],
             )
             .await
