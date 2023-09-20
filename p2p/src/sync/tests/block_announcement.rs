@@ -523,10 +523,9 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             node.assert_no_event().await;
         }
 
-        // Note: since best_sent_block_header is currently not taken into account by
-        // the implementation, this portion of the test has to be disabled.
-        // TODO: it should be re-enabled when we switch to the protocol V2. See the issue #1110.
-        if false {
+        // Note: since best_sent_block_header is not taken into account by V1, this portion
+        // of the test has to be disabled.
+        if protocol_version >= SupportedProtocolVersion::V2.into() {
             // Do exactly the same as in the previous section; the expected result is the same as well.
             // The purpose of this is to ensure that the node correctly takes into account
             // headers that it has already sent (as opposed to what headers have been revealed
