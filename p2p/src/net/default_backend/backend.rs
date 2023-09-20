@@ -19,12 +19,13 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
 use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
+use tokio_stream::{wrappers::ReceiverStream, StreamExt, StreamMap};
 
 use common::{
     chain::ChainConfig,
@@ -57,10 +58,19 @@ use super::{
     types::{HandshakeNonce, Message, P2pTimestamp},
 };
 
-/// Buffer size of the channel to the SyncManager peer task.
-/// How many unprocessed messages can be sent before the peer's event loop is blocked.
-// TODO: Decide what the optimal value is (for example, by comparing the initial block download time)
-const SYNC_CHAN_BUF_SIZE: usize = 20;
+/// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
+///
+/// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
+/// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
+/// requests, which may lead to memory exhaustion.
+/// Note: the values were chosen pretty much arbitrarily; the sync messages channel has a lower
+/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events,
+/// on the other hand, are small.
+/// Also note that basic tests of initial block download time showed that there is no real
+/// difference between 20 and 10000 for both of the limits here. These results, of course, depend
+/// on the hardware and internet connection, so we've chosen larger limits.
+const SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
 struct PeerContext {
@@ -123,12 +133,8 @@ pub struct Backend<T: TransportSocket> {
     /// Pending connections
     pending: HashMap<PeerId, PendingPeerContext>,
 
-    /// Channel sender for sending events from Peers to Backend; this will be passed to each
-    /// Peer upon its creation.
-    peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-
-    /// Channel receiver for receiving events from Peers
-    peer_event_rx: mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
+    /// Map of streams for receiving events from peers.
+    peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
 
     /// Channel sender for sending connectivity events to the frontend
     conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
@@ -171,7 +177,6 @@ where
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
         node_protocol_version: ProtocolVersion,
     ) -> Self {
-        let (peer_event_tx, peer_event_rx) = mpsc::unbounded_channel();
         Self {
             transport,
             socket,
@@ -183,8 +188,7 @@ where
             syncing_event_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
-            peer_event_tx,
-            peer_event_rx,
+            peer_event_stream_map: StreamMap::new(),
             command_queue: FuturesUnordered::new(),
             shutdown,
             shutdown_receiver,
@@ -234,7 +238,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
+        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
         peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
 
         let old_value = peer.was_accepted.test_and_set();
@@ -292,13 +296,12 @@ where
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
-                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
+                Some(callback) = self.command_queue.next() => {
                     callback(&mut self)?;
                 },
                 // Handle peer events.
-                event = self.peer_event_rx.recv() => {
-                    let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_peer_event(peer, event)?;
+                Some((peer_id, event)) = self.peer_event_stream_map.next() => {
+                    self.handle_peer_event(peer_id, event)?;
                 },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
@@ -350,7 +353,10 @@ where
             Some(address.as_peer_address())
         };
 
-        let peer_event_tx = self.peer_event_tx.clone();
+        let (peer_event_tx, peer_event_rx) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
+        let peer_event_stream = ReceiverStream::new(peer_event_rx);
+
+        self.peer_event_stream_map.insert(remote_peer_id, peer_event_stream);
 
         let peer = peer::Peer::<T>::new(
             remote_peer_id,

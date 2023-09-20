@@ -196,6 +196,7 @@ testing_logger = "0.1"
 thiserror = "1.0"
 tokio = { version = "1.27", default-features = false }
 tokio-socks = "0.5"
+tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tower = "0.4"
