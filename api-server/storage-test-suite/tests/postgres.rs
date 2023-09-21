@@ -50,9 +50,17 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
     ApiServerStorageWithContainer::new(storage, podman)
 }
 
-fn main() {
+#[cfg(target_os = "linux")]
+fn run_test() {
     let storage_maker = || make_postgres_storage(Arc::new(create_unit_test_config()));
     let result = api_server_backend_test_suite::run(storage_maker);
 
     result.exit()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn run_test() {}
+
+fn main() {
+    run_test()
 }
