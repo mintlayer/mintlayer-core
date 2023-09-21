@@ -35,17 +35,17 @@ use common::{
 use libtest_mimic::Failed;
 use test_utils::random::{make_seedable_rng, Seed};
 
-pub fn initialization<S: ApiServerStorage, F: Fn() -> S>(
+pub async fn initialization<S: ApiServerStorage, F: Fn() -> S>(
     storage_maker: Arc<F>,
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
     let storage = storage_maker();
-    let mut tx = storage.transaction_ro().unwrap();
-    assert!(tx.is_initialized().unwrap());
+    let mut tx = storage.transaction_ro().await.unwrap();
+    assert!(tx.is_initialized().await.unwrap());
     Ok(())
 }
 
-pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
+pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
     storage_maker: Arc<F>,
     seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
@@ -55,12 +55,12 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
     let mut storage = storage_maker();
 
-    let mut db_tx = storage.transaction_ro().unwrap();
+    let mut db_tx = storage.transaction_ro().await.unwrap();
 
-    let is_initialized = db_tx.is_initialized().unwrap();
+    let is_initialized = db_tx.is_initialized().await.unwrap();
     assert!(is_initialized);
 
-    let version_option = db_tx.get_storage_version().unwrap();
+    let version_option = db_tx.get_storage_version().await.unwrap();
     assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
 
     drop(db_tx);
@@ -69,52 +69,52 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
     // Test setting mainchain block id and getting it back
     {
-        let mut db_tx = storage.transaction_rw().unwrap();
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let height_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height = height_u64.into();
 
-        let block_id = db_tx.get_main_chain_block_id(height).unwrap();
+        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
         assert!(block_id.is_none());
 
         let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
-        db_tx.set_main_chain_block_id(height, random_block_id1).unwrap();
+        db_tx.set_main_chain_block_id(height, random_block_id1).await.unwrap();
 
-        let block_id = db_tx.get_main_chain_block_id(height).unwrap();
+        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
         assert_eq!(block_id, Some(random_block_id1));
 
         let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
-        db_tx.set_main_chain_block_id(height, random_block_id2).unwrap();
+        db_tx.set_main_chain_block_id(height, random_block_id2).await.unwrap();
 
-        let block_id = db_tx.get_main_chain_block_id(height).unwrap();
+        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
         assert_eq!(block_id, Some(random_block_id2));
 
         // Now delete the block id, then get it, and it won't be there
-        db_tx.del_main_chain_block_id(height).unwrap();
-        let block_id = db_tx.get_main_chain_block_id(height).unwrap();
+        db_tx.del_main_chain_block_id(height).await.unwrap();
+        let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
         assert!(block_id.is_none());
 
         // Delete again, as deleting non-existing data is OK
-        db_tx.del_main_chain_block_id(height).unwrap();
-        db_tx.del_main_chain_block_id(height).unwrap();
+        db_tx.del_main_chain_block_id(height).await.unwrap();
+        db_tx.del_main_chain_block_id(height).await.unwrap();
 
-        db_tx.commit().unwrap();
+        db_tx.commit().await.unwrap();
 
-        let mut db_tx = storage.transaction_ro().unwrap();
+        let mut db_tx = storage.transaction_ro().await.unwrap();
 
         {
-            let block_id = db_tx.get_main_chain_block_id(height).unwrap();
+            let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
             assert!(block_id.is_none());
         }
     }
 
     // Test setting/getting blocks
     {
-        let mut db_tx = storage.transaction_rw().unwrap();
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         {
             let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
-            let block = db_tx.get_block(random_block_id).unwrap();
+            let block = db_tx.get_block(random_block_id).await.unwrap();
             assert!(block.is_none());
         }
         // Create a test framework and blocks
@@ -129,24 +129,24 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
         let block1 = test_framework.block(block_id1);
 
         {
-            let block_id = db_tx.get_block(block_id1).unwrap();
+            let block_id = db_tx.get_block(block_id1).await.unwrap();
             assert!(block_id.is_none());
 
-            db_tx.set_block(block_id1, &block1).unwrap();
+            db_tx.set_block(block_id1, &block1).await.unwrap();
 
-            let block = db_tx.get_block(block_id1).unwrap();
+            let block = db_tx.get_block(block_id1).await.unwrap();
             assert_eq!(block, Some(block1));
         }
 
-        db_tx.commit().unwrap();
+        db_tx.commit().await.unwrap();
     }
 
     // Test setting/getting transactions
     {
-        let mut db_tx = storage.transaction_ro().unwrap();
+        let mut db_tx = storage.transaction_ro().await.unwrap();
 
         let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
-        let tx = db_tx.get_transaction(random_tx_id).unwrap();
+        let tx = db_tx.get_transaction(random_tx_id).await.unwrap();
         assert!(tx.is_none());
 
         let owning_block1 = Id::<Block>::new(H256::random_using(&mut rng));
@@ -163,18 +163,18 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
             .build();
 
         // before storage
-        let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).unwrap();
+        let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
         assert!(tx_and_block_id.is_none());
 
         drop(db_tx);
 
-        let mut db_tx = storage.transaction_rw().unwrap();
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         // Set without owning block
         {
-            db_tx.set_transaction(tx1.transaction().get_id(), None, &tx1).unwrap();
+            db_tx.set_transaction(tx1.transaction().get_id(), None, &tx1).await.unwrap();
 
-            let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).unwrap();
+            let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
             assert!(tx_and_block_id.is_some());
 
             let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
@@ -186,9 +186,10 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
         {
             db_tx
                 .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx1)
+                .await
                 .unwrap();
 
-            let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).unwrap();
+            let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
             assert!(tx_and_block_id.is_some());
 
             let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
@@ -196,40 +197,40 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
             assert_eq!(tx_retrieved, tx1);
         }
 
-        db_tx.commit().unwrap();
+        db_tx.commit().await.unwrap();
     }
 
     // Test setting/getting block aux data
     {
-        let mut db_tx = storage.transaction_rw().unwrap();
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         let random_block_id: Id<Block> = Id::<Block>::new(H256::random_using(&mut rng));
-        let block = db_tx.get_block_aux_data(random_block_id).unwrap();
+        let block = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert!(block.is_none());
 
         let height1_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height1 = height1_u64.into();
         let aux_data1 = BlockAuxData::new(random_block_id, height1);
-        db_tx.set_block_aux_data(random_block_id, &aux_data1).unwrap();
+        db_tx.set_block_aux_data(random_block_id, &aux_data1).await.unwrap();
 
-        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).unwrap();
+        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data1));
 
         // Test overwrite
         let height2_u64 = rng.gen_range::<u64, _>(1..i64::MAX as u64);
         let height2 = height2_u64.into();
         let aux_data2 = BlockAuxData::new(random_block_id, height2);
-        db_tx.set_block_aux_data(random_block_id, &aux_data2).unwrap();
+        db_tx.set_block_aux_data(random_block_id, &aux_data2).await.unwrap();
 
-        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).unwrap();
+        let retrieved_aux_data = db_tx.get_block_aux_data(random_block_id).await.unwrap();
         assert_eq!(retrieved_aux_data, Some(aux_data2));
 
-        db_tx.commit().unwrap();
+        db_tx.commit().await.unwrap();
     }
 
     // Test setting/getting best block
     {
-        let mut db_tx = storage.transaction_rw().unwrap();
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         // Set once then get best block
         {
@@ -237,9 +238,9 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
             let height1 = height1_u64.into();
             let random_block_id1 = Id::<Block>::new(H256::random_using(&mut rng));
 
-            db_tx.set_best_block(height1, random_block_id1.into()).unwrap();
+            db_tx.set_best_block(height1, random_block_id1.into()).await.unwrap();
 
-            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().unwrap();
+            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().await.unwrap();
 
             assert_eq!(height1, retrieved_best_height);
             assert_eq!(random_block_id1, retrieved_best_id);
@@ -251,15 +252,15 @@ pub fn set_get<S: ApiServerStorage, F: Fn() -> S>(
             let height2 = height2_u64.into();
             let random_block_id2 = Id::<Block>::new(H256::random_using(&mut rng));
 
-            db_tx.set_best_block(height2, random_block_id2.into()).unwrap();
+            db_tx.set_best_block(height2, random_block_id2.into()).await.unwrap();
 
-            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().unwrap();
+            let (retrieved_best_height, retrieved_best_id) = db_tx.get_best_block().await.unwrap();
 
             assert_eq!(height2, retrieved_best_height);
             assert_eq!(random_block_id2, retrieved_best_id);
         }
 
-        db_tx.commit().unwrap();
+        db_tx.commit().await.unwrap();
     }
 
     Ok(())

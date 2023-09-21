@@ -44,96 +44,109 @@ pub enum ApiServerStorageError {
     TxRwRollbackFailed(String),
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerStorageRead {
-    fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError>;
+    async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError>;
 
-    fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>;
+    async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError>;
 
-    fn get_best_block(&mut self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
+    async fn get_best_block(
+        &mut self,
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
-    fn get_block(&mut self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
+    async fn get_block(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, ApiServerStorageError>;
 
-    fn get_block_aux_data(
+    async fn get_block_aux_data(
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError>;
 
-    fn get_main_chain_block_id(
+    async fn get_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError>;
 
     #[allow(clippy::type_complexity)]
-    fn get_transaction(
+    async fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerStorageWrite: ApiServerStorageRead {
-    fn initialize_storage(
+    async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn set_best_block(
+    async fn set_best_block(
         &mut self,
         block_height: BlockHeight,
         block_id: Id<GenBlock>,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn set_block(
+    async fn set_block(
         &mut self,
         block_id: Id<Block>,
         block: &Block,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn set_transaction(
+    async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn set_block_aux_data(
+    async fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn set_main_chain_block_id(
+    async fn set_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
         block_id: Id<Block>,
     ) -> Result<(), ApiServerStorageError>;
 
-    fn del_main_chain_block_id(
+    async fn del_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerTransactionRw: ApiServerStorageWrite + ApiServerStorageRead {
-    fn commit(self) -> Result<(), ApiServerStorageError>;
-    fn rollback(self) -> Result<(), ApiServerStorageError>;
+    async fn commit(self) -> Result<(), ApiServerStorageError>;
+    async fn rollback(self) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait ApiServerTransactionRo: ApiServerStorageRead {
-    fn close(self) -> Result<(), ApiServerStorageError>;
+    async fn close(self) -> Result<(), ApiServerStorageError>;
 }
 
+#[async_trait::async_trait]
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: ApiServerTransactionRo + 't;
+    type TransactionRo: ApiServerTransactionRo + Send + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: ApiServerTransactionRw + 't;
+    type TransactionRw: ApiServerTransactionRw + Send + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, ApiServerStorageError>;
+    async fn transaction_ro<'s: 't>(&'s self)
+        -> Result<Self::TransactionRo, ApiServerStorageError>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s mut self) -> Result<Self::TransactionRw, ApiServerStorageError>;
+    async fn transaction_rw<'s: 't>(
+        &'s mut self,
+    ) -> Result<Self::TransactionRw, ApiServerStorageError>;
 }
 
 pub trait ApiServerStorage: for<'tx> Transactional<'tx> + Send + Sync {}

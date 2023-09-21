@@ -13,12 +13,13 @@ crypto = { path = '../../crypto/' }
 logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
+async-trait.workspace = true
+futures = { workspace = true, default-features = false }
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-postgres = "0.19"
-r2d2_postgres = "0.18"
-ouroboros = "0.18"
+tokio-postgres = "0.7"
+bb8-postgres = "0.8"
 
 [dev-dependencies]
 chainstate-test-framework = { path = '../../chainstate/test-framework' }

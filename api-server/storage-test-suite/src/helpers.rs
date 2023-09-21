@@ -13,23 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use api_server_common::storage::storage_api::ApiServerStorage;
+use futures::executor::block_on;
 use libtest_mimic::{Failed, Trial};
 use test_utils::random::Seed;
 
 pub fn make_trial<
     S: ApiServerStorage,
     F: Fn() -> S + Send + Sync + 'static,
-    T: FnOnce(Arc<F>, Box<dyn Fn() -> Seed + Send>) -> Result<(), Failed> + Send + 'static,
+    Fut: Future<Output = Result<(), Failed>> + Send + 'static,
+    T: FnOnce(Arc<F>, Box<dyn Fn() -> Seed + Send>) -> Fut + Send + 'static,
 >(
     name: &'static str,
     test: T,
     storage_maker: Arc<F>,
 ) -> libtest_mimic::Trial {
     let make_seed: Box<dyn Fn() -> Seed + Send> = Box::new(|| Seed::from_entropy_and_print(name));
-    Trial::test(name, move || test(storage_maker, make_seed))
+    Trial::test(name, move || {
+        block_on(async { test(storage_maker, make_seed).await })
+    })
 }
 
 #[macro_export]

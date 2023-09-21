@@ -26,183 +26,148 @@ use crate::storage::{
     },
 };
 
-use super::{ApiServerPostgresTransactionalRw, TX_ERR};
+use super::ApiServerPostgresTransactionalRw;
 
-impl ApiServerStorageWrite for ApiServerPostgresTransactionalRw {
-    fn initialize_storage(
+#[async_trait::async_trait]
+impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
+    async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.initialize_database(chain_config)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.initialize_database(chain_config).await?;
 
         Ok(())
     }
 
-    fn set_best_block(
+    async fn set_best_block(
         &mut self,
         block_height: BlockHeight,
         block_id: Id<GenBlock>,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_best_block(block_height, block_id)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.set_best_block(block_height, block_id).await?;
 
         Ok(())
     }
 
-    fn set_block(
+    async fn set_block(
         &mut self,
         block_id: Id<Block>,
         block: &Block,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_block(block_id, block)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.set_block(block_id, block).await?;
 
         Ok(())
     }
 
-    fn set_transaction(
+    async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
         owning_block: Option<Id<Block>>,
         transaction: &SignedTransaction,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_transaction(transaction_id, owning_block, transaction)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.set_transaction(transaction_id, owning_block, transaction).await?;
 
         Ok(())
     }
 
-    fn set_block_aux_data(
+    async fn set_block_aux_data(
         &mut self,
         block_id: Id<Block>,
         block_aux_data: &BlockAuxData,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_block_aux_data(block_id, block_aux_data)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.set_block_aux_data(block_id, block_aux_data).await?;
 
         Ok(())
     }
 
-    fn set_main_chain_block_id(
+    async fn set_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
         block_id: Id<Block>,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.set_main_chain_block_id(block_height, block_id)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.set_main_chain_block_id(block_height, block_id).await?;
 
         Ok(())
     }
 
-    fn del_main_chain_block_id(
+    async fn del_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.del_main_chain_block_id(block_height)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        conn.del_main_chain_block_id(block_height).await?;
 
         Ok(())
     }
 }
 
-impl ApiServerStorageRead for ApiServerPostgresTransactionalRw {
-    fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.is_initialized()
-        })?;
+#[async_trait::async_trait]
+impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
+    async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
-    fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_storage_version()
-        })?;
+    async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
 
-    fn get_best_block(&mut self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_best_block()
-        })?;
+    async fn get_best_block(
+        &mut self,
+    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_best_block().await?;
 
         Ok(res)
     }
 
-    fn get_block(&mut self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_block(block_id)
-        })?;
+    async fn get_block(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_block(block_id).await?;
 
         Ok(res)
     }
 
-    fn get_block_aux_data(
+    async fn get_block_aux_data(
         &mut self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_block_aux_data(block_id)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_block_aux_data(block_id).await?;
 
         Ok(res)
     }
 
-    fn get_main_chain_block_id(
+    async fn get_main_chain_block_id(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_main_chain_block_id(block_height)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_main_chain_block_id(block_height).await?;
 
         Ok(res)
     }
 
-    fn get_transaction(
+    async fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
-        let res = self.with_transaction_mut(|tx| {
-            let tx_ref = tx.as_mut().expect(TX_ERR);
-            let mut conn = QueryFromConnection::new(tx_ref);
-            conn.get_transaction(transaction_id)
-        })?;
+        let mut conn = QueryFromConnection::new(&self.connection);
+        let res = conn.get_transaction(transaction_id).await?;
 
         Ok(res)
     }
