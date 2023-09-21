@@ -27,10 +27,7 @@ async fn make_in_memory_storage(chain_config: Arc<ChainConfig>) -> impl ApiServe
 }
 
 fn main() {
-    let storage_maker = || {
-        let chain_config = Arc::new(create_unit_test_config());
-        make_in_memory_storage(chain_config)
-    };
+    let storage_maker = || make_in_memory_storage(Arc::new(create_unit_test_config()));
     let result = api_server_backend_test_suite::run(storage_maker);
 
     result.exit()

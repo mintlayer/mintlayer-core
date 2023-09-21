@@ -52,10 +52,8 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
 
 #[tokio::main]
 async fn main() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let storage_maker = || make_postgres_storage(chain_config);
-    let _x = storage_maker().await;
-    // let result = api_server_backend_test_suite::run(storage_maker);
+    let storage_maker = || make_postgres_storage(Arc::new(create_unit_test_config()));
+    let result = api_server_backend_test_suite::run(storage_maker);
 
-    // result.exit()
+    result.exit()
 }
