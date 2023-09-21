@@ -169,7 +169,10 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
         let tx_id = tx.transaction().get_id();
         let origin = LocalTxOrigin::PastBlock.into();
         if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
-            log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
+            // Note: logging this error can make our test logs huge, so we use the "trace"
+            // level in this case, see
+            // https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
+            log::trace!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
 

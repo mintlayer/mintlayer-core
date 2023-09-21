@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use mempool_types::tx_origin::LocalTxOrigin;
 use parking_lot::RwLock;
 use std::{
     collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap},
@@ -40,9 +41,7 @@ use common::{
 };
 use logging::log;
 use serialization::Encode;
-use utils::{
-    ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
-};
+use utils::{ensure, eventhandler::EventsController, shallow_clone::ShallowClone};
 
 pub use self::feerate::FeeRate;
 pub use self::memory_usage_estimator::MemoryUsageEstimator;
@@ -896,13 +895,15 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 
     fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
-        log::debug!("Adding transaction {:?}", tx.tx_id());
+        // Note: it's not a good idea to use anything above "trace" here, even to log the
+        // transaction id, because this may make our test logs huge,
+        // see https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
         log::trace!("Adding transaction {tx:?}");
 
         let tx_id = *tx.tx_id();
         let origin = tx.origin();
 
-        match self.validate_transaction(tx).log_warn_pfx("Transaction rejected") {
+        match self.validate_transaction(tx) {
             Ok(ValidationOutcome::Valid {
                 transaction,
                 conflicts,
@@ -925,6 +926,20 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 Ok(TxStatus::InOrphanPool)
             }
             Err(err) => {
+                if matches!(
+                    err,
+                    Error::Orphan(OrphanPoolError::NotSupportedForLocalOrigin(
+                        LocalTxOrigin::PastBlock
+                    ))
+                ) {
+                    // Note: logging this error can make our test logs huge, so we use the "trace"
+                    // level in this case, see
+                    // https://github.com/mintlayer/mintlayer-core/issues/1219#issuecomment-1728176441
+                    log::trace!("Transaction rejected: {}", err);
+                } else {
+                    log::warn!("Transaction rejected: {}", err);
+                }
+
                 let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
                 self.events_controller.broadcast(event.into());
                 Err(err)
