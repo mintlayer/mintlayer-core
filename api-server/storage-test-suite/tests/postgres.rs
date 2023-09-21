@@ -41,6 +41,8 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
         "127.0.0.1",
         host_port,
         "postgres",
+        None,
+        None,
         4,
         &chain_config,
     )
