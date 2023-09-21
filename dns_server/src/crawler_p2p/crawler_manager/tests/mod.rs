@@ -17,11 +17,11 @@ mod mock_manager;
 
 use std::time::Duration;
 
-use p2p::types::socket_address::SocketAddress;
+use p2p::{peer_manager::peerdb_common::Transactional, types::socket_address::SocketAddress};
 
 use crate::{
     crawler_p2p::crawler_manager::{
-        storage::{DnsServerStorageRead, DnsServerTransactional},
+        storage::DnsServerStorageRead,
         tests::mock_manager::{advance_time, test_crawler},
     },
     dns_server::DnsServerCommand,

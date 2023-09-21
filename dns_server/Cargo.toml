@@ -17,16 +17,16 @@ storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
 utils = { path = '../utils' }
 
-futures = { workspace = true }
-tokio = { workspace = true, default-features = false }
-
-trust-dns-client.workspace = true
-trust-dns-server.workspace = true
-thiserror.workspace = true
 async-trait.workspace = true
-parity-scale-codec.workspace = true
 clap = { workspace = true, features = ["derive"] }
 directories.workspace = true
+futures = { workspace = true }
+parity-scale-codec.workspace = true
+paste.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false }
+trust-dns-client.workspace = true
+trust-dns-server.workspace = true
 
 [dev-dependencies]
 p2p-test-utils = { path = "../p2p/p2p-test-utils" }

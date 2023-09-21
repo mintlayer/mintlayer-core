@@ -49,7 +49,10 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::{address_groups::AddressGroup, ip_or_socket_address_to_peer_address};
+use super::{
+    address_groups::AddressGroup, ip_or_socket_address_to_peer_address,
+    peerdb_common::storage::update_db,
+};
 
 pub struct PeerDb<S> {
     /// P2P configuration
@@ -213,7 +216,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             let banned = now <= *banned_till;
 
             if !banned {
-                storage::update_db(&self.storage, |tx| {
+                update_db(&self.storage, |tx| {
                     tx.del_banned_address(&address.to_string())
                 })
                 .expect("removing banned address is expected to succeed");
@@ -284,13 +287,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
         match (is_persistent_old, is_persistent_new) {
             (false, true) => {
-                storage::update_db(&self.storage, |tx| {
+                update_db(&self.storage, |tx| {
                     tx.add_known_address(&address.to_string())
                 })
                 .expect("adding address expected to succeed (peer_connected)");
             }
             (true, false) => {
-                storage::update_db(&self.storage, |tx| {
+                update_db(&self.storage, |tx| {
                     tx.del_known_address(&address.to_string())
                 })
                 .expect("adding address expected to succeed (peer_connected)");
@@ -326,7 +329,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     pub fn ban(&mut self, address: BannableAddress) {
         let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
 
-        storage::update_db(&self.storage, |tx| {
+        update_db(&self.storage, |tx| {
             tx.add_banned_address(&address.to_string(), ban_till)
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
@@ -335,7 +338,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
     }
 
     pub fn unban(&mut self, address: &BannableAddress) {
-        storage::update_db(&self.storage, |tx| {
+        update_db(&self.storage, |tx| {
             tx.del_banned_address(&address.to_string())
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
@@ -351,7 +354,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
         if self.anchor_addresses == anchor_addresses {
             return;
         }
-        storage::update_db(&self.storage, |tx| {
+        update_db(&self.storage, |tx| {
             for address in self.anchor_addresses.difference(&anchor_addresses) {
                 log::debug!("remove anchor peer {address}");
                 tx.del_anchor_address(&address.to_string())?;

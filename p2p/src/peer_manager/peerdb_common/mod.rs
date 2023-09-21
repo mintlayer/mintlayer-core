@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,24 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::decl_storage_trait;
+pub mod storage;
+pub mod storage_impl;
 
-pub trait DnsServerStorageRead {
-    fn get_version(&self) -> Result<Option<u32>, storage::Error>;
-
-    fn get_addresses(&self) -> Result<Vec<String>, storage::Error>;
-}
-
-pub trait DnsServerStorageWrite {
-    fn set_version(&mut self, version: u32) -> Result<(), storage::Error>;
-
-    fn add_address(&mut self, address: &str) -> Result<(), storage::Error>;
-
-    fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
-}
-
-decl_storage_trait!(
-    DnsServerStorage,
-    DnsServerStorageRead,
-    DnsServerStorageWrite
-);
+pub use storage::{TransactionRo, TransactionRw, Transactional};
