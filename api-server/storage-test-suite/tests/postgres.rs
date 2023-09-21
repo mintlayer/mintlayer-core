@@ -13,23 +13,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: uncomment when the container stuff is ready.
+mod containers;
 
-// use api_server_common::storage::{
-//     impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
-// };
-// use common::chain::{config::create_unit_test_config, ChainConfig};
+use std::sync::Arc;
 
-// #[must_use]
-// fn make_postgres_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
-//     TransactionalApiServerPostgresStorage::new("127.0.0.1", "some-user", 4, chain_config).unwrap()
-// }
+use api_server_common::storage::{
+    impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
+};
+use common::chain::{config::create_unit_test_config, ChainConfig};
+use containers::with_container::ApiServerStorageWithContainer;
 
-// TODO: Make sure to guard this with some feature to prevent running these tests by default
+#[must_use]
+async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
+    let container = containers::podman::Container::PostgresFromDockerHub;
 
-fn main() {
-    //     let storage_maker = || make_postgres_storage(&create_unit_test_config());
-    //     let result = api_server_backend_test_suite::run(storage_maker);
+    let podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
+        .with_env("POSTGRES_PASSWORD", "mysecretpassword")
+        .with_port_mapping(None, 5432);
 
-    //     result.exit()
+    podman.run();
+
+    let host_port = podman.get_port_mapping(5432).unwrap();
+
+    println!("Port mapping: {}", host_port);
+
+    let storage = TransactionalApiServerPostgresStorage::new(
+        "127.0.0.1",
+        host_port,
+        "postgres",
+        4,
+        &chain_config,
+    )
+    .await
+    .unwrap();
+
+    ApiServerStorageWithContainer::new(storage, podman)
+}
+
+#[tokio::main]
+async fn main() {
+    let chain_config = Arc::new(create_unit_test_config());
+    let storage_maker = || make_postgres_storage(chain_config);
+    let _x = storage_maker().await;
+    // let result = api_server_backend_test_suite::run(storage_maker);
+
+    // result.exit()
 }

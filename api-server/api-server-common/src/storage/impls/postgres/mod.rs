@@ -27,6 +27,7 @@ use tokio_postgres::NoTls;
 use crate::storage::storage_api::ApiServerStorageError;
 use crate::storage::storage_api::ApiServerStorageRead;
 use crate::storage::storage_api::ApiServerStorageWrite;
+use crate::storage::storage_api::ApiServerTransactionRw;
 
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
@@ -51,18 +52,19 @@ impl Drop for TransactionalApiServerPostgresStorage {
 impl TransactionalApiServerPostgresStorage {
     pub async fn new(
         host: &str,
+        port: u16,
         user: &str,
         max_connections: u32,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
-        let config: tokio_postgres::Config = format!("host={host} user={user}").parse().map_err(
-            |e: <tokio_postgres::Config as FromStr>::Err| {
+        let config: tokio_postgres::Config = format!("host={host} port={port} user={user}")
+            .parse()
+            .map_err(|e: <tokio_postgres::Config as FromStr>::Err| {
                 ApiServerStorageError::InitializationError(format!(
                     "Postgres configuration parsing error: {}",
                     e
                 ))
-            },
-        )?;
+            })?;
         let manager = PostgresConnectionManager::new(config, NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(
@@ -105,6 +107,7 @@ impl TransactionalApiServerPostgresStorage {
         if !tx.is_initialized().await? {
             tx.initialize_storage(chain_config).await?;
         }
+        tx.commit().await?;
         Ok(())
     }
 
