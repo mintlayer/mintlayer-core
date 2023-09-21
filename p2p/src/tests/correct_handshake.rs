@@ -37,8 +37,6 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
-    logging::init_logging::<std::path::PathBuf>(None);
-
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
@@ -111,8 +109,6 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
-    logging::init_logging::<std::path::PathBuf>(None);
-
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 

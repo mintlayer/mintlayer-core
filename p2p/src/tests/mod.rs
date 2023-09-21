@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -21,3 +21,8 @@ mod incorrect_handshake;
 mod unsupported_version;
 
 pub mod helpers;
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}

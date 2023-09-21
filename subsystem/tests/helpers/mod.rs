@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub fn init_test_runtime() -> tokio::runtime::Runtime {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     //let mut runtime = tokio::runtime::Builder::new_current_thread();
     let mut runtime = tokio::runtime::Builder::new_multi_thread();

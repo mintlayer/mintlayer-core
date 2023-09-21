@@ -31,16 +31,8 @@ pub use log;
 
 pub use tracing_utils::spawn_in_current_span;
 
-pub fn is_only_terminal_output_logging() -> bool {
-    true
-}
-
-pub fn is_file_output_supported() -> bool {
-    false
-}
-
 /// Send log output to the terminal.
-pub fn init_logging<P: AsRef<std::path::Path>>(_: Option<P>) {
+pub fn init_logging() {
     init_logging_impl(
         // Write to stderr to mimic the behavior of env_logger.
         std::io::stderr,
@@ -110,7 +102,7 @@ mod tests {
 
     #[test]
     fn initialize_twice() {
-        init_logging::<&std::path::Path>(None);
-        init_logging::<&std::path::Path>(None);
+        init_logging();
+        init_logging();
     }
 }

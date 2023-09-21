@@ -36,6 +36,7 @@ use crate::{
     PeerManagerEvent,
 };
 
+#[tracing::instrument]
 #[test]
 fn validate_services() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;

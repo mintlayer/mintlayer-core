@@ -30,6 +30,7 @@ use crate::{
     P2pConfig, P2pError,
 };
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -73,6 +74,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -117,6 +119,7 @@ async fn unordered_headers(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -159,6 +162,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -201,6 +205,7 @@ async fn valid_headers(#[case] seed: Seed) {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect() {
     for_each_protocol_version(|protocol_version| async move {

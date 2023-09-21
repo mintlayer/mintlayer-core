@@ -98,6 +98,7 @@ mod tests {
     use super::*;
 
     // Send and receive each variant of Message once and assert that its value hasn't changed.
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]

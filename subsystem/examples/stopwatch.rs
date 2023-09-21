@@ -49,7 +49,7 @@ impl Stopwatch {
 
 #[tokio::main]
 async fn main() {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     let mut app = subsystem::Manager::new("toplevel");
     app.install_signal_handlers();

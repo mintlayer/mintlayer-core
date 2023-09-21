@@ -34,6 +34,7 @@ use crate::{
     types::peer_id::PeerId,
 };
 
+#[tracing::instrument]
 #[test]
 fn ban_scores() {
     // Test that ChainstateError p2p errors are reported correctly
@@ -49,6 +50,7 @@ fn ban_scores() {
     );
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn peer_handle_result() {
     let (peer_manager_sender, mut peer_manager_receiver) = unbounded_channel();
@@ -85,6 +87,7 @@ async fn peer_handle_result() {
     }
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

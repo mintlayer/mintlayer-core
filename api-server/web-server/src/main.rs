@@ -35,7 +35,7 @@ async fn main() {
         std::env::set_var("RUST_LOG", "info");
     }
 
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     let args = ApiServerWebServerConfig::parse();
     log::info!("Command line options: {args:?}");

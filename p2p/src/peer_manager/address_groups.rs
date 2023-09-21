@@ -75,6 +75,7 @@ mod tests {
         assert_eq!(group, expected, "check failed for {ip}");
     }
 
+    #[tracing::instrument]
     #[test]
     fn address_group() {
         check_group("127.0.0.1", AddressGroup::Local);

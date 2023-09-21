@@ -81,17 +81,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_tcp() {
     ban_connected_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_channels() {
     ban_connected_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_noise() {
     ban_connected_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -130,11 +133,13 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_tcp() {
     banned_peer_attempts_to_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_channel() {
     banned_peer_attempts_to_connect::<
@@ -144,6 +149,7 @@ async fn banned_peer_attempts_to_connect_channel() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_noise() {
     banned_peer_attempts_to_connect::<
@@ -206,12 +212,14 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_tcp() {
     connect_to_banned_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_channels() {
     connect_to_banned_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(
@@ -219,6 +227,7 @@ async fn connect_to_banned_peer_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_noise() {
     connect_to_banned_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
@@ -259,12 +268,14 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_tcp() {
     validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_channels() {
     validate_invalid_connection::<
@@ -274,6 +285,7 @@ async fn validate_invalid_connection_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_noise() {
     validate_invalid_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
@@ -321,6 +333,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_tcp() {
     inbound_connection_invalid_magic::<
@@ -330,6 +343,7 @@ async fn inbound_connection_invalid_magic_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_channels() {
     inbound_connection_invalid_magic::<
@@ -339,6 +353,7 @@ async fn inbound_connection_invalid_magic_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_noise() {
     inbound_connection_invalid_magic::<
@@ -349,6 +364,7 @@ async fn inbound_connection_invalid_magic_noise() {
 }
 
 // Test that manually banned peers are also disconnected
+#[tracing::instrument]
 #[test]
 fn ban_and_disconnect() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;

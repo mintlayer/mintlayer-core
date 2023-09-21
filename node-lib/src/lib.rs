@@ -36,5 +36,5 @@ pub fn default_rpc_config() -> RpcConfigFile {
 }
 
 pub fn init_logging(_opts: &Options) {
-    logging::init_logging::<&std::path::Path>(None)
+    logging::init_logging()
 }

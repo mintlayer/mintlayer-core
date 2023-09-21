@@ -24,6 +24,12 @@ use p2p::{
     make_p2p, peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
 };
 
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}
+
+#[tracing::instrument]
 // Check that the p2p shutdown isn't timed out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn shutdown_timeout() {
