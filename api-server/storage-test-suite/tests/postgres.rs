@@ -25,30 +25,39 @@ use testcontainers::{clients::Cli, images::postgres::Postgres};
 
 #[must_use]
 fn make_postgres_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
-    let docker = Cli::default();
+    Runtime::new().unwrap().block_on(async {
+        let docker = Cli::default();
     let image = Postgres::default();
     let container = docker.run(image);
-    
-    container.start();
 
-    Runtime::new().unwrap().block_on(async {
-        TransactionalApiServerPostgresStorage::new(
+    container.start();
+    let port = container.get_host_port(5432);
+
+
+        let l = TransactionalApiServerPostgresStorage::new(
             "localhost",
-            container.get_host_port_ipv4(5432),
+            c,
             "postgres",
             4,
             chain_config,
         )
         .await
-        .unwrap()
+            .unwrap();
+
+//	l.begin_ro_transaction().await.unwrap();
+//	panic!("III");
+
+	l
     })
 }
 
 // TODO: Make sure to guard this with some feature to prevent running these tests by default
 // TODO
 
+use testcontainers::Container;
+
 fn main() {
-    let storage_maker = || make_postgres_storage(&create_unit_test_config());
+    let storage_maker = move || make_postgres_storage(&create_unit_test_config());
     let result = api_server_backend_test_suite::run(storage_maker);
 
     result.exit()

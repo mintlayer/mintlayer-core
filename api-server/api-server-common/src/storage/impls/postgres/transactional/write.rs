@@ -110,7 +110,9 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 #[async_trait::async_trait]
 impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+
         let mut conn = QueryFromConnection::new(&self.connection);
+	
         let res = conn.is_initialized().await?;
 
         Ok(res)

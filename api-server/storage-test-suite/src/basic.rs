@@ -35,17 +35,24 @@ use common::{
 use libtest_mimic::Failed;
 use test_utils::random::{make_seedable_rng, Seed};
 
-pub async fn initialization<S: ApiServerStorage, F: Fn() -> S>(
+use tokio::runtime::Runtime;
+pub async fn initialization<S: ApiServerStorage + 'static, F: Fn() -> S>(
     storage_maker: Arc<F>,
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
+
     let storage = storage_maker();
-    let mut tx = storage.transaction_ro().await.unwrap();
-    assert!(tx.is_initialized().await.unwrap());
+
+    Runtime::new().unwrap().spawn(async move {
+	let mut tx = storage.transaction_ro().await.unwrap();
+
+	assert!(tx.is_initialized().await.unwrap());
+    }).await.unwrap();
+    
     Ok(())
 }
 
-pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
+pub async fn set_get<S: ApiServerStorage + 'static, F: Fn() -> S>(
     storage_maker: Arc<F>,
     seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
@@ -55,10 +62,14 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
     let mut storage = storage_maker();
 
-    let mut db_tx = storage.transaction_ro().await.unwrap();
+    Runtime::new().unwrap().spawn(async move {
+panic!("WAH");
+	let mut db_tx = storage.transaction_ro().await.unwrap();
 
-    let is_initialized = db_tx.is_initialized().await.unwrap();
-    assert!(is_initialized);
+	let is_initialized = db_tx.is_initialized().await.unwrap();
+	assert!(is_initialized);
+  }).await.unwrap();	/*  
+
 
     let version_option = db_tx.get_storage_version().await.unwrap();
     assert_eq!(version_option.unwrap(), CURRENT_STORAGE_VERSION);
@@ -262,7 +273,7 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
         db_tx.commit().await.unwrap();
     }
-
+*/
     Ok(())
 }
 

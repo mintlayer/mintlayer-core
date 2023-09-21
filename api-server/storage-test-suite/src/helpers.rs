@@ -39,6 +39,8 @@ pub fn make_trial<
 #[macro_export]
 macro_rules! make_test {
     ($name:ident, $storage_maker:expr) => {
-        make_trial(stringify!($name), $name, $storage_maker)
+	tokio::runtime::Runtime::new().unwrap().block_on(async {
+            make_trial(stringify!($name), $name, $storage_maker)
+	})
     };
 }

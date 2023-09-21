@@ -34,11 +34,9 @@ pub struct QueryFromConnection<'a, 'b> {
 impl<'a, 'b> QueryFromConnection<'a, 'b> {
     fn get_table_exists_query(table_name: &str) -> String {
         format!(
-            "SELECT COALESCE( (
-            SELECT 1
+            "SELECT 1
             FROM information_schema.tables
-            WHERE table_name = '{}'
-        ), 0) AS count;",
+            WHERE table_name = '{}';",
             table_name
         )
     }
@@ -61,13 +59,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let query_str = Self::get_table_exists_query("ml_misc_data");
         let row_count = self
             .tx
-            .query_one(&query_str, &[])
+            .query(&query_str, &[])
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        let row_count: i32 = row_count.get(0);
-
-        if row_count == 0 {
+	if row_count.is_empty() {
             return Ok(false);
         }
 
@@ -75,7 +71,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         let version = match version {
             Some(v) => v,
-            None => return Ok(false),
+            None => {
+				panic!("BB");		
+		return Ok(false)
+	},
         };
 
         logging::log::info!("Found database version: {version}");
@@ -144,16 +143,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)
+                "INSERT INTO ml_misc_data (name, value) VALUES ('best_block', $1)
                     ON CONFLICT (name) DO UPDATE
-                    SET value = $2;",
-                &[&block_height.encode(), &block_id.encode()],
+                    SET value = $1;",
+                &[&(block_height, block_id).encode()],
 		//		[vec![1u8], vec![2u8]],
 		//&[],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
-panic!("CCC");
+
 	Ok(())
     }
 
@@ -167,6 +166,7 @@ panic!("CCC");
     }
 
     pub async fn create_tables(&mut self) -> Result<(), ApiServerStorageError> {
+	
         logging::log::info!("Creating database tables");
 
         self.just_execute(
@@ -210,6 +210,8 @@ panic!("CCC");
         )
         .await?;
 
+//	let x = self.is_initialized().await?;
+//	panic!("xxxx = {}", x);
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -219,21 +221,22 @@ panic!("CCC");
         &mut self,
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
+
         self.create_tables().await?;
 
         // Insert row to the table
         self.tx
             .execute(
                 "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)",
-		//&[&"version", &"1.0"]
 		&[&"version", &CURRENT_STORAGE_VERSION.encode()],
-	//	&[],
             )
             .await
             .map_err(|e| ApiServerStorageError::InitializationError(e.to_string()))?;
+//	let x = self.is_initialized().await?;
+//	panic!("xxxx = {}", x);
 
         self.set_best_block(0.into(), chain_config.genesis_block_id()).await?;
-
+//self.tx.execute("COMMIT", &[]).await.unwrap();	
         Ok(())
     }
 

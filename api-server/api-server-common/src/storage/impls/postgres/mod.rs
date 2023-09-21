@@ -65,14 +65,20 @@ impl TransactionalApiServerPostgresStorage {
         Ok(result)
     }
 
+    
     async fn initialize_if_not(
         &self,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
+
+	use crate::storage::storage_api::ApiServerTransactionRw;
         let mut tx = self.begin_rw_transaction().await?;
+
         if !tx.is_initialized().await? {
             tx.initialize_storage(chain_config).await?;
+	    tx.commit().await?;
         }
+
         Ok(())
     }
 
