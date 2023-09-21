@@ -22,12 +22,17 @@ mod basic;
 pub mod helpers;
 
 use api_server_common::storage::storage_api::ApiServerStorage;
+use futures::Future;
 use std::sync::Arc;
 
 /// Get all tests
-fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+fn tests<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
     storage_maker: F,
-) -> Vec<libtest_mimic::Trial> {
+) -> Vec<libtest_mimic::Trial>
+where
+    Fut: Future<Output = S> + Send + 'static,
+    S: ApiServerStorage + 'static,
+{
     let storage_maker = Arc::new(storage_maker);
     std::iter::empty()
         .chain(basic::build_tests(storage_maker))
@@ -38,9 +43,13 @@ fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
 
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+pub fn run<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
     storage_maker: F,
-) -> libtest_mimic::Conclusion {
+) -> libtest_mimic::Conclusion
+where
+    Fut: Future<Output = S> + Send + 'static,
+    S: ApiServerStorage + 'static,
+{
     logging::init_logging::<&str>(None);
     let args = libtest_mimic::Arguments::from_args();
     libtest_mimic::run(&args, tests(storage_maker))

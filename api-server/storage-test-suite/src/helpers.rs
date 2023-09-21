@@ -22,7 +22,8 @@ use test_utils::random::Seed;
 
 pub fn make_trial<
     S: ApiServerStorage,
-    F: Fn() -> S + Send + Sync + 'static,
+    FutS: Future<Output = S> + Send + 'static,
+    F: Fn() -> FutS + Send + Sync + 'static,
     Fut: Future<Output = Result<(), Failed>> + Send + 'static,
     T: FnOnce(Arc<F>, Box<dyn Fn() -> Seed + Send>) -> Fut + Send + 'static,
 >(
