@@ -44,6 +44,8 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 tokio-stream.workspace = true
 tokio-socks.workspace = true
 tokio-util = { workspace = true, default-features = false, features = ["codec"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage" }

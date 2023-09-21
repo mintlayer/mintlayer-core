@@ -311,7 +311,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     match event {

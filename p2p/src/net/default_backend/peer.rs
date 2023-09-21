@@ -365,6 +365,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use futures::FutureExt;
+
     use super::*;
     use crate::{
         message::HeaderListRequest,
@@ -380,7 +382,6 @@ mod tests {
         },
     };
     use chainstate::Locator;
-    use futures::FutureExt;
 
     const TEST_CHAN_BUF_SIZE: usize = 100;
 
@@ -408,7 +409,7 @@ mod tests {
             TEST_PROTOCOL_VERSION.into(),
         );
 
-        let handle = tokio::spawn(async move {
+        let handle = logging::spawn_in_current_span(async move {
             peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
             peer
         });
@@ -486,7 +487,7 @@ mod tests {
             TEST_PROTOCOL_VERSION.into(),
         );
 
-        let handle = tokio::spawn(async move {
+        let handle = logging::spawn_in_current_span(async move {
             peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
             peer
         });
@@ -561,7 +562,8 @@ mod tests {
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
+        let handle =
+            logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
@@ -622,7 +624,8 @@ mod tests {
         );
 
         let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle = tokio::spawn(async move { peer.handshake(local_time).await });
+        let handle =
+            logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
 
         let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());

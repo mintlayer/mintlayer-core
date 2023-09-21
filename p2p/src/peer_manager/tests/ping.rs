@@ -90,7 +90,7 @@ async fn ping_timeout() {
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         let _ = peer_manager.run().await;
     });
 

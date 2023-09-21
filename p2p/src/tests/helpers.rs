@@ -127,7 +127,7 @@ where
             peerdb_inmemory_store(),
         )
         .unwrap();
-        let peer_mgr_join_handle = tokio::spawn(async move {
+        let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
             let mut peer_mgr = peer_mgr;
             let err = match peer_mgr.run_without_consuming_self().await {
                 Err(err) => err,
@@ -147,7 +147,7 @@ where
             peer_mgr_event_tx.clone(),
             time_getter.get_time_getter(),
         );
-        let sync_mgr_join_handle = tokio::spawn(async move {
+        let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
             match sync_mgr.run().await {
                 Err(err) => err,
                 Ok(never) => match never {},

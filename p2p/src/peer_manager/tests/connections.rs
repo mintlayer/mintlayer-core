@@ -18,12 +18,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
+
+use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
@@ -128,7 +129,7 @@ where
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         loop {
             assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
@@ -447,7 +448,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -668,7 +669,7 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
 

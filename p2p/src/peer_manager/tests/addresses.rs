@@ -379,7 +379,7 @@ async fn resend_own_addresses() {
     assert_eq!(pm.peers.len(), OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT);
 
     let (started_tx, started_rx) = oneshot_nofail::channel();
-    tokio::spawn(async move { pm.run_internal(Some(started_tx)).await });
+    logging::spawn_in_current_span(async move { pm.run_internal(Some(started_tx)).await });
     started_rx.await.unwrap();
 
     // Flush all pending messages

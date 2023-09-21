@@ -19,8 +19,9 @@ use std::{panic, sync::Arc};
 use futures::future::BoxFuture;
 use tokio::{
     sync::{mpsc, oneshot, RwLock},
-    task::{self, JoinHandle, JoinSet},
+    task::{JoinHandle, JoinSet},
 };
+use tracing::Instrument;
 
 use logging::log;
 use utils::once_destructor::OnceDestructor;
@@ -226,13 +227,13 @@ impl Manager {
                                 worker_tasks.spawn(async move {
                                     let mut subsys = subsys.write().await;
                                     call(&mut *subsys).await
-                                });
+                                }.in_current_span());
                             },
                             Action::Ref(call) => {
                                 worker_tasks.spawn(async move {
                                     let subsys = subsys.read().await;
                                     call(&*subsys).await
-                                });
+                                }.in_current_span());
                             },
                         }
                     }
@@ -331,7 +332,13 @@ impl Manager {
         let subsystems: Vec<_> = self
             .subsystems
             .into_iter()
-            .map(|s| (s.name, task::spawn(s.task), s.shutdown_tx))
+            .map(|s| {
+                (
+                    s.name,
+                    logging::spawn_in_current_span(s.task),
+                    s.shutdown_tx,
+                )
+            })
             .collect();
 
         // Signal the manager is shut down so it does not wait for itself
@@ -421,7 +428,9 @@ impl Manager {
     /// an incorrect usage. The returned handle must be joined to ensure a proper subsystems
     /// shutdown.
     pub fn main_in_task(self) -> ManagerJoinHandle {
-        let handle = Some(tokio::spawn(async move { self.main().await }));
+        let handle = Some(logging::spawn_in_current_span(
+            async move { self.main().await },
+        ));
         ManagerJoinHandle { handle }
     }
 }

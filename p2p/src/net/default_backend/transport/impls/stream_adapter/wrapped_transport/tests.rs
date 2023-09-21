@@ -239,7 +239,7 @@ async fn pending_handshakes() {
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let local_addr = server.local_addresses().unwrap();
 
-    let join_handle = tokio::spawn(async move {
+    let join_handle = logging::spawn_in_current_span(async move {
         loop {
             _ = server.accept().await;
         }
@@ -281,7 +281,7 @@ async fn handshake_timeout() {
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
     let local_addr = server.local_addresses().unwrap();
 
-    let join_handle = tokio::spawn(async move {
+    let join_handle = logging::spawn_in_current_span(async move {
         loop {
             _ = server.accept().await;
         }

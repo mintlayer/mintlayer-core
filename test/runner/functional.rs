@@ -112,6 +112,8 @@ ENABLE_BITCOIND=true
     std::fs::write(&config_file_path, config_str).map_err(Error::ConfigFile)?;
 
     // Tests are expected to work with RUST_LOG set to debug. Using anything else may break them.
+    // TODO: correctness of tests should not depend on the log level; investigate and fix this.
+    // See github.com/mintlayer/mintlayer-core/issues/1181
     let env_log_key = "RUST_LOG";
     let env_log_value_def = "debug";
     let env_log_value = env::var(env_log_key).ok().unwrap_or(env_log_value_def.to_owned());

@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub fn init_test_runtime() -> tokio::runtime::Runtime {
-    logging::init_logging::<&std::path::Path>(None);
+use std::future::Future;
 
-    //let mut runtime = tokio::runtime::Builder::new_current_thread();
-    let mut runtime = tokio::runtime::Builder::new_multi_thread();
-    #[cfg(not(loom))]
-    runtime.enable_all();
-    //runtime.worker_threads(4).build().unwrap()
-    runtime.build().unwrap()
+use tokio::task::JoinHandle;
+use tracing::Instrument;
+
+pub fn spawn_in_current_span<F>(future: F) -> JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    tokio::spawn(future.in_current_span())
 }

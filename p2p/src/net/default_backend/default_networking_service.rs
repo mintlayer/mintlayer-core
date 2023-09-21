@@ -16,14 +16,14 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use common::time_getter::TimeGetter;
-use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 
+use common::time_getter::TimeGetter;
 use logging::log;
+use p2p_types::socket_address::SocketAddress;
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
@@ -91,7 +91,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
             subscribers_receiver,
             protocol_version,
         );
-        let backend_task = tokio::spawn(async move {
+        let backend_task = logging::spawn_in_current_span(async move {
             match backend.run().await {
                 Ok(never) => match never {},
                 Err(P2pError::ChannelClosed) if shutdown.load() => {

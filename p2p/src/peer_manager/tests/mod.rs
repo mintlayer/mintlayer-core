@@ -141,7 +141,7 @@ where
 {
     let (peer_manager, tx, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
     (tx, shutdown_sender, subscribers_sender)

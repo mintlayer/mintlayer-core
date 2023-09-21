@@ -178,7 +178,7 @@ where
                         self.time_getter.clone(),
                     );
 
-                    tokio::spawn(async move {
+                    logging::spawn_in_current_span(async move {
                         peer.run().await;
                     })
                 }
@@ -198,7 +198,7 @@ where
                         self.time_getter.clone(),
                     );
 
-                    tokio::spawn(async move {
+                    logging::spawn_in_current_span(async move {
                         peer.run().await;
                     })
                 }

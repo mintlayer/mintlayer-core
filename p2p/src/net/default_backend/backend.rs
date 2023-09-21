@@ -371,7 +371,7 @@ where
         );
         let shutdown = Arc::clone(&self.shutdown);
         let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
-        let handle = tokio::spawn(async move {
+        let handle = logging::spawn_in_current_span(async move {
             match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}

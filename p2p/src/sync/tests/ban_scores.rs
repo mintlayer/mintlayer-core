@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use tokio::sync::mpsc::unbounded_channel;
+
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
@@ -23,7 +25,6 @@ use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::random::Rng;
 use mempool::error::{MempoolPolicyError, TxValidationError};
 use test_utils::random::{make_seedable_rng, Seed};
-use tokio::sync::mpsc::unbounded_channel;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
@@ -51,7 +52,7 @@ fn ban_scores() {
 #[tokio::test]
 async fn peer_handle_result() {
     let (peer_manager_sender, mut peer_manager_receiver) = unbounded_channel();
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         while let Some(event) = peer_manager_receiver.recv().await {
             match event {
                 crate::PeerManagerEvent::AdjustPeerScore(_, _, score) => {

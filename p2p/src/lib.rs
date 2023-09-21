@@ -29,8 +29,6 @@ mod peer_manager_event;
 #[cfg(test)]
 mod tests;
 
-use types::socket_address::SocketAddress;
-
 use std::{
     marker::PhantomData,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -42,13 +40,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-use interface::p2p_interface::P2pInterface;
-use net::default_backend::transport::{
-    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
-};
-use peer_manager::peerdb::storage::PeerDbStorage;
-use subsystem::{CallRequest, ShutdownRequest};
-
 use ::utils::atomics::SeqCstAtomicBool;
 use ::utils::ensure;
 use chainstate::chainstate_interface;
@@ -56,8 +47,15 @@ use common::{
     chain::{config::ChainType, ChainConfig},
     time_getter::TimeGetter,
 };
+use interface::p2p_interface::P2pInterface;
 use logging::log;
 use mempool::MempoolHandle;
+use net::default_backend::transport::{
+    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
+};
+use peer_manager::peerdb::storage::PeerDbStorage;
+use subsystem::{CallRequest, ShutdownRequest};
+use types::socket_address::SocketAddress;
 
 use crate::{
     config::P2pConfig,
@@ -157,7 +155,7 @@ where
             peerdb_storage,
         )?;
         let shutdown_ = Arc::clone(&shutdown);
-        let peer_manager_task = tokio::spawn(async move {
+        let peer_manager_task = logging::spawn_in_current_span(async move {
             match peer_manager.run().await {
                 Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.
@@ -182,7 +180,7 @@ where
             time_getter,
         );
         let shutdown_ = Arc::clone(&shutdown);
-        let sync_manager_task = tokio::spawn(async move {
+        let sync_manager_task = logging::spawn_in_current_span(async move {
             match sync_manager.run().await {
                 Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.

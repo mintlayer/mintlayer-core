@@ -113,10 +113,10 @@ where
     )
     .unwrap();
 
-    let sync1_handle = tokio::spawn(async move { sync1.run().await });
+    let sync1_handle = logging::spawn_in_current_span(async move { sync1.run().await });
 
     // spawn `sync2` into background and spam an orphan block on the network
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         let (peer, mut sync_msg_rx) = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Connected {
                 peer_id,

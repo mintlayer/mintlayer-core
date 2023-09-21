@@ -136,7 +136,7 @@ impl TestNode {
         let sync_manager_chanstate_handle = sync_manager.chainstate().clone();
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = tokio::spawn(async move {
+        let sync_manager_handle = logging::spawn_in_current_span(async move {
             let e = sync_manager.run().await.unwrap_err();
             let _ = error_sender.send(e);
         });
