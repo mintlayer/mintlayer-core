@@ -16,7 +16,6 @@
 use std::{future::Future, sync::Arc};
 
 use api_server_common::storage::storage_api::ApiServerStorage;
-use futures::executor::block_on;
 use libtest_mimic::{Failed, Trial};
 use test_utils::random::Seed;
 
@@ -33,7 +32,12 @@ pub fn make_trial<
 ) -> libtest_mimic::Trial {
     let make_seed: Box<dyn Fn() -> Seed + Send> = Box::new(|| Seed::from_entropy_and_print(name));
     Trial::test(name, move || {
-        block_on(async { test(storage_maker, make_seed).await })
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async { test(storage_maker, make_seed).await })
     })
 }
 
