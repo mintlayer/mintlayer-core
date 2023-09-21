@@ -20,6 +20,7 @@ mod queries;
 use std::str::FromStr;
 
 use bb8_postgres::bb8::Pool;
+use bb8_postgres::bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
 use tokio_postgres::NoTls;
 
@@ -32,6 +33,19 @@ use self::transactional::ApiServerPostgresTransactionalRw;
 
 pub struct TransactionalApiServerPostgresStorage {
     pool: Pool<PostgresConnectionManager<NoTls>>,
+    /// This task is responsible for rolling back failed RW/RO transactions, since closing connections are pooled
+    tx_dropper_joiner: tokio::task::JoinHandle<()>,
+    /// This channel is used to send transactions that are not manually rolled back to the tx_dropper task to roll them back
+    db_tx_conn_sender: tokio::sync::mpsc::UnboundedSender<
+        PooledConnection<'static, PostgresConnectionManager<NoTls>>,
+    >,
+}
+
+impl Drop for TransactionalApiServerPostgresStorage {
+    fn drop(&mut self) {
+        // Since the whole connection pool will be destroyed, we can safely abort all connections
+        self.tx_dropper_joiner.abort();
+    }
 }
 
 impl TransactionalApiServerPostgresStorage {
@@ -57,7 +71,26 @@ impl TransactionalApiServerPostgresStorage {
             ))
         })?;
 
-        let result = Self { pool };
+        let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel::<
+            PooledConnection<'static, PostgresConnectionManager<NoTls>>,
+        >();
+
+        let tx_dropper_joiner = tokio::task::spawn(async move {
+            let mut conn_rx = conn_rx;
+            while let Some(conn) = conn_rx.recv().await {
+                conn.batch_execute("ROLLBACK").await.unwrap_or_else(|e| {
+                    logging::log::error!(
+                        "CRITICAL ERROR: failed to rollback failed postgres RW transaction: {e}"
+                    )
+                });
+            }
+        });
+
+        let result = Self {
+            pool,
+            tx_dropper_joiner,
+            db_tx_conn_sender: conn_tx,
+        };
 
         result.initialize_if_not(chain_config).await?;
 
@@ -80,10 +113,11 @@ impl TransactionalApiServerPostgresStorage {
     ) -> Result<ApiServerPostgresTransactionalRo, ApiServerStorageError> {
         let conn = self
             .pool
-            .get()
+            .get_owned()
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRo::from_connection(conn).await
+        ApiServerPostgresTransactionalRo::from_connection(conn, self.db_tx_conn_sender.clone())
+            .await
     }
 
     pub async fn begin_rw_transaction(
@@ -91,9 +125,10 @@ impl TransactionalApiServerPostgresStorage {
     ) -> Result<ApiServerPostgresTransactionalRw, ApiServerStorageError> {
         let conn = self
             .pool
-            .get()
+            .get_owned()
             .await
             .map_err(|e| ApiServerStorageError::AcquiringConnectionFailed(e.to_string()))?;
-        ApiServerPostgresTransactionalRw::from_connection(conn).await
+        ApiServerPostgresTransactionalRw::from_connection(conn, self.db_tx_conn_sender.clone())
+            .await
     }
 }
