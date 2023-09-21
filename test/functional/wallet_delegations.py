@@ -305,7 +305,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 50_000_000_000_000_000 }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 50_000 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")

@@ -29,7 +29,7 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input)
+from test_framework.mintlayer import (make_tx, reward_input, tx_input, MLT_COIN)
 from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
@@ -77,6 +77,9 @@ class WalletRecoverAccounts(BitcoinTestFramework):
 
         # new wallet
         async with WalletCliController(node, self.config, self.log) as wallet:
+            invalid_mnemonic = "asd asd dwa"
+            assert "Invalid mnemonic:" in  await wallet.recover_wallet(invalid_mnemonic)
+
             await wallet.create_wallet()
 
             # check it is on genesis
@@ -93,7 +96,7 @@ class WalletRecoverAccounts(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 1_000_000_000_000 }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 10 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 

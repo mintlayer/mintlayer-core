@@ -28,7 +28,7 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input)
+from test_framework.mintlayer import (make_tx, reward_input, tx_input, MLT_COIN)
 from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
@@ -90,7 +90,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 100_000_000_000_000 }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 101 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -108,11 +108,38 @@ class WalletTokens(BitcoinTestFramework):
             assert await wallet.get_best_block_height() == '1'
             assert await wallet.get_best_block() == block_id
 
-            assert "Coins amount: 1000" in await wallet.get_balance()
+            assert "Coins amount: 101" in await wallet.get_balance()
 
             address = await wallet.new_address()
-            token_id = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+
+            # invalid ticker
+            # > max len
+            token_id, err = await wallet.issue_new_token("asdddd", "10000", 2, "http://uri", address)
+            assert token_id is None
+            assert err is not None
+            assert "Invalid ticker length" in err
+            # non alphanumeric
+            token_id, err = await wallet.issue_new_token("asd#", "10000", 2, "http://uri", address)
+            assert token_id is None
+            assert err is not None
+            assert "Invalid character in token ticker" in err
+
+            # invalid url
+            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "123 123", address)
+            assert token_id is None
+            assert err is not None
+            assert "Incorrect metadata URI" in err
+
+            # invalid num decimals
+            token_id, err = await wallet.issue_new_token("XXX", "10000", 99, "http://uri", address)
+            assert token_id is None
+            assert err is not None
+            assert "Too many decimals" in err
+
+            # issue a valid token
+            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
             assert token_id is not None
+            assert err is None
             self.log.info(f"new token id: {token_id}")
 
             self.generate_block()
@@ -134,6 +161,12 @@ class WalletTokens(BitcoinTestFramework):
 
             # check the new balance
             assert f"{token_id} amount: 9989.99" in await wallet.get_balance()
+
+            # try to issue a new token, should fail with not enough coins
+            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+            assert token_id is None
+            assert err is not None
+            assert "Not enough funds" in err
 
 if __name__ == '__main__':
     WalletTokens().main()
