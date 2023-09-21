@@ -28,14 +28,12 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
     let container = containers::podman::Container::PostgresFromDockerHub;
 
     let podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
-        .with_env("POSTGRES_PASSWORD", "mysecretpassword")
+        .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
         .with_port_mapping(None, 5432);
 
     podman.run();
 
     let host_port = podman.get_port_mapping(5432).unwrap();
-
-    println!("Port mapping: {}", host_port);
 
     let storage = TransactionalApiServerPostgresStorage::new(
         "127.0.0.1",

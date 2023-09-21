@@ -120,7 +120,6 @@ impl Podman {
     }
 
     pub fn stop(&self) {
-        // TODO(PR): remove the container, not just stop it
         let mut command = std::process::Command::new("podman");
         command.arg("stop");
         command.arg(&self.name);
@@ -147,5 +146,3 @@ impl Drop for Podman {
         }
     }
 }
-
-// TODO(PR): remove the prints
