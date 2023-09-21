@@ -1,3 +1,18 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 pub enum Container {
     PostgresFromDockerHub,
 }
@@ -75,18 +90,17 @@ impl Podman {
             };
         }
         command.arg(self.container.container_name());
-        println!(
-            "Podman command args: {:?}",
+        logging::log::debug!(
+            "Podman run command args: {:?}",
             command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
         );
         let output = command.output().unwrap();
-        if !output.status.success() {
-            panic!(
-                "Failed to run podman command: {:?}\n{}",
-                command,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     pub fn get_port_mapping(&self, container_port: u16) -> Option<u16> {
@@ -96,14 +110,16 @@ impl Podman {
         command.arg(format!("{}", container_port));
 
         let output = command.output().unwrap();
-        if !output.status.success() {
-            panic!(
-                "Failed to run podman command: {:?}\n{}",
-                command,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
+        logging::log::debug!(
+            "Podman ports command args: {:?}",
+            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
+        );
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
         let stdout = String::from_utf8(output.stdout).unwrap();
         let line = match stdout.lines().next() {
             Some(line) => line,
@@ -124,13 +140,16 @@ impl Podman {
         command.arg("stop");
         command.arg(&self.name);
         let output = command.output().unwrap();
-        if !output.status.success() {
-            panic!(
-                "Failed to run podman command: {:?}\n{}",
-                command,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
+        logging::log::debug!(
+            "Podman stop command args: {:?}",
+            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
+        );
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[allow(dead_code)]

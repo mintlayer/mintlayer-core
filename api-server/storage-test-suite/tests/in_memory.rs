@@ -22,6 +22,7 @@ use api_server_common::storage::{
 use common::chain::{config::create_unit_test_config, ChainConfig};
 
 #[must_use]
+#[allow(clippy::unused_async)]
 async fn make_in_memory_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
     TransactionalApiServerInMemoryStorage::new(&chain_config)
 }
