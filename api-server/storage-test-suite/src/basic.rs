@@ -63,7 +63,7 @@ pub async fn set_get<S: ApiServerStorage + 'static, F: Fn() -> S>(
     let mut storage = storage_maker();
 
     Runtime::new().unwrap().spawn(async move {
-panic!("WAH");
+
 	let mut db_tx = storage.transaction_ro().await.unwrap();
 
 	let is_initialized = db_tx.is_initialized().await.unwrap();
