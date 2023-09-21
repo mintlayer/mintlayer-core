@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -176,13 +176,12 @@ class WalletCliController:
                               amount_to_issue: str,
                               number_of_decimals: int,
                               metadata_uri: str,
-                              destination_address: str) -> Optional[str]:
-        output = await self._write_command(f"issuenewtoken {token_ticker} {amount_to_issue} {number_of_decimals} {metadata_uri} {destination_address}\n")
+                              destination_address: str) -> Tuple[Optional[str], Optional[str]]:
+        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{amount_to_issue}" "{number_of_decimals}" "{metadata_uri}" {destination_address}\n')
         if output.startswith("A new token has been issued with ID"):
-            return output[output.find(':')+2:]
+            return output[output.find(':')+2:], None
 
-        self.log.error(f"err: {output}")
-        return None
+        return None, output
 
     async def issue_new_nft(self,
                             destination_address: str,
