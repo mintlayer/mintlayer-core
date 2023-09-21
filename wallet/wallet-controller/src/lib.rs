@@ -85,6 +85,14 @@ pub enum ControllerError<T: NodeInterface> {
     StakingRunning,
 }
 
+#[derive(Clone, Copy)]
+pub struct ControllerConfig {
+    /// In which top N MB should we aim for our transactions to be in the mempool
+    /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+    /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+    pub in_top_x_mb: usize,
+}
+
 pub struct Controller<T, W> {
     chain_config: Arc<ChainConfig>,
 
@@ -475,6 +483,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn synced_controller(
         &mut self,
         account_index: U31,
+        config: ControllerConfig,
     ) -> Result<SyncedController<T, W>, ControllerError<T>> {
         self.sync_once().await?;
         Ok(SyncedController::new(
@@ -484,6 +493,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             &self.wallet_events,
             &mut self.staking_started,
             account_index,
+            config,
         ))
     }
 

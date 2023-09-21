@@ -133,6 +133,7 @@ BASE_SCRIPTS = [
     'wallet_tokens.py',
     'wallet_nfts.py',
     'wallet_delegations.py',
+    'wallet_high_fee.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',

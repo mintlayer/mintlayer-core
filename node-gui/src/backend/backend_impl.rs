@@ -31,8 +31,8 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_controller::{
-    read::ReadOnlyController, synced_controller::SyncedController, HandlesController, UtxoState,
-    WalletHandlesClient,
+    read::ReadOnlyController, synced_controller::SyncedController, ControllerConfig,
+    HandlesController, UtxoState, WalletHandlesClient,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -49,6 +49,10 @@ use super::{
 };
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
+/// In which top N MB should we aim for our transactions to be in the mempool
+/// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+/// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+const IN_TOP_X_MB: usize = 5;
 
 pub type GuiController = HandlesController<GuiWalletEvents>;
 
@@ -376,7 +380,13 @@ impl Backend {
             .get_mut(&wallet_id)
             .ok_or(BackendError::UnknownWalletIndex(wallet_id))?
             .controller
-            .synced_controller(account_index)
+            // TODO: add option to select from GUI
+            .synced_controller(
+                account_index,
+                ControllerConfig {
+                    in_top_x_mb: IN_TOP_X_MB,
+                },
+            )
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))
     }

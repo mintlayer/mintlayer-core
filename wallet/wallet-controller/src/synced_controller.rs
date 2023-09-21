@@ -42,7 +42,7 @@ use wallet::{
     DefaultWallet, WalletError,
 };
 
-use crate::ControllerError;
+use crate::{ControllerConfig, ControllerError};
 
 pub struct SyncedController<'a, T, W> {
     wallet: &'a mut DefaultWallet,
@@ -51,12 +51,8 @@ pub struct SyncedController<'a, T, W> {
     wallet_events: &'a W,
     staking_started: &'a mut BTreeSet<U31>,
     account_index: U31,
+    config: ControllerConfig,
 }
-
-/// In which top N MB should we aim for our transactions to be in the mempool
-/// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
-/// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
-const IN_TOP_N_MB: usize = 5;
 
 impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub fn new(
@@ -66,6 +62,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         wallet_events: &'a W,
         staking_started: &'a mut BTreeSet<U31>,
         account_index: U31,
+        config: ControllerConfig,
     ) -> Self {
         Self {
             wallet,
@@ -74,6 +71,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             wallet_events,
             staking_started,
             account_index,
+            config,
         }
     }
 
@@ -370,7 +368,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(mempool::FeeRate, mempool::FeeRate), ControllerError<T>> {
         let current_fee_rate = self
             .rpc_client
-            .mempool_get_fee_rate(IN_TOP_N_MB)
+            .mempool_get_fee_rate(self.config.in_top_x_mb)
             .await
             .map_err(ControllerError::NodeCallError)?;
         let consolidate_fee_rate = current_fee_rate;

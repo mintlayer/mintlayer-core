@@ -76,6 +76,12 @@ pub struct WalletCliArgs {
     /// vi input mode
     #[clap(long)]
     pub vi_mode: bool,
+
+    /// In which top N MB should we aim for our transactions to be in the mempool
+    /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+    /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+    #[arg(long, default_value_t = 5)]
+    pub in_top_x_mb: usize,
 }
 
 impl From<Network> for ChainType {

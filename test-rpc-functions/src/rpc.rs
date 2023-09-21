@@ -21,13 +21,15 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::{regtest::GenesisStakingSettings, EpochIndex},
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
         stakelock::StakePoolData,
-        PoolId, TxOutput,
+        Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::H256,
+    primitives::{Amount, Id, Idable, H256},
 };
 use crypto::key::Signature;
-use serialization::{hex::HexDecode, hex::HexEncode};
+use serialization::{hex::HexDecode, hex::HexEncode, hex_encoded::HexEncoded};
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 
@@ -94,6 +96,15 @@ trait RpcTestFunctionsRpc {
         vrf_public_key: String,
         block_timestamp: BlockTimestamp,
     ) -> rpc::Result<String>;
+
+    #[method(name = "generate_transactions")]
+    async fn generate_transactions(
+        &self,
+        input_tx_id: Id<Transaction>,
+        num_transactions: u32,
+        amount_to_spend: u64,
+        fee_per_tx: u64,
+    ) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>>;
 }
 
 #[async_trait::async_trait]
@@ -268,6 +279,51 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let vrf_output: H256 = rpc::handle_result(vrf_output)?;
 
         Ok(vrf_output.hex_encode())
+    }
+
+    async fn generate_transactions(
+        &self,
+        mut input_tx_id: Id<Transaction>,
+        num_transactions: u32,
+        amount_to_spend: u64,
+        fee_per_tx: u64,
+    ) -> rpc::Result<Vec<HexEncoded<SignedTransaction>>> {
+        let coin_decimals = self
+            .call(|this| this.get_chain_config().map(|chain| chain.coin_decimals()))
+            .await
+            .expect("Subsystem call ok")
+            .expect("chain config is present");
+        let coin_decimal_factor = 10u128.pow(coin_decimals as u32);
+        let mut amount_to_spend = (amount_to_spend as u128) * coin_decimal_factor;
+        let fee_per_tx = (fee_per_tx as u128) * coin_decimal_factor;
+        let mut transactions = vec![];
+        for _ in 0..num_transactions {
+            let inputs = vec![TxInput::from_utxo(OutPointSourceId::Transaction(input_tx_id), 0)];
+            let mut outputs = vec![TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(amount_to_spend)),
+                Destination::AnyoneCanSpend,
+            )];
+            outputs.extend((0..9999).map(|_| {
+                TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(1)),
+                    Destination::AnyoneCanSpend,
+                )
+            }));
+
+            let transaction = SignedTransaction::new(
+                Transaction::new(0, inputs, outputs).expect("should not fail"),
+                vec![InputWitness::NoSignature(None)],
+            )
+            .expect("num signatures ok");
+
+            input_tx_id = transaction.transaction().get_id();
+            amount_to_spend -= 10000;
+            amount_to_spend -= fee_per_tx;
+
+            transactions.push(HexEncoded::new(transaction));
+        }
+
+        Ok(transactions)
     }
 }
 
