@@ -21,9 +21,10 @@ use libtest_mimic::{Failed, Trial};
 use test_utils::random::Seed;
 
 pub fn make_trial<
-    S: ApiServerStorage,
-    F: Fn() -> S + Send + Sync + 'static,
-    Fut: Future<Output = Result<(), Failed>> + Send + 'static,
+	C: 'static,
+    S: ApiServerStorage + Send + Sync + 'static,
+    F: Fn() -> (S, C) + Send + Sync + 'static,
+    Fut: Future<Output = Result<(), Failed>> + 'static,
     T: FnOnce(Arc<F>, Box<dyn Fn() -> Seed + Send>) -> Fut + Send + 'static,
 >(
     name: &'static str,

@@ -25,7 +25,7 @@ use api_server_common::storage::storage_api::ApiServerStorage;
 use std::sync::Arc;
 
 /// Get all tests
-fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+fn tests<T: 'static, S: ApiServerStorage + 'static + Send + Sync, F: Fn() -> (S, T) + Send + Sync + 'static>(
     storage_maker: F,
 ) -> Vec<libtest_mimic::Trial> {
     let storage_maker = Arc::new(storage_maker);
@@ -36,9 +36,11 @@ fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
         .collect()
 }
 
+use testcontainers::{Container, Image};
+
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
+pub fn run<T: 'static, S: ApiServerStorage + 'static + Sync + Send, F: Fn() -> (S, T) + Send + Sync + 'static>(
     storage_maker: F,
 ) -> libtest_mimic::Conclusion {
     logging::init_logging::<&str>(None);

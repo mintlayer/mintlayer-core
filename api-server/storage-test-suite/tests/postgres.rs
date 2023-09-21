@@ -23,15 +23,13 @@ use tokio::runtime::Runtime;
 
 use testcontainers::{clients::Cli, images::postgres::Postgres};
 
+use testcontainers::Image;
 
 #[must_use]
-fn make_postgres_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
+fn make_postgres_storage(chain_config: &ChainConfig) -> (impl ApiServerStorage, Container<'_, Postgres>) {
     Runtime::new().unwrap().block_on(async {
-        let docker = Cli::default();
-    let image = Postgres::default();
-	let container = docker.run(image);
-
-	
+	let docker = Cli::default();
+	let container = docker.run(Postgres::default());
 	
 
     container.start();
@@ -50,7 +48,7 @@ fn make_postgres_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
 //	l.begin_ro_transaction().await.unwrap();
 //	panic!("III");
 
-	l
+	(l, container)
     })
 }
 

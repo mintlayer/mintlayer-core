@@ -20,8 +20,8 @@ use api_server_common::storage::{
 use common::chain::{config::create_unit_test_config, ChainConfig};
 
 #[must_use]
-pub fn make_in_memory_storage(chain_config: &ChainConfig) -> impl ApiServerStorage {
-    TransactionalApiServerInMemoryStorage::new(chain_config)
+pub fn make_in_memory_storage(chain_config: &ChainConfig) -> (impl ApiServerStorage, ()) {
+    (TransactionalApiServerInMemoryStorage::new(chain_config), ())
 }
 
 fn main() {

@@ -36,12 +36,12 @@ use libtest_mimic::Failed;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use tokio::runtime::Runtime;
-pub async fn initialization<S: ApiServerStorage + 'static, F: Fn() -> S>(
+pub async fn initialization<T , S: ApiServerStorage + Send + Sync + 'static, F: Fn() -> (S, T)>(
     storage_maker: Arc<F>,
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
 
-    let storage = storage_maker();
+    let (storage, X) = storage_maker();
 
     Runtime::new().unwrap().spawn(async move {
 	let mut tx = storage.transaction_ro().await.unwrap();
@@ -52,7 +52,7 @@ pub async fn initialization<S: ApiServerStorage + 'static, F: Fn() -> S>(
     Ok(())
 }
 
-pub async fn set_get<S: ApiServerStorage + 'static, F: Fn() -> S>(
+pub async fn set_get<T, S: ApiServerStorage + 'static + Send + Sync, F: Fn() -> (S, T)>(
     storage_maker: Arc<F>,
     seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
@@ -60,7 +60,7 @@ pub async fn set_get<S: ApiServerStorage + 'static, F: Fn() -> S>(
 
     let mut rng = make_seedable_rng(seed);
 
-    let mut storage = storage_maker();
+    let (mut storage, X) = storage_maker();
 
     Runtime::new().unwrap().spawn(async move {
 
@@ -277,7 +277,7 @@ pub async fn set_get<S: ApiServerStorage + 'static, F: Fn() -> S>(
     Ok(())
 }
 
-pub fn build_tests<S: ApiServerStorage + Send + 'static, F: Fn() -> S + Send + Sync + 'static>(
+pub fn build_tests<T:  'static, S: ApiServerStorage + Send + Sync + 'static, F: Fn() -> (S, T) + Send + Sync + 'static>(
     storage_maker: Arc<F>,
 ) -> impl Iterator<Item = libtest_mimic::Trial> {
     vec![
