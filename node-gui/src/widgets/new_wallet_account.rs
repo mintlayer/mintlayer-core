@@ -30,11 +30,10 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, text_input, Button, Text},
+    widget::{self, container, text_input, Button, Component, Text},
     Element, Length,
 };
 use iced_aw::Card;
-use iced_lazy::{self, Component};
 
 pub struct NewWalletAccount<Message> {
     on_submit: Box<dyn Fn(String) -> Message>,
@@ -101,6 +100,6 @@ where
     Message: 'a,
 {
     fn from(component: NewWalletAccount<Message>) -> Self {
-        iced_lazy::component(component)
+        widget::component(component)
     }
 }

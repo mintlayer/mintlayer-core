@@ -23,8 +23,8 @@ use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
 use common::time_getter::TimeGetter;
 use iced::widget::{column, container, text};
-use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
+use iced::{font, Subscription};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -36,7 +36,6 @@ pub fn main() -> iced::Result {
         id: Some("mintlayer-gui".to_owned()),
         antialiasing: true,
         exit_on_close_request: false,
-        try_opengles_first: true,
         ..Settings::default()
     })
 }
@@ -51,6 +50,7 @@ enum MintlayerNodeGUI {
 pub enum Message {
     FromBackend(UnboundedReceiver<BackendEvent>, BackendEvent),
     Loaded(anyhow::Result<BackendControls>),
+    FontLoaded(Result<(), font::Error>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
     MainWindowMessage(MainWindowMessage),
@@ -65,7 +65,10 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Loading,
-            Command::perform(node_initialize(TimeGetter::default()), Message::Loaded),
+            Command::batch(vec![
+                font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(Message::FontLoaded),
+                Command::perform(node_initialize(TimeGetter::default()), Message::Loaded),
+            ]),
         )
     }
 
@@ -100,6 +103,12 @@ impl Application for MintlayerNodeGUI {
                     *self = MintlayerNodeGUI::IntializationError(e.to_string());
                     Command::none()
                 }
+                Message::FontLoaded(status) => {
+                    if status.is_err() {
+                        *self = MintlayerNodeGUI::IntializationError("Faild to load font".into());
+                    }
+                    Command::none()
+                }
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         panic!("Attempted shutdown during initialization")
@@ -121,6 +130,12 @@ impl Application for MintlayerNodeGUI {
                     recv_backend_command(backend_receiver),
                 ]),
                 Message::Loaded(_) => unreachable!("Already loaded"),
+                Message::FontLoaded(status) => {
+                    if status.is_err() {
+                        *self = MintlayerNodeGUI::IntializationError("Faild to load font".into());
+                    }
+                    Command::none()
+                }
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         // TODO: this event doesn't cover the case of closing the Window through Cmd+Q in MacOS
@@ -138,6 +153,7 @@ impl Application for MintlayerNodeGUI {
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::FromBackend(_, _) => unreachable!(),
                 Message::Loaded(_) => Command::none(),
+                Message::FontLoaded(_) => Command::none(),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         iced::window::close()

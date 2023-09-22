@@ -15,11 +15,10 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, text_input, Button, Text},
+    widget::{self, container, text, text_input, Button, Component, Text},
     Element, Length,
 };
 use iced_aw::Card;
-use iced_lazy::{self, Component};
 
 pub struct WalletUnlockDialog<Message> {
     on_unlock: Box<dyn Fn(String) -> Message>,
@@ -39,6 +38,7 @@ pub fn wallet_unlock_dialog<Message>(
 #[derive(Default)]
 pub struct UnlockState {
     password: String,
+    unlocking: bool,
 }
 
 #[derive(Clone)]
@@ -58,29 +58,42 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
                 state.password = password;
                 None
             }
-            UnlockEvent::Ok => Some((self.on_unlock)(state.password.clone())),
+            UnlockEvent::Ok => {
+                state.unlocking = true;
+                Some((self.on_unlock)(state.password.clone()))
+            }
             UnlockEvent::Cancel => Some((self.on_close)()),
         }
     }
 
     fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
-        let button_enabled = !state.password.is_empty();
-        let button =
-            Button::new(Text::new("Unlock").horizontal_alignment(Horizontal::Center)).width(100.0);
-        let button = if button_enabled {
-            button.on_press(UnlockEvent::Ok)
-        } else {
-            button
+        let container = match state.unlocking {
+            true => container(text("Unlocking...")),
+            false => {
+                let button_enabled = !state.password.is_empty();
+                let button =
+                    Button::new(Text::new("Unlock").horizontal_alignment(Horizontal::Center))
+                        .width(100.0);
+                let button = if button_enabled {
+                    button.on_press(UnlockEvent::Ok)
+                } else {
+                    button
+                };
+                container(button)
+            }
+        };
+
+        let password = text_input("Password", &state.password).password();
+        let password = match state.unlocking {
+            true => password,
+            false => password.on_input(UnlockEvent::EditPassword),
         };
 
         Card::new(
             Text::new("Unlock"),
-            iced::widget::column![text_input("Password", &state.password)
-                .password()
-                .on_input(UnlockEvent::EditPassword)
-                .padding(15)],
+            iced::widget::column![password.padding(15)],
         )
-        .foot(container(button).width(Length::Fill).center_x())
+        .foot(container.width(Length::Fill).center_x())
         .max_width(600.0)
         .on_close(UnlockEvent::Cancel)
         .into()
@@ -92,6 +105,6 @@ where
     Message: 'a,
 {
     fn from(component: WalletUnlockDialog<Message>) -> Self {
-        iced_lazy::component(component)
+        widget::component(component)
     }
 }

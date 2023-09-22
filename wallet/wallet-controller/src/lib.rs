@@ -127,6 +127,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         Ok(controller)
     }
 
+    pub fn new_unsynced(
+        chain_config: Arc<ChainConfig>,
+        rpc_client: T,
+        wallet: DefaultWallet,
+        wallet_events: W,
+    ) -> Self {
+        Self {
+            chain_config,
+            rpc_client,
+            wallet,
+            staking_started: BTreeSet::new(),
+            wallet_events,
+        }
+    }
+
     pub fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
