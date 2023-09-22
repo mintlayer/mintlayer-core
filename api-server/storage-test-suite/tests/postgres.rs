@@ -27,7 +27,7 @@ use containers::with_container::ApiServerStorageWithContainer;
 async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
     let container = containers::podman::Container::PostgresFromDockerHub;
 
-    let podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
+    let mut podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
         .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
         .with_port_mapping(None, 5432);
 

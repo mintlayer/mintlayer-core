@@ -50,7 +50,7 @@ impl Podman {
     #[must_use]
     pub fn new(name_prefix: &str, container: Container) -> Self {
         let name =
-            [name_prefix.to_string(), current_datetime_as_string(), random_string(8)].join("_");
+            [name_prefix.to_string(), current_datetime_as_string(), random_string(8)].join("-");
 
         Self {
             name,
@@ -72,7 +72,7 @@ impl Podman {
         self
     }
 
-    pub fn run(&self) {
+    pub fn run(&mut self) {
         let mut command = std::process::Command::new("podman");
         command.arg("run");
         command.arg("--detach");
@@ -101,6 +101,7 @@ impl Podman {
             command,
             String::from_utf8_lossy(&output.stderr)
         );
+        self.stopped = false;
     }
 
     pub fn get_port_mapping(&self, container_port: u16) -> Option<u16> {
@@ -135,7 +136,7 @@ impl Podman {
         Some(port)
     }
 
-    pub fn stop(&self) {
+    pub fn stop(&mut self) {
         let mut command = std::process::Command::new("podman");
         command.arg("stop");
         command.arg(&self.name);
@@ -150,6 +151,7 @@ impl Podman {
             command,
             String::from_utf8_lossy(&output.stderr)
         );
+        self.stopped = true;
     }
 
     #[allow(dead_code)]
