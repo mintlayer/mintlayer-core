@@ -75,6 +75,8 @@ jobs:
           path: target/tmp
 
   build_ubuntu:
+    env:
+      ML_CONTAINERIZED_TESTS: 1
     runs-on: ubuntu-latest
     # if: github.ref == 'refs/heads/master'
     steps:

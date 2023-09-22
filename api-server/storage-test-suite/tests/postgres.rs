@@ -51,19 +51,17 @@ async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServer
     ApiServerStorageWithContainer::new(storage, podman)
 }
 
-#[cfg(target_os = "linux")]
-fn run_test() {
+fn main() {
+    rust_backtrace::enable();
+
+    // Only run the test if the env var is defined
+    if std::env::var("ML_CONTAINERIZED_TESTS").is_err() {
+        eprintln!("Warning: Skipping Postgres containerized tests");
+        return;
+    }
+
     let storage_maker = || make_postgres_storage(Arc::new(create_unit_test_config()));
     let result = api_server_backend_test_suite::run(storage_maker);
 
     result.exit()
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_test() {}
-
-fn main() {
-    rust_backtrace::enable();
-
-    run_test()
 }
