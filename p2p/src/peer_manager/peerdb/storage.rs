@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use crate::decl_storage_trait;
+use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
 pub trait PeerDbStorageRead {
     fn get_version(&self) -> Result<Option<u32>, storage::Error>;
@@ -47,4 +47,27 @@ pub trait PeerDbStorageWrite {
     fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
-decl_storage_trait!(PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite);
+// Note: here we want to say something like:
+//  pub trait PeerDbStorage: for<'t> Transactional<'t> + Send
+//      where for<'t> <Self as Transactional<'t>>::TransactionRo: PeerDbStorageRead,
+//            for<'t> <Self as Transactional<'t>>::TransactionRw: PeerDbStorageWrite {}
+// But currently Rust would require us to duplicate the "where" constrains in all places
+// where PeerDbStorage is used, so we use this "Helper" approach instead.
+pub trait PeerDbStorage: for<'t> PeerDbStorageHelper<'t> + Send {}
+
+pub trait PeerDbStorageHelper<'t>:
+    Transactional<'t, TransactionRo = Self::TxRo, TransactionRw = Self::TxRw>
+{
+    type TxRo: TransactionRo + PeerDbStorageRead + 't;
+    type TxRw: TransactionRw + PeerDbStorageWrite + 't;
+}
+
+impl<'t, T> PeerDbStorageHelper<'t> for T
+where
+    T: Transactional<'t>,
+    Self::TransactionRo: PeerDbStorageRead + 't,
+    Self::TransactionRw: PeerDbStorageWrite + 't,
+{
+    type TxRo = Self::TransactionRo;
+    type TxRw = Self::TransactionRw;
+}

@@ -37,59 +37,6 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, storage::Error>;
 }
 
-/// Declare a trait that extends [`Transactional`] and adds additional constraints to its
-/// associated types `TransactionRo` and `TransactionRw`.
-/// ```
-/// # use p2p::{decl_storage_trait, peer_manager::peerdb_common::storage::Transactional};
-/// # trait StorageRead {}
-/// # trait StorageWrite {}
-/// decl_storage_trait!(Storage, StorageRead, StorageWrite);
-/// ```
-/// is basically equivalent to
-/// ```
-/// # use p2p::peer_manager::peerdb_common::storage::Transactional;
-/// # trait StorageRead {}
-/// # trait StorageWrite {}
-/// pub trait Storage: for<'t> Transactional<'t> + Send
-/// where
-///     for<'t> <Self as Transactional<'t>>::TransactionRo: StorageRead,
-///     for<'t> <Self as Transactional<'t>>::TransactionRw: StorageWrite,
-/// {
-/// }
-/// ```
-/// except that with the `where` clause you'd have to repeat the trait bounds for
-/// `TransactionRo`/`TransactionRw` everywhere where you use `Storage`, and with
-/// `decl_storage_trait` you don't.
-#[macro_export]
-macro_rules! decl_storage_trait {
-    ($trait_name: ident, $tx_read_trait: ident, $tx_write_trait: ident) => {
-        paste::paste! {
-            pub trait [<$trait_name Helper>]<'t>:
-                $crate::peer_manager::peerdb_common::Transactional<
-                't,
-                TransactionRo = Self::TxRo,
-                TransactionRw = Self::TxRw,
-            >
-            {
-                type TxRo: $crate::peer_manager::peerdb_common::TransactionRo + $tx_read_trait + 't;
-                type TxRw: $crate::peer_manager::peerdb_common::TransactionRw + $tx_write_trait + 't;
-            }
-
-            impl<'t, T> [<$trait_name Helper>]<'t> for T
-            where
-                T: $crate::peer_manager::peerdb_common::Transactional<'t>,
-                Self::TransactionRo: $tx_read_trait + 't,
-                Self::TransactionRw: $tx_write_trait + 't,
-            {
-                type TxRo = Self::TransactionRo;
-                type TxRw = Self::TransactionRw;
-            }
-
-            pub trait $trait_name: for<'t> [<$trait_name Helper>]<'t> + Send {}
-        }
-    };
-}
-
 const MAX_RECOVERABLE_ERROR_RETRY_COUNT: u32 = 3;
 
 /// Try updating the storage, gracefully handle recoverable errors.

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::decl_storage_trait;
+use p2p::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
 pub trait DnsServerStorageRead {
     fn get_version(&self) -> Result<Option<u32>, storage::Error>;
@@ -29,8 +29,27 @@ pub trait DnsServerStorageWrite {
     fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
-decl_storage_trait!(
-    DnsServerStorage,
-    DnsServerStorageRead,
-    DnsServerStorageWrite
-);
+// Note: here we want to say something like:
+//  pub trait DnsServerStorage: for<'t> Transactional<'t> + Send
+//      where for<'t> <Self as Transactional<'t>>::TransactionRo: DnsServerStorageRead,
+//            for<'t> <Self as Transactional<'t>>::TransactionRw: DnsServerStorageWrite {}
+// But currently Rust would require us to duplicate the "where" constrains in all places
+// where DnsServerStorage is used, so we use this "Helper" approach instead.
+pub trait DnsServerStorage: for<'t> DnsServerStorageHelper<'t> + Send {}
+
+pub trait DnsServerStorageHelper<'t>:
+    Transactional<'t, TransactionRo = Self::TxRo, TransactionRw = Self::TxRw>
+{
+    type TxRo: TransactionRo + DnsServerStorageRead + 't;
+    type TxRw: TransactionRw + DnsServerStorageWrite + 't;
+}
+
+impl<'t, T> DnsServerStorageHelper<'t> for T
+where
+    T: Transactional<'t>,
+    Self::TransactionRo: DnsServerStorageRead + 't,
+    Self::TransactionRw: DnsServerStorageWrite + 't,
+{
+    type TxRo = Self::TransactionRo;
+    type TxRw = Self::TransactionRw;
+}
