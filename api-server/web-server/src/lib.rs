@@ -17,7 +17,11 @@ pub mod error;
 
 pub use error::APIServerWebServerError;
 
+use common::chain::ChainConfig;
+use std::sync::Arc;
+
 #[derive(Debug, Clone)]
-pub struct APIServerWebServerState {
-    pub example_shared_value: String,
+pub struct APIServerWebServerState<T> {
+    pub db: T,
+    pub chain_config: Arc<ChainConfig>,
 }

@@ -26,6 +26,7 @@ fn shuffle_vec<T>(mut vec: Vec<T>) -> Vec<T> {
     vec
 }
 
+#[tracing::instrument]
 #[test]
 fn test_filter_peer_role() {
     let peer1 = PeerId::new();
@@ -66,6 +67,7 @@ fn test_filter_peer_role() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_filter_address_group() {
     let peer1 = PeerId::new();
@@ -203,6 +205,7 @@ fn test_filter_address_group() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_ping() {
     let peer1 = PeerId::new();
@@ -305,6 +308,7 @@ fn test_ping() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_filter_by_last_block_time() {
     let peer1 = PeerId::new();
@@ -407,6 +411,7 @@ fn test_filter_by_last_block_time() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_filter_by_last_transaction_time() {
     let peer1 = PeerId::new();
@@ -509,6 +514,7 @@ fn test_filter_by_last_transaction_time() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_find_group_most_connections() {
     let peer1 = PeerId::new();
@@ -613,6 +619,7 @@ fn test_preserved_by_address_group(index: usize, candidate: &mut EvictionCandida
     index < PRESERVED_COUNT_ADDRESS_GROUP
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(test_utils::random::Seed::from_entropy())]
@@ -650,6 +657,7 @@ fn test_randomized(#[case] seed: Seed) {
     }
 }
 
+#[tracing::instrument]
 #[test]
 fn test_block_relay_eviction_young_old_peers() {
     let peer1 = PeerId::new();
@@ -725,6 +733,7 @@ fn test_block_relay_eviction_young_old_peers() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_block_relay_eviction_no_blocks() {
     let peer1 = PeerId::new();
@@ -766,6 +775,7 @@ fn test_block_relay_eviction_no_blocks() {
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn test_block_relay_eviction_old_blocks() {
     let peer1 = PeerId::new();

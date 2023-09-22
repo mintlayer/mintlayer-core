@@ -153,6 +153,8 @@ impl SelectionResult {
 pub enum UtxoSelectorError {
     #[error("No solution found")]
     NoSolutionFound,
+    #[error("No available UTXOs")]
+    NoUtxos,
     #[error("Not enough funds got: {0:?}, requested: {1:?}")]
     NotEnoughFunds(Amount, Amount),
     #[error("The inputs size exceeds the maximum weight.")]
@@ -663,6 +665,8 @@ pub fn select_coins(
     cost_of_change: Amount,
     coin_selection_algo: CoinSelectionAlgo,
 ) -> Result<SelectionResult, UtxoSelectorError> {
+    ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
+
     let total_available_value = utxo_pool
         .iter()
         .map(|utxo| utxo.get_effective_value(pay_fees))

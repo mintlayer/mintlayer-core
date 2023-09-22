@@ -64,7 +64,8 @@ impl TestNodeGroup {
             for j in 0..self.data.len() {
                 if i != j {
                     let dest_peer_id = self.data[j].node.peer_id;
-                    self.data[i].node.try_connect_peer(dest_peer_id);
+                    let dest_peer_protocol_version = self.data[j].node.protocol_version;
+                    self.data[i].node.try_connect_peer(dest_peer_id, dest_peer_protocol_version);
                 }
             }
         }
@@ -194,7 +195,7 @@ impl TestNodeGroup {
         let sentinel_tx_id = get_random_hash(rng).into();
         let sentinel_msg = SyncMessage::TransactionRequest(sentinel_tx_id);
 
-        log::debug!("Using transaction {sentinel_tx_id} as a sentinel");
+        log::trace!("Using transaction {sentinel_tx_id} as a sentinel");
 
         let mut msg_count = 0;
 
@@ -207,7 +208,7 @@ impl TestNodeGroup {
 
             {
                 // Send the sentinel
-                log::debug!("Sending sentinel transaction {sentinel_tx_id} to peer {cur_peer_id}");
+                log::trace!("Sending sentinel transaction {sentinel_tx_id} to peer {cur_peer_id}");
 
                 let tx_sender_peer_id = self
                     .data
@@ -235,7 +236,7 @@ impl TestNodeGroup {
                     SyncMessage::TransactionResponse(TransactionResponse::NotFound(tx_id))
                         if *tx_id == sentinel_tx_id =>
                     {
-                        log::debug!("Sentinel transaction {tx_id} received by peer {cur_peer_id}");
+                        log::trace!("Sentinel transaction {tx_id} received by peer {cur_peer_id}");
                         break;
                     }
                     message => {

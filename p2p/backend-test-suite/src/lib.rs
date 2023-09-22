@@ -43,7 +43,7 @@ where
     N::SyncingEventReceiver: SyncingEventReceiver + Debug,
 {
     rlimit::increase_nofile_limit(10 * 1024).unwrap();
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let args = Arguments::from_args();
     libtest_mimic::run(&args, tests::<T, N>()).exit();
 }

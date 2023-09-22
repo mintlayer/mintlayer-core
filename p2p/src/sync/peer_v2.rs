@@ -19,17 +19,13 @@ use std::{
     time::Duration,
 };
 
-use crypto::random::make_pseudo_rng;
 use itertools::Itertools;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::MissedTickBehavior,
 };
 
-use chainstate::{
-    ban_score::BanScore, chainstate_interface::ChainstateInterface, BlockIndex, BlockSource,
-    Locator,
-};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
     chain::{
         block::signed_block_header::SignedBlockHeader, Block, ChainConfig, GenBlock, Transaction,
@@ -38,13 +34,9 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{
-    error::{Error as MempoolError, MempoolPolicyError},
-    MempoolHandle,
-};
+use mempool::MempoolHandle;
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
-use utils::{atomics::AcqRelAtomicBool, bloom_filters::rolling_bloom_filter::RollingBloomFilter};
 
 use crate::{
     config::P2pConfig,
@@ -58,29 +50,21 @@ use crate::{
         NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    sync::types::PeerActivity,
+    sync::{
+        peer_common::{
+            choose_peers_best_block, handle_message_processing_result, KnownTransactions,
+        },
+        types::PeerActivity,
+        LocalEvent,
+    },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
 
-use super::LocalEvent;
-
-/// Use the same parameters as Bitcoin Core (see `m_tx_inventory_known_filter`)
-const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE: usize = 50000;
-const KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP: f64 = 0.000001;
-
-/// Helper for `RollingBloomFilter` because `Id` does not implement `Hash`
-struct TxIdWrapper(Id<Transaction>);
-
-impl std::hash::Hash for TxIdWrapper {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.as_ref().hash(state);
-    }
-}
+use super::chainstate_handle::ChainstateHandle;
 
 // TODO: Take into account the chain work when syncing.
-// TODO: rename this struct to PeerState/PeerManager or similar.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
@@ -89,23 +73,19 @@ pub struct Peer<T: NetworkingService> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     common_services: Services,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
     messaging_handle: T::MessagingHandle,
     sync_msg_rx: Receiver<SyncMessage>,
     local_event_rx: UnboundedReceiver<LocalEvent>,
-    // TODO: this is an optimization to avoid extra subsystem calls. But there is no need for it
-    // to be an atomic; instead, we can receive it as a non-atomic bool during construction and
-    // update it on every "new tip" event.
-    is_initial_block_download: Arc<AcqRelAtomicBool>,
     time_getter: TimeGetter,
     /// Incoming data state.
     incoming: IncomingDataState,
     /// Outgoing data state.
     outgoing: OutgoingDataState,
     /// A rolling filter of all known transactions (sent to us or sent by us)
-    known_transactions: RollingBloomFilter<TxIdWrapper>,
+    known_transactions: KnownTransactions,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
@@ -127,9 +107,6 @@ struct IncomingDataState {
     /// This includes headers received by any means, e.g. via HeaderList messages, as part
     /// of a locator during peer's header requests, via block responses.
     peers_best_block_that_we_have: Option<Id<GenBlock>>,
-    /// The number of singular unconnected headers received from a peer. This counter is reset
-    /// after receiving a valid header list.
-    singular_unconnected_headers_count: usize,
 }
 
 struct OutgoingDataState {
@@ -138,8 +115,6 @@ struct OutgoingDataState {
     /// The index of the best block that we've sent to the peer.
     best_sent_block: Option<BlockIndex>,
     /// The id of the best block header that we've sent to the peer.
-    // Note: at this moment this field is only informational, i.e. we only print it to the log,
-    // see the comment in handle_new_tip.
     best_sent_block_header: Option<Id<GenBlock>>,
 }
 
@@ -154,20 +129,15 @@ where
         common_services: Services,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent>,
         sync_msg_rx: Receiver<SyncMessage>,
         messaging_handle: T::MessagingHandle,
         local_event_rx: UnboundedReceiver<LocalEvent>,
-        is_initial_block_download: Arc<AcqRelAtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
-        let known_transactions = RollingBloomFilter::new(
-            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FILTER_SIZE,
-            KNOWN_TRANSACTIONS_ROLLING_BLOOM_FPP,
-            &mut make_pseudo_rng(),
-        );
+        let known_transactions = KnownTransactions::new();
 
         Self {
             id: id.into(),
@@ -180,13 +150,11 @@ where
             messaging_handle,
             sync_msg_rx,
             local_event_rx,
-            is_initial_block_download,
             time_getter,
             incoming: IncomingDataState {
                 pending_headers: Vec::new(),
                 requested_blocks: BTreeSet::new(),
                 peers_best_block_that_we_have: None,
-                singular_unconnected_headers_count: 0,
             },
             outgoing: OutgoingDataState {
                 blocks_queue: VecDeque::new(),
@@ -264,7 +232,7 @@ where
 
     async fn handle_new_tip(&mut self, new_tip_id: &Id<Block>) -> Result<()> {
         // This function is not supposed to be called when in IBD.
-        debug_assert!(!self.is_initial_block_download.load());
+        debug_assert!(!self.chainstate_handle.is_initial_block_download().await?);
 
         let best_sent_block_id =
             self.outgoing.best_sent_block.as_ref().map(|index| (*index.block_id()).into());
@@ -285,13 +253,9 @@ where
         if self.send_tip_updates {
             debug_assert!(self.common_services.has_service(Service::Blocks));
 
-            // Note: an intermediate implementation also used to use best_sent_block_header
-            // here when determining the latest fork point. But it doesn't seem to be a good
-            // idea to use it in the v1 protocol, because legacy peers may not maintain their
-            // "received pending headers" correctly. So, they may see the announced header list
-            // as disconnected. But they can only tolerate disconnected lists of length 1,
-            // therefore, they might ban us eventually.
-            if self.incoming.peers_best_block_that_we_have.is_some() || best_sent_block_id.is_some()
+            if self.incoming.peers_best_block_that_we_have.is_some()
+                || best_sent_block_id.is_some()
+                || self.outgoing.best_sent_block_header.is_some()
             {
                 let limit = *self.p2p_config.msg_header_count_limit;
                 let new_tip_id = *new_tip_id;
@@ -301,6 +265,7 @@ where
                     .peers_best_block_that_we_have
                     .iter()
                     .chain(best_sent_block_id.iter())
+                    .chain(self.outgoing.best_sent_block_header.iter())
                     .copied()
                     .collect();
 
@@ -313,9 +278,9 @@ where
 
                         let headers =
                             c.get_mainchain_headers_since_latest_fork_point(&block_ids, limit)?;
-                        Result::<_>::Ok((headers, best_block_id))
+                        Ok((headers, best_block_id))
                     })
-                    .await??;
+                    .await?;
 
                 if headers.is_empty() {
                     log::warn!(
@@ -373,7 +338,7 @@ where
         match event {
             LocalEvent::ChainstateNewTip(new_tip_id) => self.handle_new_tip(&new_tip_id).await,
             LocalEvent::MempoolNewTx(txid) => {
-                if !self.known_transactions.contains(&TxIdWrapper(txid))
+                if !self.known_transactions.contains(&txid)
                     && self.common_services.has_service(Service::Transactions)
                 {
                     self.add_known_transaction(txid);
@@ -386,7 +351,7 @@ where
     }
 
     async fn request_headers(&mut self) -> Result<()> {
-        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
+        let locator = self.chainstate_handle.call(|this| Ok(this.get_locator()?)).await?;
         if locator.len() > *self.p2p_config.msg_max_locator_count {
             // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
             // so we should never get here in production code. Moreover, currently it's not
@@ -425,7 +390,7 @@ where
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         };
-        Self::handle_result(&self.peer_manager_sender, self.id(), res).await
+        handle_message_processing_result(&self.peer_manager_sender, self.id(), res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -439,7 +404,7 @@ where
             )));
         }
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
             // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
             // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
@@ -475,9 +440,9 @@ where
                     Some(c.get_best_block_id()?)
                 };
 
-                Result::<_>::Ok((headers, peers_best_block_that_we_have))
+                Ok((headers, peers_best_block_that_we_have))
             })
-            .await??;
+            .await?;
         debug_assert!(headers.len() <= header_count_limit);
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
@@ -508,7 +473,7 @@ where
         // Assume this is the case if it asks us for blocks.
         self.peer_activity.set_expecting_headers_since(None);
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             // Note: currently this is not a normal situation, because a node in IBD wouldn't
             // send block headers to the peer in the first place, which means that the peer won't
             // be able to ask it for blocks.
@@ -565,9 +530,9 @@ where
                     }
                 }
 
-                Result::<_>::Ok(())
+                Ok(())
             })
-            .await??;
+            .await?;
 
         self.outgoing.blocks_queue.extend(block_ids.into_iter());
 
@@ -645,8 +610,8 @@ where
 
         let first_header_is_connected_to_chainstate = self
             .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&first_header_prev_id))
-            .await??
+            .call(move |c| Ok(c.get_gen_block_index(&first_header_prev_id)?))
+            .await?
             .is_some();
 
         let first_header_is_connected_to_pending_headers = {
@@ -674,30 +639,8 @@ where
             || first_header_is_connected_to_pending_headers
             || first_header_is_connected_to_requested_blocks)
         {
-            // Note: legacy nodes will send singular unconnected headers during block announcement,
-            // so we have to handle this behavior here.
-            // TODO: this should be removed in the protocol v2. See the issue #1110.
-            if headers.len() == 1 {
-                self.incoming.singular_unconnected_headers_count += 1;
-
-                log::debug!(
-                    "[peer id = {}] The peer has sent {} singular unconnected headers",
-                    self.id(),
-                    self.incoming.singular_unconnected_headers_count
-                );
-                if self.incoming.singular_unconnected_headers_count
-                    <= *self.p2p_config.max_singular_unconnected_headers
-                {
-                    self.request_headers().await?;
-                    return Ok(());
-                }
-            }
-
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
-
-        // Now that we've received a properly connected header list, this counter may be reset.
-        self.incoming.singular_unconnected_headers_count = 0;
 
         let already_downloading_blocks = if !self.incoming.requested_blocks.is_empty() {
             true
@@ -735,9 +678,9 @@ where
                     existing_block_headers.last().map(|header| header.get_id().into()),
                 )?;
 
-                Result::<_>::Ok((new_block_headers, peers_best_block_that_we_have))
+                Ok((new_block_headers, peers_best_block_that_we_have))
             })
-            .await??;
+            .await?;
 
         self.incoming.peers_best_block_that_we_have = peers_best_block_that_we_have;
 
@@ -760,8 +703,8 @@ where
                 .expect("Headers shouldn't be empty")
                 .clone();
             self.chainstate_handle
-                .call(|c| c.preliminary_header_check(first_header))
-                .await??;
+                .call(|c| Ok(c.preliminary_header_check(first_header)?))
+                .await?;
         }
 
         self.request_blocks(new_block_headers)
@@ -785,7 +728,7 @@ where
             )));
         }
 
-        let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
+        let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
 
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let peer_id = self.id();
@@ -812,9 +755,9 @@ where
                     Some(block_id.into()),
                 )?;
 
-                Result::Ok((best_block, new_tip_received))
+                Ok((best_block, new_tip_received))
             })
-            .await??;
+            .await?;
         self.incoming.peers_best_block_that_we_have = best_block;
 
         if new_tip_received {
@@ -833,8 +776,8 @@ where
                 headers
             } else {
                 self.chainstate_handle
-                    .call(|c| c.split_off_leading_known_headers(headers))
-                    .await??
+                    .call(|c| Ok(c.split_off_leading_known_headers(headers)?))
+                    .await?
                     .1
             };
 
@@ -907,7 +850,7 @@ where
     }
 
     fn add_known_transaction(&mut self, txid: Id<Transaction>) {
-        self.known_transactions.insert(&TxIdWrapper(txid), &mut make_pseudo_rng());
+        self.known_transactions.insert(&txid);
     }
 
     // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
@@ -920,7 +863,7 @@ where
 
         self.add_known_transaction(tx);
 
-        if self.is_initial_block_download.load() {
+        if self.chainstate_handle.is_initial_block_download().await? {
             log::debug!(
                 "[peer id = {}] Ignoring transaction announcement because the node is in initial block download", self.id()
             );
@@ -953,88 +896,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Handles a result of message processing.
-    ///
-    /// There are three possible types of errors:
-    /// - Fatal errors will be propagated by this function effectively stopping the peer event loop.
-    /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
-    ///   "ban score" value of the given error.
-    /// - Ignored errors aren't propagated and don't affect the peer score.
-    pub async fn handle_result(
-        peer_manager_sender: &UnboundedSender<PeerManagerEvent>,
-        peer_id: PeerId,
-        result: Result<()>,
-    ) -> Result<()> {
-        let error = match result {
-            Ok(()) => return Ok(()),
-            Err(e) => e,
-        };
-
-        match error {
-            // Due to the fact that p2p is split into several tasks, it is possible to send a
-            // request/response after a peer is disconnected, but before receiving the disconnect
-            // event. Therefore this error can be safely ignored.
-            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            // The special handling of these mempool errors is not really necessary, because their ban score is 0
-            P2pError::MempoolError(MempoolError::Policy(
-                MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
-            )) => Ok(()),
-
-            // A protocol error - increase the ban score of a peer if needed.
-            e @ (P2pError::ProtocolError(_)
-            | P2pError::MempoolError(_)
-            | P2pError::ChainstateError(_)) => {
-                let ban_score = e.ban_score();
-                if ban_score > 0 {
-                    log::info!(
-                        "[peer id = {}] Adjusting peer's score by {}: {:?}",
-                        peer_id,
-                        ban_score,
-                        e,
-                    );
-
-                    let (sender, receiver) = oneshot_nofail::channel();
-                    peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                        peer_id, ban_score, sender,
-                    ))?;
-                    receiver.await?.or_else(|e| match e {
-                        P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-                        e => Err(e),
-                    })
-                } else {
-                    log::debug!(
-                        "[peer id = {}] Ignoring an error with the ban score of 0: {:?}",
-                        peer_id,
-                        e,
-                    );
-                    Ok(())
-                }
-            }
-
-            // Some of these errors aren't technically fatal,
-            // but they shouldn't occur in the sync manager.
-            e @ (P2pError::DialError(_)
-            | P2pError::ConversionError(_)
-            | P2pError::PeerError(_)
-            | P2pError::NoiseHandshakeError(_)
-            | P2pError::InvalidConfigurationValue(_)
-            | P2pError::MessageCodecError(_)) => panic!("Unexpected error {e:?}"),
-
-            // Fatal errors, simply propagate them to stop the sync manager.
-            // Note/TODO: due to how error types are currently organized, a storage error can
-            // "hide" in other error types. E.g. ChainstateError can contain a BlockError, which
-            // can contain a storage error (both directly and through other error types such as
-            // PropertyQueryError). Also, MempoolError may contain ChainstateError through
-            // TxValidationError. I.e. the code above may silently consume a fatal error,
-            // leaving this struct in some intermediate state. Because of this, a malfunctioning
-            // node may see its peers as behaving incorrectly and ban them eventually.
-            e @ (P2pError::ChannelClosed
-            | P2pError::SubsystemFailure
-            | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
-        }
     }
 
     /// Sends a block list request.
@@ -1080,7 +941,7 @@ where
             .call(move |c| {
                 let index = c.get_block_index(&id);
                 let block = c.get_block(id);
-                (block, index)
+                Ok((block, index))
             })
             .await?;
         // All requested blocks are already checked while processing `BlockListRequest`.
@@ -1136,31 +997,6 @@ where
                 self.id(),
                 err
             );
-        }
-    }
-}
-
-/// This function is used to update peers_best_block_that_we_have.
-/// The "better" block is the one that is on the main chain and has bigger height.
-/// In the case of a tie, new_block_id is preferred.
-fn choose_peers_best_block(
-    chainstate: &dyn ChainstateInterface,
-    old_block_id: Option<Id<GenBlock>>,
-    new_block_id: Option<Id<GenBlock>>,
-) -> Result<Option<Id<GenBlock>>> {
-    match (old_block_id, new_block_id) {
-        (None, None) => Ok(None),
-        (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
-        (Some(old_id), Some(new_id)) => {
-            let old_height =
-                chainstate.get_block_height_in_main_chain(&old_id)?.unwrap_or(0.into());
-            let new_height =
-                chainstate.get_block_height_in_main_chain(&new_id)?.unwrap_or(0.into());
-            if new_height >= old_height {
-                Ok(Some(new_id))
-            } else {
-                Ok(Some(old_id))
-            }
         }
     }
 }

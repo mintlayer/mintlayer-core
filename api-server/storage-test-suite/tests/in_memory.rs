@@ -20,6 +20,7 @@ use api_server_common::storage::{
     storage_api::ApiServerStorage,
 };
 use common::chain::{config::create_unit_test_config, ChainConfig};
+use utils::rust_backtrace;
 
 #[must_use]
 #[allow(clippy::unused_async)]
@@ -28,6 +29,8 @@ async fn make_in_memory_storage(chain_config: Arc<ChainConfig>) -> impl ApiServe
 }
 
 fn main() {
+    rust_backtrace::enable();
+
     let storage_maker = || make_in_memory_storage(Arc::new(create_unit_test_config()));
     let result = api_server_backend_test_suite::run(storage_maker);
 

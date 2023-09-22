@@ -45,7 +45,7 @@ where
     Fut: Future<Output = S> + Send + 'static,
 {
     let storage = storage_maker().await;
-    let mut tx = storage.transaction_ro().await.unwrap();
+    let tx = storage.transaction_ro().await.unwrap();
     assert!(tx.is_initialized().await.unwrap());
     Ok(())
 }
@@ -64,7 +64,7 @@ where
 
     let mut storage = storage_maker().await;
 
-    let mut db_tx = storage.transaction_ro().await.unwrap();
+    let db_tx = storage.transaction_ro().await.unwrap();
 
     let is_initialized = db_tx.is_initialized().await.unwrap();
     assert!(is_initialized);
@@ -109,7 +109,7 @@ where
 
         db_tx.commit().await.unwrap();
 
-        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let db_tx = storage.transaction_ro().await.unwrap();
 
         {
             let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
@@ -152,7 +152,7 @@ where
 
     // Test setting/getting transactions
     {
-        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let db_tx = storage.transaction_ro().await.unwrap();
 
         let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
         let tx = db_tx.get_transaction(random_tx_id).await.unwrap();

@@ -23,7 +23,7 @@ use logging::log;
 
 #[test]
 fn check_encode() {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     let data = vec![0x00, 0x01, 0x02].check_base32().unwrap();
     let hrp = "bech32";

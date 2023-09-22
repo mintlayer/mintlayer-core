@@ -324,9 +324,9 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             assert "Success" in await wallet.create_new_account()
             assert "Success" in await wallet.select_account(1)
-            address = await wallet.new_address()
+            acc1_address = await wallet.new_address()
             assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "The transaction was submitted successfully" in await wallet.send_to_address(address, 100)
+            assert "The transaction was submitted successfully" in await wallet.send_to_address(acc1_address, 100)
             assert "Success" in await wallet.select_account(1)
             transactions = node.mempool_transactions()
 
@@ -345,7 +345,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert pools[0].balance == 40000
 
             assert "Success" in await wallet.select_account(1)
-            delegation_id = await wallet.create_delegation(address, pools[0].pool_id)
+            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             assert delegation_id is not None
             transactions = node.mempool_transactions()
 
@@ -373,7 +373,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             last_delegation_balance = delegations[0].balance
             for _ in range(4, 10):
                 tip_id = node.chainstate_best_block_id()
-                assert "The transaction was submitted successfully" in await wallet.send_to_address(address, 1)
+                assert "The transaction was submitted successfully" in await wallet.send_to_address(acc1_address, 1)
                 transactions = node.mempool_transactions()
                 self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
 
@@ -381,6 +381,29 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert len(delegations) == 1
                 assert delegations[0].balance > last_delegation_balance
                 last_delegation_balance = delegations[0].balance
+
+            # stake to acc1 delegation from acc 0
+            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
+            assert "Success" in await wallet.stake_delegation(10, delegation_id)
+            self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+
+            # check that we still don't have any delagations for this account
+            delegations = await wallet.list_delegation_ids()
+            assert len(delegations) == 0
+
+            # create a delegation from acc 0 but with destination address for acc1
+            delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
+            tip_id = node.chainstate_best_block_id()
+            self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+
+            # check that we still don't have any delagations for this account
+            delegations = await wallet.list_delegation_ids()
+            assert len(delegations) == 0
+
+            assert "Success" in await wallet.select_account(1)
+            delegations = await wallet.list_delegation_ids()
+            assert len(delegations) == 2
+            assert delegation_id in [delegation.delegation_id for delegation in delegations]
 
 
 if __name__ == '__main__':

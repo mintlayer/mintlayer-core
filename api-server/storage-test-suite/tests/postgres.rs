@@ -22,6 +22,7 @@ use api_server_common::storage::{
 };
 use common::chain::{config::create_unit_test_config, ChainConfig};
 use containers::with_container::ApiServerStorageWithContainer;
+use utils::rust_backtrace;
 
 #[must_use]
 async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
@@ -62,5 +63,7 @@ fn run_test() {
 fn run_test() {}
 
 fn main() {
+    rust_backtrace::enable();
+
     run_test()
 }

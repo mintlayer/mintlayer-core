@@ -211,6 +211,7 @@ mod tests {
         net::default_backend::{transport::BufferedTranscoder, types::Message},
     };
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]

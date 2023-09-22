@@ -286,7 +286,7 @@ pub struct CliTestFramework {
 
 impl CliTestFramework {
     pub async fn setup(rng: &mut impl Rng) -> Self {
-        logging::init_logging::<std::path::PathBuf>(None);
+        logging::init_logging();
 
         let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
 

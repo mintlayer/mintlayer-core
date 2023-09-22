@@ -393,6 +393,8 @@ def init_mintlayer_types():
 
             "HeaderListRequest": "Vec<Id>",
 
+            "HeaderList": "Vec<SignedBlockHeader>",
+
             "TransactionResponse": {
                 "type": "enum",
                 "type_mapping": [
@@ -409,7 +411,7 @@ def init_mintlayer_types():
                     ["ping_response", "PingMessage"],
                     ["new_transaction", "Id"],
                     ["header_list_request", "HeaderListRequest"],
-                    ["header_list", "()"], # TODO
+                    ["header_list", "HeaderList"],
                     ["block_list_request", "Vec<Id>"], # TODO
                     ["block_response", "()"], # TODO
                     ["announce_addr_request", "PeerAddress"], # TODO

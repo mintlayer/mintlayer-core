@@ -22,6 +22,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;
 
+#[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -57,6 +58,7 @@ fn randomized(#[case] seed: Seed) {
     }
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

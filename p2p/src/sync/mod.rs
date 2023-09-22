@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -16,7 +16,10 @@
 //! This module is responsible for both initial syncing and further blocks processing (the reaction
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
-mod peer;
+mod chainstate_handle;
+mod peer_common;
+mod peer_v1;
+mod peer_v2;
 mod types;
 
 use std::collections::HashMap;
@@ -27,7 +30,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
+use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{config::ChainConfig, Block, Transaction},
     primitives::Id,
@@ -35,9 +38,7 @@ use common::{
 };
 use logging::log;
 use mempool::{event::TransactionProcessed, tx_origin::TxOrigin, MempoolHandle};
-use utils::atomics::AcqRelAtomicBool;
-use utils::sync::Arc;
-use utils::tap_error_log::LogError;
+use utils::{sync::Arc, tap_error_log::LogError};
 
 use crate::{
     config::P2pConfig,
@@ -47,10 +48,12 @@ use crate::{
         types::{services::Services, SyncingEvent},
         MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    sync::peer::Peer,
+    protocol::SupportedProtocolVersion,
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
 };
+
+use self::chainstate_handle::ChainstateHandle;
 
 #[derive(Debug)]
 pub enum LocalEvent {
@@ -78,11 +81,8 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent>,
 
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-
-    /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
-    is_initial_block_download: Arc<AcqRelAtomicBool>,
 
     /// The list of connected peers
     peers: HashMap<PeerId, PeerContext>,
@@ -115,9 +115,8 @@ where
             messaging_handle,
             syncing_event_receiver,
             peer_manager_sender,
-            chainstate_handle,
+            chainstate_handle: ChainstateHandle::new(chainstate_handle),
             mempool_handle,
-            is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
             time_getter,
         }
@@ -128,9 +127,6 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
-        self.is_initial_block_download
-            .store(self.chainstate_handle.call(|c| c.is_initial_block_download()).await?);
-
         let mut tx_processed_receiver = subscribe_to_tx_processed(&self.mempool_handle).await?;
 
         loop {
@@ -158,30 +154,56 @@ where
         &mut self,
         peer_id: PeerId,
         common_services: Services,
+        protocol_version: SupportedProtocolVersion,
         sync_msg_rx: Receiver<SyncMessage>,
     ) {
         log::debug!("Register peer {peer_id} to sync manager");
 
         let (local_event_tx, local_event_rx) = mpsc::unbounded_channel();
 
-        let mut peer = Peer::<T>::new(
-            peer_id,
-            common_services,
-            Arc::clone(&self.chain_config),
-            Arc::clone(&self.p2p_config),
-            self.chainstate_handle.clone(),
-            self.mempool_handle.clone(),
-            self.peer_manager_sender.clone(),
-            sync_msg_rx,
-            self.messaging_handle.clone(),
-            local_event_rx,
-            Arc::clone(&self.is_initial_block_download),
-            self.time_getter.clone(),
-        );
+        let peer_task = {
+            match protocol_version {
+                SupportedProtocolVersion::V1 => {
+                    let mut peer = peer_v1::Peer::<T>::new(
+                        peer_id,
+                        common_services,
+                        Arc::clone(&self.chain_config),
+                        Arc::clone(&self.p2p_config),
+                        self.chainstate_handle.clone(),
+                        self.mempool_handle.clone(),
+                        self.peer_manager_sender.clone(),
+                        sync_msg_rx,
+                        self.messaging_handle.clone(),
+                        local_event_rx,
+                        self.time_getter.clone(),
+                    );
 
-        let peer_task = tokio::spawn(async move {
-            peer.run().await;
-        });
+                    logging::spawn_in_current_span(async move {
+                        peer.run().await;
+                    })
+                }
+
+                SupportedProtocolVersion::V2 => {
+                    let mut peer = peer_v2::Peer::<T>::new(
+                        peer_id,
+                        common_services,
+                        Arc::clone(&self.chain_config),
+                        Arc::clone(&self.p2p_config),
+                        self.chainstate_handle.clone(),
+                        self.mempool_handle.clone(),
+                        self.peer_manager_sender.clone(),
+                        sync_msg_rx,
+                        self.messaging_handle.clone(),
+                        local_event_rx,
+                        self.time_getter.clone(),
+                    );
+
+                    logging::spawn_in_current_span(async move {
+                        peer.run().await;
+                    })
+                }
+            }
+        };
 
         let peer_context = PeerContext {
             task: peer_task,
@@ -205,15 +227,7 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
-        let is_initial_block_download = if self.is_initial_block_download.load() {
-            let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await?;
-            self.is_initial_block_download.store(is_ibd);
-            is_ibd
-        } else {
-            false
-        };
-
-        if is_initial_block_download {
+        if self.chainstate_handle.is_initial_block_download().await? {
             return Ok(());
         }
 
@@ -265,8 +279,9 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services,
+                protocol_version,
                 sync_msg_rx,
-            } => self.register_peer(peer_id, common_services, sync_msg_rx),
+            } => self.register_peer(peer_id, common_services, protocol_version, sync_msg_rx),
             SyncingEvent::Disconnected { peer_id } => {
                 Self::notify_mempool_peer_disconnected(&self.mempool_handle, peer_id).await;
                 self.unregister_peer(peer_id);
@@ -281,6 +296,10 @@ where
             .unwrap_or_else(|err| {
                 log::error!("Mempool dead upon peer {peer_id} disconnect: {err}");
             })
+    }
+
+    pub fn chainstate(&self) -> &ChainstateHandle {
+        &self.chainstate_handle
     }
 }
 
@@ -300,9 +319,11 @@ pub async fn subscribe_to_new_tip(
         );
 
     chainstate_handle
-        .call_mut(|this| this.subscribe_to_events(subscribe_func))
-        .await
-        .map_err(|_| P2pError::SubsystemFailure)?;
+        .call_mut(|this| {
+            this.subscribe_to_events(subscribe_func);
+            Ok(())
+        })
+        .await?;
 
     Ok(receiver)
 }

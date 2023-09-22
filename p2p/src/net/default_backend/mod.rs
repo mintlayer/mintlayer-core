@@ -14,37 +14,31 @@
 // limitations under the License.
 
 pub mod backend;
+mod default_networking_service;
 mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use async_trait::async_trait;
-use common::time_getter::TimeGetter;
-use p2p_types::{services::Services, socket_address::SocketAddress};
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::mpsc;
 
 use logging::log;
-use utils::atomics::SeqCstAtomicBool;
+use p2p_types::{services::Services, socket_address::SocketAddress};
 
 use crate::{
     error::P2pError,
     message::{PeerManagerMessage, SyncMessage},
     net::{
-        default_backend::transport::{TransportListener, TransportSocket},
+        self,
         types::{ConnectivityEvent, SyncingEvent},
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        ConnectivityService, MessagingService, NetworkingService,
     },
     types::peer_id::PeerId,
-    P2pConfig, P2pEventHandler,
 };
 
-#[derive(Debug)]
-pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
+pub use default_networking_service::DefaultNetworkingService;
 
 #[derive(Debug)]
 pub struct ConnectivityHandle<S: NetworkingService> {
@@ -95,71 +89,8 @@ impl Clone for MessagingHandle {
 }
 
 #[derive(Debug)]
-pub struct SyncingReceiver {
+pub struct SyncingEventReceiver {
     syncing_event_rx: mpsc::UnboundedReceiver<SyncingEvent>,
-}
-
-#[async_trait]
-impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
-    type Transport = T;
-    type ConnectivityHandle = ConnectivityHandle<Self>;
-    type MessagingHandle = MessagingHandle;
-    type SyncingEventReceiver = SyncingReceiver;
-
-    async fn start(
-        transport: Self::Transport,
-        bind_addresses: Vec<SocketAddress>,
-        chain_config: Arc<common::chain::ChainConfig>,
-        p2p_config: Arc<P2pConfig>,
-        time_getter: TimeGetter,
-        shutdown: Arc<SeqCstAtomicBool>,
-        shutdown_receiver: oneshot::Receiver<()>,
-        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::MessagingHandle,
-        Self::SyncingEventReceiver,
-        JoinHandle<()>,
-    )> {
-        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (conn_event_tx, conn_event_rx) = mpsc::unbounded_channel();
-        let (syncing_event_tx, syncing_event_rx) = mpsc::unbounded_channel();
-        let socket = transport.bind(bind_addresses).await?;
-        let local_addresses = socket.local_addresses().expect("to have bind address available");
-
-        let backend = backend::Backend::<T>::new(
-            transport,
-            socket,
-            chain_config,
-            Arc::clone(&p2p_config),
-            time_getter.clone(),
-            cmd_rx,
-            conn_event_tx,
-            syncing_event_tx,
-            Arc::clone(&shutdown),
-            shutdown_receiver,
-            subscribers_receiver,
-        );
-        let backend_task = tokio::spawn(async move {
-            match backend.run().await {
-                Ok(never) => match never {},
-                Err(P2pError::ChannelClosed) if shutdown.load() => {
-                    log::info!("Backend is shut down");
-                }
-                Err(e) => {
-                    shutdown.store(true);
-                    log::error!("Failed to run backend: {e}");
-                }
-            }
-        });
-
-        Ok((
-            ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_event_rx),
-            MessagingHandle::new(cmd_tx),
-            Self::SyncingEventReceiver { syncing_event_rx },
-            backend_task,
-        ))
-    }
 }
 
 #[async_trait]
@@ -221,7 +152,7 @@ impl MessagingService for MessagingHandle {
 }
 
 #[async_trait]
-impl SyncingEventReceiver for SyncingReceiver {
+impl net::SyncingEventReceiver for SyncingEventReceiver {
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
         self.syncing_event_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }

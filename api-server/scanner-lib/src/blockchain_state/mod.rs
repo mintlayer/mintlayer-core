@@ -40,11 +40,11 @@ impl<S: ApiServerStorage> BlockchainState<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: ApiServerStorage + Sync> LocalBlockchainState for BlockchainState<S> {
+impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState<S> {
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let mut db_tx = self.storage.transaction_ro().await?;
+        let db_tx = self.storage.transaction_ro().await?;
         let best_block = db_tx.get_best_block().await?;
         Ok(best_block)
     }

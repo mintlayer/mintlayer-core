@@ -21,38 +21,11 @@ Check that:
 * After submitting a transaction that defines the UTXO, both are in non-orphan mempool
 """
 
-from test_framework.p2p import P2PInterface
+from test_framework.p2p import (P2PInterface, P2PDataStore)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx_dict, reward_input, tx_input, calc_tx_id)
 import scalecodec
 import time
-
-
-class SimpleTxSendingNode(P2PInterface):
-    """ Simple node capable of sending transactions on command """
-
-    def __init__(self):
-        super().__init__()
-        self.txs = {}
-
-    def submit_tx(self, tx):
-        self.store_tx(tx)
-        return self.send_tx_announcement(calc_tx_id(tx))
-
-    def store_tx(self, tx):
-        self.txs[calc_tx_id(tx)] = tx
-
-    def send_tx_announcement(self, tx_id):
-        return self.send_message({ 'new_transaction': "0x" + tx_id })
-
-    def on_transaction_request(self, request):
-        tx_id = request['transaction_request'][2:]
-        tx = self.txs.get(tx_id)
-
-        if tx: response = {'found': tx}
-        else: response = {'not_found': tx_id}
-
-        self.send_message({'transaction_response': response})
 
 
 class MempoolOrphanSubmissionTest(BitcoinTestFramework):
@@ -69,7 +42,7 @@ class MempoolOrphanSubmissionTest(BitcoinTestFramework):
 
     def run_test(self):
         # Spin up our node, connect it to the rest via node0
-        my_node = SimpleTxSendingNode()
+        my_node = P2PDataStore()
         node0 = self.nodes[0]
         node0.add_p2p_connection(my_node)
 

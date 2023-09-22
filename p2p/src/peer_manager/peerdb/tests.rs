@@ -29,6 +29,7 @@ use crate::{
 
 use super::PeerDb;
 
+#[tracing::instrument]
 #[test]
 fn unban_peer() {
     let db_store = peerdb_inmemory_store();
@@ -84,6 +85,7 @@ fn unban_peer() {
     assert_eq!(banned_addresses.len(), 0);
 }
 
+#[tracing::instrument]
 #[test]
 fn connected_unreachable() {
     let db_store = peerdb_inmemory_store();
@@ -112,6 +114,7 @@ fn connected_unreachable() {
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 }
 
+#[tracing::instrument]
 #[test]
 fn connected_unknown() {
     let db_store = peerdb_inmemory_store();
@@ -134,6 +137,7 @@ fn connected_unknown() {
     assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 }
 
+#[tracing::instrument]
 #[test]
 fn anchor_peers() {
     let db_store = peerdb_inmemory_store();

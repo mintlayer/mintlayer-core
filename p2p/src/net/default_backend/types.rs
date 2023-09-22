@@ -24,13 +24,14 @@ use serialization::{Decode, Encode};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
+    error::P2pError,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
         HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
         TransactionResponse,
     },
     net::types::services::Services,
-    protocol::NetworkProtocolVersion,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -79,7 +80,7 @@ impl P2pTimestamp {
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        protocol_version: NetworkProtocolVersion,
+        protocol_version: SupportedProtocolVersion,
         network: [u8; 4],
         common_services: Services,
         user_agent: UserAgent,
@@ -93,6 +94,9 @@ pub enum PeerEvent {
 
     /// Connection closed to remote
     ConnectionClosed,
+
+    /// Handshake failed
+    HandshakeFailed { error: P2pError },
 
     /// Message received from remote
     MessageReceived { message: PeerManagerMessage },
@@ -109,7 +113,7 @@ pub enum BackendEvent {
 pub enum HandshakeMessage {
     #[codec(index = 0)]
     Hello {
-        protocol_version: NetworkProtocolVersion,
+        protocol_version: ProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
@@ -125,7 +129,7 @@ pub enum HandshakeMessage {
     },
     #[codec(index = 1)]
     HelloAck {
-        protocol_version: NetworkProtocolVersion,
+        protocol_version: ProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
@@ -193,6 +197,61 @@ impl From<SyncMessage> for Message {
             SyncMessage::NewTransaction(id) => Message::NewTransaction(id),
             SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
             SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
+        }
+    }
+}
+
+/// The main purpose of this message type is to simplify conversion from `Message`
+/// to `HandshakeMessage`/`PeerManagerMessage`/`SyncMessage`.
+#[derive(Debug)]
+pub enum CategorizedMessage {
+    Handshake(HandshakeMessage),
+    PeerManagerMessage(PeerManagerMessage),
+    SyncMessage(SyncMessage),
+}
+
+impl Message {
+    pub fn categorize(self) -> CategorizedMessage {
+        match self {
+            Message::Handshake(msg) => CategorizedMessage::Handshake(msg),
+
+            Message::PingRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::PingRequest(msg))
+            }
+            Message::PingResponse(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::PingResponse(msg))
+            }
+            Message::AnnounceAddrRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AnnounceAddrRequest(msg))
+            }
+            Message::AddrListRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListRequest(msg))
+            }
+            Message::AddrListResponse(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListResponse(msg))
+            }
+
+            Message::NewTransaction(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::NewTransaction(msg))
+            }
+            Message::HeaderListRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::HeaderListRequest(msg))
+            }
+            Message::HeaderList(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::HeaderList(msg))
+            }
+            Message::BlockListRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::BlockListRequest(msg))
+            }
+            Message::BlockResponse(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::BlockResponse(msg))
+            }
+            Message::TransactionRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::TransactionRequest(msg))
+            }
+            Message::TransactionResponse(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::TransactionResponse(msg))
+            }
         }
     }
 }

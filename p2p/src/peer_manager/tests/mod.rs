@@ -18,28 +18,29 @@ mod ban;
 mod connections;
 mod peer_types;
 mod ping;
+mod utils;
 
 use std::{sync::Arc, time::Duration};
 
-use p2p_types::socket_address::SocketAddress;
 use tokio::sync::{mpsc, oneshot};
 
+use ::utils::atomics::SeqCstAtomicBool;
 use common::time_getter::TimeGetter;
 use crypto::random::Rng;
+use p2p_types::socket_address::SocketAddress;
+use test_utils::assert_matches_return_val;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     time::timeout,
 };
-use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     expect_recv,
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::types::{Command, Message},
-        types::ConnectivityEvent,
-        ConnectivityService, NetworkingService,
+        default_backend::types::Command, types::ConnectivityEvent, ConnectivityService,
+        NetworkingService,
     },
     peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, test_p2p_config},
@@ -47,6 +48,8 @@ use crate::{
     utils::oneshot_nofail,
     P2pConfig, P2pEventHandler, PeerManagerEvent,
 };
+
+use self::utils::cmd_to_peer_man_msg;
 
 use super::peerdb::storage::PeerDbStorage;
 
@@ -138,7 +141,7 @@ where
 {
     let (peer_manager, tx, shutdown_sender, subscribers_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
     (tx, shutdown_sender, subscribers_sender)
@@ -167,20 +170,19 @@ async fn send_and_sync(
         })
         .unwrap();
 
-    let event = expect_recv!(cmd_rx);
-    match event {
-        Command::SendMessage {
+    let cmd = expect_recv!(cmd_rx);
+    let (peer_id_from_msg, peer_msg) = cmd_to_peer_man_msg(cmd);
+    let nonce = assert_matches_return_val!(
+        peer_msg,
+        PeerManagerMessage::PingResponse(PingResponse { nonce }),
+        nonce
+    );
+    assert_eq!(peer_id_from_msg, peer_id);
+    conn_tx
+        .send(ConnectivityEvent::Message {
             peer_id,
-            message: Message::PingResponse(PingResponse { nonce }),
-        } => {
-            conn_tx
-                .send(ConnectivityEvent::Message {
-                    peer_id,
-                    message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
-                })
-                .unwrap();
-            assert_eq!(nonce, sent_nonce);
-        }
-        _ => panic!("unexpected event: {event:?}"),
-    }
+            message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
+        })
+        .unwrap();
+    assert_eq!(nonce, sent_nonce);
 }

@@ -32,11 +32,11 @@ use crate::{
         types::{PeerInfo, PeerRole},
     },
     peer_manager::PeerManager,
-    protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::peerdb_inmemory_store,
+    testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     PeerManagerEvent,
 };
 
+#[tracing::instrument]
 #[test]
 fn validate_services() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
@@ -101,7 +101,7 @@ fn validate_services() {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {
                     peer_id: peer_id_1,
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *chain_config.magic_bytes(),
                     software_version: *chain_config.software_version(),
                     user_agent: mintlayer_core_user_agent(),

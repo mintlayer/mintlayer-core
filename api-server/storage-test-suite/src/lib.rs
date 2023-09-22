@@ -50,7 +50,7 @@ where
     Fut: Future<Output = S> + Send + 'static,
     S: ApiServerStorage + 'static,
 {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let args = libtest_mimic::Arguments::from_args();
     libtest_mimic::run(&args, tests(storage_maker))
 }

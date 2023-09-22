@@ -63,3 +63,68 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
         .collect();
     token_ticker
 }
+
+#[macro_export]
+macro_rules! assert_matches_return_val {
+    ($in:expr, $pattern:pat, $out:expr) => {
+        match $in {
+            $pattern => $out,
+            _ => {
+                panic!(
+                    "Assertion failed: expression {} doesn't match pattern {}",
+                    stringify!($in),
+                    stringify!($pattern)
+                )
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! assert_matches {
+    ($in:expr, $pattern:pat) => {
+        $crate::assert_matches_return_val!($in, $pattern, ())
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    mod match_macro_tests {
+        #[allow(unused)]
+        enum TestEnum {
+            E1(usize),
+            E2,
+        }
+
+        #[test]
+        fn assert_matches_return_val_success() {
+            let test_val = TestEnum::E1(123);
+
+            let val = assert_matches_return_val!(test_val, TestEnum::E1(x), x);
+            assert_eq!(val, 123);
+        }
+
+        #[test]
+        #[should_panic]
+        fn assert_matches_return_val_failure() {
+            let test_val = TestEnum::E1(123);
+
+            assert_matches_return_val!(test_val, TestEnum::E2, ());
+        }
+
+        #[test]
+        fn assert_matches_success() {
+            let test_val = TestEnum::E1(123);
+
+            assert_matches!(test_val, TestEnum::E1(_));
+        }
+
+        #[test]
+        #[should_panic]
+        fn assert_matches_failure() {
+            let test_val = TestEnum::E1(123);
+
+            assert_matches!(test_val, TestEnum::E2);
+        }
+    }
+}

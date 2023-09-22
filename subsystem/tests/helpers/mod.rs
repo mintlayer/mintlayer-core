@@ -13,10 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-static INIT: std::sync::Once = std::sync::Once::new();
-
 pub fn init_test_runtime() -> tokio::runtime::Runtime {
-    INIT.call_once(|| logging::init_logging::<&std::path::Path>(None));
+    logging::init_logging();
 
     //let mut runtime = tokio::runtime::Builder::new_current_thread();
     let mut runtime = tokio::runtime::Builder::new_multi_thread();

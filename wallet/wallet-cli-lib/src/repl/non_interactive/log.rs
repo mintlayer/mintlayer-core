@@ -14,5 +14,5 @@
 // limitations under the License.
 
 pub fn init() {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 }

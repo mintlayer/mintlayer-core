@@ -23,6 +23,8 @@ use std::{
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use crypto::random::{make_pseudo_rng, Rng};
+use futures::Future;
+use logging::log;
 use p2p_types::socket_address::SocketAddress;
 use tokio::time::timeout;
 
@@ -37,7 +39,13 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::peerdb::storage_impl::PeerDbStorageImpl,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
 };
+
+/// A protocol version for use in tests that just need some valid value for it.
+// TODO: ideally, tests that use this constant should call for_each_protocol_version instead
+// and thus check all available versions.
+pub const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
 
 /// An interface for creating transports and addresses used in tests.
 ///
@@ -268,4 +276,15 @@ where
 
     let (res1, res2) = tokio::join!(server.accept(), peer_fut);
     (res1.unwrap().0, res2.unwrap())
+}
+
+pub async fn for_each_protocol_version<Func, Res>(func: Func)
+where
+    Func: Fn(ProtocolVersion) -> Res,
+    Res: Future<Output = ()>,
+{
+    for version in enum_iterator::all::<SupportedProtocolVersion>() {
+        log::info!("---------- Testing protocol version {version:?} ----------");
+        func(version.into()).await;
+    }
 }

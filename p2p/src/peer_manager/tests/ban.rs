@@ -22,20 +22,16 @@ use crate::{
         types::{services::Service, PeerInfo, PeerRole, Role},
     },
     peer_manager::{OutboundConnectType, PeerManager},
-    protocol::{NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::{
-    chain::config,
-    primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
-};
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
@@ -85,17 +81,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_tcp() {
     ban_connected_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_channels() {
     ban_connected_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ban_connected_peer_noise() {
     ban_connected_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -134,11 +133,13 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_tcp() {
     banned_peer_attempts_to_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_channel() {
     banned_peer_attempts_to_connect::<
@@ -148,6 +149,7 @@ async fn banned_peer_attempts_to_connect_channel() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_noise() {
     banned_peer_attempts_to_connect::<
@@ -197,7 +199,12 @@ where
     pm2.handle_connectivity_event(event.unwrap());
 
     let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(remote_addr, OutboundConnectType::Manual { response: tx });
+    pm2.connect(
+        remote_addr,
+        OutboundConnectType::Manual {
+            response_sender: tx,
+        },
+    );
     let res = rx.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
@@ -205,12 +212,14 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_tcp() {
     connect_to_banned_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_channels() {
     connect_to_banned_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(
@@ -218,6 +227,7 @@ async fn connect_to_banned_peer_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_to_banned_peer_noise() {
     connect_to_banned_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
@@ -236,26 +246,6 @@ where
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
                 .await;
 
-        // invalid protocol
-        let peer_id = PeerId::new();
-        let res = peer_manager.try_accept_connection(
-            TestAddressMaker::new_random_address(),
-            peer_role,
-            net::types::PeerInfo {
-                peer_id,
-                protocol_version: 0,
-                network: *config.magic_bytes(),
-                software_version: *config.software_version(),
-                user_agent: mintlayer_core_user_agent(),
-                common_services: [Service::Blocks, Service::Transactions, Service::PeerAddresses]
-                    .as_slice()
-                    .into(),
-            },
-            None,
-        );
-        assert!(res.is_err());
-        assert!(!peer_manager.is_peer_connected(peer_id));
-
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
@@ -263,7 +253,7 @@ where
             peer_role,
             net::types::PeerInfo {
                 peer_id,
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: [1, 2, 3, 4],
                 software_version: *config.software_version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -275,44 +265,17 @@ where
         );
         assert!(res.is_err());
         assert!(!peer_manager.is_peer_connected(peer_id));
-
-        // valid connections
-        const NETWORK_PROTOCOL_FUTURE: u32 = u32::MAX; // Some future version of the node is trying to connect to us
-        for protocol in [NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN, NETWORK_PROTOCOL_FUTURE] {
-            let address = TestAddressMaker::new_random_address();
-            let peer_id = PeerId::new();
-            let res = peer_manager.try_accept_connection(
-                address,
-                peer_role,
-                net::types::PeerInfo {
-                    peer_id,
-                    protocol_version: protocol,
-                    network: *config.magic_bytes(),
-                    software_version: SemVer::new(123, 123, 12345),
-                    user_agent: mintlayer_core_user_agent(),
-                    common_services: [
-                        Service::Blocks,
-                        Service::Transactions,
-                        Service::PeerAddresses,
-                    ]
-                    .as_slice()
-                    .into(),
-                },
-                None,
-            );
-            assert!(res.is_ok());
-            assert!(peer_manager.is_peer_connected(peer_id));
-            assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
-        }
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_tcp() {
     validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_channels() {
     validate_invalid_connection::<
@@ -322,6 +285,7 @@ async fn validate_invalid_connection_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn validate_invalid_connection_noise() {
     validate_invalid_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
@@ -359,7 +323,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     match event {
@@ -369,6 +333,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_tcp() {
     inbound_connection_invalid_magic::<
@@ -378,6 +343,7 @@ async fn inbound_connection_invalid_magic_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_channels() {
     inbound_connection_invalid_magic::<
@@ -387,6 +353,7 @@ async fn inbound_connection_invalid_magic_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_invalid_magic_noise() {
     inbound_connection_invalid_magic::<
@@ -397,6 +364,7 @@ async fn inbound_connection_invalid_magic_noise() {
 }
 
 // Test that manually banned peers are also disconnected
+#[tracing::instrument]
 #[test]
 fn ban_and_disconnect() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
@@ -424,7 +392,7 @@ fn ban_and_disconnect() {
     let address_1 = TestAddressMaker::new_random_address();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
-        protocol_version: NETWORK_PROTOCOL_CURRENT,
+        protocol_version: TEST_PROTOCOL_VERSION,
         network: *chain_config.magic_bytes(),
         software_version: *chain_config.software_version(),
         user_agent: mintlayer_core_user_agent(),
