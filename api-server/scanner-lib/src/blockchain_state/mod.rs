@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use crate::sync::local_state::LocalBlockchainState;
-use api_server_common::storage::{
-    impls::sqlx::transactional::TransactionalSqlxStorage, storage_api::ApiServerStorageError,
+use api_server_common::storage::storage_api::{
+    ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+    ApiServerTransactionRw,
 };
 use common::{
     chain::{Block, GenBlock},
     primitives::{id::WithId, BlockHeight, Id, Idable},
 };
-use sqlx::{database::HasArguments, ColumnIndex, Database, Executor, IntoArguments};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -29,35 +29,22 @@ pub enum BlockchainStateError {
     StorageError(#[from] ApiServerStorageError),
 }
 
-pub struct BlockchainState<D: Database> {
-    storage: TransactionalSqlxStorage<D>,
+pub struct BlockchainState<S: ApiServerStorage> {
+    storage: S,
 }
 
-impl<D: Database> BlockchainState<D> {
-    pub fn new(storage: TransactionalSqlxStorage<D>) -> Self {
+impl<S: ApiServerStorage> BlockchainState<S> {
+    pub fn new(storage: S) -> Self {
         Self { storage }
     }
 }
 
 #[async_trait::async_trait]
-impl<D: Database> LocalBlockchainState for BlockchainState<D>
-where
-    for<'e> <D as HasArguments<'e>>::Arguments: IntoArguments<'e, D>,
-    for<'e> &'e mut <D as sqlx::Database>::Connection: Executor<'e, Database = D>,
-    usize: ColumnIndex<<D as sqlx::Database>::Row>,
-    Vec<u8>: sqlx::Type<D>,
-    for<'e> Vec<u8>: sqlx::Decode<'e, D>,
-    for<'e> i64: sqlx::Encode<'e, D>,
-    i64: sqlx::Type<D>,
-    for<'e> Vec<u8>: sqlx::Encode<'e, D>,
-    for<'e> Option<Vec<u8>>: sqlx::Encode<'e, D>,
-    for<'e> &'e str: sqlx::Encode<'e, D>,
-    for<'e> &'e str: sqlx::Type<D>,
-{
+impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState<S> {
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        let mut db_tx = self.storage.transaction_ro().await?;
+        let db_tx = self.storage.transaction_ro().await?;
         let best_block = db_tx.get_best_block().await?;
         Ok(best_block)
     }

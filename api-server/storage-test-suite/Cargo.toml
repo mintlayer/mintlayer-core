@@ -1,0 +1,27 @@
+[package]
+name = "api-server-backend-test-suite"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+api-server-common = { path = "../api-server-common" }
+chainstate-test-framework = { path = '../../chainstate/test-framework' }
+common = { path = '../../common' }
+crypto = { path = '../../crypto/' }
+logging = { path = "../../logging" }
+test-utils = {path = '../../test-utils'}
+utils = { path = "../../utils" }
+
+futures = { workspace = true, default-features = false }
+libtest-mimic.workspace = true
+proptest.workspace = true
+
+[[test]]
+name = "postgres"
+harness = false
+
+[[test]]
+name = "in_memory"
+harness = false

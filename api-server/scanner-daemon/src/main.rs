@@ -15,7 +15,12 @@
 
 use std::sync::Arc;
 
-use api_server_common::storage::impls::sqlx::SqlxStorage;
+use api_server_common::storage::{
+    impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+    storage_api::{
+        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
+    },
+};
 use blockchain_scanner_lib::blockchain_state::BlockchainState;
 use clap::Parser;
 use common::chain::{config::ChainType, ChainConfig};
@@ -26,15 +31,17 @@ use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
 
-pub async fn run(
+#[must_use]
+pub fn make_in_memory_storage(chain_config: &ChainConfig) -> TransactionalApiServerInMemoryStorage {
+    TransactionalApiServerInMemoryStorage::new(chain_config)
+}
+
+pub async fn run<S: ApiServerStorage>(
     chain_config: &Arc<ChainConfig>,
     rpc_client: &NodeRpcClient,
+    mut storage: S,
 ) -> Result<(), ApiServerScannerError> {
     // TODO: move this storage initialization into a separate function... the trait bounds are gonna be painful
-    let mut storage = SqlxStorage::from_sqlite_inmemory(8)
-        .await
-        .unwrap_or_else(|e| panic!("Storage initialization failed {}", e))
-        .into_transactional();
 
     {
         let mut db_tx = storage
@@ -47,7 +54,7 @@ pub async fn run(
             .unwrap_or_else(|e| panic!("Storage initialization checking failed {}", e))
         {
             db_tx
-                .initialize_database(chain_config)
+                .initialize_storage(chain_config)
                 .await
                 .unwrap_or_else(|e| panic!("Storage initialization failed {}", e));
         }
@@ -127,7 +134,9 @@ async fn main() -> Result<(), ApiServerScannerError> {
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 
-    run(&chain_config, &rpc_client).await?;
+    let storage = make_in_memory_storage(&chain_config);
+
+    run(&chain_config, &rpc_client, storage).await?;
 
     Ok(())
 }

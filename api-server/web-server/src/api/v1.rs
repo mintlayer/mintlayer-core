@@ -95,12 +95,14 @@ pub async fn block<T: ApiServerStorage>(
         state
             .db
             .transaction_ro()
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
                 )
             })?
             .get_block(block_id)
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
@@ -141,12 +143,14 @@ pub async fn block_header<T: ApiServerStorage>(
         state
             .db
             .transaction_ro()
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
                 )
             })?
             .get_block(block_id)
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
@@ -181,12 +185,14 @@ pub async fn block_reward<T: ApiServerStorage>(
         state
             .db
             .transaction_ro()
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
                 )
             })?
             .get_block(block_id)
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
@@ -219,12 +225,14 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
         state
             .db
             .transaction_ro()
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
                 )
             })?
             .get_block(block_id)
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
@@ -283,10 +291,12 @@ pub async fn chain_at_height<T: ApiServerStorage>(
     let block_id = state
         .db
         .transaction_ro()
+        .await
         .map_err(|_| {
             APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
         })?
         .get_main_chain_block_id(block_height)
+        .await
         .map_err(|_| {
             APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
         })?;
@@ -306,10 +316,12 @@ pub async fn chain_tip<T: ApiServerStorage>(
     let best_block = state
         .db
         .transaction_ro()
+        .await
         .map_err(|_| {
             APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
         })?
         .get_best_block()
+        .await
         .map_err(|_| {
             APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
         })?;
@@ -341,12 +353,14 @@ pub async fn transaction<T: ApiServerStorage>(
         state
             .db
             .transaction_ro()
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,
                 )
             })?
             .get_transaction(transaction_id)
+            .await
             .map_err(|_| {
                 APIServerWebServerError::ServerError(
                     APIServerWebServerServerError::InternalServerError,

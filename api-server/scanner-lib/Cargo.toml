@@ -18,7 +18,6 @@ utils = { path = "../../utils" }
 async-trait.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-sqlx = { workspace = true, features = [ "runtime-tokio", "macros", "sqlite", "postgres" ] }
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
