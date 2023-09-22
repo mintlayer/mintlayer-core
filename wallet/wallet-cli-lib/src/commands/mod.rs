@@ -17,6 +17,7 @@ mod helper_types;
 
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
+use chainstate::TokenIssuanceError;
 use clap::Parser;
 use common::{
     address::Address,
@@ -29,10 +30,13 @@ use common::{
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
-use wallet::{account::Currency, version::get_version, wallet_events::WalletEventsNoOp};
+use utils::ensure;
+use wallet::{
+    account::Currency, version::get_version, wallet_events::WalletEventsNoOp, WalletError,
+};
 use wallet_controller::{
-    read::ReadOnlyController, synced_controller::SyncedController, NodeInterface, NodeRpcClient,
-    PeerId, DEFAULT_ACCOUNT_INDEX,
+    read::ReadOnlyController, synced_controller::SyncedController, ControllerError, NodeInterface,
+    NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
 
 use crate::{errors::WalletCliError, CliController};
@@ -474,6 +478,7 @@ impl CommandHandler {
             .await
             .map_err(WalletCliError::Controller)
     }
+
     fn get_readonly_controller(
         &mut self,
     ) -> Result<ReadOnlyController<'_, NodeRpcClient>, WalletCliError> {
@@ -784,6 +789,13 @@ impl CommandHandler {
                 metadata_uri,
                 destination_address,
             } => {
+                ensure!(
+                    number_of_decimals <= chain_config.token_max_dec_count(),
+                    WalletCliError::Controller(ControllerError::WalletError(
+                        WalletError::TokenIssuance(TokenIssuanceError::IssueErrorTooManyDecimals),
+                    ))
+                );
+
                 let amount_to_issue = parse_token_amount(number_of_decimals, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
