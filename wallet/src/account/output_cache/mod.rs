@@ -40,6 +40,8 @@ pub struct DelegationData {
     pub pool_id: PoolId,
     pub destination: Destination,
     pub last_nonce: Option<AccountNonce>,
+    /// last parent transaction if the parent is unconfirmed
+    pub last_parent: Option<OutPointSourceId>,
     pub not_staked_yet: bool,
 }
 impl DelegationData {
@@ -48,6 +50,7 @@ impl DelegationData {
             pool_id,
             destination,
             last_nonce: None,
+            last_parent: None,
             not_staked_yet: true,
         }
     }
@@ -162,14 +165,8 @@ impl OutputCache {
         self.delegations.iter()
     }
 
-    pub fn delegation_data(&self, delegation_id: DelegationId) -> WalletResult<&DelegationData> {
-        self.delegations
-            .get(&delegation_id)
-            .ok_or(WalletError::DelegationNotFound(delegation_id))
-    }
-
-    pub fn owns_delegation(&self, delegation_id: &DelegationId) -> bool {
-        self.delegations.contains_key(delegation_id)
+    pub fn delegation_data(&self, delegation_id: &DelegationId) -> Option<&DelegationData> {
+        self.delegations.get(delegation_id)
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
@@ -220,11 +217,10 @@ impl OutputCache {
                         });
                 }
                 TxOutput::DelegateStaking(_, delegation_id) => {
-                    let delegation_data = self
-                        .delegations
-                        .get_mut(delegation_id)
-                        .ok_or(WalletError::InconsistentDelegationAddition(*delegation_id))?;
-                    delegation_data.not_staked_yet = false;
+                    if let Some(delegation_data) = self.delegations.get_mut(delegation_id) {
+                        delegation_data.not_staked_yet = false;
+                    }
+                    // Else it is not ours
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
                     let input0_outpoint = tx
@@ -273,30 +269,14 @@ impl OutputCache {
                     if !already_present {
                         match outpoint.account() {
                             Delegation(delegation_id, _) => {
-                                match self.delegations.get_mut(delegation_id) {
-                                    Some(data) => {
-                                        let next_nonce = data
-                                            .last_nonce
-                                            .map_or(Some(AccountNonce::new(0)), |nonce| {
-                                                nonce.increment()
-                                            })
-                                            .ok_or(WalletError::DelegationNonceOverflow(
-                                                *delegation_id,
-                                            ))?;
-                                        ensure!(
-                                            outpoint.nonce() >= next_nonce,
-                                            WalletError::InconsistentDelegationDuplicateNonce(
-                                                *delegation_id,
-                                                outpoint.nonce()
-                                            )
-                                        );
-                                        data.last_nonce = Some(outpoint.nonce());
-                                    }
-                                    None => {
-                                        return Err(WalletError::InconsistentDelegationRemoval(
-                                            *delegation_id,
-                                        ));
-                                    }
+                                if let Some(data) = self.delegations.get_mut(delegation_id) {
+                                    Self::update_delegation_state(
+                                        &mut self.unconfirmed_descendants,
+                                        data,
+                                        delegation_id,
+                                        outpoint,
+                                        tx_id,
+                                    )?;
                                 }
                             }
                         }
@@ -304,6 +284,37 @@ impl OutputCache {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Update delegation state with new tx input
+    fn update_delegation_state(
+        unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+        data: &mut DelegationData,
+        delegation_id: &DelegationId,
+        outpoint: &common::chain::AccountOutPoint,
+        tx_id: &OutPointSourceId,
+    ) -> Result<(), WalletError> {
+        let next_nonce = data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::DelegationNonceOverflow(*delegation_id))?;
+
+        ensure!(
+            outpoint.nonce() == next_nonce,
+            WalletError::InconsistentDelegationDuplicateNonce(*delegation_id, outpoint.nonce())
+        );
+
+        data.last_nonce = Some(outpoint.nonce());
+        // update unconfirmed descendants
+        if let Some(descendants) = data
+            .last_parent
+            .as_ref()
+            .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
+        {
+            descendants.insert(tx_id.clone());
+        }
+        data.last_parent = Some(tx_id.clone());
         Ok(())
     }
 
@@ -318,13 +329,10 @@ impl OutputCache {
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
                         Delegation(delegation_id, _) => {
-                            match self.delegations.get_mut(delegation_id) {
-                                Some(data) => {
-                                    data.last_nonce = outpoint.nonce().decrement();
-                                }
-                                None => {
-                                    return Err(WalletError::NoUtxos);
-                                }
+                            if let Some(data) = self.delegations.get_mut(delegation_id) {
+                                data.last_nonce = outpoint.nonce().decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
                     },
@@ -474,40 +482,40 @@ impl OutputCache {
             if let Some(descendants) = self.unconfirmed_descendants.remove(&outpoint_source_id) {
                 to_abandon.extend(descendants.into_iter())
             }
+        }
 
-            match self.txs.entry(outpoint_source_id) {
-                Entry::Occupied(mut entry) => {
-                    match entry.get_mut() {
-                        WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
-                        WalletTx::Tx(tx) => match tx.state() {
-                            TxState::Inactive(_) => {
-                                tx.set_state(TxState::Abandoned);
-                                for input in tx.get_transaction().inputs() {
-                                    match input {
-                                        TxInput::Utxo(outpoint) => {
-                                            self.consumed.insert(outpoint.clone(), *tx.state());
-                                        }
-                                        TxInput::Account(outpoint) => match outpoint.account() {
-                                            Delegation(delegation_id, _) => {
-                                                match self.delegations.get_mut(delegation_id) {
-                                                    Some(data) => {
-                                                        data.last_nonce =
-                                                            outpoint.nonce().decrement();
-                                                    }
-                                                    None => {
-                                                        return Err(WalletError::InconsistentDelegationRemoval(*delegation_id));
-                                                    }
-                                                }
-                                            }
-                                        },
+        for tx_id in all_abandoned.iter().rev().copied() {
+            match self.txs.entry(tx_id.into()) {
+                Entry::Occupied(mut entry) => match entry.get_mut() {
+                    WalletTx::Block(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
+                    WalletTx::Tx(tx) => match tx.state() {
+                        TxState::Inactive(_) => {
+                            tx.set_state(TxState::Abandoned);
+                            for input in tx.get_transaction().inputs() {
+                                match input {
+                                    TxInput::Utxo(outpoint) => {
+                                        self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
+                                    TxInput::Account(outpoint) => match outpoint.account() {
+                                        Delegation(delegation_id, _) => {
+                                            if let Some(data) =
+                                                self.delegations.get_mut(delegation_id)
+                                            {
+                                                data.last_nonce = outpoint.nonce().decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                            }
+                                        }
+                                    },
                                 }
-                                Ok(())
                             }
-                            state => Err(WalletError::CannotAbandonTransaction(*state)),
-                        },
-                    }
-                }
+                            Ok(())
+                        }
+                        state => Err(WalletError::CannotAbandonTransaction(*state)),
+                    },
+                },
                 Entry::Vacant(_) => Err(WalletError::CannotFindTransactionWithId(tx_id)),
             }?;
         }
@@ -575,4 +583,15 @@ fn valid_timelock(
 /// Check Tx is in the selected state Confirmed/Inactive/Abandoned...
 fn is_in_state(tx: &WalletTx, utxo_states: UtxoStates) -> bool {
     utxo_states.contains(get_utxo_state(&tx.state()))
+}
+
+/// Find the parent tx if it is in the unconfirmed transactions
+fn find_parent(
+    unconfirmed_descendants: &BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+    tx_id: OutPointSourceId,
+) -> Option<OutPointSourceId> {
+    unconfirmed_descendants
+        .iter()
+        .find_map(|(parent_id, descendants)| descendants.contains(&tx_id).then_some(parent_id))
+        .cloned()
 }

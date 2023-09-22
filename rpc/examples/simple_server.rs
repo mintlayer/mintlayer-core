@@ -73,7 +73,7 @@ impl SomeSubsystemRpcServer for SomeSubsystemHandle {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     let mut app = subsystem::Manager::new("rpc-example");
     app.install_signal_handlers();

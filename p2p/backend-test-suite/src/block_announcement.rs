@@ -36,6 +36,7 @@ use utils::atomics::SeqCstAtomicBool;
 tests![block_announcement, block_announcement_no_subscription,];
 
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn block_announcement<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,
@@ -99,6 +100,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            protocol_version: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
@@ -134,6 +136,7 @@ where
         SyncingEvent::Connected {
             peer_id: _,
             common_services: _,
+            protocol_version: _,
             sync_msg_rx,
         } => sync_msg_rx,
         event => panic!("Unexpected event: {event:?}"),
@@ -155,6 +158,7 @@ where
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn block_announcement_no_subscription<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,

@@ -26,7 +26,6 @@ use crate::send_request::{
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
-use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
@@ -94,30 +93,16 @@ pub enum WalletError {
     AbsoluteMaxNumAccountsExceeded(U31),
     #[error("Not implemented: {0}")]
     NotImplemented(&'static str),
-    #[error("The send request is complete")]
-    SendRequestComplete,
     #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
     UnsupportedTransactionOutput(Box<TxOutput>),
     #[error("Unsupported input destination")] // TODO implement display for Destination
     UnsupportedInputDestination(Destination),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
-    #[error("Negative delegation amount for id: {0}")]
-    NegativeDelegationAmount(DelegationId),
-    #[error(
-        "Inconsistent delegation state for id: {0}, missing Delegation creation before staking"
-    )]
-    InconsistentDelegationAddition(DelegationId),
-    #[error("Inconsistent delegation state for id: {0}, amount less than 0 while trying to remove transaction")]
-    InconsistentDelegationRemoval(DelegationId),
-    #[error("Inconsistent delegation state for id: {0}, nonce less than 0 while trying to remove transaction")]
-    InconsistentDelegationRemovalNegativeNonce(DelegationId),
     #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
     InconsistentProduceBlockFromStake(PoolId),
-    #[error("Delegation amount overflow for id: {0}")]
-    DelegationAmountOverflow(DelegationId),
     #[error("Delegation nonce overflow for id: {0}")]
     DelegationNonceOverflow(DelegationId),
     #[error("Empty inputs in token issuance transaction")]
@@ -132,8 +117,6 @@ pub enum WalletError {
     DelegationNotFound(DelegationId),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
     NotEnoughUtxo(Amount, Amount),
-    #[error("Invalid address {0}: {1}")]
-    InvalidAddress(String, PublicKeyHashError),
     #[error("Token issuance error: {0}")]
     TokenIssuance(#[from] TokenIssuanceError),
     #[error("No UTXOs")]
@@ -678,7 +661,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         delegation_id: DelegationId,
     ) -> WalletResult<&DelegationData> {
-        self.get_account(account_index)?.find_delegation(delegation_id)
+        self.get_account(account_index)?.find_delegation(&delegation_id)
     }
 
     pub fn get_new_address(

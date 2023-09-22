@@ -49,7 +49,7 @@ const HUGE_MAX_TIP_AGE: MaxTipAge = MaxTipAge::new(Duration::from_secs(100 * 365
 
 #[test]
 fn dummy_size() {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     log::debug!("1, 1: {}", estimate_tx_size(1, 1));
     log::debug!("1, 2: {}", estimate_tx_size(1, 2));
     log::debug!("1, 400: {}", estimate_tx_size(1, 400));
@@ -209,7 +209,7 @@ pub fn start_chainstate_with_config(
 }
 
 fn setup() -> Mempool<StoreMemoryUsageEstimator> {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config));
     Mempool::new(
@@ -223,7 +223,7 @@ fn setup() -> Mempool<StoreMemoryUsageEstimator> {
 fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<StoreMemoryUsageEstimator> {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_handle = start_chainstate(chainstate);
     Mempool::new(
@@ -879,7 +879,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let mock_time = Arc::new(SeqCstAtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let mut mock_usage = MockMemoryUsageEstimator::new();
@@ -1513,7 +1513,7 @@ fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
 
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1557,7 +1557,7 @@ async fn mempool_full_mock(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case::fail(Seed(1))]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full_real(#[case] seed: Seed) {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let mut rng = make_seedable_rng(seed);
 
     let num_txs = rng.gen_range(5..20);

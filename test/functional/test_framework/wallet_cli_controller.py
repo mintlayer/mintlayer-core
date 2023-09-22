@@ -117,7 +117,7 @@ class WalletCliController:
 
     async def show_seed_phrase(self) -> Optional[str]:
         output = await self._write_command("showseedphrase\n")
-        if output.startswith("The saved seed phrase is"):
+        if output.startswith("The stored seed phrase is"):
             mnemonic = output[output.find("\"") + 1:-1]
             return mnemonic
         # wallet doesn't have the seed phrase stored

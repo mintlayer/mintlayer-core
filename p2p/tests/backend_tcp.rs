@@ -19,5 +19,7 @@ use p2p::{
 };
 
 fn main() {
+    logging::init_logging();
+
     p2p_backend_test_suite::run::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>();
 }

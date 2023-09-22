@@ -33,6 +33,7 @@ fn run_test(seconds: u32, rate: f64, initial_tokens: u32, bucket: u32, expected:
     );
 }
 
+#[tracing::instrument]
 #[test]
 fn rate_limiter_basic() {
     // expected = seconds * rate + initial_bucket (normal fill rate)

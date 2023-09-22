@@ -19,12 +19,13 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
 use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
+use tokio_stream::{wrappers::ReceiverStream, StreamExt, StreamMap};
 
 use common::{
     chain::ChainConfig,
@@ -43,23 +44,33 @@ use crate::{
         default_backend::{
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{BackendEvent, Command, Message, PeerEvent},
+            types::{BackendEvent, Command, PeerEvent},
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
     },
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pEvent, P2pEventHandler,
 };
 
 use super::{
     peer::ConnectionInfo,
-    types::{HandshakeNonce, P2pTimestamp},
+    types::{HandshakeNonce, Message, P2pTimestamp},
 };
 
-/// Buffer size of the channel to the SyncManager peer task.
-/// How many unprocessed messages can be sent before the peer's event loop is blocked.
-// TODO: Decide what the optimal value is (for example, by comparing the initial block download time)
-const SYNC_CHAN_BUF_SIZE: usize = 20;
+/// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
+///
+/// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
+/// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
+/// requests, which may lead to memory exhaustion.
+/// Note: the values were chosen pretty much arbitrarily; the sync messages channel has a lower
+/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events,
+/// on the other hand, are small.
+/// Also note that basic tests of initial block download time showed that there is no real
+/// difference between 20 and 10000 for both of the limits here. These results, of course, depend
+/// on the hardware and internet connection, so we've chosen larger limits.
+const SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
 struct PeerContext {
@@ -74,6 +85,8 @@ struct PeerContext {
     address: SocketAddress,
 
     inbound: bool,
+
+    protocol_version: SupportedProtocolVersion,
 
     user_agent: UserAgent,
 
@@ -120,12 +133,8 @@ pub struct Backend<T: TransportSocket> {
     /// Pending connections
     pending: HashMap<PeerId, PendingPeerContext>,
 
-    /// Channel sender for sending events from Peers to Backend; this will be passed to each
-    /// Peer upon its creation.
-    peer_event_tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-
-    /// Channel receiver for receiving events from Peers
-    peer_event_rx: mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
+    /// Map of streams for receiving events from peers.
+    peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
 
     /// Channel sender for sending connectivity events to the frontend
     conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
@@ -134,7 +143,7 @@ pub struct Backend<T: TransportSocket> {
     syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
 
     /// List of incoming commands to the backend; we put them in a queue
-    /// to make receiving commands can run concurrently with other backend operations
+    /// to make sure receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
     shutdown: Arc<SeqCstAtomicBool>,
@@ -142,6 +151,11 @@ pub struct Backend<T: TransportSocket> {
 
     events_controller: EventsController<P2pEvent>,
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+
+    /// The protocol version that this node is running. Normally this will be
+    /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
+    /// overridden for testing purposes.
+    node_protocol_version: ProtocolVersion,
 }
 
 impl<T> Backend<T>
@@ -161,8 +175,8 @@ where
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+        node_protocol_version: ProtocolVersion,
     ) -> Self {
-        let (peer_event_tx, peer_event_rx) = mpsc::unbounded_channel();
         Self {
             transport,
             socket,
@@ -174,13 +188,13 @@ where
             syncing_event_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
-            peer_event_tx,
-            peer_event_rx,
+            peer_event_stream_map: StreamMap::new(),
             command_queue: FuturesUnordered::new(),
             shutdown,
             shutdown_receiver,
             events_controller: EventsController::new(),
             subscribers_receiver,
+            node_protocol_version,
         }
     }
 
@@ -224,7 +238,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
+        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
         peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
 
         let old_value = peer.was_accepted.test_and_set();
@@ -235,6 +249,7 @@ where
             SyncingEvent::Connected {
                 peer_id,
                 common_services: peer.common_services,
+                protocol_version: peer.protocol_version,
                 sync_msg_rx,
             },
             &self.shutdown,
@@ -281,13 +296,12 @@ where
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
-                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
+                Some(callback) = self.command_queue.next() => {
                     callback(&mut self)?;
                 },
                 // Handle peer events.
-                event = self.peer_event_rx.recv() => {
-                    let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_peer_event(peer, event)?;
+                Some((peer_id, event)) = self.peer_event_stream_map.next() => {
+                    self.handle_peer_event(peer_id, event)?;
                 },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
@@ -339,7 +353,10 @@ where
             Some(address.as_peer_address())
         };
 
-        let peer_event_tx = self.peer_event_tx.clone();
+        let (peer_event_tx, peer_event_rx) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
+        let peer_event_stream = ReceiverStream::new(peer_event_rx);
+
+        self.peer_event_stream_map.insert(remote_peer_id, peer_event_stream);
 
         let peer = peer::Peer::<T>::new(
             remote_peer_id,
@@ -350,10 +367,11 @@ where
             receiver_address,
             peer_event_tx,
             backend_event_rx,
+            self.node_protocol_version,
         );
         let shutdown = Arc::clone(&self.shutdown);
         let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
-        let handle = tokio::spawn(async move {
+        let handle = logging::spawn_in_current_span(async move {
             match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
@@ -400,6 +418,7 @@ where
         }
 
         let common_services = peer_info.common_services;
+        let protocol_version = peer_info.protocol_version;
         let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
         let software_version = peer_info.software_version;
@@ -430,6 +449,7 @@ where
                 handle,
                 address,
                 inbound,
+                protocol_version,
                 user_agent,
                 software_version,
                 common_services,
@@ -535,6 +555,28 @@ where
             ),
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
+
+            PeerEvent::HandshakeFailed { error } => {
+                if let Some(pending_peer) = self.pending.get(&peer_id) {
+                    log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
+
+                    let send_result = self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
+                        address: pending_peer.address,
+                        error,
+                    });
+                    if let Err(send_error) = send_result {
+                        log::error!(
+                            "Unable to report a failed handshake for peer {} to the front end: {}",
+                            peer_id,
+                            send_error
+                        );
+                    }
+                } else {
+                    log::error!("Cannot find pending peer for peer id {peer_id}");
+                }
+
+                Ok(())
+            }
 
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {

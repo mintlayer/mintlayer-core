@@ -18,22 +18,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
+use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
+
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
     net::types::{services::Service, PeerRole},
     peer_manager::tests::{get_connected_peers, run_peer_manager},
-    protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -82,6 +82,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_peer_manager_connect_tcp() {
     let transport = TestTransportTcp::make_transport();
@@ -96,6 +97,7 @@ async fn test_peer_manager_connect_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_peer_manager_connect_tcp_noise() {
     let transport = TestTransportNoise::make_transport();
@@ -129,7 +131,7 @@ where
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         loop {
             assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
@@ -146,17 +148,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_tcp() {
     test_auto_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_channels() {
     test_auto_connect::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_noise() {
     test_auto_connect::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -184,11 +189,13 @@ where
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_tcp() {
     connect_outbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_channels() {
     connect_outbound_same_network::<
@@ -198,6 +205,7 @@ async fn connect_outbound_same_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_noise() {
     connect_outbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -230,6 +238,7 @@ where
     assert_ne!(peer_info.network, *config.magic_bytes());
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_tcp() {
     connect_outbound_different_network::<
@@ -239,6 +248,7 @@ async fn connect_outbound_different_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_channels() {
     connect_outbound_different_network::<
@@ -248,6 +258,7 @@ async fn connect_outbound_different_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_noise() {
     connect_outbound_different_network::<
@@ -280,6 +291,7 @@ where
     pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None).unwrap();
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_tcp() {
     connect_inbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
@@ -287,6 +299,7 @@ async fn connect_inbound_same_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_channel() {
     connect_inbound_same_network::<
@@ -296,6 +309,7 @@ async fn connect_inbound_same_network_channel() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_noise() {
     connect_inbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -338,6 +352,7 @@ where
     );
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_tcp() {
     connect_inbound_different_network::<
@@ -347,6 +362,7 @@ async fn connect_inbound_different_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_channels() {
     connect_inbound_different_network::<
@@ -356,6 +372,7 @@ async fn connect_inbound_different_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_noise() {
     connect_inbound_different_network::<
@@ -403,17 +420,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_tcp() {
     remote_closes_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_channels() {
     remote_closes_connection::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_noise() {
     remote_closes_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
@@ -448,7 +468,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -458,6 +478,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_tcp() {
     let config = Arc::new(config::create_mainnet());
@@ -467,7 +488,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
@@ -484,6 +505,7 @@ async fn inbound_connection_too_many_peers_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_channels() {
     let config = Arc::new(config::create_mainnet());
@@ -493,7 +515,7 @@ async fn inbound_connection_too_many_peers_channels() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
@@ -510,6 +532,7 @@ async fn inbound_connection_too_many_peers_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_noise() {
     let config = Arc::new(config::create_mainnet());
@@ -519,7 +542,7 @@ async fn inbound_connection_too_many_peers_noise() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol_version: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
                     software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
@@ -575,6 +598,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_tcp() {
     connection_timeout::<DefaultNetworkingService<TcpTransportSocket>>(
@@ -585,6 +609,7 @@ async fn connection_timeout_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_channels() {
     connection_timeout::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -595,6 +620,7 @@ async fn connection_timeout_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_noise() {
     connection_timeout::<DefaultNetworkingService<NoiseTcpTransport>>(
@@ -669,7 +695,7 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
 
@@ -689,6 +715,7 @@ async fn connection_timeout_rpc_notified<T>(
 // Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
@@ -699,6 +726,7 @@ async fn connection_timeout_rpc_notified_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -709,6 +737,7 @@ async fn connection_timeout_rpc_notified_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
@@ -829,18 +858,21 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_tcp() {
     connection_reserved_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_noise() {
     connection_reserved_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_channel() {
     connection_reserved_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
@@ -855,7 +887,6 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    logging::init_logging::<std::path::PathBuf>(None);
     let chain_config = Arc::new(config::create_mainnet());
 
     let time_getter = P2pBasicTestTimeGetter::new();
@@ -1015,16 +1046,19 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_tcp() {
     discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_noise() {
     discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_channel() {
     discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;

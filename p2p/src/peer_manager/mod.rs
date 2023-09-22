@@ -60,7 +60,6 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager_event::PeerDisconnectionDbAction,
-    protocol::{NetworkProtocolVersion, NETWORK_PROTOCOL_MIN},
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
@@ -125,7 +124,7 @@ enum OutboundConnectType {
     Automatic,
     Reserved,
     Manual {
-        response: oneshot_nofail::Sender<crate::Result<()>>,
+        response_sender: oneshot_nofail::Sender<crate::Result<()>>,
     },
 }
 
@@ -219,13 +218,6 @@ where
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
         })
-    }
-
-    /// Verify network protocol compatibility
-    ///
-    /// Make sure that the local and remote peers have compatible network protocols
-    fn validate_network_protocol(&self, protocol: NetworkProtocolVersion) -> bool {
-        protocol >= NETWORK_PROTOCOL_MIN
     }
 
     /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
@@ -336,6 +328,16 @@ where
         }
     }
 
+    fn is_whitelisted_node(peer_role: PeerRole) -> bool {
+        match peer_role {
+            PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => {
+                // TODO: Add whitelisted IPs option and check it here
+                false
+            }
+            PeerRole::OutboundManual => true,
+        }
+    }
+
     /// Adjust peer score
     ///
     /// If the peer is known, update its existing peer score and report
@@ -350,15 +352,7 @@ where
             None => return,
         };
 
-        let whitelisted_node = match peer.peer_role {
-            PeerRole::Inbound | PeerRole::OutboundFullRelay | PeerRole::OutboundBlockRelay => {
-                // TODO: Add whitelisted IPs option and check it here
-                false
-            }
-            PeerRole::OutboundManual => true,
-        };
-
-        if whitelisted_node {
+        if Self::is_whitelisted_node(peer.peer_role) {
             log::info!(
                 "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
             );
@@ -374,6 +368,30 @@ where
 
         if peer.score >= *self.p2p_config.ban_threshold {
             let address = peer.address.as_bannable();
+            self.ban(address);
+        }
+    }
+
+    /// Adjust peer score after a failed handshake.
+    ///
+    /// Note that currently intermediate scores are not stored in the peer db, so this call will
+    /// only make any effect if the passed score is bigger than the ban threshold.
+    fn adjust_peer_score_on_failed_handshake(&mut self, peer_address: SocketAddress, score: u32) {
+        let whitelisted_node =
+            self.pending_outbound_connects
+                .get(&peer_address)
+                .map_or(false, |pending_connect| {
+                    Self::is_whitelisted_node(Self::determine_outbound_peer_role(pending_connect))
+                });
+        if whitelisted_node {
+            log::info!(
+                "Not adjusting peer score for the whitelisted peer at address {peer_address}, adjustment {score}",
+            );
+            return;
+        }
+
+        if score >= *self.p2p_config.ban_threshold {
+            let address = peer_address.as_bannable();
             self.ban(address);
         }
     }
@@ -438,7 +456,9 @@ where
                 *self.p2p_config.enable_block_relay_peers
                     && self.block_relay_peer_count() < OUTBOUND_BLOCK_RELAY_COUNT
             }
-            OutboundConnectType::Reserved | OutboundConnectType::Manual { response: _ } => false,
+            OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
+                false
+            }
         };
 
         let local_services_override: Option<Services> = if block_relay_only {
@@ -465,8 +485,8 @@ where
                 log::debug!("outbound connection to {address:?} failed: {e}");
                 match outbound_connect_type {
                     OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
-                    OutboundConnectType::Manual { response } => {
-                        response.send(Err(e));
+                    OutboundConnectType::Manual { response_sender } => {
+                        response_sender.send(Err(e));
                     }
                 }
             }
@@ -535,10 +555,6 @@ where
         peer_role: PeerRole,
         info: &PeerInfo,
     ) -> crate::Result<()> {
-        ensure!(
-            self.validate_network_protocol(info.protocol_version),
-            P2pError::ProtocolError(ProtocolError::UnsupportedProtocol(info.protocol_version))
-        );
         ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -767,6 +783,20 @@ where
         Ok(())
     }
 
+    fn determine_outbound_peer_role(pending_connect: &PendingConnect) -> PeerRole {
+        match pending_connect.outbound_connect_type {
+            OutboundConnectType::Automatic => {
+                if pending_connect.block_relay_only {
+                    PeerRole::OutboundBlockRelay
+                } else {
+                    PeerRole::OutboundFullRelay
+                }
+            }
+            OutboundConnectType::Reserved => PeerRole::OutboundManual,
+            OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
+        }
+    }
+
     fn accept_connection(
         &mut self,
         address: SocketAddress,
@@ -779,25 +809,16 @@ where
         let (peer_role, response) = match role {
             Role::Inbound => (PeerRole::Inbound, None),
             Role::Outbound => {
-                let PendingConnect {
-                    outbound_connect_type,
-                    block_relay_only,
-                } = self.pending_outbound_connects.remove(&address).expect(
+                let pending_connect = self.pending_outbound_connects.remove(&address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
-                match outbound_connect_type {
-                    OutboundConnectType::Automatic => {
-                        if block_relay_only {
-                            (PeerRole::OutboundBlockRelay, None)
-                        } else {
-                            (PeerRole::OutboundFullRelay, None)
-                        }
-                    }
-                    OutboundConnectType::Reserved => (PeerRole::OutboundManual, None),
-                    OutboundConnectType::Manual { response } => {
-                        (PeerRole::OutboundManual, Some(response))
-                    }
-                }
+                let role = Self::determine_outbound_peer_role(&pending_connect);
+                let response_sender = match pending_connect.outbound_connect_type {
+                    OutboundConnectType::Automatic | OutboundConnectType::Reserved => None,
+                    OutboundConnectType::Manual { response_sender } => Some(response_sender),
+                };
+
+                (role, response_sender)
             }
         };
 
@@ -846,8 +867,8 @@ where
         );
         match outbound_connect_type {
             OutboundConnectType::Automatic | OutboundConnectType::Reserved => {}
-            OutboundConnectType::Manual { response } => {
-                response.send(Err(error));
+            OutboundConnectType::Manual { response_sender } => {
+                response_sender.send(Err(error));
             }
         }
     }
@@ -1174,9 +1195,9 @@ where
     /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager.
     fn handle_control_event(&mut self, event: PeerManagerEvent) {
         match event {
-            PeerManagerEvent::Connect(address, response) => {
+            PeerManagerEvent::Connect(address, response_sender) => {
                 let address = ip_or_socket_address_to_peer_address(&address, &self.chain_config);
-                self.connect(address, OutboundConnectType::Manual { response });
+                self.connect(address, OutboundConnectType::Manual { response_sender });
             }
             PeerManagerEvent::Disconnect(peer_id, peerdb_action, response) => {
                 self.disconnect(peer_id, peerdb_action, Some(response));
@@ -1263,6 +1284,9 @@ where
             }
             ConnectivityEvent::Misbehaved { peer_id, error } => {
                 self.adjust_peer_score(peer_id, error.ban_score());
+            }
+            ConnectivityEvent::HandshakeFailed { address, error } => {
+                self.adjust_peer_score_on_failed_handshake(address, error.ban_score());
             }
         }
     }
@@ -1486,7 +1510,7 @@ where
                 self.resend_own_address_randomly();
 
                 // Pick a random outbound peer to resend the listening address to.
-                // The delay has this value because there are at most `MAX_OUTBOUND_CONNECTIONS`
+                // The delay has this value because there are at most `OUTBOUND_FULL_RELAY_COUNT`
                 // that can have `discovered_own_address`.
                 let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
@@ -1497,6 +1521,17 @@ where
 
     pub async fn run(mut self) -> crate::Result<Never> {
         self.run_internal(None).await
+    }
+
+    // A variant of 'run' to use in tests.
+    #[cfg(test)]
+    pub async fn run_without_consuming_self(&mut self) -> crate::Result<Never> {
+        self.run_internal(None).await
+    }
+
+    #[cfg(test)]
+    pub fn peerdb(&self) -> &peerdb::PeerDb<S> {
+        &self.peerdb
     }
 }
 

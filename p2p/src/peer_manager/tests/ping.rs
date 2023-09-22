@@ -17,6 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use test_utils::{assert_matches, assert_matches_return_val};
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -24,19 +25,21 @@ use crate::{
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{
-            transport::TcpTransportSocket,
-            types::{Command, Message},
-            ConnectivityHandle, DefaultNetworkingService,
+            transport::TcpTransportSocket, types::Command, ConnectivityHandle,
+            DefaultNetworkingService,
         },
         types::{ConnectivityEvent, PeerInfo},
     },
-    peer_manager::{tests::send_and_sync, PeerManager},
-    protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::peerdb_inmemory_store,
+    peer_manager::{
+        tests::{send_and_sync, utils::cmd_to_peer_man_msg},
+        PeerManager,
+    },
+    testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     types::peer_id::PeerId,
     PeerManagerEvent,
 };
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
@@ -88,7 +91,7 @@ async fn ping_timeout() {
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         let _ = peer_manager.run().await;
     });
 
@@ -98,7 +101,7 @@ async fn ping_timeout() {
             address: "123.123.123.123:12345".parse().unwrap(),
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
-                protocol_version: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: *chain_config.magic_bytes(),
                 software_version: *chain_config.software_version(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -118,34 +121,30 @@ async fn ping_timeout() {
     for _ in 0..5 {
         time_getter.advance_time(ping_check_period);
 
-        let event = expect_recv!(&mut cmd_rx);
-        match event {
-            Command::SendMessage {
-                peer_id,
-                message: Message::PingRequest(PingRequest { nonce }),
-            } => {
-                send_and_sync(
-                    peer_id,
-                    PeerManagerMessage::PingResponse(PingResponse { nonce }),
-                    &conn_tx,
-                    &mut cmd_rx,
-                )
-                .await;
-            }
-            _ => panic!("unexpected event: {event:?}"),
-        }
+        let cmd = expect_recv!(&mut cmd_rx);
+        let (peer_id, peer_msg) = cmd_to_peer_man_msg(cmd);
+        let nonce = assert_matches_return_val!(
+            peer_msg,
+            PeerManagerMessage::PingRequest(PingRequest { nonce },),
+            nonce
+        );
+        send_and_sync(
+            peer_id,
+            PeerManagerMessage::PingResponse(PingResponse { nonce }),
+            &conn_tx,
+            &mut cmd_rx,
+        )
+        .await;
     }
 
     // Receive one more ping request but do not send a ping response
     time_getter.advance_time(ping_check_period);
-    let event = expect_recv!(&mut cmd_rx);
-    match event {
-        Command::SendMessage {
-            peer_id: _,
-            message: Message::PingRequest(PingRequest { nonce: _ }),
-        } => {}
-        _ => panic!("unexpected event: {event:?}"),
-    }
+    let cmd = expect_recv!(&mut cmd_rx);
+    let (_, peer_msg) = cmd_to_peer_man_msg(cmd);
+    assert_matches!(
+        peer_msg,
+        PeerManagerMessage::PingRequest(PingRequest { nonce: _ })
+    );
 
     time_getter.advance_time(ping_timeout);
 

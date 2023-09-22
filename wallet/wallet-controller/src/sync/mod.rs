@@ -22,6 +22,7 @@ use common::{
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_comm::node_traits::NodeInterface;
+use utils::{once_destructor::OnceDestructor, set_flag::SetFlag};
 use wallet::{
     wallet::WalletSyncingState, wallet_events::WalletEvents, DefaultWallet, WalletResult,
 };
@@ -113,6 +114,9 @@ pub async fn sync_once<T: NodeInterface>(
     wallet: &mut impl SyncingWallet,
     wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
+    let mut print_flag = SetFlag::new();
+    let mut _log_on_exit = None;
+
     loop {
         let chain_info =
             rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
@@ -144,6 +148,24 @@ pub async fn sync_once<T: NodeInterface>(
             unused_account_best_block,
         )
         .await?;
+
+        // Print the log message informing about the syncing process only once
+        if !print_flag.test_and_set() {
+            _log_on_exit = Some(OnceDestructor::new(move || {
+                log::info!(
+                    "Wallet syncing done to height {}",
+                    chain_info.best_block_height
+                )
+            }));
+
+            let lowest_acc_height =
+                accounts_grouped.first().expect("empty accounts").0.common_block_height;
+            log::info!(
+                "Syncing wallet from height {} to {}",
+                lowest_acc_height,
+                chain_info.best_block_height
+            );
+        }
 
         // Sync all account groups together from last to first,
         // where the last has the lowest block height.

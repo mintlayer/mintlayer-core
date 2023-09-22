@@ -41,7 +41,7 @@ fn tests<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
 pub fn run<S: ApiServerStorage + 'static, F: Fn() -> S + Send + Sync + 'static>(
     storage_maker: F,
 ) -> libtest_mimic::Conclusion {
-    logging::init_logging::<&str>(None);
+    logging::init_logging();
     let args = libtest_mimic::Arguments::from_args();
     libtest_mimic::run(&args, tests(storage_maker))
 }
