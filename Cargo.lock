@@ -3895,6 +3895,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "variant_count",
  "wallet",
  "wallet-controller",
  "wallet-types",
