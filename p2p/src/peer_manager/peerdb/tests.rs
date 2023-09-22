@@ -23,7 +23,7 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError},
-    peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
+    peer_manager::{peerdb::storage::PeerDbStorageRead, peerdb_common::Transactional},
     testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
 

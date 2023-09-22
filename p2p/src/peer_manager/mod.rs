@@ -18,6 +18,7 @@
 pub mod address_groups;
 pub mod peer_context;
 pub mod peerdb;
+pub mod peerdb_common;
 mod peers_eviction;
 
 use std::{

@@ -15,6 +15,8 @@
 
 use std::time::Duration;
 
+use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
+
 pub trait PeerDbStorageRead {
     fn get_version(&self) -> Result<Option<u32>, storage::Error>;
 
@@ -45,58 +47,27 @@ pub trait PeerDbStorageWrite {
     fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
-pub trait PeerDbTransactionRo: PeerDbStorageRead {
-    fn close(self);
-}
+// Note: here we want to say something like:
+//  pub trait PeerDbStorage: for<'t> Transactional<'t> + Send
+//      where for<'t> <Self as Transactional<'t>>::TransactionRo: PeerDbStorageRead,
+//            for<'t> <Self as Transactional<'t>>::TransactionRw: PeerDbStorageWrite {}
+// But currently Rust would require us to duplicate the "where" constrains in all places
+// where PeerDbStorage is used, so we use this "Helper" approach instead.
+pub trait PeerDbStorage: for<'t> PeerDbStorageHelper<'t> + Send {}
 
-pub trait PeerDbTransactionRw: PeerDbStorageWrite {
-    fn abort(self);
-
-    fn commit(self) -> Result<(), storage::Error>;
-}
-
-/// Support for transactions over blockchain storage
-pub trait PeerDbTransactional<'t> {
-    /// Associated read-only transaction type.
-    type TransactionRo: PeerDbTransactionRo + 't;
-
-    /// Associated read-write transaction type.
-    type TransactionRw: PeerDbTransactionRw + 't;
-
-    /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, storage::Error>;
-
-    /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, storage::Error>;
-}
-
-pub trait PeerDbStorage: for<'tx> PeerDbTransactional<'tx> + Send {}
-
-const MAX_RECOVERABLE_ERROR_RETRY_COUNT: u32 = 3;
-
-/// Try update storage, gracefully handle recoverable errors
-pub fn update_db<S, F>(storage: &S, f: F) -> Result<(), storage::Error>
-where
-    S: PeerDbStorage,
-    F: Fn(&mut <S as PeerDbTransactional<'_>>::TransactionRw) -> Result<(), storage::Error>,
+pub trait PeerDbStorageHelper<'t>:
+    Transactional<'t, TransactionRo = Self::TxRo, TransactionRw = Self::TxRw>
 {
-    let mut recoverable_errors = 0;
-    loop {
-        let res = || -> Result<(), storage::Error> {
-            let mut tx = storage.transaction_rw()?;
-            f(&mut tx)?;
-            tx.commit()
-        }();
+    type TxRo: TransactionRo + PeerDbStorageRead + 't;
+    type TxRw: TransactionRw + PeerDbStorageWrite + 't;
+}
 
-        match res {
-            Ok(()) => return Ok(()),
-            err @ Err(storage::Error::Recoverable(_)) => {
-                recoverable_errors += 1;
-                if recoverable_errors >= MAX_RECOVERABLE_ERROR_RETRY_COUNT {
-                    return err;
-                }
-            }
-            err @ Err(storage::Error::Fatal(_)) => return err,
-        }
-    }
+impl<'t, T> PeerDbStorageHelper<'t> for T
+where
+    T: Transactional<'t>,
+    Self::TransactionRo: PeerDbStorageRead + 't,
+    Self::TransactionRw: PeerDbStorageWrite + 't,
+{
+    type TxRo = Self::TransactionRo;
+    type TxRw = Self::TransactionRw;
 }

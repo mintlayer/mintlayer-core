@@ -20,11 +20,12 @@ use std::{
 
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
-use crate::error::P2pError;
-
-use super::storage::{
-    PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
+use crate::{
+    error::P2pError,
+    peer_manager::peerdb_common::{TransactionRo, TransactionRw},
 };
+
+use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
 
 const STORAGE_VERSION: u32 = 1;
 

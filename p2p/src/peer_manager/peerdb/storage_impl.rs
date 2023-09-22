@@ -15,10 +15,9 @@
 
 use std::time::Duration;
 
-use super::storage::{
-    PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
-    PeerDbTransactional,
-};
+use crate::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
+
+use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
 
 type ValueId = u32;
@@ -42,45 +41,24 @@ storage::decl_schema! {
 
 const VALUE_ID_VERSION: ValueId = 1;
 
-pub struct PeerDbStoreTxRo<'st, B: storage::Backend>(storage::TransactionRo<'st, B, Schema>);
+type PeerDbStoreTxRo<'st, B> = StorageTxRo<'st, B, Schema>;
+type PeerDbStoreTxRw<'st, B> = StorageTxRw<'st, B, Schema>;
 
-pub struct PeerDbStoreTxRw<'st, B: storage::Backend>(storage::TransactionRw<'st, B, Schema>);
-
-impl<'tx, B: storage::Backend + 'tx> PeerDbTransactional<'tx> for PeerDbStorageImpl<B> {
-    type TransactionRo = PeerDbStoreTxRo<'tx, B>;
-    type TransactionRw = PeerDbStoreTxRw<'tx, B>;
-
-    fn transaction_ro<'st: 'tx>(&'st self) -> Result<Self::TransactionRo, storage::Error> {
-        self.0.transaction_ro().map(PeerDbStoreTxRo)
-    }
-
-    fn transaction_rw<'st: 'tx>(&'st self) -> Result<Self::TransactionRw, storage::Error> {
-        self.0.transaction_rw(None).map(PeerDbStoreTxRw)
-    }
-}
+pub type PeerDbStorageImpl<B> = StorageImpl<B, Schema>;
 
 impl<B: storage::Backend + 'static> PeerDbStorage for PeerDbStorageImpl<B> {}
 
-pub struct PeerDbStorageImpl<T: storage::Backend>(storage::Storage<T, Schema>);
-
-impl<B: storage::Backend> PeerDbStorageImpl<B> {
-    pub fn new(storage: B) -> crate::Result<Self> {
-        let store = storage::Storage::<_, Schema>::new(storage)?;
-        Ok(Self(store))
-    }
-}
-
 impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
     fn set_version(&mut self, version: u32) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())
+        self.storage().get_mut::<DBValue, _>().put(VALUE_ID_VERSION, version.encode())
     }
 
     fn add_known_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBKnownAddresses, _>().put(address, ())
+        self.storage().get_mut::<DBKnownAddresses, _>().put(address, ())
     }
 
     fn del_known_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBKnownAddresses, _>().del(address)
+        self.storage().get_mut::<DBKnownAddresses, _>().del(address)
     }
 
     fn add_banned_address(
@@ -88,35 +66,25 @@ impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
         address: &str,
         duration: Duration,
     ) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBBannedAddresses, _>().put(address, duration)
+        self.storage().get_mut::<DBBannedAddresses, _>().put(address, duration)
     }
 
     fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBBannedAddresses, _>().del(address)
+        self.storage().get_mut::<DBBannedAddresses, _>().del(address)
     }
 
     fn add_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBAnchorAddresses, _>().put(address, ())
+        self.storage().get_mut::<DBAnchorAddresses, _>().put(address, ())
     }
 
     fn del_anchor_address(&mut self, address: &str) -> Result<(), storage::Error> {
-        self.0.get_mut::<DBAnchorAddresses, _>().del(address)
-    }
-}
-
-impl<'st, B: storage::Backend> PeerDbTransactionRw for PeerDbStoreTxRw<'st, B> {
-    fn abort(self) {
-        self.0.abort()
-    }
-
-    fn commit(self) -> Result<(), storage::Error> {
-        self.0.commit()
+        self.storage().get_mut::<DBAnchorAddresses, _>().del(address)
     }
 }
 
 impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
     fn get_version(&self) -> Result<Option<u32>, storage::Error> {
-        let map = self.0.get::<DBValue, _>();
+        let map = self.storage().get::<DBValue, _>();
         let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);
         Ok(vec_opt.map(|vec| {
             u32::decode_all(&mut vec.as_ref()).expect("db values to be encoded correctly")
@@ -124,26 +92,20 @@ impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
     }
 
     fn get_known_addresses(&self) -> Result<Vec<String>, storage::Error> {
-        let map = self.0.get::<DBKnownAddresses, _>();
+        let map = self.storage().get::<DBKnownAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?;
         Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
     }
 
     fn get_banned_addresses(&self) -> Result<Vec<(String, Duration)>, storage::Error> {
-        let map = self.0.get::<DBBannedAddresses, _>();
+        let map = self.storage().get::<DBBannedAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?;
         Ok(iter.collect::<Vec<_>>())
     }
 
     fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error> {
-        let map = self.0.get::<DBAnchorAddresses, _>();
+        let map = self.storage().get::<DBAnchorAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?;
         Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
-    }
-}
-
-impl<'st, B: storage::Backend> PeerDbTransactionRo for PeerDbStoreTxRo<'st, B> {
-    fn close(self) {
-        self.0.close()
     }
 }

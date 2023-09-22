@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use p2p::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
+
 pub trait DnsServerStorageRead {
     fn get_version(&self) -> Result<Option<u32>, storage::Error>;
 
@@ -27,58 +29,27 @@ pub trait DnsServerStorageWrite {
     fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
-pub trait DnsServerTransactionRo: DnsServerStorageRead {
-    fn close(self);
-}
+// Note: here we want to say something like:
+//  pub trait DnsServerStorage: for<'t> Transactional<'t> + Send
+//      where for<'t> <Self as Transactional<'t>>::TransactionRo: DnsServerStorageRead,
+//            for<'t> <Self as Transactional<'t>>::TransactionRw: DnsServerStorageWrite {}
+// But currently Rust would require us to duplicate the "where" constrains in all places
+// where DnsServerStorage is used, so we use this "Helper" approach instead.
+pub trait DnsServerStorage: for<'t> DnsServerStorageHelper<'t> + Send {}
 
-pub trait DnsServerTransactionRw: DnsServerStorageWrite {
-    fn abort(self);
-
-    fn commit(self) -> Result<(), storage::Error>;
-}
-
-/// Support for transactions over blockchain storage
-pub trait DnsServerTransactional<'t> {
-    /// Associated read-only transaction type.
-    type TransactionRo: DnsServerTransactionRo + 't;
-
-    /// Associated read-write transaction type.
-    type TransactionRw: DnsServerTransactionRw + 't;
-
-    /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, storage::Error>;
-
-    /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, storage::Error>;
-}
-
-pub trait DnsServerStorage: for<'tx> DnsServerTransactional<'tx> + Send {}
-
-const MAX_RECOVERABLE_ERROR_RETRY_COUNT: u32 = 3;
-
-/// Try update storage, gracefully handle recoverable errors
-pub fn update_db<S, F>(storage: &S, f: F) -> Result<(), storage::Error>
-where
-    S: DnsServerStorage,
-    F: Fn(&mut <S as DnsServerTransactional<'_>>::TransactionRw) -> Result<(), storage::Error>,
+pub trait DnsServerStorageHelper<'t>:
+    Transactional<'t, TransactionRo = Self::TxRo, TransactionRw = Self::TxRw>
 {
-    let mut recoverable_errors = 0;
-    loop {
-        let res = || -> Result<(), storage::Error> {
-            let mut tx = storage.transaction_rw()?;
-            f(&mut tx)?;
-            tx.commit()
-        }();
+    type TxRo: TransactionRo + DnsServerStorageRead + 't;
+    type TxRw: TransactionRw + DnsServerStorageWrite + 't;
+}
 
-        match res {
-            Ok(()) => return Ok(()),
-            Err(storage::Error::Recoverable(e)) => {
-                recoverable_errors += 1;
-                if recoverable_errors >= MAX_RECOVERABLE_ERROR_RETRY_COUNT {
-                    return Err(storage::Error::Recoverable(e));
-                }
-            }
-            Err(storage::Error::Fatal(e)) => return Err(storage::Error::Fatal(e)),
-        }
-    }
+impl<'t, T> DnsServerStorageHelper<'t> for T
+where
+    T: Transactional<'t>,
+    Self::TransactionRo: DnsServerStorageRead + 't,
+    Self::TransactionRw: DnsServerStorageWrite + 't,
+{
+    type TxRo = Self::TransactionRo;
+    type TxRw = Self::TransactionRw;
 }

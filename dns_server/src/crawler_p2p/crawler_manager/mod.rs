@@ -33,7 +33,10 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
-    peer_manager::ip_or_socket_address_to_peer_address,
+    peer_manager::{
+        ip_or_socket_address_to_peer_address,
+        peerdb_common::{storage::update_db, TransactionRo, TransactionRw},
+    },
     types::{
         ip_or_socket_address::IpOrSocketAddress, peer_address::PeerAddress, peer_id::PeerId,
         socket_address::SocketAddress, IsGlobalIp,
@@ -43,10 +46,7 @@ use tokio::sync::mpsc;
 
 use crate::{dns_server::DnsServerCommand, error::DnsServerError};
 
-use self::storage::{
-    DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite, DnsServerTransactionRo,
-    DnsServerTransactionRw,
-};
+use self::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
 
 use super::crawler::{Crawler, CrawlerCommand, CrawlerEvent};
 
@@ -299,11 +299,11 @@ where
 
                 match (old_state.is_persistent(), new_state.is_persistent()) {
                     (false, true) => {
-                        storage::update_db(storage, |tx| tx.add_address(&address.to_string()))
+                        update_db(storage, |tx| tx.add_address(&address.to_string()))
                             .expect("update_db must succeed (add_address)");
                     }
                     (true, false) => {
-                        storage::update_db(storage, |tx| tx.del_address(&address.to_string()))
+                        update_db(storage, |tx| tx.del_address(&address.to_string()))
                             .expect("update_db must succeed (del_address)");
                     }
                     _ => {}
