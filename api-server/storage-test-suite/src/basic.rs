@@ -40,7 +40,7 @@ pub async fn initialization<S: ApiServerStorage, F: Fn() -> S>(
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed> {
     let storage = storage_maker();
-    let mut tx = storage.transaction_ro().await.unwrap();
+    let tx = storage.transaction_ro().await.unwrap();
     assert!(tx.is_initialized().await.unwrap());
     Ok(())
 }
@@ -55,7 +55,7 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
     let mut storage = storage_maker();
 
-    let mut db_tx = storage.transaction_ro().await.unwrap();
+    let db_tx = storage.transaction_ro().await.unwrap();
 
     let is_initialized = db_tx.is_initialized().await.unwrap();
     assert!(is_initialized);
@@ -100,7 +100,7 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
         db_tx.commit().await.unwrap();
 
-        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let db_tx = storage.transaction_ro().await.unwrap();
 
         {
             let block_id = db_tx.get_main_chain_block_id(height).await.unwrap();
@@ -143,7 +143,7 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
 
     // Test setting/getting transactions
     {
-        let mut db_tx = storage.transaction_ro().await.unwrap();
+        let db_tx = storage.transaction_ro().await.unwrap();
 
         let random_tx_id: Id<Transaction> = Id::<Transaction>::new(H256::random_using(&mut rng));
         let tx = db_tx.get_transaction(random_tx_id).await.unwrap();

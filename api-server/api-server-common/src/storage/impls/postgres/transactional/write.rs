@@ -109,33 +109,28 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
-    async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
+    async fn is_initialized(&self) -> Result<bool, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.is_initialized().await?;
 
         Ok(res)
     }
 
-    async fn get_storage_version(&mut self) -> Result<Option<u32>, ApiServerStorageError> {
+    async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_storage_version().await?;
 
         Ok(res)
     }
 
-    async fn get_best_block(
-        &mut self,
-    ) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
+    async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_best_block().await?;
 
         Ok(res)
     }
 
-    async fn get_block(
-        &mut self,
-        block_id: Id<Block>,
-    ) -> Result<Option<Block>, ApiServerStorageError> {
+    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_block(block_id).await?;
 
@@ -143,7 +138,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     }
 
     async fn get_block_aux_data(
-        &mut self,
+        &self,
         block_id: Id<Block>,
     ) -> Result<Option<BlockAuxData>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
@@ -153,7 +148,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     }
 
     async fn get_main_chain_block_id(
-        &mut self,
+        &self,
         block_height: BlockHeight,
     ) -> Result<Option<Id<Block>>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
@@ -163,7 +158,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     }
 
     async fn get_transaction(
-        &mut self,
+        &self,
         transaction_id: Id<Transaction>,
     ) -> Result<Option<(Option<Id<Block>>, SignedTransaction)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
