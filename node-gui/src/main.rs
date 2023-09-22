@@ -105,7 +105,7 @@ impl Application for MintlayerNodeGUI {
                 }
                 Message::FontLoaded(status) => {
                     if status.is_err() {
-                        *self = MintlayerNodeGUI::IntializationError("Faild to load font".into());
+                        *self = MintlayerNodeGUI::IntializationError("Failed to load font".into());
                     }
                     Command::none()
                 }
@@ -132,7 +132,7 @@ impl Application for MintlayerNodeGUI {
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::FontLoaded(status) => {
                     if status.is_err() {
-                        *self = MintlayerNodeGUI::IntializationError("Faild to load font".into());
+                        *self = MintlayerNodeGUI::IntializationError("Failed to load font".into());
                     }
                     Command::none()
                 }
