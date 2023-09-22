@@ -37,8 +37,19 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, storage::Error>;
 }
 
-/// `decl_storage_trait!(Storage, StorageRead, StorageWrite)` is basically equivalent to
+/// Declare a trait that extends [`Transactional`] and adds additional constraints to its
+/// associated types `TransactionRo` and `TransactionRw`.
 /// ```
+/// # use p2p::{decl_storage_trait, peer_manager::peerdb_common::storage::Transactional};
+/// # trait StorageRead {}
+/// # trait StorageWrite {}
+/// decl_storage_trait!(Storage, StorageRead, StorageWrite);
+/// ```
+/// is basically equivalent to
+/// ```
+/// # use p2p::peer_manager::peerdb_common::storage::Transactional;
+/// # trait StorageRead {}
+/// # trait StorageWrite {}
 /// pub trait Storage: for<'t> Transactional<'t> + Send
 /// where
 ///     for<'t> <Self as Transactional<'t>>::TransactionRo: StorageRead,
@@ -46,8 +57,8 @@ pub trait Transactional<'t> {
 /// {
 /// }
 /// ```
-/// except that with the `where` clause you'd have to repeat the trait bounds for the
-/// inner `TransactionRo`/`TransactionRw` everywhere where you use `Storage` and with
+/// except that with the `where` clause you'd have to repeat the trait bounds for
+/// `TransactionRo`/`TransactionRw` everywhere where you use `Storage`, and with
 /// `decl_storage_trait` you don't.
 #[macro_export]
 macro_rules! decl_storage_trait {
