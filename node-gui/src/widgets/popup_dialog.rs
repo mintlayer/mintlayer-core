@@ -15,11 +15,10 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, Button, Text},
+    widget::{self, container, Button, Component, Text},
     Element, Length,
 };
 use iced_aw::Card;
-use iced_lazy::{self, Component};
 
 #[derive(Clone)]
 pub struct Popup {
@@ -69,6 +68,6 @@ where
     Message: 'a,
 {
     fn from(my_component: PopupDialog<Message>) -> Self {
-        iced_lazy::component(my_component)
+        widget::component(my_component)
     }
 }

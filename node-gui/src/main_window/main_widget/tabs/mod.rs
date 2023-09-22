@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{Command, Element};
+use iced::{Command, Element, Length};
 use iced_aw::{TabLabel, Tabs};
 
 use crate::{
@@ -70,30 +70,36 @@ impl TabsWidget {
     pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
-        let mut tabs = Tabs::new(self.active_tab, TabsMessage::TabSelected)
+        let mut tabs = Tabs::new(TabsMessage::TabSelected)
+            .icon_font(iced_aw::ICON_FONT)
             .push(
+                0,
                 self.summary_tab.tab_label(),
                 self.summary_tab.view(node_state),
             )
             .push(
+                1,
                 self.networking_tab.tab_label(),
                 self.networking_tab.view(node_state),
             )
             .push(
+                2,
                 self.settings_tab.tab_label(),
                 self.settings_tab.view(node_state),
             );
 
-        for wallet in self.wallets.iter() {
-            tabs = tabs.push(wallet.tab_label(), wallet.view(node_state))
+        for (idx, wallet) in self.wallets.iter().enumerate() {
+            tabs = tabs.push(idx + 3, wallet.tab_label(), wallet.view(node_state))
         }
 
-        tabs.icon_font(iced_aw::ICON_FONT)
-            .tab_bar_position(match position {
-                TabBarPosition::Top => iced_aw::TabBarPosition::Top,
-                TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
-            })
-            .into()
+        tabs.tab_bar_position(match position {
+            TabBarPosition::Top => iced_aw::TabBarPosition::Top,
+            TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
+        })
+        .set_active_tab(&self.active_tab)
+        .height(Length::Fill)
+        .tab_bar_max_height(70.0)
+        .into()
     }
 
     pub fn update(

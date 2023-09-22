@@ -15,11 +15,10 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, text_input, Button, Text},
+    widget::{self, container, text_input, Button, Component, Text},
     Element, Length,
 };
 use iced_aw::Card;
-use iced_lazy::{self, Component};
 
 pub struct WalletUnlockDialog<Message> {
     on_set_password: Box<dyn Fn(String, String) -> Message>,
@@ -108,6 +107,6 @@ where
     Message: 'a,
 {
     fn from(component: WalletUnlockDialog<Message>) -> Self {
-        iced_lazy::component(component)
+        widget::component(component)
     }
 }

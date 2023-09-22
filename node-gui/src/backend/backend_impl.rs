@@ -187,12 +187,13 @@ impl Backend {
 
         let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
-        let controller = HandlesController::new(
+        let controller = HandlesController::new_unsynced(
             Arc::clone(&self.chain_config),
             handles_client,
             wallet,
             wallet_events,
         );
+
         let best_block = controller.best_block();
 
         let accounts_info = account_indexes
