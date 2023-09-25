@@ -48,15 +48,16 @@ class DelegationData:
 
 class WalletCliController:
 
-    def __init__(self, node, config, log):
+    def __init__(self, node, config, log, wallet_args: List[str] = []):
         self.log = log
         self.node = node
         self.config = config
+        self.wallet_args = wallet_args
 
     async def __aenter__(self):
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
-        wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file]
+        wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file] + self.wallet_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 

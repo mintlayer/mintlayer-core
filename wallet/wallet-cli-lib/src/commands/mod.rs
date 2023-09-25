@@ -35,8 +35,8 @@ use wallet::{
     account::Currency, version::get_version, wallet_events::WalletEventsNoOp, WalletError,
 };
 use wallet_controller::{
-    read::ReadOnlyController, synced_controller::SyncedController, ControllerError, NodeInterface,
-    NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
+    read::ReadOnlyController, synced_controller::SyncedController, ControllerConfig,
+    ControllerError, NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
 
 use crate::{errors::WalletCliError, CliController};
@@ -413,11 +413,15 @@ struct CliWalletState {
 pub struct CommandHandler {
     // the CliController if there is a loaded wallet
     state: Option<(CliController, CliWalletState)>,
+    config: ControllerConfig,
 }
 
 impl CommandHandler {
-    pub fn new() -> Self {
-        CommandHandler { state: None }
+    pub fn new(config: ControllerConfig) -> Self {
+        CommandHandler {
+            state: None,
+            config,
+        }
     }
 
     fn set_selected_account(&mut self, account_index: U31) -> Result<(), WalletCliError> {
@@ -474,7 +478,7 @@ impl CommandHandler {
     ) -> Result<SyncedController<'_, NodeRpcClient, WalletEventsNoOp>, WalletCliError> {
         let (controller, state) = self.state.as_mut().ok_or(WalletCliError::NoWallet)?;
         controller
-            .synced_controller(state.selected_account)
+            .synced_controller(state.selected_account, self.config)
             .await
             .map_err(WalletCliError::Controller)
     }

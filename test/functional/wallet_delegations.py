@@ -376,6 +376,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 assert "The transaction was submitted successfully" in await wallet.send_to_address(acc1_address, 1)
                 transactions = node.mempool_transactions()
                 self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+                assert "Success" in await wallet.sync()
 
                 delegations = await wallet.list_delegation_ids()
                 assert len(delegations) == 1
@@ -386,6 +387,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
             assert "Success" in await wallet.stake_delegation(10, delegation_id)
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+            assert "Success" in await wallet.sync()
 
             # check that we still don't have any delagations for this account
             delegations = await wallet.list_delegation_ids()
@@ -395,6 +397,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             tip_id = node.chainstate_best_block_id()
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
+            assert "Success" in await wallet.sync()
 
             # check that we still don't have any delagations for this account
             delegations = await wallet.list_delegation_ids()

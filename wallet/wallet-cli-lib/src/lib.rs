@@ -63,6 +63,7 @@ pub async fn run(
         history_file,
         exit_on_error,
         vi_mode,
+        in_top_x_mb,
     } = args;
 
     let mode = if let Some(file_path) = commands_file {
@@ -161,7 +162,7 @@ pub async fn run(
         ),
     });
 
-    cli_event_loop::run(&chain_config, &rpc_client, event_rx).await;
+    cli_event_loop::run(&chain_config, &rpc_client, event_rx, in_top_x_mb).await;
 
     repl_handle.join().expect("Should not panic")
 }

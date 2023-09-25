@@ -310,6 +310,7 @@ impl CliTestFramework {
             history_file: None,
             exit_on_error: None,
             vi_mode: false,
+            in_top_x_mb: 5,
         };
 
         let (output_tx, output_rx) = std::sync::mpsc::channel();
