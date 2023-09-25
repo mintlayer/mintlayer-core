@@ -99,7 +99,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
-                            | TxOutput::TokenIssuance(_) => {
+                            | TxOutput::Tokens(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
@@ -184,7 +184,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
-                            | TxOutput::TokenIssuance(_) => {
+                            | TxOutput::Tokens(_) => {
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                             }
 

@@ -55,7 +55,9 @@ fn token_issue_test(#[case] seed: Seed) {
                     TxInput::from_utxo(outpoint_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::TokenIssuance(Box::new(issuance)))
+                .add_output(TxOutput::Tokens(common::chain::TokenOutput::TokenIssuance(
+                    Box::new(issuance),
+                )))
                 .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build();
             let tx_id = tx.transaction().get_id();
@@ -234,7 +236,9 @@ fn token_issue_test(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::TokenIssuance(Box::new(issuance.clone())))
+                    .add_output(TxOutput::Tokens(common::chain::TokenOutput::TokenIssuance(
+                        Box::new(issuance.clone()),
+                    )))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )

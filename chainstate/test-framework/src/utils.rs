@@ -65,7 +65,7 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::TokenIssuance(_) => None,
+        | TxOutput::Tokens(_) => None,
     }
 }
 
@@ -108,7 +108,7 @@ pub fn create_utxo_data(
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
             }
         },
-        OutputValue::TokenV1(_) => todo!(),
+        OutputValue::TokenV1(_, _) => todo!(),
     };
 
     Some((
@@ -236,7 +236,7 @@ pub fn create_multiple_utxo_data(
                 }
             }
         },
-        OutputValue::TokenV1(_) => todo!(),
+        OutputValue::TokenV1(_, _) => todo!(),
     };
 
     Some((
