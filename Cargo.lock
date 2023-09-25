@@ -220,14 +220,18 @@ name = "api-server-backend-test-suite"
 version = "0.1.2"
 dependencies = [
  "api-server-common",
+ "async-trait",
  "chainstate-test-framework",
+ "chrono",
  "common",
  "crypto",
  "futures",
  "libtest-mimic",
  "logging",
  "proptest",
+ "rand 0.8.5",
  "test-utils",
+ "tokio",
  "utils",
 ]
 

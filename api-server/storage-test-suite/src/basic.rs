@@ -32,28 +32,37 @@ use common::{
     chain::{Block, OutPointSourceId, SignedTransaction, Transaction, TxInput, UtxoOutPoint},
     primitives::{Id, Idable, H256},
 };
+use futures::Future;
 use libtest_mimic::Failed;
 use test_utils::random::{make_seedable_rng, Seed};
 
-pub async fn initialization<S: ApiServerStorage, F: Fn() -> S>(
+pub async fn initialization<S, Fut, F: Fn() -> Fut>(
     storage_maker: Arc<F>,
     _seed_maker: Box<dyn Fn() -> Seed + Send>,
-) -> Result<(), Failed> {
-    let storage = storage_maker();
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+{
+    let storage = storage_maker().await;
     let tx = storage.transaction_ro().await.unwrap();
     assert!(tx.is_initialized().await.unwrap());
     Ok(())
 }
 
-pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
+pub async fn set_get<S: ApiServerStorage, Fut, F: Fn() -> Fut>(
     storage_maker: Arc<F>,
     seed_maker: Box<dyn Fn() -> Seed + Send>,
-) -> Result<(), Failed> {
+) -> Result<(), Failed>
+where
+    S: ApiServerStorage,
+    Fut: Future<Output = S> + Send + 'static,
+{
     let seed = seed_maker();
 
     let mut rng = make_seedable_rng(seed);
 
-    let mut storage = storage_maker();
+    let mut storage = storage_maker().await;
 
     let db_tx = storage.transaction_ro().await.unwrap();
 
@@ -266,9 +275,13 @@ pub async fn set_get<S: ApiServerStorage, F: Fn() -> S>(
     Ok(())
 }
 
-pub fn build_tests<S: ApiServerStorage + Send + 'static, F: Fn() -> S + Send + Sync + 'static>(
+pub fn build_tests<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
     storage_maker: Arc<F>,
-) -> impl Iterator<Item = libtest_mimic::Trial> {
+) -> impl Iterator<Item = libtest_mimic::Trial>
+where
+    Fut: Future<Output = S> + Send + 'static,
+    S: ApiServerStorage + Send + 'static,
+{
     vec![
         make_test!(initialization, storage_maker.clone()),
         make_test!(set_get, storage_maker),

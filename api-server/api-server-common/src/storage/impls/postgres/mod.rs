@@ -27,6 +27,7 @@ use tokio_postgres::NoTls;
 use crate::storage::storage_api::ApiServerStorageError;
 use crate::storage::storage_api::ApiServerStorageRead;
 use crate::storage::storage_api::ApiServerStorageWrite;
+use crate::storage::storage_api::ApiServerTransactionRw;
 
 use self::transactional::ApiServerPostgresTransactionalRo;
 use self::transactional::ApiServerPostgresTransactionalRw;
@@ -51,18 +52,35 @@ impl Drop for TransactionalApiServerPostgresStorage {
 impl TransactionalApiServerPostgresStorage {
     pub async fn new(
         host: &str,
+        port: u16,
         user: &str,
+        passsword: Option<&str>,
+        database: Option<&str>,
         max_connections: u32,
         chain_config: &common::chain::ChainConfig,
     ) -> Result<Self, ApiServerStorageError> {
-        let config: tokio_postgres::Config = format!("host={host} user={user}").parse().map_err(
-            |e: <tokio_postgres::Config as FromStr>::Err| {
+        let password_part = match passsword {
+            Some(p) => format!("password={}", p),
+            None => "".to_string(),
+        };
+
+        let database_part = match database {
+            Some(d) => format!("database={}", d),
+            None => "".to_string(),
+        };
+
+        let config_str =
+            format!("host={host} port={port} user={user} {password_part} {database_part}");
+        logging::log::debug!("Using postgres config connection string: {}", config_str);
+
+        let config: tokio_postgres::Config =
+            config_str.parse().map_err(|e: <tokio_postgres::Config as FromStr>::Err| {
                 ApiServerStorageError::InitializationError(format!(
                     "Postgres configuration parsing error: {}",
                     e
                 ))
-            },
-        )?;
+            })?;
+
         let manager = PostgresConnectionManager::new(config, NoTls);
         let pool = Pool::builder().max_size(max_connections).build(manager).await.map_err(|e| {
             ApiServerStorageError::InitializationError(format!(
@@ -105,6 +123,7 @@ impl TransactionalApiServerPostgresStorage {
         if !tx.is_initialized().await? {
             tx.initialize_storage(chain_config).await?;
         }
+        tx.commit().await?;
         Ok(())
     }
 

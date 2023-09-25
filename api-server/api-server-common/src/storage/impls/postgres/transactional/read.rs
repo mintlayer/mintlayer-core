@@ -85,7 +85,10 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Option<common::primitives::Id<common::chain::Block>>,
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        self.get_main_chain_block_id(block_height).await
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_main_chain_block_id(block_height).await?;
+
+        Ok(res)
     }
 
     async fn get_transaction(
@@ -98,6 +101,9 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         )>,
         crate::storage::storage_api::ApiServerStorageError,
     > {
-        self.get_transaction(transaction_id).await
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_transaction(transaction_id).await?;
+
+        Ok(res)
     }
 }

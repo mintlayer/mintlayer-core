@@ -14,9 +14,13 @@ logging = { path = "../../logging" }
 test-utils = {path = '../../test-utils'}
 utils = { path = "../../utils" }
 
+async-trait.workspace = true
+chrono.workspace = true
 futures = { workspace = true, default-features = false }
 libtest-mimic.workspace = true
 proptest.workspace = true
+rand.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
 [[test]]
 name = "postgres"
