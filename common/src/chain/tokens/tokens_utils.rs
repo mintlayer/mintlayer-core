@@ -37,10 +37,10 @@ pub fn get_tokens_issuance_versioned(outputs: &[TxOutput]) -> Vec<&TokenIssuance
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
             TxOutput::Tokens(v) => match v {
-                TokenOutput::TokenIssuance(v) => Some(v.as_ref()),
-                TokenOutput::IncreaseSupply(_, _)
-                | TokenOutput::DecreaseSupply(_, _)
-                | TokenOutput::LockSupply(_) => None,
+                TokenOutput::IssueFungibleToken(v) => Some(v.as_ref()),
+                TokenOutput::MintTokens(_, _)
+                | TokenOutput::RedeemTokens(_, _)
+                | TokenOutput::LockCirculatingSupply(_) => None,
             },
         })
         .collect()
@@ -97,10 +97,10 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
             }
         }
         TxOutput::Tokens(v) => match v {
-            TokenOutput::TokenIssuance(_) => true,
-            TokenOutput::IncreaseSupply(_, _)
-            | TokenOutput::DecreaseSupply(_, _)
-            | TokenOutput::LockSupply(_) => false,
+            TokenOutput::IssueFungibleToken(_) => true,
+            TokenOutput::MintTokens(_, _)
+            | TokenOutput::RedeemTokens(_, _)
+            | TokenOutput::LockCirculatingSupply(_) => false,
         },
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)

@@ -57,9 +57,10 @@ pub trait TokensAccountingOperations {
     fn issue_token(&mut self, id: TokenId, data: TokenData) -> Result<TokenAccountingUndo>;
 
     fn mint_tokens(&mut self, id: TokenId, amount_to_add: Amount) -> Result<TokenAccountingUndo>;
-    fn burn_tokens(&mut self, id: TokenId, amount_to_burn: Amount) -> Result<TokenAccountingUndo>;
+    fn redeem_tokens(&mut self, id: TokenId, amount_to_burn: Amount)
+        -> Result<TokenAccountingUndo>;
 
-    fn lock_total_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
+    fn lock_circulating_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<()>;
 }

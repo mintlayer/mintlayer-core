@@ -22,7 +22,7 @@ use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
         signature::Signable,
-        GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        GenBlock, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -495,10 +495,15 @@ fn can_be_spent(output: &TxOutput) -> bool {
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
-        TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..)
-        | TxOutput::Burn(..)
-        | TxOutput::Tokens(..) => false,
+        TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
+            false
+        }
+        TxOutput::Tokens(v) => match v {
+            TokenOutput::IssueFungibleToken(_)
+            | TokenOutput::RedeemTokens(_, _)
+            | TokenOutput::LockCirculatingSupply(_) => false,
+            TokenOutput::MintTokens(_, _) => true,
+        },
     }
 }
 

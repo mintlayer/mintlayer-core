@@ -734,7 +734,7 @@ where
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => None,
                 TxOutput::Tokens(token_output) => match token_output {
-                    TokenOutput::TokenIssuance(issuance_data) => {
+                    TokenOutput::IssueFungibleToken(issuance_data) => {
                         let result = token_id(tx)
                             .ok_or(ConnectTransactionError::TokensError(
                                 TokensError::TokenIdCantBeCalculated,
@@ -751,24 +751,24 @@ where
                             );
                         Some(result)
                     }
-                    TokenOutput::IncreaseSupply(token_id, mint_amount) => {
+                    TokenOutput::MintTokens(token_id, mint_amount) => {
                         let res = self
                             .tokens_accounting_cache
                             .mint_tokens(*token_id, *mint_amount)
                             .map_err(ConnectTransactionError::TokensAccountingError);
                         Some(res)
                     }
-                    TokenOutput::DecreaseSupply(token_id, burn_amount) => {
+                    TokenOutput::RedeemTokens(token_id, burn_amount) => {
                         let res = self
                             .tokens_accounting_cache
-                            .burn_tokens(*token_id, *burn_amount)
+                            .redeem_tokens(*token_id, *burn_amount)
                             .map_err(ConnectTransactionError::TokensAccountingError);
                         Some(res)
                     }
-                    TokenOutput::LockSupply(token_id) => {
+                    TokenOutput::LockCirculatingSupply(token_id) => {
                         let res = self
                             .tokens_accounting_cache
-                            .lock_total_supply(*token_id)
+                            .lock_circulating_supply(*token_id)
                             .map_err(ConnectTransactionError::TokensAccountingError);
                         Some(res)
                     }

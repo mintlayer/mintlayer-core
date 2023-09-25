@@ -111,14 +111,18 @@ pub enum TxOutput {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenOutput {
     #[codec(index = 0)]
-    TokenIssuance(Box<TokenIssuanceVersioned>),
+    IssueFungibleToken(Box<TokenIssuanceVersioned>),
     #[codec(index = 1)]
-    IncreaseSupply(TokenId, Amount),
+    MintTokens(TokenId, Amount),
+    // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount
+    // of tokens is no longer supported by underlying fiat currency, which can only be done by
+    // reissuance controller.
     #[codec(index = 2)]
-    DecreaseSupply(TokenId, Amount),
+    RedeemTokens(TokenId, Amount),
+    // After supply is locked tokens cannot be minted or redeemed ever again.
+    // Works only for Lockable tokens supply.
     #[codec(index = 3)]
-    LockSupply(TokenId),
-    // FIXME: add NftIssuance at once?
+    LockCirculatingSupply(TokenId),
 }
 
 impl TxOutput {

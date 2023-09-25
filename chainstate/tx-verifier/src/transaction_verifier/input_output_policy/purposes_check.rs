@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxOutput},
+    chain::{
+        block::BlockRewardTransactable, signature::Signable, Block, TokenOutput, Transaction,
+        TxOutput,
+    },
     primitives::Id,
 };
 use consensus::ConsensusPoSError;
@@ -130,10 +133,15 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
-        TxOutput::Burn(..)
-        | TxOutput::CreateDelegationId(..)
-        | TxOutput::DelegateStaking(..)
-        | TxOutput::Tokens(..) => false,
+        TxOutput::Tokens(v) => match v {
+            TokenOutput::MintTokens(_, _) => true,
+            TokenOutput::IssueFungibleToken(_)
+            | TokenOutput::RedeemTokens(_, _)
+            | TokenOutput::LockCirculatingSupply(_) => false,
+        },
+        TxOutput::Burn(..) | TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) => {
+            false
+        }
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
