@@ -17,12 +17,10 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        output_value::OutputValue,
-        timelock::OutputTimeLock,
-        tokens::{TokenData, TokenId},
-        AccountSpending, ChainConfig, PoolId, TxInput, TxOutput,
+        output_value::OutputValue, timelock::OutputTimeLock, tokens::TokenId, AccountSpending,
+        ChainConfig, PoolId, TokenOutput, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight},
+    primitives::{signed_amount::SignedAmount, Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
 
@@ -38,7 +36,7 @@ use super::IOPolicyError;
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: Amount,
     timelock_constrained: BTreeMap<BlockDistance, Amount>,
-    burn_constrained: BTreeMap<TokenId, Amount>,
+    burn_constrained: BTreeMap<TokenId, SignedAmount>,
 }
 
 impl ConstrainedValueAccumulator {
@@ -56,7 +54,6 @@ impl ConstrainedValueAccumulator {
     pub fn consume(self) -> Result<Amount, IOPolicyError> {
         self.timelock_constrained
             .into_values()
-            .chain(self.burn_constrained.into_values())
             .sum::<Option<Amount>>()
             .and_then(|v| v + self.unconstrained_value)
             .ok_or(IOPolicyError::AmountOverflow)
@@ -97,7 +94,7 @@ impl ConstrainedValueAccumulator {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
                                 .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TxOutput::CreateDelegationId(..) | TxOutput::TokenIssuance(_) => { /* do nothing */
+                        TxOutput::CreateDelegationId(..) | TxOutput::Tokens(_) => { /* do nothing */
                         }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
@@ -129,9 +126,7 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountSpending::TokenSupply(token_id, amount) => {
-                            todo!()
-                        }
+                        AccountSpending::TokenSupply(_, _) => { /* do nothing */ }
                     };
                 }
             }
@@ -156,12 +151,11 @@ impl ConstrainedValueAccumulator {
                         )?;
                     }
                     OutputValue::Token(_) => { /* do nothing */ }
-                    OutputValue::TokenV1((id, value)) => {
-                        todo!()
-                        //if let Some(constrained_amount) = self.burn_constrained.get_mut(id) {
-                        //    *constrained_amount = (*constrained_amount - *value)
-                        //        .ok_or(IOPolicyError::AmountOverflow)?;
-                        //}
+                    OutputValue::TokenV1(id, value) => {
+                        let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
+                        let constrained_amount = self.burn_constrained.entry(*id).or_insert(signed);
+                        *constrained_amount =
+                            (*constrained_amount - signed).ok_or(IOPolicyError::AmountOverflow)?;
                     }
                 },
                 TxOutput::DelegateStaking(coins, _) => {
@@ -172,10 +166,7 @@ impl ConstrainedValueAccumulator {
                     self.unconstrained_value = (self.unconstrained_value - data.value())
                         .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
                 }
-                TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::TokenIssuance(_) => {
-                    /* do nothing as these outputs cannot produce values */
+                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => { /* do nothing as these outputs cannot produce values */
                 }
                 TxOutput::LockThenTransfer(value, _, timelock) => match timelock {
                     OutputTimeLock::UntilHeight(_)
@@ -223,8 +214,27 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
+                TxOutput::Tokens(token_output) => match token_output {
+                    TokenOutput::TokenIssuance(_)
+                    | TokenOutput::IncreaseSupply(_, _)
+                    | TokenOutput::LockSupply(_) => { /* do nothing */ }
+                    TokenOutput::DecreaseSupply(id, value) => {
+                        let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
+                        let constrained_amount = self.burn_constrained.entry(*id).or_insert(signed);
+                        *constrained_amount =
+                            (*constrained_amount + signed).ok_or(IOPolicyError::AmountOverflow)?;
+                    }
+                },
             };
         }
+
+        ensure!(
+            self.burn_constrained
+                .iter()
+                .all(|(_, constrained_amount)| *constrained_amount > SignedAmount::ZERO),
+            IOPolicyError::AttemptToViolateBurnConstraints
+        );
+
         Ok(())
     }
 }

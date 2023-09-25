@@ -48,7 +48,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::Burn(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
-                    | TxOutput::TokenIssuance(..) => Err(ConnectTransactionError::IOPolicyError(
+                    | TxOutput::Tokens(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
@@ -68,7 +68,7 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::CreateStakePool(..)
                                 | TxOutput::CreateDelegationId(..)
                                 | TxOutput::DelegateStaking(..)
-                                | TxOutput::TokenIssuance(..) => {
+                                | TxOutput::Tokens(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
                                         block_id.into(),
@@ -105,7 +105,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::ProduceBlockFromStake(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
-                    | TxOutput::TokenIssuance(..) => false,
+                    | TxOutput::Tokens(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -133,7 +133,7 @@ pub fn check_tx_inputs_outputs_purposes(
         TxOutput::Burn(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::TokenIssuance(..) => false,
+        | TxOutput::Tokens(..) => false,
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
@@ -147,7 +147,7 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::LockThenTransfer(..)
         | TxOutput::Burn(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::TokenIssuance(..) => { /* do nothing */ }
+        | TxOutput::Tokens(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }

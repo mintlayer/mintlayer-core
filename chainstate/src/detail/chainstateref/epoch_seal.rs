@@ -168,7 +168,7 @@ where
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::TokenIssuance(_) => {
+        | TxOutput::Tokens(_) => {
             return Err(EpochSealError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardOutputType,
             ));

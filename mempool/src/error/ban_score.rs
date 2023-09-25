@@ -376,6 +376,7 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AmountOverflow => 100,
             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints => 100,
+            IOPolicyError::AttemptToViolateBurnConstraints => 100,
             IOPolicyError::InputsAndInputsUtxosLengthMismatch(_, _) => 100,
             IOPolicyError::MissingOutputOrSpent(_) => 0,
             IOPolicyError::BlockHeightArithmeticError => 0,

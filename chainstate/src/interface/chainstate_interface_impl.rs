@@ -668,7 +668,7 @@ fn get_output_coin_amount(
             Some(pledge_amount)
         }
         TxOutput::DelegateStaking(v, _) => Some(*v),
-        TxOutput::CreateDelegationId(_, _) | TxOutput::TokenIssuance(_) => None,
+        TxOutput::CreateDelegationId(_, _) | TxOutput::Tokens(_) => None,
     };
 
     Ok(amount)

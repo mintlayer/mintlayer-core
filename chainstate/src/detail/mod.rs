@@ -647,7 +647,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
-                | TxOutput::TokenIssuance(_) => { /* do nothing */ }
+                | TxOutput::Tokens(_) => { /* do nothing */ }
                 | TxOutput::CreateStakePool(pool_id, data) => {
                     let _ = db
                         .create_pool(*pool_id, data.as_ref().clone().into())

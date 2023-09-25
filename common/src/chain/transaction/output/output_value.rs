@@ -26,20 +26,20 @@ pub enum OutputValue {
     // FIXME: add check that new tokens cannot be issued after upgrade;
     // transfers of existing v0 tokens are allowed?
     Token(Box<TokenData>),
-    TokenV1((TokenId, Amount)),
+    TokenV1(TokenId, Amount),
 }
 
 impl OutputValue {
     pub fn coin_amount(&self) -> Option<Amount> {
         match self {
             OutputValue::Coin(v) => Some(*v),
-            OutputValue::Token(_) | OutputValue::TokenV1(_) => None,
+            OutputValue::Token(_) | OutputValue::TokenV1(_, _) => None,
         }
     }
 
     pub fn token_data(&self) -> Option<&TokenData> {
         match self {
-            OutputValue::Coin(_) | OutputValue::TokenV1(_) => None,
+            OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => None,
             OutputValue::Token(d) => Some(d),
         }
     }

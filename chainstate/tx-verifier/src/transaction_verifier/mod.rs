@@ -75,13 +75,10 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{
-            get_token_supply_change_count, get_tokens_issuance_count,
-            get_tokens_issuance_versioned, token_id, TokenId,
-        },
+        tokens::{get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenId},
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
-        TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
+        TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -266,7 +263,7 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokenIssuance(_) => None,
+                    | TxOutput::Tokens(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -294,7 +291,7 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokenIssuance(_) => None,
+                    | TxOutput::Tokens(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -325,7 +322,7 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokenIssuance(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::Tokens(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -349,7 +346,7 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokenIssuance(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::Tokens(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -508,7 +505,7 @@ where
             | TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::TokenIssuance(_) => Ok(None),
+            | TxOutput::Tokens(_) => Ok(None),
         }
     }
 
@@ -621,7 +618,7 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::TokenIssuance(_) => None,
+                | TxOutput::Tokens(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -717,65 +714,71 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // FIXME: collect from outputs
-        //let inputs_undos = tx
-        //    .inputs()
-        //    .iter()
-        //    .filter_map(|input| match input {
-        //        TxInput::Utxo(_) => None,
-        //        TxInput::Account(account_input) => match account_input.account() {
-        //            AccountSpending::Delegation(_, _) => None,
-        //            AccountSpending::TokenUnrealizedSupply(token_id, mint_amount) => {
-        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
-        //                    self.tokens_accounting_cache
-        //                        .mint_tokens(*token_id, *mint_amount)
-        //                        .map_err(ConnectTransactionError::TokensAccountingError)
-        //                });
-        //                Some(res)
-        //            }
-        //            AccountSpending::TokenCirculatingSupply(token_id, burn_amount) => {
-        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
-        //                    self.tokens_accounting_cache
-        //                        .burn_tokens(*token_id, *burn_amount)
-        //                        .map_err(ConnectTransactionError::TokensAccountingError)
-        //                });
-        //                Some(res)
-        //            }
-        //            AccountSpending::TokenSupplyLock(token_id) => {
-        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
-        //                    self.tokens_accounting_cache
-        //                        .lock_total_supply(*token_id)
-        //                        .map_err(ConnectTransactionError::TokensAccountingError)
-        //                });
-        //                Some(res)
-        //            }
-        //        },
-        //    })
-        //    .collect::<Result<Vec<_>, _>>()?;
+        tx.inputs().iter().try_for_each(|input| match input {
+            TxInput::Utxo(_) => Ok(()),
+            TxInput::Account(account_input) => match account_input.account() {
+                AccountSpending::Delegation(_, _) => Ok(()),
+                AccountSpending::TokenSupply(_, _) => self.spend_input_from_account(&account_input),
+            },
+        })?;
 
-        let outputs_undos = get_tokens_issuance_versioned(tx.outputs())
+        let undos = tx
+            .outputs()
             .iter()
-            .map(|issuance_data| {
-                token_id(tx)
-                    .ok_or(ConnectTransactionError::TokensError(
-                        TokensError::TokenIdCantBeCalculated,
-                    ))
-                    .and_then(
-                        |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
-                            let data = tokens_accounting::TokenData::FungibleToken(
-                                (*issuance_data).clone().into(),
+            .filter_map(|output| match output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _) => None,
+                TxOutput::Tokens(token_output) => match token_output {
+                    TokenOutput::TokenIssuance(issuance_data) => {
+                        let result = token_id(tx)
+                            .ok_or(ConnectTransactionError::TokensError(
+                                TokensError::TokenIdCantBeCalculated,
+                            ))
+                            .and_then(
+                                |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
+                                    let data = tokens_accounting::TokenData::FungibleToken(
+                                        issuance_data.as_ref().clone().into(),
+                                    );
+                                    self.tokens_accounting_cache
+                                        .issue_token(token_id, data)
+                                        .map_err(ConnectTransactionError::TokensAccountingError)
+                                },
                             );
-                            self.tokens_accounting_cache
-                                .issue_token(token_id, data)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        },
-                    )
+                        Some(result)
+                    }
+                    TokenOutput::IncreaseSupply(token_id, mint_amount) => {
+                        let res = self
+                            .tokens_accounting_cache
+                            .mint_tokens(*token_id, *mint_amount)
+                            .map_err(ConnectTransactionError::TokensAccountingError);
+                        Some(res)
+                    }
+                    TokenOutput::DecreaseSupply(token_id, burn_amount) => {
+                        let res = self
+                            .tokens_accounting_cache
+                            .burn_tokens(*token_id, *burn_amount)
+                            .map_err(ConnectTransactionError::TokensAccountingError);
+                        Some(res)
+                    }
+                    TokenOutput::LockSupply(token_id) => {
+                        let res = self
+                            .tokens_accounting_cache
+                            .lock_total_supply(*token_id)
+                            .map_err(ConnectTransactionError::TokensAccountingError);
+                        Some(res)
+                    }
+                },
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Store accounting operations undos
-        if !outputs_undos.is_empty() {
-            let tx_undos = outputs_undos.into_iter().collect();
+        if !undos.is_empty() {
+            let tx_undos = undos.into_iter().collect();
             self.tokens_accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))
