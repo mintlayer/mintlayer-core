@@ -215,10 +215,10 @@ impl ConstrainedValueAccumulator {
                     }
                 },
                 TxOutput::Tokens(token_output) => match token_output {
-                    TokenOutput::TokenIssuance(_)
-                    | TokenOutput::IncreaseSupply(_, _)
-                    | TokenOutput::LockSupply(_) => { /* do nothing */ }
-                    TokenOutput::DecreaseSupply(id, value) => {
+                    TokenOutput::IssueFungibleToken(_)
+                    | TokenOutput::MintTokens(_, _)
+                    | TokenOutput::LockCirculatingSupply(_) => { /* do nothing */ }
+                    TokenOutput::RedeemTokens(id, value) => {
                         let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
                         let constrained_amount = self.burn_constrained.entry(*id).or_insert(signed);
                         *constrained_amount =
