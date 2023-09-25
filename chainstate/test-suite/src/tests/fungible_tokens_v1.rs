@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -15,16 +15,16 @@
 
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    TokensError,
+    ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::tokens::{TokenIssuanceV1, TokenIssuanceVersioned, TokenTotalSupply};
+use common::chain::tokens::{token_id, TokenIssuanceV1, TokenIssuanceVersioned, TokenTotalSupply};
 use common::{
     chain::{
         output_value::OutputValue, signature::inputsig::InputWitness, Destination,
-        OutPointSourceId, TxInput, TxOutput,
+        OutPointSourceId, TokenOutput, TxInput, TxOutput,
     },
-    primitives::Idable,
+    primitives::{Amount, Idable},
 };
 use crypto::random::Rng;
 use rstest::rstest;
@@ -55,9 +55,9 @@ fn token_issue_test(#[case] seed: Seed) {
                     TxInput::from_utxo(outpoint_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::Tokens(common::chain::TokenOutput::TokenIssuance(
-                    Box::new(issuance),
-                )))
+                .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+                    issuance,
+                ))))
                 .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build();
             let tx_id = tx.transaction().get_id();
@@ -228,7 +228,52 @@ fn token_issue_test(#[case] seed: Seed) {
             supply_limit: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
-        let block_index = tf
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(outpoint_source_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+                issuance.clone(),
+            ))))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let token_id = token_id(tx.transaction()).unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        let actual_token_data =
+            tokens_accounting::TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id)
+                .unwrap();
+        let expected_token_data = tokens_accounting::TokenData::FungibleToken(issuance.into());
+        assert_eq!(actual_token_data, Some(expected_token_data));
+
+        let actual_supply = tokens_accounting::TokensAccountingStorageRead::get_circulating_supply(
+            &tf.storage,
+            &token_id,
+        )
+        .unwrap();
+        assert_eq!(actual_supply, None);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_issue_not_enough_fee(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
+
+        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            supply_limit: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::AnyoneCanSpend,
+        });
+        let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -236,19 +281,82 @@ fn token_issue_test(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(common::chain::TokenOutput::TokenIssuance(
-                        Box::new(issuance.clone()),
+                    .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+                        issuance.clone(),
+                    ))))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
                     )))
-                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+            .build_and_process();
 
-        // FIXME: check that token account was created
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
+                    TokensError::InsufficientTokenFees(_, _)
+                ))
+            ))
+        ));
     });
 }
 
-// FIXME: more tests
-// FIXME: token_reissuance_with_insufficient_fee
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_issue_cannot_be_spent(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            supply_limit: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::AnyoneCanSpend,
+        });
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tf.genesis().get_id().into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+                issuance.clone(),
+            ))))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+                        issuance.clone(),
+                    ))))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent(common::chain::UtxoOutPoint::new(
+                    tx_id.into(),
+                    0
+                ))
+            ))
+        );
+    });
+}
+
+// FIXME: supply tests

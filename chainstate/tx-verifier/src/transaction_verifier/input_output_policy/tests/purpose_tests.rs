@@ -29,6 +29,8 @@ use super::*;
 
 use crate::error::SpendStakeError;
 
+// FIXME: cover new TxOutput::Tokens
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -243,16 +245,8 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
 #[case(produce_block(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(produce_block(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
 #[case(produce_block(), produce_block(),      Ok(()))]
-#[case(
-    produce_block(),
-    create_delegation(),
-    Err(IOPolicyError::InvalidOutputTypeInReward)
-)]
-#[case(
-    produce_block(),
-    delegate_staking(),
-    Err(IOPolicyError::InvalidOutputTypeInReward)
-)]
+#[case(produce_block(), create_delegation(), Err(IOPolicyError::InvalidOutputTypeInReward))]
+#[case(produce_block(), delegate_staking(), Err(IOPolicyError::InvalidOutputTypeInReward))]
 /*-----------------------------------------------------------------------------------------------*/
 #[case(create_delegation(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
 #[case(create_delegation(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]

@@ -81,6 +81,8 @@ fn delegate_staking() -> TxOutput {
     TxOutput::DelegateStaking(Amount::ZERO, DelegationId::new(H256::zero()))
 }
 
+// FIXME: compile-time check for functions above and coverage?
+
 fn get_random_outputs_combination(
     rng: &mut impl Rng,
     source: &[TxOutput],

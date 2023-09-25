@@ -22,7 +22,7 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, TokenData, TokenId},
-        AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountSpending, Block, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -119,10 +119,13 @@ fn get_output_value<P: PoSAccountingView>(
         TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
         TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
         TxOutput::Tokens(v) => match v {
-            common::chain::TokenOutput::TokenIssuance(_)
-            | common::chain::TokenOutput::LockSupply(_) => OutputValue::Coin(Amount::ZERO),
-            common::chain::TokenOutput::IncreaseSupply(id, v)
-            | common::chain::TokenOutput::DecreaseSupply(id, v) => OutputValue::TokenV1(*id, *v),
+            TokenOutput::IssueFungibleToken(_) | TokenOutput::LockCirculatingSupply(_) => {
+                OutputValue::Coin(Amount::ZERO)
+            }
+            TokenOutput::MintTokens(id, v) | TokenOutput::RedeemTokens(id, v) => {
+                // FIXME: not sure that is works for redeem the same way
+                OutputValue::TokenV1(*id, *v)
+            }
         },
     };
     Ok(res)
