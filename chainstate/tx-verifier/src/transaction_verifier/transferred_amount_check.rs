@@ -185,12 +185,8 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::TokenUnrealizedSupply(token_id, amount)
-            | AccountSpending::TokenCirculatingSupply(token_id, amount) => {
+            AccountSpending::TokenSupply(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
-            }
-            AccountSpending::TokenSupplyLock(token_id) => {
-                Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
     });

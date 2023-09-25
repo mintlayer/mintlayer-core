@@ -129,16 +129,9 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        AccountSpending::TokenCirculatingSupply(token_id, amount_to_burn) => {
-                            let amount =
-                                self.burn_constrained.entry(*token_id).or_insert(Amount::ZERO);
-                            *amount =
-                                (*amount + *amount_to_burn).ok_or(IOPolicyError::AmountOverflow)?;
+                        AccountSpending::TokenSupply(token_id, amount) => {
+                            todo!()
                         }
-                        AccountSpending::TokenUnrealizedSupply(_, _) => {
-                            // TODO: do nothing for now but should be used to check transferred amount later
-                        }
-                        AccountSpending::TokenSupplyLock(_) => { /* do nothing*/ }
                     };
                 }
             }
@@ -164,10 +157,11 @@ impl ConstrainedValueAccumulator {
                     }
                     OutputValue::Token(_) => { /* do nothing */ }
                     OutputValue::TokenV1((id, value)) => {
-                        if let Some(constrained_amount) = self.burn_constrained.get_mut(id) {
-                            *constrained_amount = (*constrained_amount - *value)
-                                .ok_or(IOPolicyError::AmountOverflow)?;
-                        }
+                        todo!()
+                        //if let Some(constrained_amount) = self.burn_constrained.get_mut(id) {
+                        //    *constrained_amount = (*constrained_amount - *value)
+                        //        .ok_or(IOPolicyError::AmountOverflow)?;
+                        //}
                     }
                 },
                 TxOutput::DelegateStaking(coins, _) => {

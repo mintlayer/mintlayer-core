@@ -549,9 +549,7 @@ where
                                 });
                             Some(res)
                         }
-                        AccountSpending::TokenUnrealizedSupply(_, _)
-                        | AccountSpending::TokenCirculatingSupply(_, _)
-                        | AccountSpending::TokenSupplyLock(_) => None,
+                        AccountSpending::TokenSupply(_, _) => None,
                     }
                 }
             })
@@ -719,40 +717,41 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let inputs_undos = tx
-            .inputs()
-            .iter()
-            .filter_map(|input| match input {
-                TxInput::Utxo(_) => None,
-                TxInput::Account(account_input) => match account_input.account() {
-                    AccountSpending::Delegation(_, _) => None,
-                    AccountSpending::TokenUnrealizedSupply(token_id, mint_amount) => {
-                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .mint_tokens(*token_id, *mint_amount)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
-                        Some(res)
-                    }
-                    AccountSpending::TokenCirculatingSupply(token_id, burn_amount) => {
-                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .burn_tokens(*token_id, *burn_amount)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
-                        Some(res)
-                    }
-                    AccountSpending::TokenSupplyLock(token_id) => {
-                        let res = self.spend_input_from_account(&account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .lock_total_supply(*token_id)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
-                        Some(res)
-                    }
-                },
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        // FIXME: collect from outputs
+        //let inputs_undos = tx
+        //    .inputs()
+        //    .iter()
+        //    .filter_map(|input| match input {
+        //        TxInput::Utxo(_) => None,
+        //        TxInput::Account(account_input) => match account_input.account() {
+        //            AccountSpending::Delegation(_, _) => None,
+        //            AccountSpending::TokenUnrealizedSupply(token_id, mint_amount) => {
+        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
+        //                    self.tokens_accounting_cache
+        //                        .mint_tokens(*token_id, *mint_amount)
+        //                        .map_err(ConnectTransactionError::TokensAccountingError)
+        //                });
+        //                Some(res)
+        //            }
+        //            AccountSpending::TokenCirculatingSupply(token_id, burn_amount) => {
+        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
+        //                    self.tokens_accounting_cache
+        //                        .burn_tokens(*token_id, *burn_amount)
+        //                        .map_err(ConnectTransactionError::TokensAccountingError)
+        //                });
+        //                Some(res)
+        //            }
+        //            AccountSpending::TokenSupplyLock(token_id) => {
+        //                let res = self.spend_input_from_account(&account_input).and_then(|_| {
+        //                    self.tokens_accounting_cache
+        //                        .lock_total_supply(*token_id)
+        //                        .map_err(ConnectTransactionError::TokensAccountingError)
+        //                });
+        //                Some(res)
+        //            }
+        //        },
+        //    })
+        //    .collect::<Result<Vec<_>, _>>()?;
 
         let outputs_undos = get_tokens_issuance_versioned(tx.outputs())
             .iter()
@@ -774,9 +773,9 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Store pos accounting operations undos
-        if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
-            let tx_undos = inputs_undos.into_iter().chain(outputs_undos).collect();
+        // Store accounting operations undos
+        if !outputs_undos.is_empty() {
+            let tx_undos = outputs_undos.into_iter().collect();
             self.tokens_accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))
