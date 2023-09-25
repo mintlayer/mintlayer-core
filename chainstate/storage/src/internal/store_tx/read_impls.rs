@@ -17,6 +17,7 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoolData,
 };
+use storage::MakeMapRef;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
 use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};

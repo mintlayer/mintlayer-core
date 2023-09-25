@@ -33,6 +33,7 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
+use storage::MakeMapRef;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{

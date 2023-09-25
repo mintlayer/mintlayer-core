@@ -16,6 +16,7 @@
 use super::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
 use p2p::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
+use storage::MakeMapRef;
 
 type ValueId = u32;
 

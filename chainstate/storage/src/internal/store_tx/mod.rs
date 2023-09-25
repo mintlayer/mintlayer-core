@@ -31,7 +31,7 @@ use pos_accounting::{
     PoSAccountingStorageWrite, PoolData,
 };
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
-use storage::schema;
+use storage::{schema, MakeMapRef};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
 use crate::{

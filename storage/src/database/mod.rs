@@ -104,6 +104,37 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 }
 
+pub trait MakeMapRef<'tx, B: Backend, Sch: Schema> {
+    /// Get key-value map immutably (key-to-single-value only for now)
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    where
+        Sch: schema::HasDbMap<DbMap, I>,
+        Self: TxImpl,
+        Self: Sized;
+}
+
+impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx, B, Sch> {
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    where
+        Sch: schema::HasDbMap<DbMap, I>,
+        Self: TxImpl,
+        Self: Sized,
+    {
+        MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
+    }
+}
+
+impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx, B, Sch> {
+    fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
+    where
+        Sch: schema::HasDbMap<DbMap, I>,
+        Self: TxImpl,
+        Self: Sized,
+    {
+        MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
+    }
+}
+
 /// A read-only transaction
 pub struct TransactionRo<'tx, B: Backend, Sch> {
     dbtx: <Self as TxImpl>::Impl,
@@ -111,14 +142,6 @@ pub struct TransactionRo<'tx, B: Backend, Sch> {
 }
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
-    /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
-    where
-        Sch: schema::HasDbMap<DbMap, I>,
-    {
-        MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
-    }
-
     /// Close the read-only transaction early
     pub fn close(self) {
         // Let backend tx destructor do the heavy lifting
@@ -132,14 +155,6 @@ pub struct TransactionRw<'tx, B: Backend, Sch> {
 }
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
-    /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
-    where
-        Sch: schema::HasDbMap<DbMap, I>,
-    {
-        MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
-    }
-
     /// Get key-value map mutably (key-to-single-value only for now)
     pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self, DbMap>
     where

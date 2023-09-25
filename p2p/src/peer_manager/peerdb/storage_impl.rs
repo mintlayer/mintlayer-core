@@ -19,6 +19,7 @@ use crate::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo,
 
 use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
+use storage::MakeMapRef;
 
 type ValueId = u32;
 
