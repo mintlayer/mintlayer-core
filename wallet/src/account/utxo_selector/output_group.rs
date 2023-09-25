@@ -61,7 +61,7 @@ impl OutputGroup {
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokenIssuance(_) => {
+            | TxOutput::Tokens(_) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))
@@ -77,7 +77,7 @@ impl OutputGroup {
                     TokenData::NftIssuance(_) => Amount::from_atoms(1),
                 }
             }
-            OutputValue::TokenV1((_, output_amount)) => output_amount,
+            OutputValue::TokenV1(_, output_amount) => output_amount,
         };
 
         Ok(Self {
