@@ -104,21 +104,17 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 }
 
-pub trait MakeMapRef<'tx, B: Backend, Sch: Schema> {
+pub trait MakeMapRef<'tx, B: Backend, Sch: Schema>: TxImpl + Sized {
     /// Get key-value map immutably (key-to-single-value only for now)
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
     where
-        Sch: schema::HasDbMap<DbMap, I>,
-        Self: TxImpl,
-        Self: Sized;
+        Sch: schema::HasDbMap<DbMap, I>;
 }
 
 impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRo<'tx, B, Sch> {
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
-        Self: TxImpl,
-        Self: Sized,
     {
         MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
     }
@@ -128,8 +124,6 @@ impl<'tx, B: Backend, Sch: Schema> MakeMapRef<'tx, B, Sch> for TransactionRw<'tx
     fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
-        Self: TxImpl,
-        Self: Sized,
     {
         MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
     }
