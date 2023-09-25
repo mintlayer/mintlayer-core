@@ -1,3 +1,18 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::BTreeMap;
 
 use super::db;
@@ -12,17 +27,78 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
-use parity_scale_codec::{Decode, Encode};
 use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoolData,
 };
+use serialization::{Decode, Encode};
 use storage::MakeMapRef;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
 use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
 
 use super::well_known;
+
+mod private {
+    use super::*;
+    use serialization::encoded::Encoded;
+    use std::borrow::Cow;
+
+    pub fn block_index_to_block_reward(
+        block_index: &BlockIndex,
+        block_read_result: storage::Result<Option<Encoded<Cow<'_, [u8]>, Block>>>,
+    ) -> crate::Result<Option<BlockReward>> {
+        match block_read_result {
+            Err(e) => Err(e.into()),
+            Ok(None) => Ok(None),
+            Ok(Some(block)) => {
+                let block = block.bytes();
+                let begin = block_index.block_header().encoded_size();
+                let encoded_block_reward_begin =
+                    block.get(begin..).expect("Block reward outside of block range");
+                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
+                    .expect("Invalid block reward encoding in DB");
+                Ok(Some(block_reward))
+            }
+        }
+    }
+
+    pub fn get_mainchain_tx_by_position(
+        tx_index: &TxMainChainPosition,
+        block_read_result: storage::Result<Option<Encoded<Cow<'_, [u8]>, Block>>>,
+    ) -> crate::Result<Option<SignedTransaction>> {
+        match block_read_result {
+            Err(e) => Err(e.into()),
+            Ok(None) => Ok(None),
+            Ok(Some(block)) => {
+                let block = block.bytes();
+                let begin = tx_index.byte_offset_in_block() as usize;
+                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
+                let tx = SignedTransaction::decode(&mut &*encoded_tx)
+                    .expect("Invalid tx encoding in DB");
+                Ok(Some(tx))
+            }
+        }
+    }
+
+    pub fn filter_delegation_shares_for_poolid(
+        pool_id: PoolId,
+        iter: impl Iterator<Item = ((PoolId, DelegationId), Amount)>,
+    ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
+        let range_start = (pool_id, DelegationId::new(H256::zero()));
+        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
+        let range = range_start..=range_end;
+
+        let shares = iter.filter(|(k, _)| range.contains(k));
+
+        let result = shares.map(|((_pool_id, del_id), v)| (del_id, v)).collect::<BTreeMap<_, _>>();
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
+        }
+    }
+}
 
 /// Blockchain data storage transaction
 impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B> {
@@ -57,19 +133,9 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
-        match self.0.get::<db::DBBlock, _>().get(block_index.block_id()) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let block = block.bytes();
-                let begin = block_index.block_header().encoded_size();
-                let encoded_block_reward_begin =
-                    block.get(begin..).expect("Block reward outside of block range");
-                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
-                    .expect("Invalid block reward encoding in DB");
-                Ok(Some(block_reward))
-            }
-        }
+        let store = self.0.get::<db::DBBlock, _>();
+        let encoded_block = store.get(block_index.block_id());
+        private::block_index_to_block_reward(block_index, encoded_block)
     }
 
     fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
@@ -91,19 +157,9 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         &self,
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<SignedTransaction>> {
-        let block_id = tx_index.block_id();
-        match self.0.get::<db::DBBlock, _>().get(block_id) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let block = block.bytes();
-                let begin = tx_index.byte_offset_in_block() as usize;
-                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
-                let tx = SignedTransaction::decode(&mut &*encoded_tx)
-                    .expect("Invalid tx encoding in DB");
-                Ok(Some(tx))
-            }
-        }
+        let map = self.0.get::<db::DBBlock, _>();
+        let block = map.get(tx_index.block_id());
+        private::get_mainchain_tx_by_position(tx_index, block)
     }
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
@@ -207,21 +263,9 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let all_shares = self
-            .0
-            .get::<db::DBAccountingPoolDelegationSharesTip, _>()
-            .prefix_iter_decoded(&())?
-            .collect::<BTreeMap<(PoolId, DelegationId), Amount>>();
-
-        let range_start = (pool_id, DelegationId::new(H256::zero()));
-        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
-        let range = all_shares.range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesTip, _>();
+        let shares_iter = db_map.prefix_iter_decoded(&())?;
+        private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
     fn get_pool_delegation_share(
@@ -259,22 +303,9 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let all_shares = self
-            .0
-            .get::<db::DBAccountingPoolDelegationSharesSealed, _>()
-            .prefix_iter(&())?
-            .map(|(k, v)| crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode())))
-            .collect::<Result<BTreeMap<(PoolId, DelegationId), Amount>, _>>()?;
-
-        let range_start = (pool_id, DelegationId::new(H256::zero()));
-        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
-        let range = all_shares.range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesSealed, _>();
+        let shares_iter = db_map.prefix_iter_decoded(&())?;
+        private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
     fn get_pool_delegation_share(
@@ -319,19 +350,9 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
-        match self.0.get::<db::DBBlock, _>().get(block_index.block_id()) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let block = block.bytes();
-                let begin = block_index.block_header().encoded_size();
-                let encoded_block_reward_begin =
-                    block.get(begin..).expect("Block reward outside of block range");
-                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
-                    .expect("Invalid block reward encoding in DB");
-                Ok(Some(block_reward))
-            }
-        }
+        let store = self.0.get::<db::DBBlock, _>();
+        let encoded_block = store.get(block_index.block_id());
+        private::block_index_to_block_reward(block_index, encoded_block)
     }
 
     fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
@@ -353,19 +374,9 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         &self,
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<SignedTransaction>> {
-        let block_id = tx_index.block_id();
-        match self.0.get::<db::DBBlock, _>().get(block_id) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let block = block.bytes();
-                let begin = tx_index.byte_offset_in_block() as usize;
-                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
-                let tx = SignedTransaction::decode(&mut &*encoded_tx)
-                    .expect("Invalid tx encoding in DB");
-                Ok(Some(tx))
-            }
-        }
+        let map = self.0.get::<db::DBBlock, _>();
+        let block = map.get(tx_index.block_id());
+        private::get_mainchain_tx_by_position(tx_index, block)
     }
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
@@ -469,21 +480,9 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let all_shares = self
-            .0
-            .get::<db::DBAccountingPoolDelegationSharesTip, _>()
-            .prefix_iter_decoded(&())?
-            .collect::<BTreeMap<(PoolId, DelegationId), Amount>>();
-
-        let range_start = (pool_id, DelegationId::new(H256::zero()));
-        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
-        let range = all_shares.range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesTip, _>();
+        let shares_iter = db_map.prefix_iter_decoded(&())?;
+        private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
     fn get_pool_delegation_share(
@@ -521,22 +520,9 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let all_shares = self
-            .0
-            .get::<db::DBAccountingPoolDelegationSharesSealed, _>()
-            .prefix_iter(&())?
-            .map(|(k, v)| crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode())))
-            .collect::<Result<BTreeMap<(PoolId, DelegationId), Amount>, _>>()?;
-
-        let range_start = (pool_id, DelegationId::new(H256::zero()));
-        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
-        let range = all_shares.range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesSealed, _>();
+        let shares_iter = db_map.prefix_iter_decoded(&())?;
+        private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
 
     fn get_pool_delegation_share(
