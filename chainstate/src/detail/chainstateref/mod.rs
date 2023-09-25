@@ -38,7 +38,7 @@ use common::{
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
-        SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        SignedTransaction, TokenOutput, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -634,7 +634,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::TokenIssuance(_) => Err(
+                        | TxOutput::Tokens(_) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -648,7 +648,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
                             | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::TokenIssuance(_) => Err(
+                            | TxOutput::Tokens(_) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -770,16 +770,21 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         }
                         Ok(())
                     }
-                    TxOutput::TokenIssuance(issuance) => {
-                        check_tokens_issuance_versioned(self.chain_config, issuance.as_ref())
-                            .map_err(|e| {
-                                TokensError::IssueError(
-                                    e,
-                                    tx.transaction().get_id(),
-                                    block.get_id(),
-                                )
-                            })
-                    }
+                    TxOutput::Tokens(token_output) => match token_output {
+                        TokenOutput::TokenIssuance(issuance) => {
+                            check_tokens_issuance_versioned(self.chain_config, issuance.as_ref())
+                                .map_err(|e| {
+                                    TokensError::IssueError(
+                                        e,
+                                        tx.transaction().get_id(),
+                                        block.get_id(),
+                                    )
+                                })
+                        }
+                        TokenOutput::IncreaseSupply(_, _)
+                        | TokenOutput::DecreaseSupply(_, _)
+                        | TokenOutput::LockSupply(_) => Ok(()),
+                    },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)

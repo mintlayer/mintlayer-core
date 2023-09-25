@@ -18,8 +18,9 @@ use crate::{
         hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
     },
     chain::{
-        output_value::OutputValue, tokens::TokenIssuanceVersioned, ChainConfig, DelegationId,
-        PoolId,
+        output_value::OutputValue,
+        tokens::{TokenId, TokenIssuanceVersioned},
+        ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
 };
@@ -104,7 +105,19 @@ pub enum TxOutput {
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
     #[codec(index = 7)]
+    Tokens(TokenOutput),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+pub enum TokenOutput {
+    #[codec(index = 0)]
     TokenIssuance(Box<TokenIssuanceVersioned>),
+    #[codec(index = 1)]
+    IncreaseSupply(TokenId, Amount),
+    #[codec(index = 2)]
+    DecreaseSupply(TokenId, Amount),
+    #[codec(index = 3)]
+    LockSupply(TokenId),
     // FIXME: add NftIssuance at once?
 }
 
@@ -117,7 +130,7 @@ impl TxOutput {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokenIssuance(_) => None,
+            | TxOutput::Tokens(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }

@@ -600,7 +600,7 @@ impl Account {
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::TokenIssuance(_) => None,
+                | TxOutput::Tokens(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -632,7 +632,7 @@ impl Account {
                     | TxOutput::Burn(_)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokenIssuance(_) => panic!("Unexpected UTXO"),
+                    | TxOutput::Tokens(_) => panic!("Unexpected UTXO"),
                 };
                 pool_id == utxo_pool_id
             })
@@ -773,7 +773,7 @@ impl Account {
             | TxOutput::CreateDelegationId(d, _)
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::TokenIssuance(issuance) => todo!(),
+            TxOutput::Tokens(issuance) => todo!(),
             TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
     }
@@ -1212,7 +1212,7 @@ fn group_outputs<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::CreateDelegationId(_, _) | TxOutput::TokenIssuance(_) => continue,
+            TxOutput::CreateDelegationId(_, _) | TxOutput::Tokens(_) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
@@ -1237,7 +1237,7 @@ fn group_outputs<T, Grouped: Clone>(
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
                 }
             }
-            OutputValue::TokenV1((id, amount)) => {
+            OutputValue::TokenV1(id, amount) => {
                 let total_token_amount =
                     tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
 
@@ -1270,7 +1270,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokenIssuance(_) => {
+            | TxOutput::Tokens(_) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
@@ -1309,7 +1309,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
                     }
                 }
             }
-            OutputValue::TokenV1((id, amount)) => {
+            OutputValue::TokenV1(id, amount) => {
                 let total_token_amount =
                     tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
 

@@ -285,7 +285,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 TxOutput::Transfer(v, _)
                 | TxOutput::LockThenTransfer(v, _, _)
                 | TxOutput::Burn(v) => v.token_data(),
-                TxOutput::TokenIssuance(_issuance) => todo!(),
+                TxOutput::Tokens(_) => todo!(),
                 TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
