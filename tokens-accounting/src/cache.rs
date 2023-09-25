@@ -141,7 +141,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         }))
     }
 
-    fn burn_tokens(
+    fn redeem_tokens(
         &mut self,
         id: TokenId,
         amount_to_burn: Amount,
@@ -174,7 +174,10 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         }))
     }
 
-    fn lock_total_supply(&mut self, id: TokenId) -> crate::error::Result<TokenAccountingUndo> {
+    fn lock_circulating_supply(
+        &mut self,
+        id: TokenId,
+    ) -> crate::error::Result<TokenAccountingUndo> {
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
 
         let undo_data = match token_data {

@@ -771,7 +771,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         Ok(())
                     }
                     TxOutput::Tokens(token_output) => match token_output {
-                        TokenOutput::TokenIssuance(issuance) => {
+                        TokenOutput::IssueFungibleToken(issuance) => {
                             check_tokens_issuance_versioned(self.chain_config, issuance.as_ref())
                                 .map_err(|e| {
                                     TokensError::IssueError(
@@ -781,9 +781,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                                     )
                                 })
                         }
-                        TokenOutput::IncreaseSupply(_, _)
-                        | TokenOutput::DecreaseSupply(_, _)
-                        | TokenOutput::LockSupply(_) => Ok(()),
+                        TokenOutput::MintTokens(_, _)
+                        | TokenOutput::RedeemTokens(_, _)
+                        | TokenOutput::LockCirculatingSupply(_) => Ok(()),
                     },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)

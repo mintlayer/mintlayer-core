@@ -347,3 +347,5 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             .unwrap();
     }
 }
+
+// FIXME: violate burn on redemption
