@@ -33,9 +33,7 @@ impl From<AccountSpending> for AccountType {
     fn from(spending: AccountSpending) -> Self {
         match spending {
             AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
-            AccountSpending::TokenUnrealizedSupply(id, _)
-            | AccountSpending::TokenCirculatingSupply(id, _)
-            | AccountSpending::TokenSupplyLock(id) => AccountType::TokenSupply(id),
+            AccountSpending::TokenSupply(id, _) => AccountType::TokenSupply(id),
         }
     }
 }
@@ -48,11 +46,7 @@ pub enum AccountSpending {
     #[codec(index = 0)]
     Delegation(DelegationId, Amount),
     #[codec(index = 1)]
-    TokenUnrealizedSupply(TokenId, Amount),
-    #[codec(index = 2)]
-    TokenCirculatingSupply(TokenId, Amount),
-    #[codec(index = 3)]
-    TokenSupplyLock(TokenId),
+    TokenSupply(TokenId, Amount),
 }
 
 /// Type of OutPoint that represents spending from an account
