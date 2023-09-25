@@ -72,9 +72,7 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
             TxInput::Utxo(_) => false,
             TxInput::Account(account) => match account.account() {
                 AccountSpending::Delegation(_, _) => false,
-                AccountSpending::TokenUnrealizedSupply(_, _)
-                | AccountSpending::TokenCirculatingSupply(_, _)
-                | AccountSpending::TokenSupplyLock(_) => true,
+                AccountSpending::TokenSupply(_, _) => true,
             },
         })
         .count()
