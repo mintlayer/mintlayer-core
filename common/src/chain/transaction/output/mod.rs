@@ -113,7 +113,7 @@ pub enum TokenOutput {
     #[codec(index = 0)]
     IssueFungibleToken(Box<TokenIssuanceVersioned>),
     #[codec(index = 1)]
-    MintTokens(TokenId, Amount),
+    MintTokens(TokenId, Amount, Destination),
     // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount
     // of tokens is no longer supported by underlying fiat currency, which can only be done by
     // reissuance controller.

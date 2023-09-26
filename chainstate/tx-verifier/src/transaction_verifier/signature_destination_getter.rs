@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountSpending, DelegationId, Destination, PoolId, TxInput, TxOutput,
-    UtxoOutPoint,
+    tokens::TokenId, AccountSpending, DelegationId, Destination, PoolId, TokenOutput, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -97,9 +97,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => {
                                 Ok(d.clone())
                             }
-                            TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::Burn(_)
-                            | TxOutput::Tokens(_) => {
+                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
@@ -130,6 +128,16 @@ impl<'a> SignatureDestinationGetter<'a> {
                                     .decommission_destination()
                                     .clone())
                             }
+                            TxOutput::Tokens(v) => match v {
+                                TokenOutput::MintTokens(_, _, d) => Ok(d.clone()),
+                                TokenOutput::IssueFungibleToken(_)
+                                | TokenOutput::RedeemTokens(_, _)
+                                | TokenOutput::LockCirculatingSupply(_) => {
+                                    // This error is emitted in other places for attempting to make this spend,
+                                    // but this is just a double-check.
+                                    Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                                }
+                            },
                         }
                     }
                     TxInput::Account(account_input) => match account_input.account() {

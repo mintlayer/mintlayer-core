@@ -502,7 +502,7 @@ fn can_be_spent(output: &TxOutput) -> bool {
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::RedeemTokens(_, _)
             | TokenOutput::LockCirculatingSupply(_) => false,
-            TokenOutput::MintTokens(_, _) => true,
+            TokenOutput::MintTokens(_, _, _) => true,
         },
     }
 }
