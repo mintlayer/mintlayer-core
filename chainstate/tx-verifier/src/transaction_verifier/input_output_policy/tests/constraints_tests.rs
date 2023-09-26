@@ -19,7 +19,7 @@ use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
-        TxOutput,
+        TokenOutput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -252,7 +252,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
 
-    // make timelock outputs but total atoms that locked is less then required
+    // make timelock outputs but total atoms that locked is less than required
     {
         let random_additional_value = rng.gen_range(1..=atoms_to_spend);
         let timelocked_outputs =
@@ -348,4 +348,96 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     }
 }
 
-// FIXME: violate burn on redemption
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn burn_constraints_on_tokens_redemption(#[case] seed: Seed) {
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet).build();
+    let token_id = TokenId::new(H256::zero());
+
+    let mut rng = make_seedable_rng(seed);
+
+    let atoms_to_redeem = rng.gen_range(1..=100_000_000);
+
+    let pos_store = pos_accounting::InMemoryPoSAccounting::new();
+    let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
+    let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
+
+    // make burn outputs but total atoms burnt is less than required
+    {
+        let random_additional_value = rng.gen_range(1..=atoms_to_redeem);
+        let burn_outputs = decompose_value(&mut rng, atoms_to_redeem - random_additional_value)
+            .iter()
+            .map(|atoms| TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::from_atoms(*atoms))))
+            .collect::<Vec<_>>();
+
+        let outputs = {
+            let mut outputs = std::iter::once(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                token_id,
+                Amount::from_atoms(atoms_to_redeem),
+            )))
+            .chain(burn_outputs.into_iter())
+            .collect::<Vec<_>>();
+            outputs.shuffle(&mut rng);
+            outputs
+        };
+
+        let tx = Transaction::new(
+            0,
+            vec![TxInput::from_account(
+                AccountNonce::new(0),
+                AccountSpending::TokenSupply(token_id, Amount::from_atoms(atoms_to_redeem)),
+            )],
+            outputs,
+        )
+        .unwrap();
+
+        let res = check_tx_inputs_outputs_policy(
+            &tx,
+            &chain_config,
+            BlockHeight::new(1),
+            &pos_db,
+            &utxo_db,
+        )
+        .unwrap_err();
+        assert_eq!(
+            res,
+            ConnectTransactionError::IOPolicyError(
+                IOPolicyError::AttemptToViolateBurnConstraints,
+                tx.get_id().into()
+            )
+        )
+    }
+
+    // valid case
+    {
+        let burn_outputs = decompose_value(&mut rng, atoms_to_redeem)
+            .iter()
+            .map(|atoms| TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::from_atoms(*atoms))))
+            .collect::<Vec<_>>();
+
+        let outputs = {
+            let mut outputs = std::iter::once(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                token_id,
+                Amount::from_atoms(atoms_to_redeem),
+            )))
+            .chain(burn_outputs.into_iter())
+            .collect::<Vec<_>>();
+            outputs.shuffle(&mut rng);
+            outputs
+        };
+
+        let tx = Transaction::new(
+            0,
+            vec![TxInput::from_account(
+                AccountNonce::new(0),
+                AccountSpending::TokenSupply(token_id, Amount::from_atoms(atoms_to_redeem)),
+            )],
+            outputs,
+        )
+        .unwrap();
+
+        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
+            .unwrap();
+    }
+}

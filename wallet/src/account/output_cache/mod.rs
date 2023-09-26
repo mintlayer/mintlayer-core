@@ -416,10 +416,6 @@ impl OutputCache {
             .filter(|tx| is_in_state(tx, utxo_states))
             .flat_map(|tx| {
                 let tx_block_info = get_block_info(tx);
-                let token_id = match tx {
-                    WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
-                    WalletTx::Block(_) => None,
-                };
 
                 tx.outputs()
                     .iter()
@@ -436,16 +432,13 @@ impl OutputCache {
                             )
                     })
                     .map(move |(output, outpoint)| {
-                        (
-                            outpoint,
-                            (
-                                output,
-                                token_id.and_then(|token_id| {
-                                    // FIXME: is this correct for v1?
-                                    is_token_or_nft_issuance(output).then_some(token_id)
-                                }),
-                            ),
-                        )
+                        let token_id = match tx {
+                            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
+                                .then_some(token_id(tx_data.get_transaction()))
+                                .flatten(),
+                            WalletTx::Block(_) => None,
+                        };
+                        (outpoint, (output, token_id))
                     })
             })
             .collect()

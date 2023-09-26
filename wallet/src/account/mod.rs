@@ -45,7 +45,7 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{TokenData, TokenId, TokenTransfer};
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    SignedTransaction, TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
@@ -773,7 +773,12 @@ impl Account {
             | TxOutput::CreateDelegationId(d, _)
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::Tokens(issuance) => todo!(),
+            TxOutput::Tokens(tokens_output) => match tokens_output {
+                TokenOutput::MintTokens(_, _, d) => Some(d),
+                TokenOutput::IssueFungibleToken(_)
+                | TokenOutput::RedeemTokens(_, _)
+                | TokenOutput::LockCirculatingSupply(_) => None,
+            },
             TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
     }
@@ -869,7 +874,8 @@ impl Account {
             self.output_cache
                 .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
-            self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
+            self.is_mine_or_watched(txo)
+                && get_utxo_type(txo).map(|v| utxo_types.contains(v)).unwrap_or(false)
         });
         all_outputs
     }
