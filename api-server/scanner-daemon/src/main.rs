@@ -16,9 +16,10 @@
 use std::sync::Arc;
 
 use api_server_common::storage::{
-    impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
+    impls::postgres::TransactionalApiServerPostgresStorage,
     storage_api::{
-        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
+        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+        ApiServerTransactionRw,
     },
 };
 use blockchain_scanner_lib::blockchain_state::BlockchainState;
@@ -32,8 +33,26 @@ use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chai
 mod config;
 
 #[must_use]
-pub fn make_in_memory_storage(chain_config: &ChainConfig) -> TransactionalApiServerInMemoryStorage {
-    TransactionalApiServerInMemoryStorage::new(chain_config)
+pub async fn make_postgres_storage(
+    postgres_host: String,
+    postgres_port: u16,
+    postgres_user: String,
+    postgres_password: Option<String>,
+    postgres_database: Option<String>,
+    postgres_max_connections: u32,
+    chain_config: &ChainConfig,
+) -> Result<TransactionalApiServerPostgresStorage, ApiServerScannerError> {
+    TransactionalApiServerPostgresStorage::new(
+        &postgres_host,
+        postgres_port,
+        &postgres_user,
+        postgres_password.as_deref(),
+        postgres_database.as_deref(),
+        postgres_max_connections,
+        chain_config,
+    )
+    .await
+    .map_err(|err| ApiServerScannerError::PostgresConnectionError(err))
 }
 
 pub async fn run<S: ApiServerStorage>(
@@ -83,6 +102,8 @@ pub enum ApiServerScannerError {
     RpcError(node_comm::rpc_client::NodeRpcError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
+    #[error("Postgres connection error: {0}")]
+    PostgresConnectionError(ApiServerStorageError),
 }
 
 #[tokio::main]
@@ -104,6 +125,12 @@ async fn main() -> Result<(), ApiServerScannerError> {
         rpc_cookie_file,
         rpc_username,
         rpc_password,
+        postgres_host,
+        postgres_port,
+        postgres_user,
+        postgres_password,
+        postgres_database,
+        postgres_max_connections,
     } = args;
 
     let chain_type: ChainType = network.into();
@@ -134,7 +161,16 @@ async fn main() -> Result<(), ApiServerScannerError> {
         .await
         .map_err(ApiServerScannerError::RpcError)?;
 
-    let storage = make_in_memory_storage(&chain_config);
+    let storage = make_postgres_storage(
+        postgres_host,
+        postgres_port,
+        postgres_user,
+        postgres_password,
+        postgres_database,
+        postgres_max_connections,
+        &chain_config,
+    )
+    .await?;
 
     run(&chain_config, &rpc_client, storage).await?;
 
