@@ -21,6 +21,7 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
+        tokens::TokenId,
         Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -79,6 +80,13 @@ fn create_delegation() -> TxOutput {
 
 fn delegate_staking() -> TxOutput {
     TxOutput::DelegateStaking(Amount::ZERO, DelegationId::new(H256::zero()))
+}
+
+fn redeem_tokens() -> TxOutput {
+    TxOutput::Tokens(common::chain::TokenOutput::RedeemTokens(
+        TokenId::new(H256::zero()),
+        Amount::ZERO,
+    ))
 }
 
 // FIXME: compile-time check for functions above and coverage?

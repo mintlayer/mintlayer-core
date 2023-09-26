@@ -27,7 +27,7 @@ impl TokenIssuanceVersion {
     pub const V1: Self = Self(1);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenTotalSupply {
     Fixed(Amount), // fixed to a certain amount
     Lockable,      // not known in advance but can be locked once at some point in time

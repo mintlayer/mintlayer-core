@@ -781,7 +781,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                                     )
                                 })
                         }
-                        TokenOutput::MintTokens(_, _)
+                        TokenOutput::MintTokens(_, _, _)
                         | TokenOutput::RedeemTokens(_, _)
                         | TokenOutput::LockCirculatingSupply(_) => Ok(()),
                     },

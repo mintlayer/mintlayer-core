@@ -153,9 +153,10 @@ impl ConstrainedValueAccumulator {
                     OutputValue::Token(_) => { /* do nothing */ }
                     OutputValue::TokenV1(id, value) => {
                         let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
-                        let constrained_amount = self.burn_constrained.entry(*id).or_insert(signed);
+                        let constrained_amount =
+                            self.burn_constrained.entry(*id).or_insert(SignedAmount::ZERO);
                         *constrained_amount =
-                            (*constrained_amount - signed).ok_or(IOPolicyError::AmountOverflow)?;
+                            (*constrained_amount + signed).ok_or(IOPolicyError::AmountOverflow)?;
                     }
                 },
                 TxOutput::DelegateStaking(coins, _) => {
@@ -216,13 +217,14 @@ impl ConstrainedValueAccumulator {
                 },
                 TxOutput::Tokens(token_output) => match token_output {
                     TokenOutput::IssueFungibleToken(_)
-                    | TokenOutput::MintTokens(_, _)
+                    | TokenOutput::MintTokens(_, _, _)
                     | TokenOutput::LockCirculatingSupply(_) => { /* do nothing */ }
                     TokenOutput::RedeemTokens(id, value) => {
                         let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
-                        let constrained_amount = self.burn_constrained.entry(*id).or_insert(signed);
+                        let constrained_amount =
+                            self.burn_constrained.entry(*id).or_insert(SignedAmount::ZERO);
                         *constrained_amount =
-                            (*constrained_amount + signed).ok_or(IOPolicyError::AmountOverflow)?;
+                            (*constrained_amount - signed).ok_or(IOPolicyError::AmountOverflow)?;
                     }
                 },
             };
@@ -231,7 +233,7 @@ impl ConstrainedValueAccumulator {
         ensure!(
             self.burn_constrained
                 .iter()
-                .all(|(_, constrained_amount)| *constrained_amount > SignedAmount::ZERO),
+                .all(|(_, constrained_amount)| *constrained_amount >= SignedAmount::ZERO),
             IOPolicyError::AttemptToViolateBurnConstraints
         );
 

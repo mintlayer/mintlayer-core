@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::TxOutput;
+use common::chain::{TokenOutput, TxOutput};
 
 use crate::wallet_tx::TxState;
 
 pub type UtxoTypeInt = u16;
 
+// TODO: Burn, CreateDelegationId and DelegateStaking types seems irrelevant here
+//       since they are not included into utxo set and cannot be spend
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 pub enum UtxoType {
@@ -29,6 +31,7 @@ pub enum UtxoType {
     ProduceBlockFromStake = 1 << 4,
     CreateDelegationId = 1 << 5,
     DelegateStaking = 1 << 6,
+    MintTokens = 1 << 7,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,16 +44,21 @@ pub enum UtxoState {
     Abandoned = 1 << 4,
 }
 
-pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
+pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
     match output {
-        TxOutput::Transfer(_, _) => UtxoType::Transfer,
-        TxOutput::LockThenTransfer(_, _, _) => UtxoType::LockThenTransfer,
-        TxOutput::Burn(_) => UtxoType::Burn,
-        TxOutput::CreateStakePool(_, _) => UtxoType::CreateStakePool,
-        TxOutput::ProduceBlockFromStake(_, _) => UtxoType::ProduceBlockFromStake,
-        TxOutput::CreateDelegationId(_, _) => UtxoType::CreateDelegationId,
-        TxOutput::DelegateStaking(_, _) => UtxoType::DelegateStaking,
-        TxOutput::Tokens(_) => todo!(),
+        TxOutput::Transfer(_, _) => Some(UtxoType::Transfer),
+        TxOutput::LockThenTransfer(_, _, _) => Some(UtxoType::LockThenTransfer),
+        TxOutput::Burn(_) => Some(UtxoType::Burn),
+        TxOutput::CreateStakePool(_, _) => Some(UtxoType::CreateStakePool),
+        TxOutput::ProduceBlockFromStake(_, _) => Some(UtxoType::ProduceBlockFromStake),
+        TxOutput::CreateDelegationId(_, _) => Some(UtxoType::CreateDelegationId),
+        TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
+        TxOutput::Tokens(tokens_output) => match tokens_output {
+            TokenOutput::MintTokens(_, _, _) => Some(UtxoType::MintTokens),
+            TokenOutput::IssueFungibleToken(_)
+            | TokenOutput::RedeemTokens(_, _)
+            | TokenOutput::LockCirculatingSupply(_) => None,
+        },
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {

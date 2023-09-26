@@ -104,6 +104,7 @@ impl Addressable for DelegationId {
 }
 
 impl PoSChainConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         target_limit: Uint256,
         target_block_time: u64,

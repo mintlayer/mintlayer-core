@@ -532,18 +532,17 @@ where
                     match account_input.account() {
                         AccountSpending::Delegation(delegation_id, withdraw_amount) => {
                             check_for_delegation_cleanup = Some(*delegation_id);
-                            let res =
-                                self.spend_input_from_account(&account_input).and_then(|_| {
-                                    // If the input spends from delegation account, this means the user is
-                                    // spending part of their share in the pool.
-                                    self.pos_accounting_adapter
-                                        .operations(tx_source)
-                                        .spend_share_from_delegation_id(
-                                            *delegation_id,
-                                            *withdraw_amount,
-                                        )
-                                        .map_err(ConnectTransactionError::PoSAccountingError)
-                                });
+                            let res = self.spend_input_from_account(account_input).and_then(|_| {
+                                // If the input spends from delegation account, this means the user is
+                                // spending part of their share in the pool.
+                                self.pos_accounting_adapter
+                                    .operations(tx_source)
+                                    .spend_share_from_delegation_id(
+                                        *delegation_id,
+                                        *withdraw_amount,
+                                    )
+                                    .map_err(ConnectTransactionError::PoSAccountingError)
+                            });
                             Some(res)
                         }
                         AccountSpending::TokenSupply(_, _) => None,
@@ -674,21 +673,33 @@ where
         }
     }
 
+    fn disconnect_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        // decrement nonce if disconnected input spent from an account
+        for input in tx.inputs() {
+            match input {
+                TxInput::Utxo(_) => { /* do nothing */ }
+                TxInput::Account(account_input) => {
+                    self.unspend_input_from_account(account_input)?;
+                }
+            };
+        }
+
+        self.disconnect_pos_accounting_outputs(tx_source, tx)?;
+
+        self.disconnect_tokens_accounting_outputs(tx_source, tx)?;
+
+        Ok(())
+    }
+
     fn disconnect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // decrement nonce if disconnected input spent from account
-        for input in tx.inputs() {
-            match input {
-                TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(account_input) => {
-                    self.unspend_input_from_account(&account_input)?;
-                }
-            };
-        }
-
         // apply undos to accounting
         let block_undo_fetcher = |id: Id<Block>| {
             self.storage
@@ -718,7 +729,7 @@ where
             TxInput::Utxo(_) => Ok(()),
             TxInput::Account(account_input) => match account_input.account() {
                 AccountSpending::Delegation(_, _) => Ok(()),
-                AccountSpending::TokenSupply(_, _) => self.spend_input_from_account(&account_input),
+                AccountSpending::TokenSupply(_, _) => self.spend_input_from_account(account_input),
             },
         })?;
 
@@ -751,7 +762,7 @@ where
                             );
                         Some(result)
                     }
-                    TokenOutput::MintTokens(token_id, mint_amount) => {
+                    TokenOutput::MintTokens(token_id, mint_amount, _) => {
                         let res = self
                             .tokens_accounting_cache
                             .mint_tokens(*token_id, *mint_amount)
@@ -793,16 +804,6 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        // decrement nonce if disconnected input spent from account
-        for input in tx.inputs() {
-            match input {
-                TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(account_input) => {
-                    self.unspend_input_from_account(&account_input)?;
-                }
-            };
-        }
-
         // apply undos to accounting
         let block_undo_fetcher = |id: Id<Block>| {
             self.storage
@@ -1104,9 +1105,7 @@ where
             TransactionSource::Mempool => { /* do nothing */ }
         };
 
-        self.disconnect_pos_accounting_outputs(*tx_source, tx.transaction())?;
-
-        self.disconnect_tokens_accounting_outputs(*tx_source, tx.transaction())?;
+        self.disconnect_accounting_outputs(*tx_source, tx.transaction())?;
 
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 

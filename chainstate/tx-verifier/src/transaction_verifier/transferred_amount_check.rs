@@ -35,7 +35,7 @@ use super::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     token_issuance_cache::CoinOrTokenId,
-    Fee, Subsidy,
+    Fee, IOPolicyError, Subsidy,
 };
 
 fn get_total_fee(
@@ -119,13 +119,10 @@ fn get_output_value<P: PoSAccountingView>(
         TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
         TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
         TxOutput::Tokens(v) => match v {
-            TokenOutput::IssueFungibleToken(_) | TokenOutput::LockCirculatingSupply(_) => {
-                OutputValue::Coin(Amount::ZERO)
-            }
-            TokenOutput::MintTokens(id, v) | TokenOutput::RedeemTokens(id, v) => {
-                // FIXME: not sure that is works for redeem the same way
-                OutputValue::TokenV1(*id, *v)
-            }
+            TokenOutput::IssueFungibleToken(_)
+            | TokenOutput::LockCirculatingSupply(_)
+            | TokenOutput::RedeemTokens(_, _) => OutputValue::Coin(Amount::ZERO),
+            TokenOutput::MintTokens(id, v, _) => OutputValue::TokenV1(*id, *v),
         },
     };
     Ok(res)
@@ -163,13 +160,25 @@ where
                 }
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::Tokens(_) => {
+                | TxOutput::DelegateStaking(_, _) => {
                     return Err(ConnectTransactionError::IOPolicyError(
-                        super::IOPolicyError::InvalidInputTypeInTx,
+                        IOPolicyError::InvalidInputTypeInTx,
                         inputs_source.clone(),
                     ))
                 }
+                TxOutput::Tokens(v) => match v {
+                    TokenOutput::MintTokens(token_id, amount, _) => {
+                        OutputValue::TokenV1(*token_id, *amount)
+                    }
+                    TokenOutput::IssueFungibleToken(_)
+                    | TokenOutput::RedeemTokens(_, _)
+                    | TokenOutput::LockCirculatingSupply(_) => {
+                        return Err(ConnectTransactionError::IOPolicyError(
+                            IOPolicyError::InvalidInputTypeInTx,
+                            inputs_source.clone(),
+                        ))
+                    }
+                },
             };
 
             amount_from_outpoint(

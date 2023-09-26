@@ -93,8 +93,6 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             return Err(Error::TokenAlreadyExist(id));
         }
 
-        // FIXME: set circulating supply to 0?
-
         let undo_data = self
             .data
             .token_data
@@ -112,8 +110,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         amount_to_add: Amount,
     ) -> Result<TokenAccountingUndo, Error> {
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
-        let circulating_supply =
-            self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
+        let circulating_supply = self.get_circulating_supply(&id)?.unwrap_or(Amount::ZERO);
 
         match token_data {
             TokenData::FungibleToken(data) => match data.supply_limit() {
@@ -126,7 +123,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                 }
                 TokenTotalSupply::Lockable => {
                     if data.is_locked() {
-                        return Err(Error::CannotIncreaseLockedSupply(id));
+                        return Err(Error::CannotMintFromLockedSupply(id));
                     }
                 }
                 TokenTotalSupply::Unlimited => { /* do nothing */ }
@@ -153,13 +150,13 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         match token_data {
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
-                    return Err(Error::CannotDecreaseLockedSupply(id));
+                    return Err(Error::CannotRedeemFromLockedSupply(id));
                 }
             }
         };
 
         if circulating_supply < amount_to_burn {
-            return Err(Error::NotEnoughCirculatingSupplyToBurn(
+            return Err(Error::NotEnoughCirculatingSupplyToRedeem(
                 circulating_supply,
                 amount_to_burn,
                 id,
