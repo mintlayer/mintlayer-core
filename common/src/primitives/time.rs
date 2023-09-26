@@ -29,10 +29,10 @@ pub fn duration_from_int(v: u64) -> Duration {
 static TIME_SOURCE: AtomicU64 = AtomicU64::new(0);
 
 /// Return mocked time if set, otherwise return `None`
-fn get_mocked_time() -> Option<Duration> {
+fn get_mocked_time() -> Option<Time> {
     let value = TIME_SOURCE.load(Ordering::SeqCst);
     if value != 0 {
-        Some(duration_from_int(value))
+        Some(Time::from_duration_since_epoch(duration_from_int(value)))
     } else {
         None
     }
@@ -52,7 +52,7 @@ pub fn set(now: Duration) -> Result<(), std::num::TryFromIntError> {
 /// Either gets the current time or panics
 pub fn get_time() -> Time {
     match get_mocked_time() {
-        Some(mocked_time) => Time::from_duration_since_epoch(mocked_time),
+        Some(mocked_time) => mocked_time,
         None => Time::from_duration_since_epoch(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -170,7 +170,10 @@ mod tests {
 
         set(Duration::from_secs(1337)).unwrap();
         assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
-        assert_eq!(get_mocked_time(), Some(Duration::from_secs(1337)));
+        assert_eq!(
+            get_mocked_time(),
+            Some(Time::from_duration_since_epoch(Duration::from_secs(1337)))
+        );
 
         reset();
         assert_eq!(get_mocked_time(), None);
