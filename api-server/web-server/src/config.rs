@@ -37,7 +37,7 @@ pub struct ListenAddress {
 impl Default for ListenAddress {
     fn default() -> Self {
         Self {
-            address: LISTEN_ADDRESS.to_string().parse().expect("Valid listining address"),
+            address: LISTEN_ADDRESS.to_string().parse().expect("Valid listening address"),
         }
     }
 }
@@ -53,7 +53,7 @@ impl Deref for ListenAddress {
 impl From<String> for ListenAddress {
     fn from(address: String) -> Self {
         Self {
-            address: address.parse().expect("Valid listining address"),
+            address: address.parse().expect("Valid listening address"),
         }
     }
 }
