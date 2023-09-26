@@ -57,7 +57,6 @@ const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
 /// The `Crawler` emits events that communicate whether addresses were reached or,
 /// are unreachable anymore.
 pub struct Crawler {
-    /// Time of some monotonic timer, started from 0
     now: Time,
 
     /// Chain config
