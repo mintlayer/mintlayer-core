@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use common::primitives::time::Time;
 
 use crate::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
@@ -22,7 +22,7 @@ pub trait PeerDbStorageRead {
 
     fn get_known_addresses(&self) -> Result<Vec<String>, storage::Error>;
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Duration)>, storage::Error>;
+    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error>;
 
     fn get_anchor_addresses(&self) -> Result<Vec<String>, storage::Error>;
 }
@@ -34,11 +34,7 @@ pub trait PeerDbStorageWrite {
 
     fn del_known_address(&mut self, address: &str) -> Result<(), storage::Error>;
 
-    fn add_banned_address(
-        &mut self,
-        address: &str,
-        duration: Duration,
-    ) -> Result<(), storage::Error>;
+    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error>;
 
     fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error>;
 

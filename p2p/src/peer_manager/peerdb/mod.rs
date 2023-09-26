@@ -92,11 +92,6 @@ impl<S: PeerDbStorage> PeerDb<S> {
             anchor_addresses,
         } = LoadedStorage::load_storage(&storage)?;
 
-        let banned_addresses = banned_addresses
-            .into_iter()
-            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)))
-            .collect::<BTreeMap<BannableAddress, Time>>();
-
         let boot_nodes = p2p_config
             .boot_nodes
             .iter()
@@ -335,7 +330,7 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .expect("Ban duration is expected to be valid");
 
         update_db(&self.storage, |tx| {
-            tx.add_banned_address(&address.to_string(), ban_till.as_duration_since_epoch())
+            tx.add_banned_address(&address.to_string(), ban_till)
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
 

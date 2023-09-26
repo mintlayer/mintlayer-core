@@ -13,11 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    time::Duration,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
+use common::primitives::time::Time;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
 use crate::{
@@ -31,7 +29,7 @@ const STORAGE_VERSION: u32 = 1;
 
 pub struct LoadedStorage {
     pub known_addresses: BTreeSet<SocketAddress>,
-    pub banned_addresses: BTreeMap<BannableAddress, Duration>,
+    pub banned_addresses: BTreeMap<BannableAddress, Time>,
     pub anchor_addresses: BTreeSet<SocketAddress>,
 }
 
