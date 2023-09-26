@@ -33,12 +33,12 @@ pub enum Error {
     MintExceedsSupplyLimit(Amount, Amount, TokenId),
     #[error("Amount overflow")]
     AmountOverflow,
-    #[error("Cannot increase locked supply for token: '{0}`")]
-    CannotIncreaseLockedSupply(TokenId),
-    #[error("Cannot decrease locked supply for token: '{0}`")]
-    CannotDecreaseLockedSupply(TokenId),
-    #[error("Circulating supply `{0:?}` is not enough to burn `{1:?}` for token `{2}`")]
-    NotEnoughCirculatingSupplyToBurn(Amount, Amount, TokenId),
+    #[error("Cannot mint from locked supply for token: '{0}`")]
+    CannotMintFromLockedSupply(TokenId),
+    #[error("Cannot redeem from locked supply for token: '{0}`")]
+    CannotRedeemFromLockedSupply(TokenId),
+    #[error("Circulating supply `{0:?}` is not enough to redeem `{1:?}` for token `{2}`")]
+    NotEnoughCirculatingSupplyToRedeem(Amount, Amount, TokenId),
     #[error("Supply for a token '{0}` is already locked")]
     SupplyIsAlreadyLocked(TokenId),
     #[error("Cannot lock supply for a token '{0}` with not lockable supply type")]

@@ -29,8 +29,11 @@ pub use {
     },
     error::Error,
     operations::{TokenAccountingUndo, TokensAccountingOperations},
-    storage::{db::TokensAccountingDB, TokensAccountingStorageRead, TokensAccountingStorageWrite},
+    storage::{
+        db::TokensAccountingDB, in_memory::InMemoryTokensAccounting, TokensAccountingStorageRead,
+        TokensAccountingStorageWrite,
+    },
     view::{FlushableTokensAccountingView, TokensAccountingView},
 };
 
-// FIXME: tests
+// TODO: tests
