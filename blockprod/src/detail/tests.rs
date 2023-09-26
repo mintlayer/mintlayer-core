@@ -634,8 +634,7 @@ mod produce_block {
 
             let time_value_secs = last_used_block_timestamp
                 .saturating_duration_sub(*override_chain_config.max_future_block_time_offset())
-                .as_duration_since_epoch()
-                .as_secs();
+                .as_secs_since_epoch();
             let time_value = Arc::new(SeqCstAtomicU64::new(time_value_secs));
 
             setup_blockprod_test(Some(override_chain_config), Some(time_value))
@@ -1244,8 +1243,7 @@ mod produce_block {
                             0,
                         ))
                     .expect("No time underflow")
-                    .as_duration_since_epoch()
-                    .as_secs(),
+                    .as_secs_since_epoch(),
                 ),
                 vec![kernel_input_utxo.clone()],
             );

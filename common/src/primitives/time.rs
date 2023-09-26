@@ -72,6 +72,10 @@ impl Time {
         self.time
     }
 
+    pub const fn as_secs_since_epoch(&self) -> u64 {
+        self.time.as_secs()
+    }
+
     pub const fn from_duration_since_epoch(duration: Duration) -> Self {
         Self { time: duration }
     }
@@ -129,38 +133,23 @@ mod tests {
         logging::init_logging();
         set(Duration::from_secs(1337)).unwrap();
 
-        log::info!(
-            "p2p time: {}",
-            get_time().as_duration_since_epoch().as_secs()
-        );
+        log::info!("p2p time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!(
-            "p2p time: {}",
-            get_time().as_duration_since_epoch().as_secs()
-        );
-        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
+        log::info!("p2p time: {}", get_time().as_secs_since_epoch());
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!(
-            "rpc time: {}",
-            get_time().as_duration_since_epoch().as_secs()
-        );
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_millis(500));
 
-        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
-        log::info!(
-            "rpc time: {}",
-            get_time().as_duration_since_epoch().as_secs()
-        );
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_millis(500));
 
         reset();
-        assert_ne!(get_time().as_duration_since_epoch().as_secs(), 1337);
-        log::info!(
-            "rpc time: {}",
-            get_time().as_duration_since_epoch().as_secs()
-        );
+        assert_ne!(get_time().as_secs_since_epoch(), 1337);
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
     }
 
     #[test]
@@ -169,7 +158,7 @@ mod tests {
         assert_eq!(get_mocked_time(), None);
 
         set(Duration::from_secs(1337)).unwrap();
-        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
         assert_eq!(
             get_mocked_time(),
             Some(Time::from_duration_since_epoch(Duration::from_secs(1337)))

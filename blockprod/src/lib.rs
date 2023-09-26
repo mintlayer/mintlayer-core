@@ -291,8 +291,7 @@ mod tests {
                             0,
                         ))
                     .expect("No time underflow")
-                    .as_duration_since_epoch()
-                    .as_secs(),
+                    .as_secs_since_epoch(),
                 ),
                 vec![create_genesis_pool_txoutput.clone()],
             );
