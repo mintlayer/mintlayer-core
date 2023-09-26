@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::primitives::time::Time;
 use p2p_types::socket_address::SocketAddress;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::SetFlag};
 
@@ -26,11 +27,11 @@ use crate::{
 #[derive(Debug)]
 pub struct SentPing {
     pub nonce: u64,
-    pub timestamp: Duration,
+    pub timestamp: Time,
 }
 
 pub struct PeerContext {
-    pub created_at: Duration,
+    pub created_at: Time,
 
     /// Peer information
     pub info: PeerInfo,
@@ -68,7 +69,7 @@ pub struct PeerContext {
     /// Can be set for outbound connections only.
     pub discovered_own_address: Option<SocketAddress>,
 
-    pub last_tip_block_time: Option<Duration>,
+    pub last_tip_block_time: Option<Time>,
 
-    pub last_tx_time: Option<Duration>,
+    pub last_tx_time: Option<Time>,
 }

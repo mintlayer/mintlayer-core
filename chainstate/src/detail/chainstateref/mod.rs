@@ -40,7 +40,7 @@ use common::{
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
         SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -159,7 +159,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chain_config
     }
 
-    pub fn current_time(&self) -> std::time::Duration {
+    pub fn current_time(&self) -> Time {
         self.time_getter.get_time()
     }
 
@@ -593,7 +593,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         );
 
         let max_future_offset = self.chain_config.max_future_block_time_offset();
-        let current_time = self.current_time();
+        let current_time = self.current_time().as_duration_since_epoch();
         let block_timestamp = header.timestamp();
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,

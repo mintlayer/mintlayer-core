@@ -34,7 +34,7 @@ use std::{
     time::Duration,
 };
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, primitives::time::Time};
 use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
 use p2p::{
@@ -58,7 +58,7 @@ const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
 /// are unreachable anymore.
 pub struct Crawler {
     /// Time of some monotonic timer, started from 0
-    now: Duration,
+    now: Time,
 
     /// Chain config
     chain_config: Arc<ChainConfig>,
@@ -121,7 +121,7 @@ impl Crawler {
         loaded_addresses: BTreeSet<SocketAddress>,
         reserved_addresses: BTreeSet<SocketAddress>,
     ) -> Self {
-        let now = Duration::ZERO;
+        let now = common::primitives::time::get_time();
 
         let addresses = loaded_addresses
             .union(&reserved_addresses)
@@ -212,7 +212,7 @@ impl Crawler {
     ///
     /// The only place where the address state can be updated.
     fn change_address_state(
-        now: Duration,
+        now: Time,
         address: &SocketAddress,
         address_data: &mut AddressData,
         transition: AddressStateTransitionTo,
@@ -355,7 +355,7 @@ impl Crawler {
                     "time step is too big"
                 );
 
-                self.now += period;
+                self.now = (self.now + period).expect("All local values of Time must be valid");
 
                 self.heartbeat(callback, rng);
             }

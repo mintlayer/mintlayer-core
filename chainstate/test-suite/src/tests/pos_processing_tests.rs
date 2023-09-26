@@ -379,7 +379,7 @@ fn pos_basic(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -468,7 +468,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint.clone(),
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -554,7 +554,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -622,7 +622,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_time((tf.current_time() + Duration::from_secs(1)).unwrap()),
         invalid_kernel_input,
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -677,7 +677,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     ));
 
     let valid_prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let valid_block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
+    let valid_block_timestamp = BlockTimestamp::from_time(tf.current_time());
     let valid_epoch: EpochIndex = 1;
     let valid_vrf_transcript =
         construct_transcript(valid_epoch, &valid_prev_randomness, valid_block_timestamp);
@@ -702,7 +702,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let (valid_pos_data, valid_block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -857,7 +857,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let (valid_pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -951,7 +951,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -1025,7 +1025,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -1068,7 +1068,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         block_2_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -1118,7 +1118,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         block_3_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -1173,7 +1173,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::NoSignature(None),
         &vrf_sk_1,
@@ -1421,7 +1421,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::Standard(kernel_sig),
         &vrf_sk_1,
@@ -1465,7 +1465,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint2,
         InputWitness::Standard(kernel_sig),
         &vrf_sk_2,
@@ -1588,7 +1588,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::Standard(kernel_sig),
         &vrf_sk_1,
@@ -1717,7 +1717,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -1769,7 +1769,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
         &tf.storage,
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
         block_1_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,

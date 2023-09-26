@@ -50,12 +50,70 @@ pub fn set(now: Duration) -> Result<(), std::num::TryFromIntError> {
 }
 
 /// Either gets the current time or panics
-pub fn get_time() -> Duration {
+pub fn get_time() -> Time {
     match get_mocked_time() {
-        Some(mocked_time) => mocked_time,
-        None => SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards"),
+        Some(mocked_time) => Time::from_duration_since_epoch(mocked_time),
+        None => Time::from_duration_since_epoch(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Time went backwards"),
+        ),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Time {
+    /// Time, stored as duration since SystemTime::UNIX_EPOCH
+    time: Duration,
+}
+
+impl Time {
+    pub const fn as_duration_since_epoch(&self) -> Duration {
+        self.time
+    }
+
+    pub const fn from_duration_since_epoch(duration: Duration) -> Self {
+        Self { time: duration }
+    }
+
+    pub const fn saturating_duration_add(&self, duration: Duration) -> Self {
+        Self {
+            time: self.time.saturating_add(duration),
+        }
+    }
+
+    pub const fn saturating_duration_sub(&self, t: Duration) -> Self {
+        Self {
+            time: self.time.saturating_sub(t),
+        }
+    }
+
+    pub const fn saturating_sub(&self, t: Self) -> Duration {
+        self.time.saturating_sub(t.time)
+    }
+}
+
+impl std::ops::Add<Duration> for Time {
+    type Output = Option<Self>;
+
+    fn add(self, other: Duration) -> Option<Self> {
+        self.time.checked_add(other).map(|time| Self { time })
+    }
+}
+
+impl std::ops::Sub<Duration> for Time {
+    type Output = Option<Self>;
+
+    fn sub(self, other: Duration) -> Option<Self> {
+        self.time.checked_sub(other).map(|time| Self { time })
+    }
+}
+
+impl std::ops::Sub<Time> for Time {
+    type Output = Option<Duration>;
+
+    fn sub(self, other: Time) -> Option<Duration> {
+        self.time.checked_sub(other.as_duration_since_epoch())
     }
 }
 
@@ -71,23 +129,38 @@ mod tests {
         logging::init_logging();
         set(Duration::from_secs(1337)).unwrap();
 
-        log::info!("p2p time: {}", get_time().as_secs());
+        log::info!(
+            "p2p time: {}",
+            get_time().as_duration_since_epoch().as_secs()
+        );
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!("p2p time: {}", get_time().as_secs());
-        assert_eq!(get_time().as_secs(), 1337);
+        log::info!(
+            "p2p time: {}",
+            get_time().as_duration_since_epoch().as_secs()
+        );
+        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!("rpc time: {}", get_time().as_secs());
+        log::info!(
+            "rpc time: {}",
+            get_time().as_duration_since_epoch().as_secs()
+        );
         std::thread::sleep(Duration::from_millis(500));
 
-        assert_eq!(get_time().as_secs(), 1337);
-        log::info!("rpc time: {}", get_time().as_secs());
+        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
+        log::info!(
+            "rpc time: {}",
+            get_time().as_duration_since_epoch().as_secs()
+        );
         std::thread::sleep(Duration::from_millis(500));
 
         reset();
-        assert_ne!(get_time().as_secs(), 1337);
-        log::info!("rpc time: {}", get_time().as_secs());
+        assert_ne!(get_time().as_duration_since_epoch().as_secs(), 1337);
+        log::info!(
+            "rpc time: {}",
+            get_time().as_duration_since_epoch().as_secs()
+        );
     }
 
     #[test]
@@ -96,7 +169,7 @@ mod tests {
         assert_eq!(get_mocked_time(), None);
 
         set(Duration::from_secs(1337)).unwrap();
-        assert_eq!(get_time().as_secs(), 1337);
+        assert_eq!(get_time().as_duration_since_epoch().as_secs(), 1337);
         assert_eq!(get_mocked_time(), Some(Duration::from_secs(1337)));
 
         reset();

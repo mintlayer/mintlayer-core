@@ -68,7 +68,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_duration_since_epoch(
+            current_time: P2pTimestamp::from_time(
                 test_node.time_getter().get_time_getter().get_time(),
             ),
         }))
@@ -134,7 +134,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_duration_since_epoch(
+            current_time: P2pTimestamp::from_time(
                 test_node.time_getter().get_time_getter().get_time(),
             ),
             handshake_nonce: 0,

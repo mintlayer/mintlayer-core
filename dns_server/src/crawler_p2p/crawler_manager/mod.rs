@@ -23,7 +23,7 @@ use std::{
     time::Duration,
 };
 
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
 use futures::never::Never;
 use logging::log;
@@ -70,7 +70,7 @@ pub struct CrawlerManager<N: NetworkingService, S> {
     time_getter: TimeGetter,
 
     /// The time when the crawler was updated last time
-    last_crawler_timer: Duration,
+    last_crawler_timer: Time,
 
     /// Crawler
     crawler: Crawler,

@@ -680,7 +680,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Returns true if the given block timestamp is newer than `ChainstateConfig::max_tip_age`.
     fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
-        let now = self.time_getter.get_time();
+        let now = self.time_getter.get_time().as_duration_since_epoch();
         time.as_duration_since_epoch()
             .checked_add(self.chainstate_config().max_tip_age.clone().into())
             .map_or(true, |max_tip_time| max_tip_time > now)

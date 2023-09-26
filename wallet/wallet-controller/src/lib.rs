@@ -44,7 +44,10 @@ use common::{
         },
         Block, ChainConfig, GenBlock, PoolId, SignedTransaction, TxOutput,
     },
-    primitives::{time::get_time, Amount, BlockHeight, Id, Idable},
+    primitives::{
+        time::{get_time, Time},
+        Amount, BlockHeight, Id, Idable,
+    },
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
@@ -546,8 +549,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     }
 
     /// Rebroadcast not confirmed transactions
-    fn rebroadcast_txs(&mut self, rebroadcast_txs_timer: &mut Duration) {
-        if get_time() >= *rebroadcast_txs_timer {
+    fn rebroadcast_txs(&mut self, rebroadcast_txs_again_at: &mut Time) {
+        if get_time() >= *rebroadcast_txs_again_at {
             let _ = self
                 .wallet
                 .get_transactions_to_be_broadcast()
@@ -564,7 +567,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
             // Reset the timer with a new random interval between 2 and 5 minutes
             let sleep_interval_sec = make_pseudo_rng().gen_range(120..=300);
-            *rebroadcast_txs_timer = get_time() + Duration::from_secs(sleep_interval_sec);
+            *rebroadcast_txs_again_at = (get_time() + Duration::from_secs(sleep_interval_sec))
+                .expect("Sleep intervals cannot be this large");
         }
     }
 }

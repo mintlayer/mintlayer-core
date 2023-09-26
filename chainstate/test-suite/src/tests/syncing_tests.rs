@@ -634,7 +634,7 @@ fn initial_block_download(#[case] seed: Seed) {
         let now = tf.current_time();
         tf.progress_time_seconds_since_epoch(3);
         tf.make_block_builder()
-            .with_timestamp(BlockTimestamp::from_duration_since_epoch(now))
+            .with_timestamp(BlockTimestamp::from_time(now))
             .build_and_process()
             .unwrap();
         assert!(tf.chainstate.is_initial_block_download());
@@ -650,10 +650,7 @@ fn initial_block_download(#[case] seed: Seed) {
         // Check that receiving an "old" block does not revert `is_initial_block_download` back
         tf.progress_time_seconds_since_epoch(5);
         let now = tf.current_time();
-        let block = tf
-            .make_block_builder()
-            .with_timestamp(BlockTimestamp::from_duration_since_epoch(now))
-            .build();
+        let block = tf.make_block_builder().with_timestamp(BlockTimestamp::from_time(now)).build();
         tf.progress_time_seconds_since_epoch(10);
         tf.process_block(block, BlockSource::Local).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());

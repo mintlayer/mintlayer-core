@@ -144,7 +144,11 @@ mod tests {
     };
     use storage_inmemory::InMemory;
     use subsystem::Manager;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::{
+        mock_time_getter::mocked_time_getter_seconds,
+        random::{make_seedable_rng, Seed},
+    };
+    use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
 
@@ -182,6 +186,7 @@ mod tests {
 
     pub fn setup_blockprod_test(
         chain_config: Option<ChainConfig>,
+        initial_mock_time: Option<Arc<SeqCstAtomicU64>>,
     ) -> (
         Manager,
         Arc<ChainConfig>,
@@ -200,13 +205,18 @@ mod tests {
             chainstate_config
         };
 
+        let time_getter = match initial_mock_time {
+            Some(mock_time) => mocked_time_getter_seconds(mock_time),
+            None => TimeGetter::default(),
+        };
+
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
             chainstate_config,
             Store::new_empty().expect("Error initializing empty store"),
             DefaultTransactionVerificationStrategy::new(),
             None,
-            Default::default(),
+            time_getter.clone(),
         )
         .expect("Error initializing chainstate");
 
@@ -215,7 +225,7 @@ mod tests {
         let mempool = mempool::make_mempool(
             Arc::clone(&chain_config),
             subsystem::Handle::clone(&chainstate),
-            Default::default(),
+            time_getter.clone(),
         );
         let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
             move |call, shutdn| mempool.run(call, shutdn)
@@ -229,7 +239,7 @@ mod tests {
             Arc::new(p2p_config),
             chainstate.clone(),
             mempool.clone(),
-            Default::default(),
+            time_getter,
             PeerDbStorageImpl::new(InMemory::new()).unwrap(),
         )
         .expect("P2p initialization was successful");
@@ -274,15 +284,15 @@ mod tests {
             let genesis_block = Genesis::new(
                 "blockprod-testing".into(),
                 BlockTimestamp::from_int_seconds(
-                    TimeGetter::default()
-                        .get_time()
-                        .checked_sub(Duration::new(
+                    (TimeGetter::default().get_time()
+                        - Duration::new(
                             // Genesis must be in the past: now - (1 day..2 weeks)
                             rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
                             0,
                         ))
-                        .expect("No time underflow")
-                        .as_secs(),
+                    .expect("No time underflow")
+                    .as_duration_since_epoch()
+                    .as_secs(),
                 ),
                 vec![create_genesis_pool_txoutput.clone()],
             );
@@ -318,7 +328,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
-        let (mut manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None);
+        let (mut manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, None);
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),

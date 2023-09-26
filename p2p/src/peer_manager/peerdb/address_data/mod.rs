@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::primitives::time::Time;
 use crypto::random::Rng;
 
 /// Maximum delay between reconnection attempts to reserved nodes
@@ -46,12 +47,12 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Next time connect to the peer
-        next_connect_after: Duration,
+        next_connect_after: Time,
     },
 
     Unreachable {
         /// At which time the address would be removed from memory
-        erase_after: Duration,
+        erase_after: Time,
     },
 }
 
@@ -81,7 +82,7 @@ pub struct AddressData {
 }
 
 impl AddressData {
-    pub fn new(was_reachable: bool, reserved: bool, now: Duration) -> Self {
+    pub fn new(was_reachable: bool, reserved: bool, now: Time) -> Self {
         AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
@@ -97,7 +98,7 @@ impl AddressData {
     }
 
     /// Returns true when it is time to attempt a new outbound connection
-    pub fn connect_now(&self, now: Duration) -> bool {
+    pub fn connect_now(&self, now: Time) -> bool {
         match self.state {
             AddressState::Connected {} => false,
 
@@ -115,7 +116,7 @@ impl AddressData {
     }
 
     /// Returns true if the address should be kept in memory
-    pub fn retain(&self, now: Duration) -> bool {
+    pub fn retain(&self, now: Time) -> bool {
         match self.state {
             AddressState::Connected {} => true,
             AddressState::Disconnected {
@@ -162,20 +163,27 @@ impl AddressData {
         )
     }
 
-    fn next_connect_time(
-        now: Duration,
-        fail_count: u32,
-        reserved: bool,
-        rng: &mut impl Rng,
-    ) -> Duration {
-        now + Self::next_connect_delay(fail_count, reserved)
-            .mul_f64(utils::exp_rand::exponential_rand(rng))
+    fn next_connect_time(now: Time, fail_count: u32, reserved: bool, rng: &mut impl Rng) -> Time {
+        let random_offset = Self::next_connect_delay(fail_count, reserved)
+            .mul_f64(utils::exp_rand::exponential_rand(rng));
+        loop {
+            let res = now + random_offset;
+            match res {
+                Some(r) => return r,
+                None => {
+                    // The random offset is too large, try again
+                    logging::log::debug!(
+                        "next_connect_time: Random_offset too large (now: {now:?}, offset: {random_offset:?}), trying again"
+                    );
+                }
+            }
+        }
     }
 
     pub fn transition_to(
         &mut self,
         transition: AddressStateTransitionTo,
-        now: Duration,
+        now: Time,
         rng: &mut impl Rng,
     ) {
         self.state = match transition {
@@ -226,7 +234,8 @@ impl AddressData {
                         }
                     } else if !was_reachable {
                         AddressState::Unreachable {
-                            erase_after: now + PURGE_UNREACHABLE_TIME,
+                            erase_after: (now + PURGE_UNREACHABLE_TIME)
+                                .expect("Overflow in PURGE_UNREACHABLE_TIME"),
                         }
                     } else if fail_count + 1 >= PURGE_REACHABLE_FAIL_COUNT {
                         AddressState::Unreachable { erase_after: now }

@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use common::primitives::time::Time;
 
 /// Activity with a peer.
 #[derive(Debug)]
 pub struct PeerActivity {
-    expecting_headers_since: Option<Duration>,
-    expecting_blocks_since: Option<Duration>,
+    expecting_headers_since: Option<Time>,
+    expecting_blocks_since: Option<Time>,
 }
 
 impl PeerActivity {
@@ -30,23 +30,23 @@ impl PeerActivity {
         }
     }
 
-    pub fn expecting_headers_since(&mut self) -> Option<Duration> {
+    pub fn expecting_headers_since(&mut self) -> Option<Time> {
         self.expecting_headers_since
     }
 
-    pub fn expecting_blocks_since(&mut self) -> Option<Duration> {
+    pub fn expecting_blocks_since(&mut self) -> Option<Time> {
         self.expecting_blocks_since
     }
 
-    pub fn set_expecting_headers_since(&mut self, time: Option<Duration>) {
+    pub fn set_expecting_headers_since(&mut self, time: Option<Time>) {
         self.expecting_headers_since = time;
     }
 
-    pub fn set_expecting_blocks_since(&mut self, time: Option<Duration>) {
+    pub fn set_expecting_blocks_since(&mut self, time: Option<Time>) {
         self.expecting_blocks_since = time;
     }
 
-    pub fn earliest_expected_activity_time(&self) -> Option<Duration> {
+    pub fn earliest_expected_activity_time(&self) -> Option<Time> {
         match (self.expecting_headers_since, self.expecting_blocks_since) {
             (None, None) => None,
             (Some(time), None) | (None, Some(time)) => Some(time),

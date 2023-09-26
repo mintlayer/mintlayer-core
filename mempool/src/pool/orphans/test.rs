@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use super::*;
 use common::{
     chain::{
@@ -75,10 +77,14 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let transaction = Transaction::new(0, inputs, Vec::new()).unwrap();
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
-    let insertion_time = Time::from_secs(rng.gen());
+    let insertion_time = Duration::from_secs(rng.gen());
     let origin = random_peer_origin(rng);
 
-    TxEntry::new(transaction, insertion_time, origin)
+    TxEntry::new(
+        transaction,
+        Time::from_duration_since_epoch(insertion_time),
+        origin,
+    )
 }
 
 #[rstest]
@@ -119,7 +125,7 @@ fn insert_and_delete(#[case] seed: Seed) {
 fn capacity_reached(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new();
-    let time = Time::from_secs(0);
+    let time = Time::from_duration_since_epoch(Duration::from_secs(0));
 
     for entry in (0..config::DEFAULT_ORPHAN_POOL_CAPACITY).map(|_| random_tx_entry(&mut rng)) {
         assert_eq!(orphans.insert_and_enforce_limits(entry, time), Ok(()));

@@ -1164,11 +1164,8 @@ where
                 if sent_ping.nonce == nonce {
                     // Correct reply received, clear pending request and update ping times
 
-                    let ping_time_last = self
-                        .time_getter
-                        .get_time()
-                        .checked_sub(sent_ping.timestamp)
-                        .unwrap_or_default();
+                    let ping_time_last =
+                        (self.time_getter.get_time() - sent_ping.timestamp).unwrap_or_default();
 
                     let ping_time_min = peer.ping_min.map_or(ping_time_last, |ping_time_min| {
                         std::cmp::min(ping_time_min, ping_time_last)
@@ -1310,7 +1307,7 @@ where
                 user_agent: context.info.user_agent.to_string(),
                 software_version: context.info.software_version.to_string(),
                 ping_wait: context.sent_ping.as_ref().map(|sent_ping| {
-                    duration_to_int(&now.checked_sub(sent_ping.timestamp).unwrap_or_default())
+                    duration_to_int(&(now - sent_ping.timestamp).unwrap_or_default())
                         .expect("valid timestamp expected (ping_wait)")
                 }),
                 ping_last: context.ping_last.map(|time| {
@@ -1371,7 +1368,9 @@ where
             // If a ping has already been sent, wait for a reply first, do not send another ping request!
             match &peer.sent_ping {
                 Some(sent_ping) => {
-                    if now >= sent_ping.timestamp + *self.p2p_config.ping_timeout {
+                    let timeout_time = (sent_ping.timestamp + *self.p2p_config.ping_timeout)
+                        .expect("Both times are local, so this can't happen");
+                    if now >= timeout_time {
                         log::info!("ping check: dead peer detected: {peer_id}");
                         dead_peers.push(*peer_id);
                     } else {
@@ -1471,20 +1470,25 @@ where
             if now < last_time {
                 log::warn!(
                     "Backward time adjustment detected ({} seconds)",
-                    last_time.checked_sub(now).unwrap_or_default().as_secs_f64()
+                    (last_time - now).unwrap_or_default().as_secs_f64()
                 );
-            } else if now > last_time + Duration::from_secs(60) {
+            } else if now
+                > (last_time + Duration::from_secs(60)).expect("All from local clock; cannot fail")
+            {
                 log::warn!(
                     "Forward time jump detected ({} seconds)",
-                    now.checked_sub(last_time).unwrap_or_default().as_secs_f64()
+                    (now - last_time).unwrap_or_default().as_secs_f64()
                 );
             }
             last_time = now;
 
+            let last_heartbeat_min =
+                (last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN).expect("Cannot happen 1");
+            let last_heartbeat_max =
+                (last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX).expect("Cannot happen 2");
+
             // Periodic heartbeat call where new outbound connections are made
-            if (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN && heartbeat_call_needed)
-                || (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX)
-            {
+            if (now >= last_heartbeat_min && heartbeat_call_needed) || (now >= last_heartbeat_max) {
                 self.heartbeat();
                 last_heartbeat = now;
                 heartbeat_call_needed = false;
@@ -1496,12 +1500,15 @@ where
                 && self.pending_outbound_connects.is_empty()
             {
                 self.reload_dns_seed().await;
-                next_dns_reload = now + Duration::from_secs(60);
+                next_dns_reload = (now + Duration::from_secs(60))
+                    .expect("Times derived from local clock; cannot fail");
                 heartbeat_call_needed = true;
             }
 
             // Send ping requests and disconnect dead peers
-            if ping_check_enabled && now >= last_ping_check + *self.p2p_config.ping_check_period {
+            let ping_timeout_time = (last_ping_check + *self.p2p_config.ping_check_period)
+                .expect("All local, cannot fail");
+            if ping_check_enabled && now >= ping_timeout_time {
                 self.ping_check();
                 last_ping_check = now;
             }
@@ -1515,7 +1522,8 @@ where
                 // that can have `discovered_own_address`.
                 let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
-                next_time_resend_own_address += delay;
+                next_time_resend_own_address = (next_time_resend_own_address + delay)
+                    .expect("Time derived from local clock; cannot fail");
             }
         }
     }

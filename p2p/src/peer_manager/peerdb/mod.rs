@@ -32,10 +32,9 @@ mod storage_load;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     sync::Arc,
-    time::Duration,
 };
 
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
 use itertools::Itertools;
 use logging::log;
@@ -68,9 +67,9 @@ pub struct PeerDb<S> {
 
     /// Banned addresses along with the duration of the ban.
     ///
-    /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
+    /// The duration represents the time point, so the ban should end
     /// when `current_time > ban_duration`.
-    banned_addresses: BTreeMap<BannableAddress, Duration>,
+    banned_addresses: BTreeMap<BannableAddress, Time>,
 
     anchor_addresses: BTreeSet<SocketAddress>,
 
@@ -92,6 +91,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
             banned_addresses,
             anchor_addresses,
         } = LoadedStorage::load_storage(&storage)?;
+
+        let banned_addresses = banned_addresses
+            .into_iter()
+            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)))
+            .collect::<BTreeMap<BannableAddress, Time>>();
 
         let boot_nodes = p2p_config
             .boot_nodes
@@ -327,10 +331,11 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     /// Changes the address state to banned
     pub fn ban(&mut self, address: BannableAddress) {
-        let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
+        let ban_till = (self.time_getter.get_time() + *self.p2p_config.ban_duration)
+            .expect("Ban duration is expected to be valid");
 
         update_db(&self.storage, |tx| {
-            tx.add_banned_address(&address.to_string(), ban_till)
+            tx.add_banned_address(&address.to_string(), ban_till.as_duration_since_epoch())
         })
         .expect("adding banned address is expected to succeed (ban_peer)");
 

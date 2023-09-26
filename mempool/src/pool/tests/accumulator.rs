@@ -67,9 +67,7 @@ async fn transaction_graph_respects_deps(#[case] seed: Seed) {
     let genesis_id = tf.genesis().get_id();
     let time = tf.genesis().timestamp();
 
-    let txs: Vec<_> = generate_transaction_graph(&mut rng, time.as_duration_since_epoch())
-        .take(15)
-        .collect();
+    let txs: Vec<_> = generate_transaction_graph(&mut rng, time.into_time()).take(15).collect();
 
     let mut mempool = setup_with_chainstate(tf.chainstate());
 

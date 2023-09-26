@@ -214,8 +214,7 @@ impl BlockProduction {
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
 
-                let current_timestamp =
-                    BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+                let current_timestamp = BlockTimestamp::from_time(self.time_getter().get_time());
 
                 move |this| {
                     let best_block_index = this
@@ -258,7 +257,7 @@ impl BlockProduction {
                         &best_block_index,
                         sealed_epoch_randomness,
                         input_data.clone(),
-                        BlockTimestamp::from_duration_since_epoch(time_getter.get_time()),
+                        BlockTimestamp::from_time(time_getter.get_time()),
                         block_height,
                         get_ancestor,
                     )?;
@@ -394,7 +393,7 @@ impl BlockProduction {
 
         // Range of timestamps for the block we attempt to construct.
         let min_constructed_block_timestamp =
-            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+            BlockTimestamp::from_time(self.time_getter().get_time());
         let max_constructed_block_timestamp = min_constructed_block_timestamp
             .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
             .ok_or(ConsensusCreationError::TimestampOverflow(

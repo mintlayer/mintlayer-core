@@ -28,7 +28,7 @@ use super::*;
 #[case(Seed::from_entropy())]
 fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Duration::ZERO;
+    let started_at = Time::from_duration_since_epoch(Duration::ZERO);
 
     let weights = [100, 100, 100, 10, 10];
     assert_eq!(weights.len(), ALL_TRANSITIONS.len());
@@ -64,7 +64,7 @@ fn randomized(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn reachable_reconnects(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Duration::from_secs(1600000000);
+    let started_at = Time::from_duration_since_epoch(Duration::from_secs(1600000000));
     let mut now = started_at;
     let mut address = AddressData::new(true, false, started_at);
     let mut connection_attempts = 0;
@@ -77,11 +77,11 @@ fn reachable_reconnects(#[case] seed: Seed) {
             address.transition_to(AddressStateTransitionTo::ConnectionFailed, now, &mut rng);
             connection_attempts += 1;
         }
-        now += Duration::from_secs(60);
+        now = (now + Duration::from_secs(60)).unwrap();
     }
 
     // Reachable addresses should be tried for reconnect for a long time
-    let time_until_removed = now - started_at;
+    let time_until_removed = (now - started_at).unwrap();
     assert_eq!(connection_attempts, PURGE_REACHABLE_FAIL_COUNT);
     let week = Duration::from_secs(3600 * 24 * 7);
     assert!(
