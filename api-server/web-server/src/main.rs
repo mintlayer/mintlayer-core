@@ -53,11 +53,10 @@ async fn main() {
         &chain_config,
     )
     .await
-    .map_err(|e| {
+    .unwrap_or_else(|e| {
         log::error!("Error creating Postgres storage: {}", e);
         std::process::exit(1);
-    })
-    .unwrap();
+    });
 
     let state = APIServerWebServerState {
         db: Arc::new(storage),

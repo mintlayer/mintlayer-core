@@ -32,7 +32,6 @@ use rpc::RpcAuthData;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 mod config;
 
-#[must_use]
 pub async fn make_postgres_storage(
     postgres_host: String,
     postgres_port: u16,
@@ -52,7 +51,7 @@ pub async fn make_postgres_storage(
         chain_config,
     )
     .await
-    .map_err(|err| ApiServerScannerError::PostgresConnectionError(err))
+    .map_err(ApiServerScannerError::PostgresConnectionError)
 }
 
 pub async fn run<S: ApiServerStorage>(
