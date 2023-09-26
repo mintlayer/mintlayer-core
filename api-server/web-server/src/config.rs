@@ -27,6 +27,30 @@ pub struct ApiServerWebServerConfig {
     /// Default: `127.0.0.1:3000`
     #[clap(long)]
     pub address: Option<ListenAddress>,
+
+    /// Postgres host
+    #[clap(long, default_value = "localhost")]
+    pub postgres_host: String,
+
+    /// Postgres port
+    #[clap(long, default_value = "5432")]
+    pub postgres_port: u16,
+
+    /// Postgres user
+    #[clap(long, default_value = "postgres")]
+    pub postgres_user: String,
+
+    /// Postgres password
+    #[clap(long)]
+    pub postgres_password: Option<String>,
+
+    /// Postgres database
+    #[clap(long)]
+    pub postgres_database: Option<String>,
+
+    /// Postgres max connections
+    #[clap(long, default_value = "10")]
+    pub postgres_max_connections: u32,
 }
 
 #[derive(Clone, Debug, Parser)]
