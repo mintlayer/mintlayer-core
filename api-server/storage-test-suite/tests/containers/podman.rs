@@ -154,6 +154,71 @@ impl Podman {
         self.stopped = true;
     }
 
+    pub fn rm(&mut self) {
+        let mut command = std::process::Command::new("podman");
+        command.arg("rm");
+        command.arg(&self.name);
+        let output = command.output().unwrap();
+        logging::log::debug!(
+            "Podman rm command args: {:?}",
+            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
+        );
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// Uses the command `podman logs` to print the logs of the container.
+    pub fn print_logs(&mut self) {
+        let mut command = std::process::Command::new("podman");
+        command.arg("logs");
+        command.arg(&self.name);
+        let output = command.output().unwrap();
+        logging::log::debug!(
+            "Podman logs command args: {:?}",
+            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
+        );
+        assert!(
+            output.status.success(),
+            "Failed to run podman command: {:?}\n{}",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        {
+            let mut logs = String::new();
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str(&format!("Logs for container '{}' (stdout):\n", self.name));
+            logs.push_str("==================================================================\n");
+            logs.push_str(&String::from_utf8_lossy(&output.stdout));
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str(&format!("Logs for container '{}' (stderr):\n", self.name));
+            logs.push_str("==================================================================\n");
+            logs.push_str(&String::from_utf8_lossy(&output.stderr));
+            logs.push_str("\n\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+            logs.push_str("==================================================================\n");
+
+            println!("{}", logs);
+        }
+    }
+
+    fn destructor(&mut self) {
+        if !self.stopped {
+            self.stop();
+        }
+        self.print_logs();
+        self.rm();
+    }
+
     #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.name
@@ -162,8 +227,6 @@ impl Podman {
 
 impl Drop for Podman {
     fn drop(&mut self) {
-        if !self.stopped {
-            self.stop();
-        }
+        self.destructor()
     }
 }
