@@ -80,6 +80,12 @@ impl Time {
         Self { time: duration }
     }
 
+    pub const fn from_secs_since_epoch(seconds: u64) -> Self {
+        Self {
+            time: Duration::from_secs(seconds),
+        }
+    }
+
     pub const fn saturating_duration_add(&self, duration: Duration) -> Self {
         Self {
             time: self.time.saturating_add(duration),
@@ -159,10 +165,7 @@ mod tests {
 
         set(Duration::from_secs(1337)).unwrap();
         assert_eq!(get_time().as_secs_since_epoch(), 1337);
-        assert_eq!(
-            get_mocked_time(),
-            Some(Time::from_duration_since_epoch(Duration::from_secs(1337)))
-        );
+        assert_eq!(get_mocked_time(), Some(Time::from_secs_since_epoch(1337)));
 
         reset();
         assert_eq!(get_mocked_time(), None);

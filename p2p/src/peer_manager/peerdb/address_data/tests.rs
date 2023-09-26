@@ -64,7 +64,7 @@ fn randomized(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn reachable_reconnects(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Time::from_duration_since_epoch(Duration::from_secs(1600000000));
+    let started_at = Time::from_secs_since_epoch(1600000000);
     let mut now = started_at;
     let mut address = AddressData::new(true, false, started_at);
     let mut connection_attempts = 0;

@@ -125,7 +125,7 @@ fn insert_and_delete(#[case] seed: Seed) {
 fn capacity_reached(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new();
-    let time = Time::from_duration_since_epoch(Duration::from_secs(0));
+    let time = Time::from_secs_since_epoch(0);
 
     for entry in (0..config::DEFAULT_ORPHAN_POOL_CAPACITY).map(|_| random_tx_entry(&mut rng)) {
         assert_eq!(orphans.insert_and_enforce_limits(entry, time), Ok(()));

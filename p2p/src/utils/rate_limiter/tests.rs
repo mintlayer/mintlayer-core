@@ -13,16 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use super::*;
 
 fn run_test(seconds: u32, rate: f64, initial_tokens: u32, bucket: u32, expected: u32) {
-    let now = Time::from_duration_since_epoch(Duration::from_secs(0));
+    let now = Time::from_secs_since_epoch(0);
     let mut rate_limiter = RateLimiter::new(now, rate, initial_tokens, bucket);
     let mut actual = 0;
     for i in 0..=seconds {
-        let now = Time::from_duration_since_epoch(Duration::from_secs(i.into()));
+        let now = Time::from_secs_since_epoch(i.into());
         while rate_limiter.accept(now) {
             actual += 1;
         }
