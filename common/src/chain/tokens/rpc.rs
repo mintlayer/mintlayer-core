@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Metadata, TokenCreator, TokenId};
+use super::{Metadata, TokenCreator, TokenId, TokenTotalSupply};
 use crate::{
     chain::{Block, Transaction},
     primitives::{Amount, Id},
@@ -38,35 +38,49 @@ impl RPCTokenInfo {
 }
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub enum RPCTokenTotalSupply {
+    Fixed(Amount),
+    Lockable,
+    Unlimited,
+}
+
+impl From<TokenTotalSupply> for RPCTokenTotalSupply {
+    fn from(value: TokenTotalSupply) -> Self {
+        match value {
+            TokenTotalSupply::Fixed(v) => RPCTokenTotalSupply::Fixed(v),
+            TokenTotalSupply::Lockable => RPCTokenTotalSupply::Lockable,
+            TokenTotalSupply::Unlimited => RPCTokenTotalSupply::Unlimited,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
-    pub creation_tx_id: Id<Transaction>,
-    pub creation_block_id: Id<Block>,
     pub token_ticker: Vec<u8>,
-    pub amount_to_issue: Amount,
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
+    pub circulating_supply: Amount,
+    pub total_supply: RPCTokenTotalSupply,
 }
 
 impl RPCFungibleTokenInfo {
     pub fn new(
         token_id: TokenId,
-        creation_tx_id: Id<Transaction>,
-        creation_block_id: Id<Block>,
         token_ticker: Vec<u8>,
-        amount_to_issue: Amount,
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
+        circulating_supply: Amount,
+        total_supply: RPCTokenTotalSupply,
     ) -> Self {
         Self {
             token_id,
-            creation_tx_id,
-            creation_block_id,
             token_ticker,
-            amount_to_issue,
             number_of_decimals,
             metadata_uri,
+            circulating_supply,
+            total_supply,
         }
     }
 }

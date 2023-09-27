@@ -75,10 +75,13 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenId},
+        tokens::{
+            get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenData, TokenId,
+            TokenIssuanceVersion,
+        },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
-        TxMainChainIndex, TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, OutPointSourceId, PoolId, RequiredConsensus, TokenOutput,
+        Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -244,6 +247,7 @@ where
         }
     }
 
+    // TODO: this function should go to ConstrainedValueAccumulator
     fn check_issuance_fee_burn(
         &self,
         tx: &Transaction,
@@ -722,7 +726,7 @@ where
 
     fn connect_tokens_outputs(
         &mut self,
-        tx_source: TransactionSource,
+        tx_source: &TransactionSourceForConnect,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.inputs().iter().try_for_each(|input| match input {
@@ -737,8 +741,7 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::Burn(_)
+                TxOutput::Burn(_)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
@@ -784,6 +787,42 @@ where
                         Some(res)
                     }
                 },
+                TxOutput::Transfer(v, _) => {
+                    v.token_data().and_then(|token_data| match token_data {
+                        TokenData::TokenTransfer(_) => None,
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
+                            let consensus_status = self
+                                .chain_config
+                                .as_ref()
+                                .net_upgrade()
+                                .consensus_status(tx_source.expected_block_height());
+                            let token_version = match consensus_status {
+                                RequiredConsensus::IgnoreConsensus => None,
+                                RequiredConsensus::PoW(_) => Some(
+                                    self.chain_config
+                                        .as_ref()
+                                        .get_proof_of_work_config()
+                                        .token_issuance_version(),
+                                ),
+                                RequiredConsensus::PoS(pos_status) => {
+                                    Some(pos_status.get_chain_config().token_issuance_version())
+                                }
+                            };
+                            token_version.and_then(|token_version| match token_version {
+                                TokenIssuanceVersion::V0 => {
+                                    Some(Err(ConnectTransactionError::TokensError(
+                                        TokensError::DeprecatedTokenIssuanceVersion(
+                                            tx.get_id(),
+                                            TokenIssuanceVersion::V0,
+                                        ),
+                                    )))
+                                }
+                                TokenIssuanceVersion::V1 => None,
+                                _ => unreachable!(),
+                            })
+                        }
+                    })
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -791,7 +830,7 @@ where
         if !undos.is_empty() {
             let tx_undos = undos.into_iter().collect();
             self.tokens_accounting_block_undo
-                .get_or_create_block_undo(&tx_source)
+                .get_or_create_block_undo(&tx_source.into())
                 .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))
                 .map_err(ConnectTransactionError::TokensAccountingBlockUndoError)
         } else {
@@ -834,17 +873,6 @@ where
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        // FIXME: forbid v0 tokens at some height?
-        // pre-cache token ids to check ensure it's not in the db when issuing
-        self.token_issuance_cache.precache_token_issuance(
-            |id| {
-                self.storage
-                    .get_token_aux_data(id)
-                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-            },
-            tx.transaction(),
-        )?;
-
         let issuance_token_id_getter =
             |tx_id: &Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
                 // issuance transactions are unique, so we use them to get the token id
@@ -872,7 +900,17 @@ where
         self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
 
         // Register tokens if tx has issuance data
-        self.token_issuance_cache.register(block_id, tx.transaction())?;
+        self.token_issuance_cache.register(
+            self.chain_config.as_ref(),
+            block_id,
+            tx.transaction(),
+            tx_source,
+            |id| {
+                self.storage
+                    .get_token_aux_data(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            },
+        )?;
 
         // check timelocks of the outputs and make sure there's no premature spending
         timelock_check::check_timelocks(
@@ -898,7 +936,7 @@ where
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 
-        self.connect_tokens_outputs(tx_source.into(), tx.transaction())?;
+        self.connect_tokens_outputs(tx_source, tx.transaction())?;
 
         // spend utxos
         let tx_undo = self
@@ -1109,18 +1147,12 @@ where
 
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
-        // pre-cache token ids before removing them
-        self.token_issuance_cache.precache_token_issuance(
-            |id| {
-                self.storage
-                    .get_token_aux_data(id)
-                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-            },
-            tx.transaction(),
-        )?;
-
-        // Remove issued tokens
-        self.token_issuance_cache.unregister(tx.transaction())?;
+        // Remove issued tokens v0
+        self.token_issuance_cache.unregister(tx.transaction(), |id| {
+            self.storage
+                .get_token_aux_data(id)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        })?;
 
         Ok(())
     }

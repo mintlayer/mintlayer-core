@@ -137,7 +137,7 @@ fn mint_tokens_in_block(
                 )))
                 .build(),
         )
-        .with_parent(parent_block_id.into())
+        .with_parent(parent_block_id)
         .build();
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();

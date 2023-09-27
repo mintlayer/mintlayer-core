@@ -192,10 +192,10 @@ impl TokensAccountingStorageRead for InMemoryStorageWrapper {
         &self,
         id: &TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
-        todo!()
+        self.storage.get_token_data(id)
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.storage.get_circulating_supply(id)
     }
 }

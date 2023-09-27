@@ -105,13 +105,13 @@ pub fn check_tokens_issuance_data_v0(
 
     // Check amount
     ensure!(
-        &issuance_data.amount_to_issue > &Amount::ZERO,
+        issuance_data.amount_to_issue > Amount::ZERO,
         TokenIssuanceError::IssueAmountIsZero
     );
 
     // Check decimals
     ensure!(
-        &issuance_data.number_of_decimals <= &chain_config.token_max_dec_count(),
+        issuance_data.number_of_decimals <= chain_config.token_max_dec_count(),
         TokenIssuanceError::IssueErrorTooManyDecimals
     );
 
@@ -122,7 +122,7 @@ pub fn check_tokens_issuance_data_v0(
     );
 
     ensure!(
-        &issuance_data.metadata_uri.len() <= &chain_config.token_max_uri_len(),
+        issuance_data.metadata_uri.len() <= chain_config.token_max_uri_len(),
         TokenIssuanceError::IssueErrorIncorrectMetadataURI
     );
     Ok(())
@@ -139,7 +139,7 @@ pub fn check_tokens_issuance_versioned(
 
             // Check decimals
             ensure!(
-                &issuance_data.number_of_decimals <= &chain_config.token_max_dec_count(),
+                issuance_data.number_of_decimals <= chain_config.token_max_dec_count(),
                 TokenIssuanceError::IssueErrorTooManyDecimals
             );
 
@@ -150,7 +150,7 @@ pub fn check_tokens_issuance_versioned(
             );
 
             ensure!(
-                &issuance_data.metadata_uri.len() <= &chain_config.token_max_uri_len(),
+                issuance_data.metadata_uri.len() <= chain_config.token_max_uri_len(),
                 TokenIssuanceError::IssueErrorIncorrectMetadataURI
             );
         }
@@ -169,10 +169,8 @@ pub fn check_tokens_data(
         TokenData::TokenTransfer(transfer) => {
             check_positive_amount(source_block_id, tx, &transfer.amount)
         }
-        TokenData::TokenIssuance(issuance) => {
-            check_tokens_issuance_data_v0(chain_config, &issuance)
-                .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id))
-        }
+        TokenData::TokenIssuance(issuance) => check_tokens_issuance_data_v0(chain_config, issuance)
+            .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
         TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
             .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
     }

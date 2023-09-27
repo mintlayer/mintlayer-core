@@ -739,7 +739,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // FIXME: check tokens versions
         for tx in block.transactions() {
             // We can't issue multiple tokens in a single tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());

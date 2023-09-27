@@ -21,9 +21,9 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::TokenId,
-        Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        tokens::{TokenId, TokenIssuanceV1, TokenIssuanceVersioned, TokenTotalSupply},
+        Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TokenOutput, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
 };
@@ -82,14 +82,38 @@ fn delegate_staking() -> TxOutput {
     TxOutput::DelegateStaking(Amount::ZERO, DelegationId::new(H256::zero()))
 }
 
+fn issue_tokens() -> TxOutput {
+    TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+        TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+            token_ticker: Vec::new(),
+            number_of_decimals: 0,
+            metadata_uri: Vec::new(),
+            supply_limit: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::AnyoneCanSpend,
+        }),
+    )))
+}
+
+fn mint_tokens() -> TxOutput {
+    TxOutput::Tokens(TokenOutput::MintTokens(
+        TokenId::new(H256::zero()),
+        Amount::ZERO,
+        Destination::AnyoneCanSpend,
+    ))
+}
+
 fn redeem_tokens() -> TxOutput {
-    TxOutput::Tokens(common::chain::TokenOutput::RedeemTokens(
+    TxOutput::Tokens(TokenOutput::RedeemTokens(
         TokenId::new(H256::zero()),
         Amount::ZERO,
     ))
 }
 
-// FIXME: compile-time check for functions above and coverage?
+fn lock_tokens_supply() -> TxOutput {
+    TxOutput::Tokens(TokenOutput::LockCirculatingSupply(TokenId::new(
+        H256::zero(),
+    )))
+}
 
 fn get_random_outputs_combination(
     rng: &mut impl Rng,
