@@ -132,6 +132,11 @@ mockall::mock! {
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
+        fn get_token_data(
+            &self,
+            id: &TokenId,
+        ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError>;
+        fn get_token_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, ChainstateError>;
         fn get_inputs_outpoints_coin_amount(
             &self,
             inputs: &[TxInput],

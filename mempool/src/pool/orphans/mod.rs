@@ -306,7 +306,7 @@ impl<'p> PoolEntry<'p> {
         let entry = self.get();
         !entry.requires().any(|dep| match dep {
             // Always consider account deps. TODO: can be optimized in the future
-            TxDependency::DelegationAccount(_) => false,
+            TxDependency::DelegationAccount(_) | TxDependency::TokenSupplyAccount(_) => false,
             TxDependency::TxOutput(tx_id, _) => self.pool.maps.by_tx_id.contains_key(&tx_id),
         })
     }
