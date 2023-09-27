@@ -78,6 +78,7 @@ pub enum WalletMessage {
 
     TransactionList { skip: usize },
 
+    StillSyncing,
     Close,
 }
 
@@ -225,6 +226,7 @@ impl WalletTab {
                 });
                 Command::none()
             }
+            WalletMessage::StillSyncing => Command::none(),
             WalletMessage::Close => {
                 backend_sender.send(BackendRequest::CloseWallet(self.wallet_id));
                 Command::none()
@@ -255,6 +257,9 @@ impl Tab for WalletTab {
             .get(&self.selected_account)
             .expect("selected account must be known");
 
+        let still_syncing =
+            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height;
+        let still_syncing = still_syncing.then_some(WalletMessage::StillSyncing);
         // PaneGrid is used to make the left panel resizable
         let pane_grid: Element<WalletMessage> =
             PaneGrid::new(&self.panes, move |_id, pane, _is_maximized| match pane {
@@ -273,15 +278,19 @@ impl Tab for WalletTab {
                         SelectedPanel::Transactions => {
                             transactions::view_transactions(&node_state.chain_config, account)
                         }
-                        SelectedPanel::Addresses => addresses::view_addresses(account),
+                        SelectedPanel::Addresses => {
+                            addresses::view_addresses(account, still_syncing.clone())
+                        }
                         SelectedPanel::Send => send::view_send(
                             &self.account_state.send_address,
                             &self.account_state.send_amount,
+                            still_syncing.clone(),
                         ),
                         SelectedPanel::Staking => stake::view_stake(
                             &node_state.chain_config,
                             account,
                             &self.account_state.stake_amount,
+                            still_syncing.clone(),
                         ),
                     };
 
