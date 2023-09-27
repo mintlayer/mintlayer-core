@@ -113,14 +113,14 @@ impl TokensAccountingView for EmptyTokensAccountingView {
 
     fn get_token_data(
         &self,
-        id: &common::chain::tokens::TokenId,
+        _id: &common::chain::tokens::TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
         Ok(None)
     }
 
     fn get_circulating_supply(
         &self,
-        id: &common::chain::tokens::TokenId,
+        _id: &common::chain::tokens::TokenId,
     ) -> Result<Option<common::primitives::Amount>, Self::Error> {
         Ok(None)
     }

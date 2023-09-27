@@ -125,7 +125,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TransactionVerifierError(err) => err.mempool_ban_score(),
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
-            ConnectTransactionError::TokensAccountingError(_) => todo!(),
+            ConnectTransactionError::TokensAccountingError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::MissingTxInputs => 100,
@@ -382,6 +382,28 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::BlockHeightArithmeticError => 0,
             IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for tokens_accounting::Error {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            tokens_accounting::Error::StorageError(_) => 0,
+            tokens_accounting::Error::AccountingError(err) => err.mempool_ban_score(),
+            tokens_accounting::Error::TokenAlreadyExist(_) => 0,
+            tokens_accounting::Error::TokenDataNotFound(_) => 0,
+            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 0,
+            tokens_accounting::Error::CirculatingSupplyNotFound(_) => 0,
+            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => 100,
+            tokens_accounting::Error::AmountOverflow => 100,
+            tokens_accounting::Error::CannotMintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::CannotRedeemFromLockedSupply(_) => 100,
+            tokens_accounting::Error::NotEnoughCirculatingSupplyToRedeem(_, _, _) => 100,
+            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 100,
+            tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
+            tokens_accounting::Error::ViewFail => 0,
+            tokens_accounting::Error::StorageWrite => 0,
         }
     }
 }
