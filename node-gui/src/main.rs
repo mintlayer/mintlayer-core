@@ -48,7 +48,11 @@ enum MintlayerNodeGUI {
 
 #[derive(Debug)]
 pub enum Message {
-    FromBackend(UnboundedReceiver<BackendEvent>, BackendEvent),
+    FromBackend(
+        UnboundedReceiver<BackendEvent>,
+        UnboundedReceiver<BackendEvent>,
+        BackendEvent,
+    ),
     Loaded(anyhow::Result<BackendControls>),
     FontLoaded(Result<(), font::Error>),
     EventOccurred(iced::Event),
@@ -88,16 +92,17 @@ impl Application for MintlayerNodeGUI {
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
             MintlayerNodeGUI::Loading => match message {
-                Message::FromBackend(_, _) => unreachable!(),
+                Message::FromBackend(_, _, _) => unreachable!(),
                 Message::Loaded(Ok(backend_controls)) => {
                     let BackendControls {
                         initialized_node,
                         backend_sender,
                         backend_receiver,
+                        low_priority_backend_receiver,
                     } = backend_controls;
                     *self =
                         MintlayerNodeGUI::Loaded(backend_sender, MainWindow::new(initialized_node));
-                    recv_backend_command(backend_receiver)
+                    recv_backend_command(backend_receiver, low_priority_backend_receiver)
                 }
                 Message::Loaded(Err(e)) => {
                     *self = MintlayerNodeGUI::IntializationError(e.to_string());
@@ -121,13 +126,17 @@ impl Application for MintlayerNodeGUI {
                 Message::MainWindowMessage(_) => Command::none(),
             },
             MintlayerNodeGUI::Loaded(backend_sender, w) => match message {
-                Message::FromBackend(backend_receiver, backend_event) => Command::batch([
+                Message::FromBackend(
+                    backend_receiver,
+                    low_priority_backend_receiver,
+                    backend_event,
+                ) => Command::batch([
                     w.update(
                         MainWindowMessage::FromBackend(backend_event),
                         backend_sender,
                     )
                     .map(Message::MainWindowMessage),
-                    recv_backend_command(backend_receiver),
+                    recv_backend_command(backend_receiver, low_priority_backend_receiver),
                 ]),
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::FontLoaded(status) => {
@@ -151,7 +160,7 @@ impl Application for MintlayerNodeGUI {
                 }
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
-                Message::FromBackend(_, _) => unreachable!(),
+                Message::FromBackend(_, _, _) => unreachable!(),
                 Message::Loaded(_) => Command::none(),
                 Message::FontLoaded(_) => Command::none(),
                 Message::EventOccurred(event) => {
@@ -208,12 +217,28 @@ impl Application for MintlayerNodeGUI {
     }
 }
 
-fn recv_backend_command(mut backend_receiver: UnboundedReceiver<BackendEvent>) -> Command<Message> {
+fn recv_backend_command(
+    mut backend_receiver: UnboundedReceiver<BackendEvent>,
+    mut low_priority_backend_receiver: UnboundedReceiver<BackendEvent>,
+) -> Command<Message> {
     Command::perform(
         async move {
-            match backend_receiver.recv().await {
-                Some(msg) => Message::FromBackend(backend_receiver, msg),
-                None => Message::ShuttingDownFinished,
+            tokio::select! {
+                // Make sure we process low priority events at the end
+                biased;
+
+                msg_opt = backend_receiver.recv() => {
+                    match msg_opt {
+                        Some(msg) => Message::FromBackend(backend_receiver, low_priority_backend_receiver, msg),
+                        None => Message::ShuttingDownFinished,
+                    }
+                }
+                msg_opt = low_priority_backend_receiver.recv() => {
+                    match msg_opt {
+                        Some(msg) => Message::FromBackend(backend_receiver, low_priority_backend_receiver, msg),
+                        None => Message::ShuttingDownFinished,
+                    }
+                }
             }
         },
         identity,

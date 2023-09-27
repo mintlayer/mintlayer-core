@@ -72,6 +72,10 @@ pub struct Backend {
     /// The bounded sender is used so that the UI is not overloaded with messages.
     /// With an unbounded sender, high latency was experienced when wallet scan was enabled.
     event_tx: UnboundedSender<BackendEvent>,
+    /// Low priority event_tx for sending wallet updates when new blocks are scanned
+    /// without this the queue can get filled up with updates when the wallet is far behind
+    /// and user events interacting with the wallet can start lagging
+    low_priority_event_tx: UnboundedSender<BackendEvent>,
 
     wallet_updated_tx: UnboundedSender<WalletId>,
 
@@ -86,6 +90,7 @@ impl Backend {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         event_tx: UnboundedSender<BackendEvent>,
+        low_priority_event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
         controller: NodeController,
         manager_join_handle: JoinHandle<()>,
@@ -93,6 +98,7 @@ impl Backend {
         Self {
             chain_config,
             event_tx,
+            low_priority_event_tx,
             wallet_updated_tx,
             controller,
             manager_join_handle,
@@ -527,7 +533,7 @@ impl Backend {
             let best_block = wallet_data.controller.best_block();
             if wallet_data.best_block != best_block {
                 Self::send_event(
-                    &self.event_tx,
+                    &self.low_priority_event_tx,
                     BackendEvent::WalletBestBlock(*wallet_id, best_block),
                 );
                 wallet_data.best_block = best_block;
@@ -539,7 +545,7 @@ impl Backend {
                 let balance =
                     Self::get_account_balance(&wallet_data.controller, account_id.account_index());
                 Self::send_event(
-                    &self.event_tx,
+                    &self.low_priority_event_tx,
                     BackendEvent::Balance(*wallet_id, *account_id, balance),
                 );
 
@@ -557,7 +563,7 @@ impl Backend {
                 match transaction_list_res {
                     Ok(transaction_list) => {
                         Self::send_event(
-                            &self.event_tx,
+                            &self.low_priority_event_tx,
                             BackendEvent::TransactionList(
                                 *wallet_id,
                                 *account_id,
@@ -586,7 +592,7 @@ impl Backend {
                 match staking_balance_res {
                     Ok(staking_balance) => {
                         Self::send_event(
-                            &self.event_tx,
+                            &self.low_priority_event_tx,
                             BackendEvent::StakingBalance(
                                 *wallet_id,
                                 *account_id,
