@@ -19,7 +19,7 @@ use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
-    address::{traits::Addressable, AddressError},
+    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
     primitives::{per_thousand::PerThousand, BlockDistance, Id, H256},
     Uint256,
 };
@@ -60,6 +60,12 @@ pub struct PoSChainConfig {
     difficulty_change_limit: PerThousand,
     /// Version of the consensus protocol
     consensus_version: PoSConsensusVersion,
+}
+
+impl serde::Serialize for PoolId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
+    }
 }
 
 impl Addressable for PoolId {
@@ -107,6 +113,12 @@ impl Addressable for DelegationId {
 
     fn json_wrapper_prefix() -> &'static str {
         "HexifiedDelegationId"
+    }
+}
+
+impl serde::Serialize for DelegationId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
     }
 }
 

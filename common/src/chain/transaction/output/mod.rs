@@ -14,12 +14,14 @@
 // limitations under the License.
 
 use crate::{
-    address::{pubkeyhash::PublicKeyHash, traits::Addressable, AddressError},
+    address::{
+        hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
+    },
     chain::{output_value::OutputValue, tokens::TokenData, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 use variant_count::VariantCount;
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
@@ -45,7 +47,7 @@ pub enum Destination {
 
 impl serde::Serialize for Destination {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&format!("0x{}", self.hex_encode()))
+        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
     }
 }
 

@@ -76,6 +76,12 @@ impl PartialEq<Id<GenBlock>> for Id<Genesis> {
     }
 }
 
+impl serde::Serialize for Id<GenBlock> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.serde_serialize(s)
+    }
+}
+
 impl Id<GenBlock> {
     /// Figure out if this [Id] refers to a [Genesis] or a proper [Block].
     pub fn classify(&self, c: &crate::chain::config::ChainConfig) -> GenBlockId {

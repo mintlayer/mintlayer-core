@@ -218,6 +218,12 @@ impl PartialEq for WithId<Block> {
     }
 }
 
+impl serde::Serialize for Id<Block> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.serde_serialize(s)
+    }
+}
+
 impl Eq for WithId<Block> {}
 
 #[cfg(test)]

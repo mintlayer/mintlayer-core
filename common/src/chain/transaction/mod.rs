@@ -144,6 +144,12 @@ impl Transaction {
     }
 }
 
+impl serde::Serialize for Id<Transaction> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.serde_serialize(s)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
