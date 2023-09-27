@@ -17,15 +17,18 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{get_tokens_issuance_v0_count, token_id, TokenAuxiliaryData, TokenId},
-        Block, Transaction,
+        tokens::{
+            get_tokens_issuance_v0_count, token_id, TokenAuxiliaryData, TokenId,
+            TokenIssuanceVersion,
+        },
+        Block, ChainConfig, RequiredConsensus, Transaction,
     },
     primitives::{Id, Idable, H256},
 };
 
 use super::{
     error::{ConnectTransactionError, TokensError},
-    CachedOperation,
+    CachedOperation, TransactionSourceForConnect,
 };
 
 pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
@@ -69,23 +72,68 @@ impl TokenIssuanceCache {
 
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
     // This helps in finding the relevant information of the token at any time in the future.
-    pub fn register(
+    pub fn register<E>(
         &mut self,
+        chain_config: &ChainConfig,
         block_id: Option<Id<Block>>,
         tx: &Transaction,
-    ) -> Result<(), TokensError> {
+        tx_source: &TransactionSourceForConnect,
+        token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        ConnectTransactionError: From<E>,
+    {
         let was_token_issued = get_tokens_issuance_v0_count(tx.outputs()) > 0;
 
         if was_token_issued {
+            // Check that only v0 tokens were issued
+            let consensus_status =
+                chain_config.net_upgrade().consensus_status(tx_source.expected_block_height());
+            let token_version = match consensus_status {
+                RequiredConsensus::IgnoreConsensus => None,
+                RequiredConsensus::PoW(_) => {
+                    Some(chain_config.get_proof_of_work_config().token_issuance_version())
+                }
+                RequiredConsensus::PoS(pos_status) => {
+                    Some(pos_status.get_chain_config().token_issuance_version())
+                }
+            };
+
+            if let Some(token_version) = token_version {
+                match token_version {
+                    TokenIssuanceVersion::V0 => { /* do nothing */ }
+                    TokenIssuanceVersion::V1 => {
+                        return Err(ConnectTransactionError::TokensError(
+                            TokensError::UnsupportedTokenIssuanceVersion(
+                                tx.get_id(),
+                                TokenIssuanceVersion::V1,
+                            ),
+                        ));
+                    }
+                    _ => unreachable!(),
+                };
+            }
+
+            self.precache_token_issuance(token_data_getter, tx)?;
+
             self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
         }
         Ok(())
     }
 
-    pub fn unregister(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    pub fn unregister<E>(
+        &mut self,
+        tx: &Transaction,
+        token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        ConnectTransactionError: From<E>,
+    {
         let was_token_issued = get_tokens_issuance_v0_count(tx.outputs()) > 0;
 
         if was_token_issued {
+            self.precache_token_issuance(token_data_getter, tx)?;
+
             self.write_undo_issuance(tx)?;
         }
         Ok(())
@@ -143,7 +191,7 @@ impl TokenIssuanceCache {
         Ok(())
     }
 
-    pub fn precache_token_issuance<E>(
+    fn precache_token_issuance<E>(
         &mut self,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
         tx: &Transaction,
