@@ -273,11 +273,13 @@ impl TokensAccountingView for ChainstateHandle {
         &self,
         id: &TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_token_data(&id))
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_token_circulating_supply(&id))
     }
 }
 
@@ -288,10 +290,12 @@ impl TokensAccountingStorageRead for ChainstateHandle {
         &self,
         id: &TokenId,
     ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_token_data(&id))
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_token_circulating_supply(&id))
     }
 }

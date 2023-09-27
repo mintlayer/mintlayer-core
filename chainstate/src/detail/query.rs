@@ -355,4 +355,18 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         self.chainstate_ref.get_block_id_tree_as_list()
     }
+
+    pub fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, PropertyQueryError> {
+        self.chainstate_ref.get_token_data(id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_token_circulating_supply(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<Amount>, PropertyQueryError> {
+        self.chainstate_ref.get_circulating_supply(id).map_err(PropertyQueryError::from)
+    }
 }

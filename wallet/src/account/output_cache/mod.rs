@@ -236,7 +236,11 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
-                TxOutput::Tokens(_) => todo!(),
+                TxOutput::Tokens(_) => {
+                    // TODO: add support for tokens v1
+                    // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                    unimplemented!()
+                }
             };
         }
         Ok(())
@@ -278,7 +282,11 @@ impl OutputCache {
                                     )?;
                                 }
                             }
-                            AccountSpending::TokenSupply(_, _) => todo!(),
+                            AccountSpending::TokenSupply(_, _) => {
+                                // TODO: add support for tokens v1
+                                // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                                unimplemented!()
+                            }
                         }
                     }
                 }
@@ -335,7 +343,11 @@ impl OutputCache {
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountSpending::TokenSupply(_, _) => todo!(),
+                        AccountSpending::TokenSupply(_, _) => {
+                            // TODO: add support for tokens v1
+                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                            unimplemented!()
+                        }
                     },
                 }
             }
@@ -501,7 +513,11 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountSpending::TokenSupply(_, _) => todo!(),
+                                        AccountSpending::TokenSupply(_, _) => {
+                                            // TODO: add support for tokens v1
+                                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                                            unimplemented!()
+                                        }
                                     },
                                 }
                             }

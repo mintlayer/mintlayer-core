@@ -170,6 +170,12 @@ pub trait ChainstateInterface: Send + Sync {
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError>;
+    fn get_token_circulating_supply(&self, id: &TokenId)
+        -> Result<Option<Amount>, ChainstateError>;
 
     /// Returns the coin amounts of the outpoints spent by a transaction.
     /// If a utxo for an input was not found or contains tokens the result is `None`.
