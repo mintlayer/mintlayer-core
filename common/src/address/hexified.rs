@@ -6,12 +6,12 @@ use regex::Regex;
 
 const REGEX_SUFFIX: &str = r#"\{0x([0-9a-fA-F]+)\}"#;
 
-pub struct HexifiedAddress<A> {
-    addressable: A,
+pub struct HexifiedAddress<'a, A> {
+    addressable: &'a A,
 }
 
-impl<A: Addressable + DecodeAll> HexifiedAddress<A> {
-    pub fn new(addressable: A) -> Self {
+impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
+    pub fn new(addressable: &'a A) -> Self {
         Self { addressable }
     }
 
@@ -33,7 +33,7 @@ impl<A: Addressable + DecodeAll> HexifiedAddress<A> {
     }
 }
 
-impl<A: Addressable> std::fmt::Display for HexifiedAddress<A> {
+impl<'a, A: Addressable> std::fmt::Display for HexifiedAddress<'a, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let result = format!(
             "{}{{0x{}}}",
@@ -140,7 +140,7 @@ mod tests {
 
         let chain_config = create_regtest();
 
-        let s = format!("{}", HexifiedAddress::new(address.clone()));
+        let s = format!("{}", HexifiedAddress::new(&address));
         let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
         assert_eq!(
             res,
@@ -199,7 +199,7 @@ mod tests {
             .iter()
             .zip(keys.iter())
             .map(|(s, k)| {
-                let hexified = HexifiedAddress::new(k.clone());
+                let hexified = HexifiedAddress::new(k);
                 s.clone() + &hexified.to_string()
             })
             .collect::<Vec<_>>()
@@ -251,7 +251,7 @@ mod tests {
     fn invalid_match_should_replace_with_hex_creating_case_address_creation_error() {
         let chain_config = create_regtest();
 
-        let s = format!("{}", HexifiedAddress::new(Destination::AnyoneCanSpend)); // AnyoneCanSpend cannot be converted to an address
+        let s = format!("{}", HexifiedAddress::new(&Destination::AnyoneCanSpend)); // AnyoneCanSpend cannot be converted to an address
 
         let re = HexifiedAddress::<Destination>::make_regex_object();
         assert!(re.is_match(&s));
