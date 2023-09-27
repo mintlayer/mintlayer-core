@@ -46,7 +46,10 @@ use mempool::{
 use mocks::{MockChainstateInterface, MockMempoolInterface};
 use rstest::rstest;
 use subsystem::{error::ResponseError, subsystem::CallRequest};
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{make_seedable_rng, Seed},
+};
 use tokio::{
     sync::{mpsc::unbounded_channel, oneshot},
     time::sleep,
@@ -620,7 +623,7 @@ mod produce_block {
         // Ensure we reset the global mock time on exit
         let _reset_time_destructor = OnceDestructor::new(time::reset);
 
-        let (manager, chain_config, chainstate, mempool, p2p) = {
+        let ((manager, chain_config, chainstate, mempool, p2p), time_value) = {
             let last_used_block_timestamp = TimeGetter::get_time(&TimeGetter::default());
 
             let genesis_block = Genesis::new(
@@ -637,7 +640,10 @@ mod produce_block {
                 .as_secs_since_epoch();
             let time_value = Arc::new(SeqCstAtomicU64::new(time_value_secs));
 
-            setup_blockprod_test(Some(override_chain_config), Some(time_value))
+            (
+                setup_blockprod_test(Some(override_chain_config), Some(time_value.clone())),
+                time_value,
+            )
         };
 
         let join_handle = tokio::spawn({
@@ -654,7 +660,7 @@ mod produce_block {
                     chainstate.clone(),
                     mempool,
                     p2p,
-                    Default::default(),
+                    mocked_time_getter_seconds(time_value),
                     prepare_thread_pool(1),
                 )
                 .expect("Error initializing blockprod");
@@ -665,8 +671,6 @@ mod produce_block {
                         TransactionsSource::Provided(vec![]),
                     )
                     .await;
-
-                result.as_ref().unwrap();
 
                 match result {
                     Err(BlockProductionError::TryAgainLater) => {}
