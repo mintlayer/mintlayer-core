@@ -42,6 +42,7 @@
 //!
 //! ```
 //! # use storage::{schema, Storage};
+//! use crate::storage::MakeMapRef;
 //! // Declare a schema. Schema specifies which indices are present,
 //! // name of each index and its kind. Indices are identified by types.
 //! // Here, we create just one index.

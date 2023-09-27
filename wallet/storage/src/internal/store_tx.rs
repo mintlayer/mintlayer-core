@@ -21,7 +21,7 @@ use common::{
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
-use storage::schema;
+use storage::{schema, MakeMapRef};
 use utils::{
     ensure,
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
