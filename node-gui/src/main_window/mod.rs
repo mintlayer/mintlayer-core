@@ -290,6 +290,13 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
+                TabsMessage::WalletMessage(_wallet_id, WalletMessage::StillSyncing),
+            )) => {
+                self.show_info("The wallet is still syncing...".into());
+                Command::none()
+            }
+
             MainWindowMessage::MainWidgetMessage(main_widget_message) => self
                 .main_widget
                 .update(main_widget_message, backend_sender)

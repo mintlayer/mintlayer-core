@@ -28,6 +28,7 @@ pub fn view_stake(
     chain_config: &ChainConfig,
     account: &AccountInfo,
     stake_amount: &str,
+    still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
 
@@ -65,7 +66,7 @@ pub fn view_stake(
         row![
             Text::new(staking_status),
             iced::widget::button(Text::new(staking_button))
-                .on_press(WalletMessage::ToggleStaking(new_state))
+                .on_press(still_syncing.clone().unwrap_or(WalletMessage::ToggleStaking(new_state)))
         ]
     } else {
         row![]
@@ -78,7 +79,7 @@ pub fn view_stake(
                 .padding(15),
             iced::widget::button(Text::new("Create staking pool"))
                 .padding(15)
-                .on_press(WalletMessage::CreateStakingPool)
+                .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool))
         ],
         staking_enabled_row.spacing(10).align_items(Alignment::Center),
         iced::widget::horizontal_rule(10),

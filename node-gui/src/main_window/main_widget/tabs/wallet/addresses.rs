@@ -23,7 +23,10 @@ use crate::backend::messages::AccountInfo;
 
 use super::WalletMessage;
 
-pub fn view_addresses(account: &AccountInfo) -> Element<'static, WalletMessage> {
+pub fn view_addresses(
+    account: &AccountInfo,
+    still_syncing: Option<WalletMessage>,
+) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
     let mut addresses = Grid::with_columns(3);
     for (index, address) in account.addresses.iter() {
@@ -40,7 +43,8 @@ pub fn view_addresses(account: &AccountInfo) -> Element<'static, WalletMessage> 
     }
     column![
         addresses,
-        iced::widget::button(Text::new("New address")).on_press(WalletMessage::GetNewAddress)
+        iced::widget::button(Text::new("New address"))
+            .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress),)
     ]
     .into()
 }
