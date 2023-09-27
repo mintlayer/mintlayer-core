@@ -20,6 +20,7 @@ use crate::{
 };
 use script::Script;
 use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
+use variant_count::VariantCount;
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -28,7 +29,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -65,6 +66,10 @@ impl Addressable for Destination {
     {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedDestination"
     }
 }
 

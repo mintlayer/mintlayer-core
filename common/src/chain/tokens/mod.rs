@@ -55,6 +55,10 @@ impl Addressable for TokenId {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
     }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedTokenId"
+    }
 }
 
 mod nft;

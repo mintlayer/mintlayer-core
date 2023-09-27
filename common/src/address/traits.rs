@@ -29,4 +29,7 @@ pub trait Addressable {
     ) -> Result<Self, Self::Error>
     where
         Self: Sized;
+
+    /// Returns the prefix to be used for json conversions that cannot be done with a ChainConfig
+    fn json_wrapper_prefix() -> &'static str;
 }

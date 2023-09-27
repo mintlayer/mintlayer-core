@@ -29,6 +29,9 @@ ref-cast.workspace = true
 serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 thiserror.workspace = true
+variant_count.workspace = true
+
+regex = "1.9"
 
 [dev-dependencies]
 test-utils = {path = '../test-utils'}

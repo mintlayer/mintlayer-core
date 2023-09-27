@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+pub mod hexified;
+pub mod pubkeyhash;
+pub mod traits;
 
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error};
-pub mod pubkeyhash;
-pub mod traits;
+use std::fmt::Display;
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 use self::traits::Addressable;
