@@ -44,12 +44,12 @@ async fn main() {
     let chain_config = Arc::new(create_unit_test_config());
 
     let storage = TransactionalApiServerPostgresStorage::new(
-        &args.postgres_host,
-        args.postgres_port,
-        &args.postgres_user,
-        args.postgres_password.as_deref(),
-        args.postgres_database.as_deref(),
-        args.postgres_max_connections,
+        &args.postgres_config.postgres_host,
+        args.postgres_config.postgres_port,
+        &args.postgres_config.postgres_user,
+        args.postgres_config.postgres_password.as_deref(),
+        args.postgres_config.postgres_database.as_deref(),
+        args.postgres_config.postgres_max_connections,
         &chain_config,
     )
     .await

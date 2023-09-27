@@ -124,12 +124,7 @@ async fn main() -> Result<(), ApiServerScannerError> {
         rpc_cookie_file,
         rpc_username,
         rpc_password,
-        postgres_host,
-        postgres_port,
-        postgres_user,
-        postgres_password,
-        postgres_database,
-        postgres_max_connections,
+        postgres_config,
     } = args;
 
     let chain_type: ChainType = network.into();
@@ -161,12 +156,12 @@ async fn main() -> Result<(), ApiServerScannerError> {
         .map_err(ApiServerScannerError::RpcError)?;
 
     let storage = make_postgres_storage(
-        postgres_host,
-        postgres_port,
-        postgres_user,
-        postgres_password,
-        postgres_database,
-        postgres_max_connections,
+        postgres_config.postgres_host,
+        postgres_config.postgres_port,
+        postgres_config.postgres_user,
+        postgres_config.postgres_password,
+        postgres_config.postgres_database,
+        postgres_config.postgres_max_connections,
         &chain_config,
     )
     .await?;
