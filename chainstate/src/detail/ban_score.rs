@@ -282,6 +282,8 @@ impl BanScore for TokensError {
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
+            TokensError::UnsupportedTokenIssuanceVersion(_, _) => 100,
+            TokensError::DeprecatedTokenIssuanceVersion(_, _) => 100,
         }
     }
 }
@@ -514,21 +516,21 @@ impl BanScore for IOPolicyError {
 impl BanScore for tokens_accounting::Error {
     fn ban_score(&self) -> u32 {
         match self {
-            tokens_accounting::Error::StorageError(_) => todo!(),
-            tokens_accounting::Error::AccountingError(_) => todo!(),
-            tokens_accounting::Error::TokenAlreadyExist(_) => todo!(),
-            tokens_accounting::Error::TokenDataNotFound(_) => todo!(),
-            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => todo!(),
-            tokens_accounting::Error::CirculatingSupplyNotFound(_) => todo!(),
-            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => todo!(),
-            tokens_accounting::Error::AmountOverflow => todo!(),
-            tokens_accounting::Error::CannotMintFromLockedSupply(_) => todo!(),
-            tokens_accounting::Error::CannotRedeemFromLockedSupply(_) => todo!(),
-            tokens_accounting::Error::NotEnoughCirculatingSupplyToRedeem(_, _, _) => todo!(),
-            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => todo!(),
-            tokens_accounting::Error::CannotLockNotLockableSupply(_) => todo!(),
-            tokens_accounting::Error::ViewFail => todo!(),
-            tokens_accounting::Error::StorageWrite => todo!(),
+            tokens_accounting::Error::StorageError(_) => 0,
+            tokens_accounting::Error::AccountingError(_) => 100,
+            tokens_accounting::Error::TokenAlreadyExist(_) => 100,
+            tokens_accounting::Error::TokenDataNotFound(_) => 100,
+            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 100,
+            tokens_accounting::Error::CirculatingSupplyNotFound(_) => 100,
+            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => 100,
+            tokens_accounting::Error::AmountOverflow => 100,
+            tokens_accounting::Error::CannotMintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::CannotRedeemFromLockedSupply(_) => 100,
+            tokens_accounting::Error::NotEnoughCirculatingSupplyToRedeem(_, _, _) => 100,
+            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 100,
+            tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
+            tokens_accounting::Error::ViewFail => 0,
+            tokens_accounting::Error::StorageWrite => 0,
         }
     }
 }

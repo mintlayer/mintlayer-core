@@ -29,7 +29,24 @@ use super::*;
 
 use crate::error::SpendStakeError;
 
-// FIXME: cover new TxOutput::Tokens
+#[allow(dead_code)]
+fn update_tests_below_if_new_outputs_were_added(output: TxOutput) {
+    match output {
+        TxOutput::Transfer(_, _) => unimplemented!(),
+        TxOutput::LockThenTransfer(_, _, _) => unimplemented!(),
+        TxOutput::Burn(_) => unimplemented!(),
+        TxOutput::CreateStakePool(_, _) => unimplemented!(),
+        TxOutput::ProduceBlockFromStake(_, _) => unimplemented!(),
+        TxOutput::CreateDelegationId(_, _) => unimplemented!(),
+        TxOutput::DelegateStaking(_, _) => unimplemented!(),
+        TxOutput::Tokens(token) => match token {
+            TokenOutput::IssueFungibleToken(_) => unimplemented!(),
+            TokenOutput::MintTokens(_, _, _) => unimplemented!(),
+            TokenOutput::RedeemTokens(_, _) => unimplemented!(),
+            TokenOutput::LockCirculatingSupply(_) => unimplemented!(),
+        },
+    }
+}
 
 #[rstest]
 #[trace]
@@ -108,7 +125,8 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let number_of_outputs = rng.gen_range(1..10);
 
     // valid cases
-    let valid_inputs = [lock_then_transfer(), transfer(), stake_pool(), produce_block()];
+    let valid_inputs =
+        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), mint_tokens()];
     let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
@@ -131,10 +149,18 @@ fn tx_many_to_many_invalid(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = [lock_then_transfer(), transfer(), stake_pool(), produce_block()];
+    let valid_inputs =
+        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), mint_tokens()];
     let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
-    let invalid_inputs = [burn(), delegate_staking(), create_delegation()];
+    let invalid_inputs = [
+        burn(),
+        delegate_staking(),
+        create_delegation(),
+        issue_tokens(),
+        redeem_tokens(),
+        lock_tokens_supply(),
+    ];
 
     let input_utxos = {
         let mut outputs =
@@ -353,6 +379,10 @@ fn reward_none_to_any(#[case] seed: Seed) {
             produce_block(),
             create_delegation(),
             delegate_staking(),
+            mint_tokens(),
+            redeem_tokens(),
+            issue_tokens(),
+            lock_tokens_supply(),
         ];
 
         let number_of_outputs = rng.gen_range(1..10);
@@ -390,6 +420,10 @@ fn reward_many_to_none(#[case] seed: Seed) {
         produce_block(),
         create_delegation(),
         delegate_staking(),
+        issue_tokens(),
+        mint_tokens(),
+        redeem_tokens(),
+        lock_tokens_supply(),
     ];
 
     let number_of_outputs = rng.gen_range(2..10);
