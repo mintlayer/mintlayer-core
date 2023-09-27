@@ -3726,6 +3726,7 @@ dependencies = [
  "p2p-types",
  "pos_accounting",
  "subsystem",
+ "tokens-accounting",
  "tokio",
  "utils",
  "utxo",

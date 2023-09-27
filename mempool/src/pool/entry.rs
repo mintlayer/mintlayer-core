@@ -15,7 +15,7 @@
 
 use common::{
     chain::{
-        AccountNonce, AccountSpending, DelegationId, SignedTransaction, Transaction, TxInput,
+        AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction, TxInput,
         UtxoOutPoint,
     },
     primitives::{Id, Idable},
@@ -27,16 +27,13 @@ use crate::tx_origin::IsOrigin;
 /// A dependency of a transaction on a previous account state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TxAccountDependency {
-    delegation_id: DelegationId,
+    account: AccountType,
     nonce: AccountNonce,
 }
 
 impl TxAccountDependency {
-    pub fn new(delegation_id: DelegationId, nonce: AccountNonce) -> Self {
-        TxAccountDependency {
-            delegation_id,
-            nonce,
-        }
+    pub fn new(account: AccountType, nonce: AccountNonce) -> Self {
+        TxAccountDependency { account, nonce }
     }
 }
 
@@ -44,6 +41,7 @@ impl TxAccountDependency {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxDependency {
     DelegationAccount(TxAccountDependency),
+    TokenSupplyAccount(TxAccountDependency),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
 }
@@ -58,10 +56,12 @@ impl TxDependency {
 
     fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
         match acct {
-            AccountSpending::Delegation(delegation_id, _) => {
-                Self::DelegationAccount(TxAccountDependency::new(*delegation_id, nonce))
+            AccountSpending::Delegation(_, _) => {
+                Self::DelegationAccount(TxAccountDependency::new((*acct).into(), nonce))
             }
-            AccountSpending::TokenSupply(_, _) => todo!(),
+            AccountSpending::TokenSupply(_, _) => {
+                Self::TokenSupplyAccount(TxAccountDependency::new((*acct).into(), nonce))
+            }
         }
     }
 

@@ -875,7 +875,7 @@ impl Account {
                 .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
             self.is_mine_or_watched(txo)
-                && get_utxo_type(txo).map(|v| utxo_types.contains(v)).unwrap_or(false)
+                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
         });
         all_outputs
     }
@@ -941,7 +941,11 @@ impl Account {
                 AccountSpending::Delegation(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
-                AccountSpending::TokenSupply(_, _) => todo!(),
+                AccountSpending::TokenSupply(_, _) => {
+                    // TODO: add support for tokens v1
+                    // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                    unimplemented!()
+                }
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
