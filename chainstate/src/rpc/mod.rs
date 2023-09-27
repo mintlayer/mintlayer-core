@@ -17,14 +17,19 @@
 
 mod types;
 
-use std::io::{Read, Write};
+use std::{
+    convert::Infallible,
+    io::{Read, Write},
+    sync::Arc,
+};
 
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
+    address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, PoolId, SignedTransaction, Transaction,
+        ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -168,7 +173,19 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await,
         )?;
         let rpc_blk = both.map(|(block, block_index)| RpcBlock::new(block, block_index));
-        Ok(rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string()))
+        let result = rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string());
+
+        let chain_config: Arc<ChainConfig> = rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = Arc::clone(this.get_chain_config());
+                Ok::<_, Infallible>(chain_config)
+            })
+            .await,
+        )?;
+
+        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
+
+        Ok(result)
     }
 
     async fn get_transaction(
@@ -184,7 +201,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let tx: Option<SignedTransaction> =
             rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
         let rpc_tx = tx.map(RpcSignedTransaction::new);
-        Ok(rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
+
+        let chain_config: Arc<ChainConfig> = rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = Arc::clone(this.get_chain_config());
+                Ok::<_, Infallible>(chain_config)
+            })
+            .await,
+        )?;
+
+        let result = rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string());
+
+        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
+
+        Ok(result)
     }
 
     async fn get_mainchain_blocks(
