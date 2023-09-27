@@ -28,6 +28,13 @@ pub struct ApiServerWebServerConfig {
     #[clap(long)]
     pub address: Option<ListenAddress>,
 
+    /// Postgres config values
+    #[clap(flatten)]
+    pub postgres_config: PostgresConfig,
+}
+
+#[derive(Parser, Debug)]
+pub struct PostgresConfig {
     /// Postgres host
     #[clap(long, default_value = "localhost")]
     pub postgres_host: String,
@@ -51,6 +58,12 @@ pub struct ApiServerWebServerConfig {
     /// Postgres max connections
     #[clap(long, default_value = "10")]
     pub postgres_max_connections: u32,
+}
+
+impl Default for PostgresConfig {
+    fn default() -> Self {
+        Self::parse()
+    }
 }
 
 #[derive(Clone, Debug, Parser)]

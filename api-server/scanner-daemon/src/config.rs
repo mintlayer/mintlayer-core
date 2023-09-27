@@ -47,6 +47,13 @@ pub struct ApiServerScannerArgs {
     #[clap(long)]
     pub rpc_password: Option<String>,
 
+    /// Postgres config values
+    #[clap(flatten)]
+    pub postgres_config: PostgresConfig,
+}
+
+#[derive(Parser, Debug)]
+pub struct PostgresConfig {
     /// Postgres host
     #[clap(long, default_value = "localhost")]
     pub postgres_host: String,
@@ -70,6 +77,12 @@ pub struct ApiServerScannerArgs {
     /// Postgres max connections
     #[clap(long, default_value = "10")]
     pub postgres_max_connections: u32,
+}
+
+impl Default for PostgresConfig {
+    fn default() -> Self {
+        Self::parse()
+    }
 }
 
 impl From<Network> for ChainType {
