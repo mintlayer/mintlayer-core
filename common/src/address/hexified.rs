@@ -1,10 +1,25 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::chain::ChainConfig;
 
 use super::{traits::Addressable, Address};
-use parity_scale_codec::DecodeAll;
 use regex::Regex;
+use serialization::DecodeAll;
 
-const REGEX_SUFFIX: &str = r#"\{0x([0-9a-fA-F]+)\}"#;
+const REGEX_SUFFIX: &str = r"\{0x([0-9a-fA-F]+)\}";
 
 pub struct HexifiedAddress<'a, A> {
     addressable: &'a A,
@@ -70,7 +85,7 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
                 );
                 // replace with hex value
                 dst.push_str("0x");
-                dst.push_str(&hex_data);
+                dst.push_str(hex_data);
                 return;
             }
         };
@@ -83,7 +98,7 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
                 );
                 // replace with hex value
                 dst.push_str("0x");
-                dst.push_str(&hex_data);
+                dst.push_str(hex_data);
                 return;
             }
         };
@@ -96,7 +111,7 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
                 );
                 // replace with hex value
                 dst.push_str("0x");
-                dst.push_str(&hex_data);
+                dst.push_str(hex_data);
                 return;
             }
         };
@@ -110,8 +125,8 @@ mod tests {
         key::{KeyKind, PrivateKey},
         random,
     };
-    use parity_scale_codec::Encode;
     use rstest::rstest;
+    use serialization::Encode;
     use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     use crate::{
@@ -153,7 +168,7 @@ mod tests {
         let chain_config = create_regtest();
 
         let s = "some-random-stuff";
-        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
+        let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, s);
         assert_eq!(res, s)
     }
 
