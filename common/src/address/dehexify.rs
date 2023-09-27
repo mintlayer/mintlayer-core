@@ -26,3 +26,5 @@ pub fn dehexify_all_addresses(conf: &ChainConfig, input: &str) -> String {
 
     result
 }
+
+// TODO: add tests that create blocks, and ensure the replacement in json works properly.
