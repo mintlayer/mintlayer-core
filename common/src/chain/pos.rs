@@ -64,7 +64,13 @@ pub struct PoSChainConfig {
 
 impl serde::Serialize for PoolId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PoolId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 
@@ -118,7 +124,13 @@ impl Addressable for DelegationId {
 
 impl serde::Serialize for DelegationId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DelegationId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 

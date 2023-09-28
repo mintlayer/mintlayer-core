@@ -150,6 +150,12 @@ impl serde::Serialize for Id<Transaction> {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for Id<Transaction> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::serde_deserialize(d)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

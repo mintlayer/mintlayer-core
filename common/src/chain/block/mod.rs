@@ -224,6 +224,12 @@ impl serde::Serialize for Id<Block> {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for Id<Block> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::serde_deserialize(d)
+    }
+}
+
 impl Eq for WithId<Block> {}
 
 #[cfg(test)]

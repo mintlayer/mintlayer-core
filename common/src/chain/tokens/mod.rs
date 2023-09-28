@@ -63,7 +63,13 @@ impl Addressable for TokenId {
 
 impl serde::Serialize for TokenId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&HexifiedAddress::new(self).to_string())
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TokenId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 

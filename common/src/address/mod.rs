@@ -83,6 +83,17 @@ impl<T: Addressable> Address<T> {
         Ok(result)
     }
 
+    /// Decode an address without verifying the hrp
+    /// This is used only for the case of json deserialization, which is done as a compromise as the alternative
+    /// would be to not serialize at all. This is because chain config cannot be passed to the json serializer/deserializer.
+    fn from_str_no_hrp_verify(address: impl AsRef<str>) -> Result<T, AddressError> {
+        let data = encoding::decode(address)?;
+        let raw_data = data.data();
+        let result = T::decode_from_bytes_from_address(raw_data)
+            .map_err(|e| AddressError::DecodingError(e.to_string()))?;
+        Ok(result)
+    }
+
     pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
         let address = Self {
             address: address.to_owned(),

@@ -82,6 +82,12 @@ impl serde::Serialize for Id<GenBlock> {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for Id<GenBlock> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::serde_deserialize(d)
+    }
+}
+
 impl Id<GenBlock> {
     /// Figure out if this [Id] refers to a [Genesis] or a proper [Block].
     pub fn classify(&self, c: &crate::chain::config::ChainConfig) -> GenBlockId {

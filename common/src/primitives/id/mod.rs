@@ -94,12 +94,10 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(PartialEq, Eq, Encode, Decode, serde::Deserialize, RefCast)]
+#[derive(PartialEq, Eq, Encode, Decode, RefCast)]
 #[repr(transparent)]
-#[serde(transparent)]
 pub struct Id<T> {
     hash: H256,
-    #[serde(skip)]
     _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -163,11 +161,21 @@ impl<T> Id<T> {
     pub fn serde_serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         <H256 as serde::Serialize>::serialize(&self.hash, s)
     }
+
+    pub fn serde_deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        <H256 as serde::Deserialize<'de>>::deserialize(d).map(Self::new)
+    }
 }
 
 impl serde::Serialize for Id<()> {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         self.serde_serialize(s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Id<()> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::serde_deserialize(d)
     }
 }
 

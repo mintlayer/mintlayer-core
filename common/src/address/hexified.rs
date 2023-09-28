@@ -17,10 +17,14 @@ use crate::chain::ChainConfig;
 
 use super::{traits::Addressable, Address};
 use regex::Regex;
+use serde::{de::Error, Deserialize};
 use serialization::DecodeAll;
 
 const REGEX_SUFFIX: &str = r"\{0x([0-9a-fA-F]+)\}";
 
+/// A hexified address is an address that's formatted in such a way that it can be safely replaced with a real address using the object Address<A>.
+/// This whole thing is a workaround due to the fact that serde doesn't support stateful serialization, so the ChainConfig cannot be passed while
+/// serializing.
 pub struct HexifiedAddress<'a, A> {
     addressable: &'a A,
 }
@@ -38,6 +42,18 @@ impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
         Regex::new(&Self::make_regex_pattern()).expect("Regex pattern cannot fail")
     }
 
+    pub fn is_hexified_address(target_str: &str) -> bool {
+        let matcher = Self::make_regex_object();
+        matcher.is_match(target_str)
+    }
+
+    pub fn extract_hexified_address(target_str: impl AsRef<str>) -> Option<String> {
+        let matcher = Self::make_regex_object();
+        let caps = matcher.captures(target_str.as_ref())?;
+        let hex_data = caps.get(1)?.as_str();
+        Some(hex_data.to_string())
+    }
+
     #[must_use]
     pub fn replace_with_address(chain_config: &ChainConfig, target_str: &str) -> String {
         let matcher = Self::make_regex_object();
@@ -45,6 +61,65 @@ impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
         let result = matcher.replace_all(target_str, replacer);
 
         result.to_string()
+    }
+
+    /// Deserialize a hex string with proper error reporting
+    fn serde_hex_deserialize<'de, D>(
+        hex_string: impl AsRef<str> + std::fmt::Display,
+    ) -> Result<A, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let hex_string = if hex_string.as_ref().starts_with("0x") {
+            // Get rid of the 0x prefix
+            hex_string.as_ref().trim_start_matches("0x")
+        } else {
+            hex_string.as_ref()
+        };
+
+        let bytes = hex::decode(hex_string).map_err(|e| {
+                D::Error::custom(format!(
+                "Failed to decode hex to bytes for address from string {hex_string} with hexified json prefix {} with error {e}",
+                A::json_wrapper_prefix()
+            ))
+            })?;
+        let obj = A::decode_all(&mut &*bytes).map_err(|e| {
+                D::Error::custom(format!(
+                "Failed to decode bytes to object for address from string {hex_string} with hexified json prefix {} with error {e}",
+                A::json_wrapper_prefix()
+            ))
+            })?;
+
+        Ok(obj)
+    }
+
+    pub fn serde_serialize<S>(addressable: &'a A, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&Self::new(addressable).to_string())
+    }
+
+    pub fn serde_deserialize<'de, D>(deserializer: D) -> Result<A, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if Self::is_hexified_address(&s) {
+            // If the object is hexified and isn't an address, we de-hexify it
+
+            let hex_string =
+                Self::extract_hexified_address(&s).ok_or(D::Error::custom(format!(
+                "Failed to extract hexified address from string {s} with hexified json prefix {}",
+                A::json_wrapper_prefix()
+            )))?;
+
+            Self::serde_hex_deserialize::<D>(&hex_string)
+        } else if s.starts_with("0x") {
+            Self::serde_hex_deserialize::<D>(&s)
+        } else {
+            Address::<A>::from_str_no_hrp_verify(&s).map_err(D::Error::custom)
+        }
     }
 }
 
@@ -277,5 +352,59 @@ mod tests {
             "0x".to_string()
                 + &hex::ToHex::encode_hex::<String>(&Destination::AnyoneCanSpend.encode())
         );
+    }
+
+    #[test]
+    fn serde_serialize_something_that_cannot_go_to_address() {
+        let chain_config = create_regtest();
+
+        // AnyoneCanSpend is too short to go to an address
+        let obj = Destination::AnyoneCanSpend;
+        let obj_json = serde_json::to_string(&obj).unwrap();
+
+        {
+            assert_eq!(obj_json, "\"HexifiedDestination{0x00}\"");
+            let obj_deserialized: Destination = serde_json::from_str(&obj_json).unwrap();
+            assert_eq!(obj_deserialized, obj);
+        }
+
+        {
+            // Do the replacement, which will make it a hex starting with 0x, and deserialization will still succeed
+            let obj_json_replaced =
+                HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
+            assert_eq!(obj_json_replaced, "\"0x00\"");
+            let obj_deserialized: Destination = serde_json::from_str(&obj_json_replaced).unwrap();
+            assert_eq!(obj_deserialized, obj);
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn serde_serialize_something_that_can_be_an_address(#[case] seed: Seed) {
+        let chain_config = create_regtest();
+
+        let mut rng = make_seedable_rng(seed);
+        let (_private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let obj = Destination::PublicKey(public_key);
+        let obj_json = serde_json::to_string(&obj).unwrap();
+
+        {
+            let obj_hex: String = hex::ToHex::encode_hex(&obj.encode());
+            assert_eq!(obj_json, format!("\"HexifiedDestination{{0x{obj_hex}}}\""));
+            let obj_deserialized: Destination = serde_json::from_str(&obj_json).unwrap();
+            assert_eq!(obj_deserialized, obj);
+        }
+
+        {
+            // Do the replacement, which will make the hexified address become a real address
+            let expected_address = Address::new(&chain_config, &obj).unwrap();
+            let obj_json_replaced =
+                HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
+            assert_eq!(obj_json_replaced, format!("\"{expected_address}\""));
+            let obj_deserialized: Destination = serde_json::from_str(&obj_json_replaced).unwrap();
+            assert_eq!(obj_deserialized, obj);
+        }
     }
 }
