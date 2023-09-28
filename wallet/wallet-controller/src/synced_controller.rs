@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuanceV0},
+        tokens::{Metadata, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -108,23 +108,24 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         address: Address<Destination>,
         token_ticker: Vec<u8>,
-        amount_to_issue: Amount,
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
+        token_total_supply: TokenTotalSupply,
     ) -> Result<TokenId, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
+        let destination = address.decode_object(self.chain_config.as_ref())?;
         let (token_id, tx) = self
             .wallet
             .issue_new_token(
                 self.account_index,
-                address,
-                TokenIssuanceV0 {
+                TokenIssuance::V1(TokenIssuanceV1 {
                     token_ticker,
-                    amount_to_issue,
                     number_of_decimals,
                     metadata_uri,
-                },
+                    total_supply: token_total_supply,
+                    reissuance_controller: destination,
+                }),
                 current_fee_rate,
                 consolidate_fee_rate,
             )

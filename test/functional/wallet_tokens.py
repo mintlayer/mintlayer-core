@@ -145,28 +145,32 @@ class WalletTokens(BitcoinTestFramework):
             self.generate_block()
             assert "Success" in await wallet.sync()
 
-            assert f"{token_id} amount: 10000" in await wallet.get_balance()
+            # TODO: add support for tokens v1
+            # Hint with tokens v1 they have to be minted before any could be sent
+            # See https://github.com/mintlayer/mintlayer-core/issues/1237
 
-            # create a new account and send some tokens to it
-            await wallet.create_new_account()
-            await wallet.select_account(1)
-            address = await wallet.new_address()
+            #assert f"{token_id} amount: 10000" in await wallet.get_balance()
 
-            await wallet.select_account(0)
-            output = await wallet.send_tokens_to_address(token_id, address, 10.01)
-            assert "The transaction was submitted successfully" in output
+            ## create a new account and send some tokens to it
+            #await wallet.create_new_account()
+            #await wallet.select_account(1)
+            #address = await wallet.new_address()
 
-            self.generate_block()
-            assert "Success" in await wallet.sync()
+            #await wallet.select_account(0)
+            #output = await wallet.send_tokens_to_address(token_id, address, 10.01)
+            #assert "The transaction was submitted successfully" in output
 
-            # check the new balance
-            assert f"{token_id} amount: 9989.99" in await wallet.get_balance()
+            #self.generate_block()
+            #assert "Success" in await wallet.sync()
 
-            # try to issue a new token, should fail with not enough coins
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
-            assert token_id is None
-            assert err is not None
-            assert "Not enough funds" in err
+            ## check the new balance
+            #assert f"{token_id} amount: 9989.99" in await wallet.get_balance()
+
+            ## try to issue a new token, should fail with not enough coins
+            #token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+            #assert token_id is None
+            #assert err is not None
+            #assert "Not enough funds" in err
 
 if __name__ == '__main__':
     WalletTokens().main()
