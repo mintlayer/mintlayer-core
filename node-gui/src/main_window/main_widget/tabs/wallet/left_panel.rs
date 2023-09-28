@@ -103,13 +103,17 @@ pub fn view_left_panel(
             node_state.chain_info.best_block_height.into_int()
         );
         column![
-            text(scan_progress_str).horizontal_alignment(iced::alignment::Horizontal::Center),
-            progress_bar(0.0..=100.0, scan_progress)
+            text(scan_progress_str)
+                .horizontal_alignment(iced::alignment::Horizontal::Center)
+                .width(Length::Fill)
+                .height(Length::Shrink),
+            progress_bar(0.0..=100.0, scan_progress).width(Length::Fill),
         ]
         .padding(10)
         .spacing(10)
-        .align_items(Alignment::Center)
+        .align_items(Alignment::End)
         .width(Length::Fill)
+        .height(Length::Shrink)
     } else {
         Column::new()
     };
@@ -134,9 +138,10 @@ pub fn view_left_panel(
             panel_button("Addresses", SelectedPanel::Addresses, selected_panel),
             panel_button("Send", SelectedPanel::Send, selected_panel),
             panel_button("Staking", SelectedPanel::Staking, selected_panel),
-        ]
-        .height(Length::Fill),
+        ],
+        Column::new().height(Length::Fill),
         scan_progress_widget,
     ]
+    .height(Length::Fill)
     .into()
 }

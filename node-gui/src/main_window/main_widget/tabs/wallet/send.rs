@@ -20,7 +20,11 @@ use iced::{
 
 use super::WalletMessage;
 
-pub fn view_send(send_address: &str, send_amount: &str) -> Element<'static, WalletMessage> {
+pub fn view_send(
+    send_address: &str,
+    send_amount: &str,
+    still_syncing: Option<WalletMessage>,
+) -> Element<'static, WalletMessage> {
     column![
         text_input("Address", send_address)
             .on_input(|value| { WalletMessage::SendAddressEdit(value) })
@@ -28,7 +32,8 @@ pub fn view_send(send_address: &str, send_amount: &str) -> Element<'static, Wall
         text_input("Amount", send_amount)
             .on_input(|value| { WalletMessage::SendAmountEdit(value) })
             .padding(15),
-        iced::widget::button(Text::new("Send")).on_press(WalletMessage::Send)
+        iced::widget::button(Text::new("Send"))
+            .on_press(still_syncing.unwrap_or(WalletMessage::Send))
     ]
     .spacing(10)
     .into()

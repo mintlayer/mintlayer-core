@@ -290,6 +290,13 @@ impl MainWindow {
                 Command::none()
             }
 
+            MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
+                TabsMessage::WalletMessage(_wallet_id, WalletMessage::StillSyncing),
+            )) => {
+                self.show_info("The wallet is still syncing...".into());
+                Command::none()
+            }
+
             MainWindowMessage::MainWidgetMessage(main_widget_message) => self
                 .main_widget
                 .update(main_widget_message, backend_sender)
@@ -357,6 +364,7 @@ impl MainWindow {
                     Command::none()
                 }
                 BackendEvent::UpdateEncryption(Err(err)) => {
+                    self.active_dialog = ActiveDialog::None;
                     self.show_error(err.to_string());
                     Command::none()
                 }
@@ -601,82 +609,92 @@ impl MainWindow {
 
     pub fn view(&self) -> Element<MainWindowMessage> {
         let main_content = iced::widget::column![
-            iced::widget::row!(self.main_menu.view().map(MainWindowMessage::MenuMessage)),
-            iced::widget::row!(self
-                .main_widget
+            self.main_menu.view().map(MainWindowMessage::MenuMessage),
+            self.main_widget
                 .view(&self.node_state)
-                .map(MainWindowMessage::MainWidgetMessage))
+                .map(MainWindowMessage::MainWidgetMessage),
+            // TODO: workaround for the tabview component not accounting for the tab labels height
+            iced::widget::Column::new().height(70),
         ];
 
         let show_dialog = self.active_dialog != ActiveDialog::None;
-        let dialog_cb = move || match &self.active_dialog {
-            ActiveDialog::None => Text::new("Nothing to show").into(),
+        let dialog = show_dialog.then(move || -> Element<MainWindowMessage> {
+            match &self.active_dialog {
+                ActiveDialog::None => Text::new("Nothing to show").into(),
 
-            ActiveDialog::WalletCreate { generated_mnemonic } => wallet_mnemonic_dialog(
-                Some(generated_mnemonic.clone()),
-                Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
-                Box::new(|| MainWindowMessage::CloseDialog),
-            )
-            .into(),
+                ActiveDialog::WalletCreate { generated_mnemonic } => wallet_mnemonic_dialog(
+                    Some(generated_mnemonic.clone()),
+                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
+                    Box::new(|| MainWindowMessage::CloseDialog),
+                )
+                .into(),
 
-            ActiveDialog::WalletImport => wallet_mnemonic_dialog(
-                None,
-                Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
-                Box::new(|| MainWindowMessage::CloseDialog),
-            )
-            .into(),
+                ActiveDialog::WalletImport => wallet_mnemonic_dialog(
+                    None,
+                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic { mnemonic }),
+                    Box::new(|| MainWindowMessage::CloseDialog),
+                )
+                .into(),
 
-            ActiveDialog::WalletSetPassword { wallet_id } => {
-                let wallet_id = *wallet_id;
-                wallet_set_password_dialog(
-                    Box::new(
-                        move |password1, password2| MainWindowMessage::WalletSetPassword {
+                ActiveDialog::WalletSetPassword { wallet_id } => {
+                    let wallet_id = *wallet_id;
+                    wallet_set_password_dialog(
+                        Box::new(move |password1, password2| {
+                            MainWindowMessage::WalletSetPassword {
+                                wallet_id,
+                                password1,
+                                password2,
+                            }
+                        }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
+
+                ActiveDialog::WalletUnlock { wallet_id } => {
+                    let wallet_id = *wallet_id;
+                    wallet_unlock_dialog(
+                        Box::new(move |password| MainWindowMessage::WalletUnlock {
                             wallet_id,
-                            password1,
-                            password2,
-                        },
-                    ),
-                    Box::new(|| MainWindowMessage::CloseDialog),
-                )
-                .into()
-            }
+                            password,
+                        }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
 
-            ActiveDialog::WalletUnlock { wallet_id } => {
-                let wallet_id = *wallet_id;
-                wallet_unlock_dialog(
-                    Box::new(move |password| MainWindowMessage::WalletUnlock {
-                        wallet_id,
-                        password,
-                    }),
-                    Box::new(|| MainWindowMessage::CloseDialog),
-                )
-                .into()
+                ActiveDialog::NewAccount { wallet_id } => {
+                    let wallet_id = *wallet_id;
+                    new_wallet_account(
+                        Box::new(move |name| MainWindowMessage::NewWalletAccount {
+                            wallet_id,
+                            name,
+                        }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
             }
-
-            ActiveDialog::NewAccount { wallet_id } => {
-                let wallet_id = *wallet_id;
-                new_wallet_account(
-                    Box::new(move |name| MainWindowMessage::NewWalletAccount { wallet_id, name }),
-                    Box::new(|| MainWindowMessage::CloseDialog),
-                )
-                .into()
-            }
-        };
+        });
 
         // Always return Modal or iced will panic with "Downcast on stateless state" error
 
         let content_with_dialog =
-            Modal::new(show_dialog, main_content, dialog_cb).on_esc(MainWindowMessage::CloseDialog);
+            Modal::new(main_content, dialog).on_esc(MainWindowMessage::CloseDialog);
 
         let popup_opt = self.popups.last();
         let show_popup = popup_opt.is_some() || self.file_dialog_active;
-        let popup_cb = move || match (self.file_dialog_active, popup_opt) {
-            (true, _) => Text::new("File dialog...").into(),
-            (_, Some(popup)) => popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into(),
-            (_, None) => Text::new("Nothing to show").into(),
-        };
+        let popup = show_popup.then(move || -> Element<MainWindowMessage> {
+            match (self.file_dialog_active, popup_opt) {
+                (true, _) => Text::new("File dialog...").into(),
+                (_, Some(popup)) => {
+                    popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into()
+                }
+                (_, None) => Text::new("Nothing to show").into(),
+            }
+        });
 
-        let popup_modal = Modal::new(show_popup, content_with_dialog, popup_cb);
+        let popup_modal = Modal::new(content_with_dialog, popup);
         if self.file_dialog_active {
             popup_modal.into()
         } else {

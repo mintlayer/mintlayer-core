@@ -15,11 +15,10 @@
 
 use iced::{
     alignment::Horizontal,
-    widget::{container, text_input, Button, Text},
+    widget::{self, container, text, text_input, Button, Component, Text},
     Element, Length,
 };
 use iced_aw::Card;
-use iced_lazy::{self, Component};
 
 pub struct WalletMnemonicDialog<Message> {
     generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
@@ -42,6 +41,7 @@ pub fn wallet_mnemonic_dialog<Message>(
 #[derive(Default)]
 pub struct ImportState {
     entered_mnemonic: String,
+    importing: bool,
 }
 
 #[derive(Clone)]
@@ -65,6 +65,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletMnemonicDialog<Messag
                 None
             }
             ImportEvent::Ok => {
+                state.importing = true;
                 let mnemonic = match &self.generated_mnemonic_opt {
                     Some(generated_mnemonic) => generated_mnemonic.to_string(),
                     None => state.entered_mnemonic.clone(),
@@ -90,13 +91,21 @@ impl<Message> Component<Message, iced::Renderer> for WalletMnemonicDialog<Messag
             button
         };
 
-        Card::new(
-            Text::new(action_text),
-            iced::widget::column![text_input("Mnemonic", &mnemonic)
-                .on_input(ImportEvent::EditMnemonic)
-                .padding(15)],
-        )
-        .foot(container(button).width(Length::Fill).center_x())
+        if state.importing {
+            Card::new(
+                Text::new(action_text),
+                iced::widget::column![text_input("Mnemonic", &mnemonic).padding(15)],
+            )
+            .foot(container(text("Loading...")).width(Length::Fill).center_x())
+        } else {
+            Card::new(
+                Text::new(action_text),
+                iced::widget::column![text_input("Mnemonic", &mnemonic)
+                    .on_input(ImportEvent::EditMnemonic)
+                    .padding(15)],
+            )
+            .foot(container(button).width(Length::Fill).center_x())
+        }
         .max_width(600.0)
         .on_close(ImportEvent::Cancel)
         .into()
@@ -108,6 +117,6 @@ where
     Message: 'a,
 {
     fn from(component: WalletMnemonicDialog<Message>) -> Self {
-        iced_lazy::component(component)
+        widget::component(component)
     }
 }
