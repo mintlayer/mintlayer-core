@@ -19,7 +19,7 @@ use crate::{
     },
     chain::{
         output_value::OutputValue,
-        tokens::{TokenId, TokenIssuanceVersioned},
+        tokens::{TokenId, TokenIssuance},
         ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
@@ -111,7 +111,8 @@ pub enum TxOutput {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenOutput {
     #[codec(index = 0)]
-    IssueFungibleToken(Box<TokenIssuanceVersioned>),
+    IssueFungibleToken(Box<TokenIssuance>),
+    // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 1)]
     MintTokens(TokenId, Amount, Destination),
     // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount

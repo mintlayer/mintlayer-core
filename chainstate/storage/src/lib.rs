@@ -164,7 +164,7 @@ pub trait BlockchainStorageWrite:
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> Result<()>;
 
-    // Set the block index
+    /// Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<()>;
 
     /// Add a new block into the database
@@ -211,14 +211,14 @@ pub trait BlockchainStorageWrite:
     /// Remove token id
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<()>;
 
-    // Set tokens accounting block undo data for specific block
+    /// Set tokens accounting undo data for specific block
     fn set_tokens_accounting_undo_data(
         &mut self,
         id: Id<Block>,
         undo: &tokens_accounting::BlockUndo,
     ) -> Result<()>;
 
-    // Remove tokens accounting block undo data for specific block
+    /// Remove tokens accounting undo data for specific block
     fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Set accounting block undo data for specific block

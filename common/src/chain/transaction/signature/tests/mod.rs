@@ -710,7 +710,7 @@ fn check_insert_output(
 fn add_value(output_value: OutputValue) -> OutputValue {
     match output_value {
         OutputValue::Coin(v) => OutputValue::Coin((v + Amount::from_atoms(100)).unwrap()),
-        OutputValue::Token(v) => OutputValue::Token(v),
+        OutputValue::TokenV0(v) => OutputValue::TokenV0(v),
         OutputValue::TokenV1(d, v) => {
             OutputValue::TokenV1(d, (v + Amount::from_atoms(100)).unwrap())
         }

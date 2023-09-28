@@ -29,7 +29,7 @@ pub use bip39::{Language, Mnemonic};
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuance};
+use common::chain::tokens::{token_id, Metadata, TokenId, TokenIssuanceV0};
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TransactionCreationError, TxOutput, UtxoOutPoint,
@@ -814,7 +814,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         address: Address<Destination>,
-        token_issuance: TokenIssuance,
+        token_issuance: TokenIssuanceV0,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(TokenId, SignedTransaction)> {

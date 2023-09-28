@@ -18,7 +18,7 @@ use self::check_utils::check_media_hash;
 use super::transaction_verifier::error::TokensError;
 use common::{
     chain::{
-        tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceVersioned},
+        tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceV0},
         Block, ChainConfig, Transaction,
     },
     primitives::{Amount, Id, Idable},
@@ -30,20 +30,6 @@ use utils::ensure;
 mod check_utils;
 pub use check_utils::is_rfc3986_valid_symbol;
 use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_uri_valid};
-
-pub fn check_positive_amount(
-    source_block_id: Id<Block>,
-    tx: &Transaction,
-    amount: &Amount,
-) -> Result<(), TokensError> {
-    // Check amount
-    ensure!(
-        amount > &Amount::ZERO,
-        TokensError::TransferZeroTokens(tx.get_id(), source_block_id)
-    );
-
-    Ok(())
-}
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
@@ -98,7 +84,7 @@ pub fn check_nft_issuance_data(
 
 pub fn check_tokens_issuance_data_v0(
     chain_config: &ChainConfig,
-    issuance_data: &TokenIssuance,
+    issuance_data: &TokenIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
     // Check token ticker
     check_token_ticker(chain_config, &issuance_data.token_ticker)?;
@@ -128,12 +114,12 @@ pub fn check_tokens_issuance_data_v0(
     Ok(())
 }
 
-pub fn check_tokens_issuance_versioned(
+pub fn check_tokens_issuance(
     chain_config: &ChainConfig,
-    issuance_data: &TokenIssuanceVersioned,
+    issuance: &TokenIssuance,
 ) -> Result<(), TokenIssuanceError> {
-    match issuance_data {
-        TokenIssuanceVersioned::V1(issuance_data) => {
+    match issuance {
+        TokenIssuance::V1(issuance_data) => {
             // Check token ticker
             check_token_ticker(chain_config, &issuance_data.token_ticker)?;
 
@@ -167,7 +153,11 @@ pub fn check_tokens_data(
 ) -> Result<(), TokensError> {
     match token_data {
         TokenData::TokenTransfer(transfer) => {
-            check_positive_amount(source_block_id, tx, &transfer.amount)
+            ensure!(
+                transfer.amount > Amount::ZERO,
+                TokensError::TransferZeroTokens(tx.get_id(), source_block_id)
+            );
+            Ok(())
         }
         TokenData::TokenIssuance(issuance) => check_tokens_issuance_data_v0(chain_config, issuance)
             .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),

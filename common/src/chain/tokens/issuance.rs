@@ -35,7 +35,7 @@ pub enum TokenTotalSupply {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub enum TokenIssuanceVersioned {
+pub enum TokenIssuance {
     V1(TokenIssuanceV1),
 }
 
@@ -44,6 +44,6 @@ pub struct TokenIssuanceV1 {
     pub token_ticker: Vec<u8>,
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
-    pub supply_limit: TokenTotalSupply,
+    pub total_supply: TokenTotalSupply,
     pub reissuance_controller: Destination,
 }

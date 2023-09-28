@@ -18,7 +18,7 @@ use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{
-    Metadata, NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer,
+    Metadata, NftIssuance, TokenData, TokenId, TokenIssuanceV0, TokenTransfer,
 };
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
@@ -63,7 +63,7 @@ pub fn make_address_output_token(
     let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
             token_id,
             amount,
         }))),
@@ -73,7 +73,7 @@ pub fn make_address_output_token(
 
 pub fn make_issue_token_outputs(
     address: Address<Destination>,
-    token_issuance: TokenIssuance,
+    token_issuance: TokenIssuanceV0,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
     let destination = address.decode_object(chain_config)?;
@@ -81,7 +81,7 @@ pub fn make_issue_token_outputs(
     chainstate::check_tokens_issuance_data_v0(chain_config, &token_issuance)?;
 
     let issuance_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),
+        OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),
         destination,
     );
 
@@ -103,7 +103,7 @@ pub fn make_issue_nft_outputs(
     chainstate::check_nft_issuance_data(chain_config, &nft_issuance)?;
 
     let issuance_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::NftIssuance(nft_issuance))),
+        OutputValue::TokenV0(Box::new(TokenData::NftIssuance(nft_issuance))),
         destination,
     );
 

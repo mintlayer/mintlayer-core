@@ -21,7 +21,7 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{TokenId, TokenIssuanceV1, TokenIssuanceVersioned, TokenTotalSupply},
+        tokens::{TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TokenOutput, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -84,11 +84,11 @@ fn delegate_staking() -> TxOutput {
 
 fn issue_tokens() -> TxOutput {
     TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-        TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: Vec::new(),
             number_of_decimals: 0,
             metadata_uri: Vec::new(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         }),
     )))
