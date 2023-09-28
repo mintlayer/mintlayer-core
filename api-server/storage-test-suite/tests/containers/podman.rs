@@ -76,6 +76,7 @@ impl Podman {
         let mut command = std::process::Command::new("podman");
         command.arg("run");
         command.arg("--detach");
+        command.arg("--rm");
         command.arg("--name");
         command.arg(&self.name);
         for (key, value) in &self.env {
@@ -154,23 +155,6 @@ impl Podman {
         self.stopped = true;
     }
 
-    pub fn rm(&mut self) {
-        let mut command = std::process::Command::new("podman");
-        command.arg("rm");
-        command.arg(&self.name);
-        let output = command.output().unwrap();
-        logging::log::debug!(
-            "Podman rm command args: {:?}",
-            command.get_args().map(|s| s.to_string_lossy()).collect::<Vec<_>>().join(" ")
-        );
-        assert!(
-            output.status.success(),
-            "Failed to run podman command: {:?}\n{}",
-            command,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
     /// Uses the command `podman logs` to print the logs of the container.
     pub fn print_logs(&mut self) {
         let mut command = std::process::Command::new("podman");
@@ -212,11 +196,10 @@ impl Podman {
     }
 
     fn destructor(&mut self) {
+        self.print_logs();
         if !self.stopped {
             self.stop();
         }
-        self.print_logs();
-        self.rm();
     }
 
     #[allow(dead_code)]
