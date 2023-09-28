@@ -41,6 +41,7 @@ fn update_tests_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::DelegateStaking(_, _) => unimplemented!(),
         TxOutput::Tokens(token) => match token {
             TokenOutput::IssueFungibleToken(_) => unimplemented!(),
+            TokenOutput::IssueNft(_, _, _) => unimplemented!(),
             TokenOutput::MintTokens(_, _, _) => unimplemented!(),
             TokenOutput::RedeemTokens(_, _) => unimplemented!(),
             TokenOutput::LockCirculatingSupply(_) => unimplemented!(),
@@ -125,8 +126,14 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let number_of_outputs = rng.gen_range(1..10);
 
     // valid cases
-    let valid_inputs =
-        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), mint_tokens()];
+    let valid_inputs = [
+        lock_then_transfer(),
+        transfer(),
+        stake_pool(),
+        produce_block(),
+        mint_tokens(),
+        issue_nft(),
+    ];
     let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
@@ -149,8 +156,14 @@ fn tx_many_to_many_invalid(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs =
-        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), mint_tokens()];
+    let valid_inputs = [
+        lock_then_transfer(),
+        transfer(),
+        stake_pool(),
+        produce_block(),
+        mint_tokens(),
+        issue_nft(),
+    ];
     let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let invalid_inputs = [
@@ -380,6 +393,7 @@ fn reward_none_to_any(#[case] seed: Seed) {
             create_delegation(),
             delegate_staking(),
             mint_tokens(),
+            issue_nft(),
             redeem_tokens(),
             issue_tokens(),
             lock_tokens_supply(),
@@ -422,6 +436,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
         delegate_staking(),
         issue_tokens(),
         mint_tokens(),
+        issue_nft(),
         redeem_tokens(),
         lock_tokens_supply(),
     ];

@@ -6893,6 +6893,7 @@ dependencies = [
  "pos_accounting",
  "replace_with",
  "rstest",
+ "serialization",
  "static_assertions",
  "test-utils",
  "thiserror",

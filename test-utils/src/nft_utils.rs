@@ -19,7 +19,7 @@ use crate::random_string;
 use common::{
     chain::{
         config::ChainConfig,
-        tokens::{Metadata, NftIssuance, TokenCreator, TokenIssuanceV0},
+        tokens::{Metadata, NftIssuanceV0, TokenCreator, TokenIssuanceV0},
     },
     primitives::Amount,
 };
@@ -51,12 +51,12 @@ pub fn random_token_issuance(
 pub fn random_nft_issuance(
     chain_config: Arc<ChainConfig>,
     rng: &mut (impl Rng + CryptoRng),
-) -> NftIssuance {
+) -> NftIssuanceV0 {
     let max_desc_len = chain_config.token_max_description_len();
     let max_name_len = chain_config.token_max_name_len();
     let max_ticker_len = chain_config.token_max_ticker_len();
 
-    NftIssuance {
+    NftIssuanceV0 {
         metadata: Metadata {
             creator: Some(random_creator(rng)),
             name: random_string(rng, 1..max_name_len).into_bytes(),

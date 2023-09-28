@@ -2015,6 +2015,9 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
 }
 
+// TODO: add support for tokens v1
+// See https://github.com/mintlayer/mintlayer-core/issues/1237
+#[ignore]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

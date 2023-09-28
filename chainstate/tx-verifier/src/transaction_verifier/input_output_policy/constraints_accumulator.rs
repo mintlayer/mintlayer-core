@@ -217,6 +217,7 @@ impl ConstrainedValueAccumulator {
                 },
                 TxOutput::Tokens(token_output) => match token_output {
                     TokenOutput::IssueFungibleToken(_)
+                    | TokenOutput::IssueNft(_, _, _)
                     | TokenOutput::MintTokens(_, _, _)
                     | TokenOutput::LockCirculatingSupply(_) => { /* do nothing */ }
                     TokenOutput::RedeemTokens(id, value) => {

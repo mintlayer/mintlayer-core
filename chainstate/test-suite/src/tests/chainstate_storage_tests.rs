@@ -23,7 +23,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
-        tokens::{token_id, TokenAuxiliaryData, TokenData, TokenIssuanceV0, TokenTransfer},
+        tokens::{make_token_id, TokenAuxiliaryData, TokenData, TokenIssuanceV0, TokenTransfer},
         Destination, OutPointSourceId, SpendablePosition, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -154,7 +154,7 @@ fn store_token(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
         let tx_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
-        let token_id = token_id(tx.transaction()).unwrap();
+        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build();
         let block_id = block.get_id();
@@ -415,7 +415,7 @@ fn reorg_store_token(#[case] seed: Seed) {
             OutPointSourceId::Transaction(tx_1.transaction().get_id()),
             0,
         );
-        let token_1_id = token_id(tx_1.transaction()).unwrap();
+        let token_1_id = make_token_id(tx_1.transaction().inputs()).unwrap();
         let tx_1_id = tx_1.transaction().get_id();
 
         let block_1 = tf.make_block_builder().add_transaction(tx_1).build();
@@ -447,7 +447,7 @@ fn reorg_store_token(#[case] seed: Seed) {
             .build();
         let tx_2_id = tx_2.transaction().get_id();
         let tx_2_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
-        let token_2_id = token_id(tx_2.transaction()).unwrap();
+        let token_2_id = make_token_id(tx_2.transaction().inputs()).unwrap();
 
         let block_2 = tf
             .make_block_builder()
@@ -474,7 +474,7 @@ fn reorg_store_token(#[case] seed: Seed) {
             .build();
         let tx_3_id = tx_3.transaction().get_id();
         let tx_3_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
-        let token_3_id = token_id(tx_3.transaction()).unwrap();
+        let token_3_id = make_token_id(tx_3.transaction().inputs()).unwrap();
 
         let block_3 = tf
             .make_block_builder()
