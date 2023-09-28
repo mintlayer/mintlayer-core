@@ -96,7 +96,9 @@ pub fn calculate_block_proof(timestamp_diff: u64) -> Uint256 {
     let block_weight = Uint256::from(get_weight_for_block());
     let empty_time_slots_weight = Uint256::from(empty_time_slots_weight);
 
-    block_weight - empty_time_slots_weight
+    block_weight
+        .checked_sub(&empty_time_slots_weight)
+        .expect("Checked above; cannot fail")
 }
 
 #[cfg(test)]

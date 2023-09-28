@@ -974,7 +974,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
-        let chain_trust = prev_block_chaintrust + current_block_proof;
+        let chain_trust = (prev_block_chaintrust + current_block_proof)
+            .expect("Chain trust growth is locally controlled. This can't happen.");
         let block_index = BlockIndex::new(
             block,
             chain_trust,
