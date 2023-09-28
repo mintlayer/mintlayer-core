@@ -162,7 +162,8 @@ const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
 
 pub fn create_testnet_pos_config(consensus_version: PoSConsensusVersion) -> PoSChainConfig {
     let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
-    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
+    let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+        .expect("Target block time cannot be zero as per NonZeroU64");
 
     PoSChainConfig {
         target_limit,
@@ -189,7 +190,8 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
 
 pub fn create_regtest_pos_config(consensus_version: PoSConsensusVersion) -> PoSChainConfig {
     let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
-    let target_limit = Uint256::MAX / Uint256::from_u64(target_block_time.get());
+    let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+        .expect("Target block time cannot be zero as per NonZeroU64");
 
     PoSChainConfig {
         target_limit,

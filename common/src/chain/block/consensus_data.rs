@@ -146,7 +146,7 @@ impl PoWData {
         let mut ret = !target;
         let mut ret1 = target;
         ret1.increment();
-        ret = ret / ret1;
+        ret = (ret / ret1)?;
         ret.increment();
         Some(ret)
     }

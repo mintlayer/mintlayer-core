@@ -262,6 +262,14 @@ macro_rules! construct_uint {
                 a.overflowing_add(&one).0
             }
 
+            fn unchecked_div(&self, other: &Self) -> Self {
+                self.div_rem(*other).0
+            }
+
+            fn unchecked_rem(&self, other: &Self) -> Self {
+                self.div_rem(*other).1
+            }
+
             // TODO: use checked functions for all operations
             //       mintlayer/mintlayer-core/-/issues/1132
             pub fn checked_add(&self, other: &Self) -> Option<Self> {
@@ -311,7 +319,11 @@ macro_rules! construct_uint {
             }
 
             pub fn checked_div(&self, other: &Self) -> Option<Self> {
-                (*other != Self::ZERO).then(|| *self / *other)
+                (*other != Self::ZERO).then(|| self.unchecked_div(other))
+            }
+
+            pub fn checked_rem(&self, other: &Self) -> Option<Self> {
+                (*other != Self::ZERO).then(|| self.unchecked_rem(other))
             }
 
             pub fn overflowing_mul(&self, other: &Self) -> Self {
@@ -416,18 +428,18 @@ macro_rules! construct_uint {
         }
 
         impl ::core::ops::Div<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn div(self, other: $name) -> $name {
-                self.div_rem(other).0
+            fn div(self, other: $name) -> Option<$name> {
+                self.checked_div(&other)
             }
         }
 
         impl ::core::ops::Rem<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn rem(self, other: $name) -> $name {
-                self.div_rem(other).1
+            fn rem(self, other: $name) -> Option<$name> {
+                self.checked_rem(&other)
             }
         }
 
@@ -893,26 +905,29 @@ mod tests {
         );
         // Division
         assert_eq!(
-            Uint256::from_u64(105) / Uint256::from_u64(5),
+            (Uint256::from_u64(105) / Uint256::from_u64(5)).unwrap(),
             Uint256::from_u64(21)
         );
-        let div = mult / Uint256::from_u64(300);
+        let div = (mult / Uint256::from_u64(300)).unwrap();
         assert_eq!(
             div,
             Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
         );
 
         assert_eq!(
-            Uint256::from_u64(105) % Uint256::from_u64(5),
+            (Uint256::from_u64(105) % Uint256::from_u64(5)).unwrap(),
             Uint256::from_u64(0)
         );
         assert_eq!(
-            Uint256::from_u64(35498456) % Uint256::from_u64(3435),
+            (Uint256::from_u64(35498456) % Uint256::from_u64(3435)).unwrap(),
             Uint256::from_u64(1166)
         );
         let m = (mult * Uint256::from_u64(39842)).unwrap();
         let rem_src = (m + Uint256::from_u64(9054)).unwrap();
-        assert_eq!(rem_src % Uint256::from_u64(39842), Uint256::from_u64(9054));
+        assert_eq!(
+            (rem_src % Uint256::from_u64(39842)).unwrap(),
+            Uint256::from_u64(9054)
+        );
         // TODO: bit inversion
     }
 
@@ -1270,7 +1285,7 @@ mod tests {
         {
             let a: Uint128 = rng.gen::<u128>().into();
             let b: Uint128 = rng.gen::<u128>().into();
-            assert_eq!(a.checked_div(&b), Some(a / b));
+            assert_eq!(a.checked_div(&b), Some(a.unchecked_div(&b)));
         }
     }
 }
