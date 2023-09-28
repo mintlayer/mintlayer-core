@@ -104,6 +104,9 @@ pub enum PeerEvent {
 
     /// Message received from remote
     MessageReceived { message: PeerManagerMessage },
+
+    /// Protocol violation
+    Misbehaved { error: P2pError },
 }
 
 /// Events sent by Backend to Peer

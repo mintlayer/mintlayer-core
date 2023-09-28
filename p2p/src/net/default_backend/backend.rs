@@ -560,17 +560,10 @@ where
                 if let Some(pending_peer) = self.pending.get(&peer_id) {
                     log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
 
-                    let send_result = self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
+                    self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
                         address: pending_peer.address,
                         error,
-                    });
-                    if let Err(send_error) = send_result {
-                        log::error!(
-                            "Unable to report a failed handshake for peer {} to the front end: {}",
-                            peer_id,
-                            send_error
-                        );
-                    }
+                    })?;
                 } else {
                     log::error!("Cannot find pending peer for peer id {peer_id}");
                 }
@@ -604,6 +597,12 @@ where
                 if self.peers.contains_key(&peer_id) {
                     self.destroy_peer(peer_id)?;
                 }
+
+                Ok(())
+            }
+
+            PeerEvent::Misbehaved { error } => {
+                self.conn_event_tx.send(ConnectivityEvent::Misbehaved { peer_id, error })?;
 
                 Ok(())
             }

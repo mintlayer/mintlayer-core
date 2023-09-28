@@ -40,7 +40,7 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM>::start(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_address(),
@@ -82,11 +82,18 @@ where
     // which one it is though).
     let _msg = msg_stream.recv().await.unwrap();
 
+    // This is mainly needed to ensure that the corresponding events, if any, reach
+    // peer manager before we end the test.
+    test_node.expect_no_banning().await;
+
     let test_node_remnants = test_node.join().await;
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
-        0
-    );
+
+    let bans_count = test_node_remnants.peer_mgr.peerdb().list_banned().count();
+    assert_eq!(bans_count, 0);
+
+    assert_eq!(test_node_remnants.peer_mgr.peers().len(), 1);
+    let peer_score = test_node_remnants.peer_mgr.peers().first_key_value().unwrap().1.score;
+    assert_eq!(peer_score, 0);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -112,7 +119,7 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM>::start(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_address(),
@@ -149,11 +156,18 @@ where
     // which one it is though).
     let _msg = msg_stream.recv().await.unwrap();
 
+    // This is mainly needed to ensure that the corresponding events, if any, reach
+    // peer manager before we end the test.
+    test_node.expect_no_banning().await;
+
     let test_node_remnants = test_node.join().await;
-    assert_eq!(
-        test_node_remnants.peer_mgr.peerdb().list_banned().count(),
-        0
-    );
+
+    let bans_count = test_node_remnants.peer_mgr.peerdb().list_banned().count();
+    assert_eq!(bans_count, 0);
+
+    assert_eq!(test_node_remnants.peer_mgr.peers().len(), 1);
+    let peer_score = test_node_remnants.peer_mgr.peers().first_key_value().unwrap().1.score;
+    assert_eq!(peer_score, 0);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

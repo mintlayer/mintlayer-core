@@ -110,7 +110,7 @@ async fn ping_timeout() {
         })
         .unwrap();
 
-    let event = expect_recv!(&mut cmd_rx);
+    let event = expect_recv!(cmd_rx);
     match event {
         Command::Accept { peer_id: _ } => {}
         _ => panic!("unexpected event: {event:?}"),
@@ -120,7 +120,7 @@ async fn ping_timeout() {
     for _ in 0..5 {
         time_getter.advance_time(ping_check_period);
 
-        let cmd = expect_recv!(&mut cmd_rx);
+        let cmd = expect_recv!(cmd_rx);
         let (peer_id, peer_msg) = cmd_to_peer_man_msg(cmd);
         let nonce = assert_matches_return_val!(
             peer_msg,
@@ -138,7 +138,7 @@ async fn ping_timeout() {
 
     // Receive one more ping request but do not send a ping response
     time_getter.advance_time(ping_check_period);
-    let cmd = expect_recv!(&mut cmd_rx);
+    let cmd = expect_recv!(cmd_rx);
     let (_, peer_msg) = cmd_to_peer_man_msg(cmd);
     assert_matches!(
         peer_msg,
@@ -148,7 +148,7 @@ async fn ping_timeout() {
     time_getter.advance_time(ping_timeout);
 
     // PeerManager should ask backend to close connection
-    let event = expect_recv!(&mut cmd_rx);
+    let event = expect_recv!(cmd_rx);
     match event {
         Command::Disconnect { peer_id } => {
             conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();
