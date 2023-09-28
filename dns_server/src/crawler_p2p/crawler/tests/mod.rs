@@ -570,6 +570,7 @@ fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
     crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
 }
 
+// Check that a peer is banned on CrawlerEvent::ConnectionError.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

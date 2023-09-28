@@ -16,12 +16,11 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter};
 use test_utils::{assert_matches, assert_matches_return_val};
 
 use crate::{
     config::{NodeType, P2pConfig},
-    expect_recv,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{

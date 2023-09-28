@@ -22,7 +22,7 @@ use p2p::{
     config::{BanDuration, BanThreshold},
     types::socket_address::SocketAddress,
 };
-use p2p_test_utils::{assert_no_value_in_channel, get_value_from_channel};
+use p2p_test_utils::{expect_no_recv, expect_recv};
 
 use crate::{
     crawler_p2p::crawler_manager::tests::mock_manager::{
@@ -41,7 +41,7 @@ async fn basic() {
     state.node_online(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 
@@ -49,7 +49,7 @@ async fn basic() {
     state.node_offline(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::DelAddress(node1.socket_addr().ip())
     );
 }
@@ -72,7 +72,7 @@ async fn long_offline() {
     state.node_online(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 }
@@ -90,21 +90,21 @@ async fn announced_online() {
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
 
     state.announce_address(node2, node3);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node3.socket_addr().ip())
     );
 
@@ -121,7 +121,7 @@ async fn announced_offline() {
 
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 1);
@@ -136,7 +136,7 @@ async fn announced_offline() {
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
@@ -164,14 +164,14 @@ async fn private_ip() {
 
     // Check that only nodes with public addresses and on the default port are added to DNS
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
-    assert_no_value_in_channel(&mut command_rx).await;
+    expect_no_recv!(command_rx);
 
     // Check that all reachable nodes are stored in the DB
     assert_known_addresses(&crawler, &[node1, node2, node3, node4, node5, node6]);
@@ -202,14 +202,14 @@ async fn ban_unban() {
 
     // Only normal nodes are added to DNS
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node3.socket_addr().ip())
     );
-    assert_no_value_in_channel(&mut command_rx).await;
+    expect_no_recv!(command_rx);
 
     // node2 is banned
     assert_banned_addresses(&crawler, &[(node2.as_bannable(), node2_ban_end_time)]);
@@ -226,7 +226,7 @@ async fn ban_unban() {
 
     // Check that it's been removed from DNS.
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::DelAddress(node1.socket_addr().ip())
     );
 
@@ -252,7 +252,7 @@ async fn ban_unban() {
             (node2.as_bannable(), node2_ban_end_time),
         ],
     );
-    assert_no_value_in_channel(&mut command_rx).await;
+    expect_no_recv!(command_rx);
 
     // Wait enough time for node2 to be unbanned.
     let time_until_node2_unban =
@@ -262,7 +262,7 @@ async fn ban_unban() {
     // node2 is no longer banned; its address has been added to DNS.
     assert_banned_addresses(&crawler, &[(node1.as_bannable(), node1_ban_end_time)]);
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node2.socket_addr().ip())
     );
 
@@ -274,7 +274,7 @@ async fn ban_unban() {
     // node1 is no longer banned; its address has been added to DNS.
     assert_banned_addresses(&crawler, &[]);
     assert_eq!(
-        get_value_from_channel(&mut command_rx).await.unwrap(),
+        expect_recv!(command_rx),
         DnsServerCommand::AddAddress(node1.socket_addr().ip())
     );
 }

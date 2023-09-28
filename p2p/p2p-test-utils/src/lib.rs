@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{fmt::Debug, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
@@ -30,7 +30,6 @@ use common::{
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
-use tokio::{sync::mpsc::UnboundedReceiver, time};
 use utils::atomics::SeqCstAtomicU64;
 
 pub fn start_subsystems(
@@ -122,12 +121,40 @@ pub const LONG_TIMEOUT: Duration = Duration::from_secs(60);
 /// A short timeout for events that shouldn't occur.
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
-pub async fn get_value_from_channel<T>(rx: &mut UnboundedReceiver<T>) -> Option<T> {
-    time::timeout(LONG_TIMEOUT, rx.recv())
-        .await
-        .expect("Failed to receive value in time")
+/// Await for the specified future for some reasonably big amount of time; panic if the timeout
+/// is reached.
+// Note: this is implemented as a macro until #[track_caller] works correctly with async functions
+// (needed to print the caller location if 'unwrap' fails). Same for the other macros below.
+#[macro_export]
+macro_rules! expect_future_val {
+    ($fut:expr) => {
+        tokio::time::timeout($crate::LONG_TIMEOUT, $fut)
+            .await
+            .expect("Failed to receive value in time")
+    };
 }
 
-pub async fn assert_no_value_in_channel<T: Debug>(rx: &mut UnboundedReceiver<T>) {
-    time::timeout(SHORT_TIMEOUT, rx.recv()).await.unwrap_err();
+/// Await for the specified future for a short time, expecting a timeout.
+#[macro_export]
+macro_rules! expect_no_future_val {
+    ($fut:expr) => {
+        tokio::time::timeout($crate::SHORT_TIMEOUT, $fut).await.unwrap_err();
+    };
+}
+
+/// Try receiving a message from the tokio channel; panic if the channel is closed or the timeout
+/// is reached.
+#[macro_export]
+macro_rules! expect_recv {
+    ($rx:expr) => {
+        $crate::expect_future_val!($rx.recv()).unwrap()
+    };
+}
+
+/// Try receiving a message from the tokio channel; expect that a timeout is reached.
+#[macro_export]
+macro_rules! expect_no_recv {
+    ($rx:expr) => {
+        $crate::expect_no_future_val!($rx.recv())
+    };
 }

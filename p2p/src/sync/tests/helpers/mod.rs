@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, panic, sync::Arc};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
-use p2p_test_utils::{assert_no_value_in_channel, get_value_from_channel, SHORT_TIMEOUT};
+use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 use tokio::{
@@ -212,7 +212,7 @@ impl TestNode {
 
     /// Receives a message from the sync manager.
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
-        get_value_from_channel(&mut self.sync_msg_receiver).await.unwrap()
+        expect_recv!(&mut self.sync_msg_receiver)
     }
 
     /// Try to receive a message from the sync manager.
@@ -231,7 +231,7 @@ impl TestNode {
 
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
-        assert_no_value_in_channel(&mut self.error_receiver).await;
+        expect_no_recv!(self.error_receiver);
     }
 
     /// Receives the `AdjustPeerScore` event from the peer manager.
@@ -500,9 +500,7 @@ struct SyncingEventReceiverMock {
 #[async_trait]
 impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
-        get_value_from_channel(&mut self.events_receiver)
-            .await
-            .ok_or(P2pError::ChannelClosed)
+        expect_future_val!(self.events_receiver.recv()).ok_or(P2pError::ChannelClosed)
     }
 }
 

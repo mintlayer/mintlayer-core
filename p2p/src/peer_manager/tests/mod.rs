@@ -22,6 +22,7 @@ mod utils;
 
 use std::{sync::Arc, time::Duration};
 
+use p2p_test_utils::expect_recv;
 use tokio::sync::{mpsc, oneshot};
 
 use ::utils::atomics::SeqCstAtomicBool;
@@ -35,7 +36,6 @@ use tokio::{
 };
 
 use crate::{
-    expect_recv,
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
