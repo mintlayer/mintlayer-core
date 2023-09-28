@@ -30,7 +30,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
 from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
-from test_framework.wallet_cli_controller import WalletCliController
+from test_framework.wallet_cli_controller import UtxoOutpoint, WalletCliController
 
 import asyncio
 import sys
@@ -124,6 +124,15 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             assert len(utxos) == num_utxos
 
             address = await wallet.new_address()
+
+            # try to select one and send more than it has it should fail
+            selected_utxos = utxos[:1]
+            output = await wallet.send_to_address(address, 11, selected_utxos)
+            assert "Controller error: Wallet error: Coin selection error: Not enough funds" in output
+            # check that we didn't spent any utxos
+            assert utxos == await wallet.list_utxos()
+
+            # select the first 3 and check that they will be spent
             selected_utxos = utxos[:3]
             not_selected_utxos = utxos[3:]
             await wallet.send_to_address(address, 1, selected_utxos)
@@ -145,6 +154,17 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             assert all(selected_utxo not in new_utxos for selected_utxo in selected_utxos)
             # check not-selected utxos are still present
             assert all(not_selected_utxo in new_utxos for not_selected_utxo in not_selected_utxos)
+
+            # try to select already spent utxo
+            assert "Selected UTXO is already consumed" in await wallet.send_to_address(address, 11, selected_utxos)
+
+            # try to select unknown utxo
+            unknown_utxo_id = "0" * len(selected_utxos[0].id)
+            unknown_utxo = UtxoOutpoint(unknown_utxo_id, 1)
+            assert "Cannot find UTXO" in await wallet.send_to_address(address, 11, [unknown_utxo])
+
+            # check that we didn't spent any utxos
+            assert new_utxos == await wallet.list_utxos()
 
 
 

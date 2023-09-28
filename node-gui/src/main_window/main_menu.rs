@@ -65,7 +65,7 @@ impl button::StyleSheet for ButtonStyle {
     fn active(&self, style: &Self::Style) -> button::Appearance {
         button::Appearance {
             text_color: style.extended_palette().background.base.text,
-            border_radius: 4.0,
+            border_radius: 4.0.into(),
             background: Some(Color::TRANSPARENT.into()),
             ..Default::default()
         }

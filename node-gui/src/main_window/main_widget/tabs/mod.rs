@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{Command, Element};
+use iced::{Command, Element, Length};
 use iced_aw::{TabLabel, Tabs};
+use variant_count::VariantCount;
 
 use crate::{
     backend::{messages::WalletId, BackendSender},
@@ -44,6 +45,21 @@ pub enum TabsMessage {
     WalletMessage(WalletId, WalletMessage),
 }
 
+#[derive(VariantCount, Debug, Clone, Default)]
+enum TabIndex {
+    #[default]
+    Summary = 0,
+    Networking = 1,
+    Settings = 2,
+    // Notice that the wallet tabs are added dynamically to these variants, so a higher index may be valid
+}
+
+impl TabIndex {
+    fn into_usize(self) -> usize {
+        self as usize
+    }
+}
+
 pub struct TabsWidget {
     active_tab: usize,
     summary_tab: SummaryTab,
@@ -55,7 +71,7 @@ pub struct TabsWidget {
 impl TabsWidget {
     pub fn new() -> Self {
         TabsWidget {
-            active_tab: 0,
+            active_tab: TabIndex::default().into_usize(),
             summary_tab: SummaryTab::new(),
             networking_tab: NetworkingTab::new(),
             settings_tab: SettingsTab::new(),
@@ -64,36 +80,46 @@ impl TabsWidget {
     }
 
     pub fn last_wallet_tab_index(&self) -> usize {
-        2 + self.wallets.len()
+        TabIndex::VARIANT_COUNT + self.wallets.len() - 1
     }
 
     pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
-        let mut tabs = Tabs::new(self.active_tab, TabsMessage::TabSelected)
+        let mut tabs = Tabs::new(TabsMessage::TabSelected)
+            .icon_font(iced_aw::ICON_FONT)
             .push(
+                TabIndex::Summary as usize,
                 self.summary_tab.tab_label(),
                 self.summary_tab.view(node_state),
             )
             .push(
+                TabIndex::Networking as usize,
                 self.networking_tab.tab_label(),
                 self.networking_tab.view(node_state),
             )
             .push(
+                TabIndex::Settings as usize,
                 self.settings_tab.tab_label(),
                 self.settings_tab.view(node_state),
             );
 
-        for wallet in self.wallets.iter() {
-            tabs = tabs.push(wallet.tab_label(), wallet.view(node_state))
+        for (idx, wallet) in self.wallets.iter().enumerate() {
+            tabs = tabs.push(
+                idx + TabIndex::VARIANT_COUNT,
+                wallet.tab_label(),
+                wallet.view(node_state),
+            )
         }
 
-        tabs.icon_font(iced_aw::ICON_FONT)
-            .tab_bar_position(match position {
-                TabBarPosition::Top => iced_aw::TabBarPosition::Top,
-                TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
-            })
-            .into()
+        tabs.tab_bar_position(match position {
+            TabBarPosition::Top => iced_aw::TabBarPosition::Top,
+            TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
+        })
+        .set_active_tab(&self.active_tab)
+        .height(Length::Fill)
+        .tab_bar_max_height(70.0)
+        .into()
     }
 
     pub fn update(
