@@ -313,6 +313,10 @@ macro_rules! construct_uint {
             pub fn checked_div(&self, other: &Self) -> Option<Self> {
                 (*other != Self::ZERO).then(|| *self / *other)
             }
+
+            pub fn overflowing_mul(&self, other: &Self) -> Self {
+                self.widening_mul(other).0
+            }
         }
 
         impl From<[u8; $n_words * 8]> for $name {
@@ -404,10 +408,10 @@ macro_rules! construct_uint {
         }
 
         impl ::core::ops::Mul<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn mul(self, other: $name) -> $name {
-                self.checked_mul(&other).expect("overflow")
+            fn mul(self, other: $name) -> Option<$name> {
+                self.checked_mul(&other)
             }
         }
 
@@ -906,7 +910,8 @@ mod tests {
             Uint256::from_u64(35498456) % Uint256::from_u64(3435),
             Uint256::from_u64(1166)
         );
-        let rem_src = (mult * Uint256::from_u64(39842) + Uint256::from_u64(9054)).unwrap();
+        let m = (mult * Uint256::from_u64(39842)).unwrap();
+        let rem_src = (m + Uint256::from_u64(9054)).unwrap();
         assert_eq!(rem_src % Uint256::from_u64(39842), Uint256::from_u64(9054));
         // TODO: bit inversion
     }
@@ -954,14 +959,14 @@ mod tests {
     pub fn multiplication_test() {
         let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
-        let u128_res = u64_val * u64_val;
+        let u128_res = (u64_val * u64_val).unwrap();
 
         assert_eq!(
             u128_res,
             Uint256([0x048D1354216DA321u64, 0xC1B1CD13A4D13D46, 0, 0])
         );
 
-        let u256_res = u128_res * u128_res;
+        let u256_res = (u128_res * u128_res).unwrap();
 
         assert_eq!(
             u256_res,
@@ -980,7 +985,7 @@ mod tests {
             0x7FFFFFFFFFFFFFFF,
         ])
         .into();
-        let u512_res = u256_val * u256_val;
+        let u512_res = (u256_val * u256_val).unwrap();
         assert_eq!(
             u512_res,
             Uint512([
@@ -1243,7 +1248,7 @@ mod tests {
         {
             let a = Uint128::from_u64(rng.gen::<u64>());
             let b = Uint128::from_u64(rng.gen::<u64>());
-            assert_eq!(a.checked_mul(&b), Some(a * b));
+            assert_eq!(a.checked_mul(&b), Some(a.overflowing_mul(&b)));
         }
     }
 

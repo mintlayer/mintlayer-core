@@ -75,7 +75,7 @@ pub fn calculate_new_target(
 
     // new target is computed by  multiplying the old target by ratio of the actual timespan / target timespan.
     // see Bitcoin's Protocol rules of Difficulty change: https://en.bitcoin.it/wiki/Protocol_rules
-    let mut new_target = old_target * actual_timespan;
+    let mut new_target = (old_target * actual_timespan).unwrap_or(Uint256::MAX);
     new_target = new_target / target_timespan;
 
     new_target = if new_target > difficulty_limit {

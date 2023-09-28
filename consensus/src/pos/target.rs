@@ -83,9 +83,12 @@ fn calculate_new_target(
     );
     let prev_target: Uint512 = (*prev_target).into();
 
-    let new_target = prev_target * actual_block_time / target_block_time;
-    let difficulty_change_limit = prev_target
-        * Uint512::from_u64(pos_config.difficulty_change_limit().value().into())
+    let new_target = (prev_target * actual_block_time)
+        .expect("Source types are smaller than these types")
+        / target_block_time;
+    let difficulty_change_limit = (prev_target
+        * Uint512::from_u64(pos_config.difficulty_change_limit().value().into()))
+    .expect("Original types are smaller")
         / Uint512::from_u64(1000);
     let lower_limit = (prev_target - difficulty_change_limit)
         .expect("Cannot fail because difficulty_change_limit is in [0, 1]");
@@ -982,7 +985,7 @@ mod tests {
             let current_hash: Uint512 = current_hash.try_into().unwrap();
 
             // add block if hash satisfies the target
-            if current_hash <= target_u512 * pool_balance {
+            if current_hash <= (target_u512 * pool_balance).unwrap() {
                 let block = make_block(&mut rng, tip_id, block_timestamp, target);
                 tip_height = tip_height.next_height();
                 let new_tip = BlockIndex::new(

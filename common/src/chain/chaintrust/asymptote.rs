@@ -173,7 +173,7 @@ mod tests {
         // Given that the maximum block weight is 1*SCALING_FACTOR,
         // and it only goes down when there are empty time-slots in between,
         // the maximum chain trust is the following:
-        let max_chain_trust = max_block_height * single_block_weight;
+        let max_chain_trust = (max_block_height * single_block_weight).unwrap();
 
         // There should not be any overflow to ensure that the chain trust is always less than the maximum possible value.
         assert!(max_block_height < max_chain_trust);

@@ -191,7 +191,8 @@ fn calculate_rewards_per_delegation(
         .map(
             |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
                 let balance = Uint256::from_amount(*balance_amount);
-                let reward = (total_delegations_reward * balance) / total_delegations_balance;
+                let numer = (total_delegations_reward * balance).expect("Source types are smaller");
+                let reward = numer / total_delegations_balance;
                 let reward: common::primitives::amount::UnsignedIntType =
                     reward.try_into().map_err(|_| {
                         ConnectTransactionError::DelegationRewardOverflow(

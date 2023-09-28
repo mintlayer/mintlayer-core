@@ -57,7 +57,8 @@ fn check_pos_hash_v0(
     let pool_balance: Uint512 = pool_balance.into();
 
     ensure!(
-        hash <= pool_balance * target.into(),
+        hash <= (pool_balance * target.into())
+            .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
@@ -95,7 +96,8 @@ fn check_pos_hash_v1(
     let effective_balance: Uint512 = effective_balance.into();
 
     ensure!(
-        hash <= effective_balance * target.into(),
+        hash <= (effective_balance * target.into())
+            .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
