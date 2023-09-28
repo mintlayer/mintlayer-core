@@ -14,12 +14,14 @@ logging = {path = '../../logging'}
 serialization = { path = "../../serialization" }
 
 async-trait.workspace = true
+bb8-postgres = "0.8"
+clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true, default-features = false }
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-postgres = "0.7"
-bb8-postgres = "0.8"
+
 
 [dev-dependencies]
 chainstate-test-framework = { path = '../../chainstate/test-framework' }

@@ -242,6 +242,7 @@ dependencies = [
  "async-trait",
  "bb8-postgres",
  "chainstate-test-framework",
+ "clap",
  "common",
  "crypto",
  "futures",

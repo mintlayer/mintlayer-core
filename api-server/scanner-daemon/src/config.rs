@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_server_common::PostgresConfig;
 use clap::Parser;
 use common::chain::config::ChainType;
 use std::net::SocketAddr;
@@ -50,39 +51,6 @@ pub struct ApiServerScannerArgs {
     /// Postgres config values
     #[clap(flatten)]
     pub postgres_config: PostgresConfig,
-}
-
-#[derive(Parser, Debug)]
-pub struct PostgresConfig {
-    /// Postgres host
-    #[clap(long, default_value = "localhost")]
-    pub postgres_host: String,
-
-    /// Postgres port
-    #[clap(long, default_value = "5432")]
-    pub postgres_port: u16,
-
-    /// Postgres user
-    #[clap(long, default_value = "postgres")]
-    pub postgres_user: String,
-
-    /// Postgres password
-    #[clap(long)]
-    pub postgres_password: Option<String>,
-
-    /// Postgres database
-    #[clap(long)]
-    pub postgres_database: Option<String>,
-
-    /// Postgres max connections
-    #[clap(long, default_value = "10")]
-    pub postgres_max_connections: u32,
-}
-
-impl Default for PostgresConfig {
-    fn default() -> Self {
-        Self::parse()
-    }
 }
 
 impl From<Network> for ChainType {
