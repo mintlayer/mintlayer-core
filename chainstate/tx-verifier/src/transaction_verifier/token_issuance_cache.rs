@@ -18,7 +18,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{
     chain::{
         tokens::{
-            get_tokens_issuance_v0_count, token_id, TokenAuxiliaryData, TokenId,
+            get_tokens_issuance_v0_count, make_token_id, TokenAuxiliaryData, TokenId,
             TokenIssuanceVersion,
         },
         Block, ChainConfig, RequiredConsensus, Transaction,
@@ -144,7 +144,7 @@ impl TokenIssuanceCache {
         block_id: &Id<Block>,
         tx: &Transaction,
     ) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
         let aux_data = TokenAuxiliaryData::new(tx.clone(), *block_id);
         self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;
 
@@ -176,7 +176,7 @@ impl TokenIssuanceCache {
     }
 
     fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
         match self.data.entry(token_id) {
             Entry::Occupied(mut e) => {
                 e.insert(CachedAuxDataOp::Erase);
@@ -202,7 +202,8 @@ impl TokenIssuanceCache {
         let has_token_issuance = get_tokens_issuance_v0_count(tx.outputs()) > 0;
 
         if has_token_issuance {
-            let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+            let token_id =
+                make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
             match self.data.entry(token_id) {
                 Entry::Vacant(e) => {
                     let current_token_data = token_data_getter(&token_id)?;

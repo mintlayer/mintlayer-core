@@ -828,15 +828,15 @@ impl CommandHandler {
             }
 
             WalletCommand::IssueNewNft {
-                creator,
+                destination_address,
+                media_hash,
                 name,
                 description,
                 ticker,
+                creator,
                 icon_uri,
-                additional_metadata_uri,
                 media_uri,
-                media_hash,
-                destination_address,
+                additional_metadata_uri,
             } => {
                 let destination_address = parse_address(chain_config, &destination_address)?;
 

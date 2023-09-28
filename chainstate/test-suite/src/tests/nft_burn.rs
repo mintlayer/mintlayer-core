@@ -21,7 +21,7 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue,
     signature::inputsig::InputWitness,
-    tokens::{token_id, TokenData, TokenTransfer},
+    tokens::{make_token_id, TokenData, TokenTransfer},
     Destination, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
@@ -67,7 +67,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Burn more NFT than we have
         let result = tf
@@ -161,7 +161,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Burn
         let tx = TransactionBuilder::new()

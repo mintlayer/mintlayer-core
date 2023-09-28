@@ -18,7 +18,7 @@ use self::check_utils::check_media_hash;
 use super::transaction_verifier::error::TokensError;
 use common::{
     chain::{
-        tokens::{NftIssuance, TokenData, TokenIssuance, TokenIssuanceV0},
+        tokens::{NftIssuanceV0, TokenData, TokenIssuance, TokenIssuanceV0},
         Block, ChainConfig, Transaction,
     },
     primitives::{Amount, Id, Idable},
@@ -33,7 +33,7 @@ use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
-    issuance: &NftIssuance,
+    issuance: &NftIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
     check_token_ticker(chain_config, &issuance.metadata.ticker)?;
     check_nft_name(chain_config, &issuance.metadata.name)?;

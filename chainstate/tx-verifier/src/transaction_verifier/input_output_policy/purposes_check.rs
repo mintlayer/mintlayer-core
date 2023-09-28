@@ -134,7 +134,7 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
         TxOutput::Tokens(v) => match v {
-            TokenOutput::MintTokens(_, _, _) => true,
+            TokenOutput::MintTokens(_, _, _) | TokenOutput::IssueNft(_, _, _) => true,
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::RedeemTokens(_, _)
             | TokenOutput::LockCirculatingSupply(_) => false,

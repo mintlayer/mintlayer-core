@@ -16,7 +16,7 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuance, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
+    chain::tokens::{NftIssuanceV0, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
     primitives::Amount,
 };
 
@@ -55,8 +55,8 @@ impl From<TokenTransfer> for OutputValue {
     }
 }
 
-impl From<NftIssuance> for OutputValue {
-    fn from(d: NftIssuance) -> Self {
+impl From<NftIssuanceV0> for OutputValue {
+    fn from(d: NftIssuanceV0) -> Self {
         TokenData::NftIssuance(Box::new(d)).into()
     }
 }

@@ -35,8 +35,8 @@ use common::{
             ConsensusData,
         },
         config::EpochIndex,
-        tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
+        tokens::{NftIssuance, TokenAuxiliaryData},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
         SignedTransaction, TokenOutput, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
@@ -50,7 +50,9 @@ use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, Trans
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
-use crate::{detail::tokens::check_tokens_issuance, BlockError, ChainstateConfig};
+use crate::{
+    check_nft_issuance_data, detail::tokens::check_tokens_issuance, BlockError, ChainstateConfig,
+};
 
 use self::tx_verifier_storage::gen_block_index_getter;
 
@@ -777,6 +779,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         .map_err(|e| {
                             TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
                         }),
+                        TokenOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
+                            NftIssuance::V1(data) => {
+                                check_nft_issuance_data(self.chain_config, data).map_err(|e| {
+                                    TokensError::IssueError(
+                                        e,
+                                        tx.transaction().get_id(),
+                                        block.get_id(),
+                                    )
+                                })
+                            }
+                        },
                         TokenOutput::MintTokens(_, _, _)
                         | TokenOutput::RedeemTokens(_, _)
                         | TokenOutput::LockCirculatingSupply(_) => Ok(()),

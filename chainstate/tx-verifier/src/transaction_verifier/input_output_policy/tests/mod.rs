@@ -21,7 +21,10 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{
+            Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
+        },
         Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TokenOutput, TxInput,
         TxOutput, UtxoOutPoint,
     },
@@ -32,6 +35,7 @@ use crypto::{
     vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
 };
 use itertools::Itertools;
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::*;
@@ -92,6 +96,25 @@ fn issue_tokens() -> TxOutput {
             reissuance_controller: Destination::AnyoneCanSpend,
         }),
     )))
+}
+
+fn issue_nft() -> TxOutput {
+    TxOutput::Tokens(TokenOutput::IssueNft(
+        TokenId::new(H256::zero()),
+        Box::new(NftIssuance::V1(NftIssuanceV0 {
+            metadata: Metadata {
+                creator: None,
+                name: Vec::new(),
+                description: Vec::new(),
+                ticker: Vec::new(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: Vec::new(),
+            },
+        })),
+        Destination::AnyoneCanSpend,
+    ))
 }
 
 fn mint_tokens() -> TxOutput {
