@@ -17,7 +17,7 @@ mod api;
 mod config;
 mod error;
 
-use api_server_common::storage::impls::in_memory::transactional::TransactionalApiServerInMemoryStorage;
+use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use axum::{response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
 use common::chain::config::create_unit_test_config;
@@ -43,9 +43,23 @@ async fn main() {
     // TODO: generalize network configuration
     let chain_config = Arc::new(create_unit_test_config());
 
-    // TODO: point database to PostgreSQL from command line arguments
+    let storage = TransactionalApiServerPostgresStorage::new(
+        &args.postgres_config.postgres_host,
+        args.postgres_config.postgres_port,
+        &args.postgres_config.postgres_user,
+        args.postgres_config.postgres_password.as_deref(),
+        args.postgres_config.postgres_database.as_deref(),
+        args.postgres_config.postgres_max_connections,
+        &chain_config,
+    )
+    .await
+    .unwrap_or_else(|e| {
+        log::error!("Error creating Postgres storage: {}", e);
+        std::process::exit(1);
+    });
+
     let state = APIServerWebServerState {
-        db: Arc::new(TransactionalApiServerInMemoryStorage::new(&chain_config)),
+        db: Arc::new(storage),
         chain_config,
     };
 

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_server_common::PostgresConfig;
 use clap::Parser;
 use common::chain::config::ChainType;
 use std::net::SocketAddr;
@@ -46,6 +47,10 @@ pub struct ApiServerScannerArgs {
     /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
     pub rpc_password: Option<String>,
+
+    /// Postgres config values
+    #[clap(flatten)]
+    pub postgres_config: PostgresConfig,
 }
 
 impl From<Network> for ChainType {
