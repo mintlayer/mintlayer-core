@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenId, TokenIssuance},
+        tokens::{Metadata, TokenId, TokenIssuanceV0},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -119,7 +119,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .issue_new_token(
                 self.account_index,
                 address,
-                TokenIssuance {
+                TokenIssuanceV0 {
                     token_ticker,
                     amount_to_issue,
                     number_of_decimals,

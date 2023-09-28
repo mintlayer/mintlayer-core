@@ -113,7 +113,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         let circulating_supply = self.get_circulating_supply(&id)?.unwrap_or(Amount::ZERO);
 
         match token_data {
-            TokenData::FungibleToken(data) => match data.supply_limit() {
+            TokenData::FungibleToken(data) => match data.total_supply() {
                 TokenTotalSupply::Fixed(limit) => {
                     let expected_circulating_supply =
                         (circulating_supply + amount_to_add).ok_or(Error::AmountOverflow)?;

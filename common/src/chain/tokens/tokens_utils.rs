@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{TokenData, TokenId, TokenIssuanceVersioned};
+use super::{TokenData, TokenId, TokenIssuance};
 use crate::{
     chain::{
         output_value::OutputValue, AccountSpending, TokenOutput, Transaction, TxInput, TxOutput,
@@ -25,7 +25,7 @@ pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(TokenId::new(hash_encoded(tx.inputs().get(0)?)))
 }
 
-pub fn get_tokens_issuance_versioned(outputs: &[TxOutput]) -> Vec<&TokenIssuanceVersioned> {
+pub fn get_tokens_issuance_versioned(outputs: &[TxOutput]) -> Vec<&TokenIssuance> {
     outputs
         .iter()
         .filter_map(|output| match output {
@@ -56,7 +56,7 @@ pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
         .filter(|&output| match output {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 match v {
-                    OutputValue::Token(data) => match data.as_ref() {
+                    OutputValue::TokenV0(data) => match data.as_ref() {
                         TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
                         TokenData::TokenTransfer(_) => false,
                     },
@@ -89,7 +89,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
     match output {
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             match v {
-                OutputValue::Token(data) => match data.as_ref() {
+                OutputValue::TokenV0(data) => match data.as_ref() {
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
                     TokenData::TokenTransfer(_) => false,
                 },

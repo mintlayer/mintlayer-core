@@ -15,7 +15,7 @@
 
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::chain::{
-    tokens::{TokenId, TokenIssuanceVersioned, TokenTotalSupply},
+    tokens::{TokenId, TokenIssuance, TokenTotalSupply},
     Destination,
 };
 use serialization::{Decode, Encode};
@@ -77,7 +77,7 @@ pub struct FungibleTokenData {
     token_ticker: Vec<u8>,
     number_of_decimals: u8,
     metadata_uri: Vec<u8>,
-    supply_limit: TokenTotalSupply,
+    total_supply: TokenTotalSupply,
     locked: bool,
     reissuance_controller: Destination,
 }
@@ -95,8 +95,8 @@ impl FungibleTokenData {
         self.metadata_uri.as_ref()
     }
 
-    pub fn supply_limit(&self) -> &TokenTotalSupply {
-        &self.supply_limit
+    pub fn total_supply(&self) -> &TokenTotalSupply {
+        &self.total_supply
     }
 
     pub fn is_locked(&self) -> bool {
@@ -108,13 +108,13 @@ impl FungibleTokenData {
     }
 
     pub fn lock(self) -> Option<Self> {
-        match self.supply_limit {
+        match self.total_supply {
             TokenTotalSupply::Fixed(_) | TokenTotalSupply::Unlimited => None,
             TokenTotalSupply::Lockable => Some(Self {
                 token_ticker: self.token_ticker,
                 number_of_decimals: self.number_of_decimals,
                 metadata_uri: self.metadata_uri,
-                supply_limit: self.supply_limit,
+                total_supply: self.total_supply,
                 locked: true,
                 reissuance_controller: self.reissuance_controller,
             }),
@@ -122,14 +122,14 @@ impl FungibleTokenData {
     }
 }
 
-impl From<TokenIssuanceVersioned> for FungibleTokenData {
-    fn from(issuance: TokenIssuanceVersioned) -> Self {
+impl From<TokenIssuance> for FungibleTokenData {
+    fn from(issuance: TokenIssuance) -> Self {
         match issuance {
-            TokenIssuanceVersioned::V1(issuance) => Self {
+            TokenIssuance::V1(issuance) => Self {
                 token_ticker: issuance.token_ticker,
                 number_of_decimals: issuance.number_of_decimals,
                 metadata_uri: issuance.metadata_uri,
-                supply_limit: issuance.supply_limit,
+                total_supply: issuance.total_supply,
                 locked: false,
                 reissuance_controller: issuance.reissuance_controller,
             },

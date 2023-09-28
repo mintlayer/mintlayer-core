@@ -69,7 +69,7 @@ impl OutputGroup {
         };
         let value = match output_value {
             OutputValue::Coin(output_amount) => output_amount,
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => token_transfer.amount,

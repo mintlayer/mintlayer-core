@@ -150,7 +150,7 @@ impl ConstrainedValueAccumulator {
                             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
                         )?;
                     }
-                    OutputValue::Token(_) => { /* do nothing */ }
+                    OutputValue::TokenV0(_) => { /* do nothing */ }
                     OutputValue::TokenV1(id, value) => {
                         let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
                         let constrained_amount =
@@ -220,6 +220,7 @@ impl ConstrainedValueAccumulator {
                     | TokenOutput::MintTokens(_, _, _)
                     | TokenOutput::LockCirculatingSupply(_) => { /* do nothing */ }
                     TokenOutput::RedeemTokens(id, value) => {
+                        // Redemption requires the tokens to be burned
                         let signed = value.into_signed().ok_or(IOPolicyError::AmountOverflow)?;
                         let constrained_amount =
                             self.burn_constrained.entry(*id).or_insert(SignedAmount::ZERO);

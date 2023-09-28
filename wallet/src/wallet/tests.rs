@@ -2006,7 +2006,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
-                TokenIssuance {
+                TokenIssuanceV0 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: token_amount_to_issue,
                     number_of_decimals: rng.gen_range(1..18),
@@ -2083,7 +2083,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
             token_id: *token_id,
             amount: tokens_to_transfer,
         }))),
@@ -2153,7 +2153,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
             token_id: *token_id,
             amount: not_enough_tokens_to_transfer,
         }))),

@@ -244,7 +244,6 @@ where
         }
     }
 
-    // TODO: this function should go to ConstrainedValueAccumulator
     fn check_issuance_fee_burn(
         &self,
         tx: &Transaction,

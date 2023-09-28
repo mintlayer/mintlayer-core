@@ -86,7 +86,7 @@ impl TokenIssuanceCache {
         let was_token_issued = get_tokens_issuance_v0_count(tx.outputs()) > 0;
 
         if was_token_issued {
-            // Check if iv0 tokens are allowed to be issued at this height
+            // Check if v0 tokens are allowed to be issued at this height
             let consensus_status =
                 chain_config.net_upgrade().consensus_status(tx_source.expected_block_height());
             let latest_token_version = match consensus_status {

@@ -66,8 +66,8 @@ storage::decl_schema! {
         pub DBAccountingEpochDeltaUndo: Map<EpochIndex, DeltaMergeUndo>,
 
         /// Accounting data is stored as 2 different sets: tip, sealed
-        /// `Tip` is the current state of the accounting data. It is updated on every block.
-        /// `Sealed` is the state of the accounting data that is N epochs behind the tip.
+        /// `Tip` is the current state of the PoS accounting data. It is updated on every block.
+        /// `Sealed` is the state of the PoS accounting data that is N epochs behind the tip.
 
         /// Store for tip accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

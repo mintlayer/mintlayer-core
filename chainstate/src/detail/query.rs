@@ -283,7 +283,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         token_data.number_of_decimals(),
                         token_data.metadata_uri().to_owned(),
                         circulating_supply,
-                        (*token_data.supply_limit()).into(),
+                        (*token_data.total_supply()).into(),
                     ));
                     Ok(Some(rpc_issuance))
                 }
