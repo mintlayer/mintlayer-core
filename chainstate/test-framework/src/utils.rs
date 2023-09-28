@@ -97,9 +97,9 @@ pub fn create_utxo_data(
             utils::ensure!(new_value >= Amount::from_atoms(1));
             TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
         }
-        OutputValue::Token(token_data) => match &*token_data {
+        OutputValue::TokenV0(token_data) => match &*token_data {
             TokenData::TokenTransfer(_transfer) => {
-                TxOutput::Transfer(OutputValue::Token(token_data), anyonecanspend_address())
+                TxOutput::Transfer(OutputValue::TokenV0(token_data), anyonecanspend_address())
             }
             TokenData::TokenIssuance(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
@@ -174,7 +174,7 @@ pub fn create_multiple_utxo_data(
                     .collect()
             }
         }
-        OutputValue::Token(token_data) => match &*token_data {
+        OutputValue::TokenV0(token_data) => match &*token_data {
             TokenData::TokenTransfer(transfer) => {
                 if rng.gen::<bool>() {
                     // burn transferred tokens
@@ -211,7 +211,7 @@ pub fn create_multiple_utxo_data(
                     } else {
                         // transfer with a single output
                         vec![TxOutput::Transfer(
-                            OutputValue::Token(token_data),
+                            OutputValue::TokenV0(token_data),
                             anyonecanspend_address(),
                         )]
                     }

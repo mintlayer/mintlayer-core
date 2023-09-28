@@ -16,14 +16,14 @@
 use serialization::{Decode, Encode};
 
 use crate::{
-    chain::tokens::{NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer},
+    chain::tokens::{NftIssuance, TokenData, TokenId, TokenIssuanceV0, TokenTransfer},
     primitives::Amount,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(Box<TokenData>),
+    TokenV0(Box<TokenData>),
     TokenV1(TokenId, Amount),
 }
 
@@ -31,21 +31,21 @@ impl OutputValue {
     pub fn coin_amount(&self) -> Option<Amount> {
         match self {
             OutputValue::Coin(v) => Some(*v),
-            OutputValue::Token(_) | OutputValue::TokenV1(_, _) => None,
+            OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => None,
         }
     }
 
     pub fn token_data(&self) -> Option<&TokenData> {
         match self {
             OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => None,
-            OutputValue::Token(d) => Some(d),
+            OutputValue::TokenV0(d) => Some(d),
         }
     }
 }
 
 impl From<TokenData> for OutputValue {
     fn from(d: TokenData) -> Self {
-        Self::Token(Box::new(d))
+        Self::TokenV0(Box::new(d))
     }
 }
 
@@ -61,8 +61,8 @@ impl From<NftIssuance> for OutputValue {
     }
 }
 
-impl From<TokenIssuance> for OutputValue {
-    fn from(d: TokenIssuance) -> Self {
+impl From<TokenIssuanceV0> for OutputValue {
+    fn from(d: TokenIssuanceV0) -> Self {
         TokenData::TokenIssuance(Box::new(d)).into()
     }
 }

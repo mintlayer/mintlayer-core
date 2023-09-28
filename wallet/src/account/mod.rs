@@ -1234,7 +1234,7 @@ fn group_outputs<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => {
@@ -1291,7 +1291,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => {
@@ -1365,7 +1365,7 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
 
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
             token_id: TokenId::zero(),
             // TODO: as the  amount is compact there is an edge case where those extra few bytes of
             // size can cause the output fee to be go over the available amount of coins thus not

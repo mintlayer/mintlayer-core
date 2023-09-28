@@ -19,9 +19,7 @@ use chainstate::{
 };
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::tokens::{
-    token_id, TokenId, TokenIssuanceV1, TokenIssuanceVersioned, TokenTotalSupply,
-};
+use common::chain::tokens::{token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply};
 use common::chain::{Block, GenBlock, UtxoOutPoint};
 use common::primitives::signed_amount::SignedAmount;
 use common::primitives::Id;
@@ -42,12 +40,12 @@ use test_utils::{
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::error::TokenIssuanceError;
 
-fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuanceVersioned {
-    TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuance {
+    TokenIssuance::V1(TokenIssuanceV1 {
         token_ticker: random_string(rng, 1..5).as_bytes().to_vec(),
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: random_string(rng, 1..1024).as_bytes().to_vec(),
-        supply_limit: supply,
+        total_supply: supply,
         reissuance_controller: Destination::AnyoneCanSpend,
     })
 }
@@ -56,7 +54,7 @@ fn issue_token_from_block(
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     utxo_input_outpoint: UtxoOutPoint,
-    issuance: TokenIssuanceVersioned,
+    issuance: TokenIssuance,
 ) -> (TokenId, Id<Block>, UtxoOutPoint) {
     let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -158,7 +156,7 @@ fn token_issue_test(#[case] seed: Seed) {
         let token_max_dec_count = tf.chainstate.get_chain_config().token_max_dec_count();
         let token_max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
-        let mut process_block_with_issuance = |issuance: TokenIssuanceVersioned| {
+        let mut process_block_with_issuance = |issuance: TokenIssuance| {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::from_utxo(outpoint_source_id.clone(), 0),
@@ -177,11 +175,11 @@ fn token_issue_test(#[case] seed: Seed) {
         };
 
         // Ticker is too long
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 10..u16::MAX as usize).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -199,11 +197,11 @@ fn token_issue_test(#[case] seed: Seed) {
         );
 
         // Ticker doesn't exist
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -231,11 +229,11 @@ fn token_issue_test(#[case] seed: Seed) {
                 let token_ticker = gen_text_with_non_ascii(c, &mut rng, token_max_ticker_len);
 
                 // Ticker contain non alpha-numeric char
-                let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+                let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                     token_ticker,
                     number_of_decimals: rng.gen_range(1..18),
                     metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                    supply_limit: TokenTotalSupply::Unlimited,
+                    total_supply: TokenTotalSupply::Unlimited,
                     reissuance_controller: Destination::AnyoneCanSpend,
                 });
                 let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -259,11 +257,11 @@ fn token_issue_test(#[case] seed: Seed) {
         {
             let decimals_count_to_use = token_max_dec_count + 1;
 
-            let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+            let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                 number_of_decimals: decimals_count_to_use,
                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                supply_limit: TokenTotalSupply::Unlimited,
+                total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -285,11 +283,11 @@ fn token_issue_test(#[case] seed: Seed) {
         {
             let uri_len_range_to_use = (token_max_uri_len + 1)..u16::MAX as usize;
 
-            let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+            let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: random_string(&mut rng, uri_len_range_to_use).as_bytes().to_vec(),
-                supply_limit: TokenTotalSupply::Unlimited,
+                total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
             });
             let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -308,11 +306,11 @@ fn token_issue_test(#[case] seed: Seed) {
         }
 
         // URI contain non alpha-numeric char
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let (result, tx_id, block_id) = process_block_with_issuance(issuance);
@@ -330,11 +328,11 @@ fn token_issue_test(#[case] seed: Seed) {
         );
 
         // Valid case
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let tx = TransactionBuilder::new()
@@ -371,11 +369,11 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let result = tf
@@ -415,11 +413,11 @@ fn token_issue_cannot_be_spent(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let issuance = TokenIssuanceVersioned::V1(TokenIssuanceV1 {
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            supply_limit: TokenTotalSupply::Unlimited,
+            total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
         let tx = TransactionBuilder::new()
@@ -476,12 +474,12 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
 
-        let supply_limit = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let total_supply = Amount::from_atoms(rng.gen_range(2..100_000_000));
         let (token_id, _, utxo_with_change) =
-            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Fixed(supply_limit));
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Fixed(total_supply));
 
-        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..supply_limit.into_atoms()));
-        let amount_to_mint_over_limit = (supply_limit + Amount::from_atoms(1)).unwrap();
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms()));
+        let amount_to_mint_over_limit = (total_supply + Amount::from_atoms(1)).unwrap();
 
         let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
         let amount_to_redeem_over_limit = (amount_to_mint + Amount::from_atoms(1)).unwrap();
@@ -520,7 +518,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                 ConnectTransactionError::TokensAccountingError(
                     tokens_accounting::Error::MintExceedsSupplyLimit(
                         amount_to_mint_over_limit,
-                        supply_limit,
+                        total_supply,
                         token_id
                     )
                 )

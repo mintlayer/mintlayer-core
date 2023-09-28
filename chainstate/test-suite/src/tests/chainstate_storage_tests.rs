@@ -23,7 +23,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
-        tokens::{token_id, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer},
+        tokens::{token_id, TokenAuxiliaryData, TokenData, TokenIssuanceV0, TokenTransfer},
         Destination, OutPointSourceId, SpendablePosition, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -139,7 +139,7 @@ fn store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                TokenIssuance {
+                TokenIssuanceV0 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -398,7 +398,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                TokenIssuance {
+                TokenIssuanceV0 {
                     token_ticker: "AAAA".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -432,7 +432,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                TokenIssuance {
+                TokenIssuanceV0 {
                     token_ticker: "BBBB".as_bytes().to_vec(),
                     amount_to_issue: bbbb_tokens_amount,
                     number_of_decimals: rng.gen_range(1..18),
