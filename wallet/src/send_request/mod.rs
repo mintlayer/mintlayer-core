@@ -17,9 +17,10 @@ use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
-use common::chain::tokens::{Metadata, TokenData, TokenId, TokenIssuanceV0, TokenTransfer};
+use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
-    ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
+    ChainConfig, Destination, PoolId, TokenOutput, Transaction, TransactionCreationError, TxInput,
+    TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
@@ -61,27 +62,19 @@ pub fn make_address_output_token(
     let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(
-        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id,
-            amount,
-        }))),
+        OutputValue::TokenV1(token_id, amount),
         destination,
     ))
 }
 
 pub fn make_issue_token_outputs(
-    address: Address<Destination>,
-    token_issuance: TokenIssuanceV0,
+    token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.decode_object(chain_config)?;
+    chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
 
-    chainstate::check_tokens_issuance_data_v0(chain_config, &token_issuance)?;
-
-    let issuance_output = TxOutput::Transfer(
-        OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),
-        destination,
-    );
+    let issuance_output =
+        TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(token_issuance)));
 
     let token_issuance_fee =
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));

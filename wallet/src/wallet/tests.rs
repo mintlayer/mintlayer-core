@@ -31,7 +31,7 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{TokenData, TokenTransfer},
+        tokens::{TokenData, TokenIssuanceV1, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
@@ -2092,13 +2092,13 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         wallet
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
-                address2,
-                TokenIssuanceV0 {
+                TokenIssuance::V1(TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
-                    amount_to_issue: token_amount_to_issue,
                     number_of_decimals: rng.gen_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
-                },
+                    total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+                    reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+                }),
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
