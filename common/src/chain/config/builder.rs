@@ -156,7 +156,7 @@ impl Builder {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
             coin_decimals: CoinUnit::DECIMALS,
-            coin_ticker: CoinUnit::TICKER,
+            coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
             software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))

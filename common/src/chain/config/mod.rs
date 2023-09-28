@@ -83,6 +83,15 @@ impl ChainType {
         }
     }
 
+    const fn coin_ticker(&self) -> &'static str {
+        match self {
+            ChainType::Mainnet => "ML",
+            ChainType::Testnet => "TML",
+            ChainType::Regtest => "RML",
+            ChainType::Signet => "SML",
+        }
+    }
+
     const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],

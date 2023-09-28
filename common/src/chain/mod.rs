@@ -30,10 +30,10 @@ pub use signed_transaction::SignedTransaction;
 pub use transaction::*;
 
 pub use block::Block;
+pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
-pub use coin_unit::CoinUnit;
 pub use pos::{
     create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
     get_initial_randomness, pos_initial_difficulty, DelegationId, PoSChainConfig,

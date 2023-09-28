@@ -163,7 +163,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     );
 
     //
-    // produce some block at height 2 just to move to the next netupgrade
+    // produce some block at height 2 just to move to the next NetUpgrade
     //
     tf.make_pos_block_builder(&mut rng)
         .with_block_signing_key(staking_sk.clone())
@@ -323,7 +323,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     );
 
     //
-    // produce some block at height 2 just to move to the next netupgrade
+    // produce some block at height 2 just to move to the next NetUpgrade
     //
     tf.make_pos_block_builder(&mut rng)
         .with_block_signing_key(staking_sk.clone())
