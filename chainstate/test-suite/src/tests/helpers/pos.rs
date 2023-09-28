@@ -18,7 +18,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, output_value::OutputValue, stakelock::StakePoolData,
-        Destination, Genesis, Mlt, RequiredConsensus, TxOutput,
+        CoinUnit, Destination, Genesis, RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, H256},
 };
@@ -81,7 +81,7 @@ pub fn create_custom_genesis_with_stake_pool(
     staker_pk: PublicKey,
     vrf_pk: VRFPublicKey,
 ) -> Genesis {
-    let initial_amount = Mlt::from_mlt(100_000_000).to_amount_atoms();
+    let initial_amount = CoinUnit::from_coins(100_000_000).to_amount_atoms();
     let initial_pool_amount = (initial_amount / 3).unwrap();
     let mint_output_amount = (initial_amount - initial_pool_amount).unwrap();
 

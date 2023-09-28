@@ -102,7 +102,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     );
 
     let pool_id = pos_accounting::make_pool_id(&genesis_mint_outpoint);
-    let stake_amount = Amount::from_atoms(40_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let stake_amount = Amount::from_atoms(40_000_000 * common::chain::CoinUnit::ATOMS_PER_COIN);
 
     let tx = TransactionBuilder::new()
         .add_input(genesis_mint_outpoint.into(), empty_witness(&mut rng))

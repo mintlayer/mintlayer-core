@@ -21,7 +21,7 @@ pub mod genesis;
 pub mod tokens;
 pub mod transaction;
 
-mod mlt;
+mod coin_unit;
 mod pos;
 mod pow;
 mod upgrades;
@@ -33,7 +33,7 @@ pub use block::Block;
 pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
-pub use mlt::Mlt;
+pub use coin_unit::CoinUnit;
 pub use pos::{
     create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
     get_initial_randomness, pos_initial_difficulty, DelegationId, PoSChainConfig,

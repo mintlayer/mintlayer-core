@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use crate::chain::mlt::Mlt;
+pub use crate::chain::coin_unit::CoinUnit;
 use crate::primitives::{Amount, BlockHeight};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::Duration;
 
 // The initial supply that will be handed in the genesis block (besides the emission schedule)
-pub const DEFAULT_INITIAL_MINT: Amount = Amount::from_atoms(100_000_000 * Mlt::ATOMS_PER_MLT);
+pub const DEFAULT_INITIAL_MINT: Amount = Amount::from_atoms(100_000_000 * CoinUnit::ATOMS_PER_COIN);
 
 /// Internal emission schedule representation
-pub type EmissionScheduleFn = dyn Fn(BlockHeight) -> Mlt + Sync + Send + 'static;
+pub type EmissionScheduleFn = dyn Fn(BlockHeight) -> CoinUnit + Sync + Send + 'static;
 
 /// Emission schedule, characterized by function from block height to total supply at that point.
 ///
@@ -35,7 +35,7 @@ impl EmissionSchedule {
     /// Construct an emission schedule from a function.
     ///
     /// Be careful to maintain invariants as specified in [EmissionSchedule] docs
-    pub fn from_fn(f: impl 'static + Fn(BlockHeight) -> Mlt + Sync + Send) -> Self {
+    pub fn from_fn(f: impl 'static + Fn(BlockHeight) -> CoinUnit + Sync + Send) -> Self {
         Self(std::sync::Arc::new(f))
     }
 
@@ -48,17 +48,17 @@ impl EmissionSchedule {
     ///
     /// This includes all coins ever created up to given block height, including premine and any
     /// coins that have been burnt or made irrecoverable.
-    pub fn amount_at(&self, ht: BlockHeight) -> Mlt {
+    pub fn amount_at(&self, ht: BlockHeight) -> CoinUnit {
         self.0(ht)
     }
 
     /// Get initial supply (premine)
-    pub fn initial_supply(&self) -> Mlt {
+    pub fn initial_supply(&self) -> CoinUnit {
         self.amount_at(BlockHeight::zero())
     }
 
     /// Get subsidy for block at given height
-    pub fn subsidy(&self, ht: BlockHeight) -> Mlt {
+    pub fn subsidy(&self, ht: BlockHeight) -> CoinUnit {
         let prev_ht = ht.prev_height().expect("Genesis has no subsidy");
         (self.amount_at(ht) - self.amount_at(prev_ht)).expect("Supply not monotonic")
     }
@@ -76,11 +76,11 @@ impl std::fmt::Debug for EmissionSchedule {
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct EmissionScheduleTabular {
     /// The initial supply, in MLTs
-    initial_supply: Mlt,
+    initial_supply: CoinUnit,
     /// The initial per-block subsidy, before the first period kicks in.
-    initial_subsidy: Mlt,
+    initial_subsidy: CoinUnit,
     /// Subsidy periods. Specified by block height and the block subsidy starting at that height.
-    periods: BTreeMap<BlockHeight, Mlt>,
+    periods: BTreeMap<BlockHeight, CoinUnit>,
 }
 
 impl EmissionScheduleTabular {
@@ -92,9 +92,9 @@ impl EmissionScheduleTabular {
     ///  * Subsidy periods. These are mappings from block heights to per-block subsidy from that
     ///    point onwards, until the next period. The periods are implicitly sorted by BTreeMap.
     pub fn new(
-        initial_supply: Mlt,
-        initial_subsidy: Mlt,
-        periods: BTreeMap<BlockHeight, Mlt>,
+        initial_supply: CoinUnit,
+        initial_subsidy: CoinUnit,
+        periods: BTreeMap<BlockHeight, CoinUnit>,
     ) -> Self {
         Self {
             initial_supply,
@@ -104,26 +104,26 @@ impl EmissionScheduleTabular {
     }
 
     /// All subsidy periods, starting at block height 0
-    pub fn subsidy_periods(&self) -> impl Iterator<Item = (BlockHeight, Mlt)> + '_ {
+    pub fn subsidy_periods(&self) -> impl Iterator<Item = (BlockHeight, CoinUnit)> + '_ {
         std::iter::once((BlockHeight::zero(), self.initial_subsidy))
             .chain(self.periods.iter().map(|(ht, mlt)| (*ht, *mlt)))
     }
 
     /// Get the initial supply
-    pub fn initial_supply(&self) -> Mlt {
+    pub fn initial_supply(&self) -> CoinUnit {
         self.initial_supply
     }
 
     /// Get tail emission block height and per-block amount
-    pub fn tail_emission(&self) -> (BlockHeight, Mlt) {
+    pub fn tail_emission(&self) -> (BlockHeight, CoinUnit) {
         let empty_tail = || (BlockHeight::zero(), self.initial_subsidy);
         self.periods.iter().next_back().map_or_else(empty_tail, |(ht, mlt)| (*ht, *mlt))
     }
 
     /// Final supply. `None` if the supply increases indefinitely
-    pub fn final_supply(&self) -> Option<Mlt> {
+    pub fn final_supply(&self) -> Option<CoinUnit> {
         let (tail_block, tail_subsidy) = self.tail_emission();
-        (tail_subsidy == Mlt::ZERO).then(|| self.schedule().amount_at(tail_block))
+        (tail_subsidy == CoinUnit::ZERO).then(|| self.schedule().amount_at(tail_block))
     }
 
     /// Get the final emission schedule
@@ -135,7 +135,7 @@ impl EmissionScheduleTabular {
         );
 
         // Pre-calculate a table with starting supply and per-block rewards for each reward period.
-        let table: BTreeMap<BlockHeight, (Mlt, Mlt)> = self
+        let table: BTreeMap<BlockHeight, (CoinUnit, CoinUnit)> = self
             .periods
             .iter()
             .scan(
@@ -184,11 +184,11 @@ pub enum ParseEmissionTableError {
     #[error("Emission table cannot be an empty string")]
     Empty,
     #[error("Initial supply amount malformed: {0}")]
-    InitialSupply(<Mlt as FromStr>::Err),
+    InitialSupply(<CoinUnit as FromStr>::Err),
     #[error("Subsidy for period {0} not specified")]
     NoSubsidy(usize),
     #[error("Block subsidy for period {0} malformed: {1}")]
-    Subsidy(usize, <Mlt as FromStr>::Err),
+    Subsidy(usize, <CoinUnit as FromStr>::Err),
     #[error("Block height for period {0} malformed: {1}")]
     BlockHeight(usize, <BlockHeight as FromStr>::Err),
 }
@@ -250,12 +250,12 @@ impl FromStr for EmissionScheduleTabular {
         let initial_supply = initial_supply.trim().parse().map_err(Self::Err::InitialSupply)?;
         let initial_subsidy = initial_subsidy.parse().map_err(|e| Self::Err::Subsidy(0, e))?;
 
-        let periods: Result<BTreeMap<BlockHeight, Mlt>, Self::Err> = parts
+        let periods: Result<BTreeMap<BlockHeight, CoinUnit>, Self::Err> = parts
             .zip(1..)
             .map(|(s, n)| {
                 let (ht, mlt) = s.trim().split_once(":+").ok_or(Self::Err::NoSubsidy(n))?;
                 let ht: BlockHeight = ht.parse().map_err(|e| Self::Err::BlockHeight(n, e))?;
-                let mlt: Mlt = mlt.parse().map_err(|e| Self::Err::Subsidy(n, e))?;
+                let mlt: CoinUnit = mlt.parse().map_err(|e| Self::Err::Subsidy(n, e))?;
                 Ok((ht, mlt))
             })
             .collect();
@@ -270,7 +270,7 @@ impl FromStr for EmissionScheduleTabular {
 
 // Emission schedule for mainnet
 
-pub const MAINNET_COIN_PREMINE: Mlt = Mlt::from_mlt(400_000_000);
+pub const MAINNET_COIN_PREMINE: CoinUnit = CoinUnit::from_coins(400_000_000);
 
 pub fn mainnet_schedule_table(block_interval: Duration) -> EmissionScheduleTabular {
     // Check block interval is in whole seconds
@@ -283,9 +283,10 @@ pub fn mainnet_schedule_table(block_interval: Duration) -> EmissionScheduleTabul
     // Number of blocks emitted per year
     let blocks_per_year: u64 = (365 * 24 * 60 * 60) / block_interval.as_secs();
     let years = (1..).map(|x| BlockHeight::new(blocks_per_year * x));
-    let initial_subsidy = Mlt::from_mlt(202);
-    let subsequent_subsidies =
-        [151, 113, 85, 64, 48, 36, 27, 20, 15, 0].iter().map(|x| Mlt::from_mlt(*x));
+    let initial_subsidy = CoinUnit::from_coins(202);
+    let subsequent_subsidies = [151, 113, 85, 64, 48, 36, 27, 20, 15, 0]
+        .iter()
+        .map(|x| CoinUnit::from_coins(*x));
     let rewards = years.zip(subsequent_subsidies).collect();
     EmissionScheduleTabular::new(MAINNET_COIN_PREMINE, initial_subsidy, rewards)
 }
@@ -297,7 +298,7 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    const MAINNET_TOTAL_SUPPLY: Mlt = Mlt::from_mlt(599_990_800);
+    const MAINNET_TOTAL_SUPPLY: CoinUnit = CoinUnit::from_coins(599_990_800);
     const BLOCKS_PER_YEAR: u64 = 262800;
 
     fn mainnet_default_table() -> EmissionScheduleTabular {
@@ -355,107 +356,107 @@ mod tests {
     fn mainnet_subsidy_schedule() {
         let config = crate::chain::config::create_mainnet();
 
-        assert_eq!(config.coin_decimals(), Mlt::DECIMALS);
+        assert_eq!(config.coin_decimals(), CoinUnit::DECIMALS);
 
         // first year
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(1)),
-            Amount::from_fixedpoint_str("202", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("202", CoinUnit::DECIMALS).unwrap()
         );
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(2)),
-            Amount::from_fixedpoint_str("202", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("202", CoinUnit::DECIMALS).unwrap()
         );
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(5)),
-            Amount::from_fixedpoint_str("202", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("202", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(10000)),
-            Amount::from_fixedpoint_str("202", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("202", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(BLOCKS_PER_YEAR)),
-            Amount::from_fixedpoint_str("202", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("202", CoinUnit::DECIMALS).unwrap()
         );
 
         // second year
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(BLOCKS_PER_YEAR + 1)),
-            Amount::from_fixedpoint_str("151", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("151", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(BLOCKS_PER_YEAR + 2)),
-            Amount::from_fixedpoint_str("151", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("151", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config
                 .block_subsidy_at_height(&BlockHeight::new(BLOCKS_PER_YEAR + BLOCKS_PER_YEAR / 2)),
-            Amount::from_fixedpoint_str("151", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("151", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(2 * BLOCKS_PER_YEAR)),
-            Amount::from_fixedpoint_str("151", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("151", CoinUnit::DECIMALS).unwrap()
         );
 
         // third year
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(2 * BLOCKS_PER_YEAR + 1)),
-            Amount::from_fixedpoint_str("113", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("113", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(2 * BLOCKS_PER_YEAR + 2)),
-            Amount::from_fixedpoint_str("113", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("113", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(
                 2 * BLOCKS_PER_YEAR + BLOCKS_PER_YEAR / 2
             )),
-            Amount::from_fixedpoint_str("113", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("113", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(3 * BLOCKS_PER_YEAR)),
-            Amount::from_fixedpoint_str("113", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("113", CoinUnit::DECIMALS).unwrap()
         );
 
         // forth year
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(3 * BLOCKS_PER_YEAR + 1)),
-            Amount::from_fixedpoint_str("85", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("85", CoinUnit::DECIMALS).unwrap()
         );
 
         // towards the end
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(10 * BLOCKS_PER_YEAR)),
-            Amount::from_fixedpoint_str("15", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("15", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(10 * BLOCKS_PER_YEAR + 1)),
-            Amount::from_fixedpoint_str("0", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("0", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(10 * BLOCKS_PER_YEAR + 2)),
-            Amount::from_fixedpoint_str("0", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("0", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(11 * BLOCKS_PER_YEAR + 2)),
-            Amount::from_fixedpoint_str("0", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("0", CoinUnit::DECIMALS).unwrap()
         );
 
         assert_eq!(
             config.block_subsidy_at_height(&BlockHeight::new(u64::MAX)),
-            Amount::from_fixedpoint_str("0", Mlt::DECIMALS).unwrap()
+            Amount::from_fixedpoint_str("0", CoinUnit::DECIMALS).unwrap()
         );
     }
 
@@ -480,65 +481,82 @@ mod tests {
 
     #[test]
     fn total_emission_0() {
-        let schedule = EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, BTreeMap::new());
-        assert_eq!(schedule.final_supply(), Some(Mlt::ZERO));
+        let schedule =
+            EmissionScheduleTabular::new(CoinUnit::ZERO, CoinUnit::ZERO, BTreeMap::new());
+        assert_eq!(schedule.final_supply(), Some(CoinUnit::ZERO));
     }
 
     #[test]
     fn total_emission_1() {
         let schedule = [
-            (BlockHeight::new(1), Mlt::from_atoms(20)),
-            (BlockHeight::new(11), Mlt::from_atoms(0)),
+            (BlockHeight::new(1), CoinUnit::from_atoms(20)),
+            (BlockHeight::new(11), CoinUnit::from_atoms(0)),
         ];
-        let schedule =
-            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
-        assert_eq!(schedule.final_supply(), Some(Mlt::from_atoms(200)));
+        let schedule = EmissionScheduleTabular::new(
+            CoinUnit::ZERO,
+            CoinUnit::ZERO,
+            schedule.into_iter().collect(),
+        );
+        assert_eq!(schedule.final_supply(), Some(CoinUnit::from_atoms(200)));
     }
 
     #[test]
     fn total_emission_2() {
         let schedule = [
-            (BlockHeight::new(1), Mlt::from_atoms(20)),
-            (BlockHeight::new(11), Mlt::from_atoms(10)),
-            (BlockHeight::new(51), Mlt::from_atoms(0)),
+            (BlockHeight::new(1), CoinUnit::from_atoms(20)),
+            (BlockHeight::new(11), CoinUnit::from_atoms(10)),
+            (BlockHeight::new(51), CoinUnit::from_atoms(0)),
         ];
-        let schedule =
-            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
-        assert_eq!(schedule.final_supply(), Some(Mlt::from_atoms(200 + 400)));
+        let schedule = EmissionScheduleTabular::new(
+            CoinUnit::ZERO,
+            CoinUnit::ZERO,
+            schedule.into_iter().collect(),
+        );
+        assert_eq!(
+            schedule.final_supply(),
+            Some(CoinUnit::from_atoms(200 + 400))
+        );
     }
 
     #[test]
     fn total_emission_3() {
         let schedule = [
-            (BlockHeight::new(1), Mlt::from_atoms(20)),
-            (BlockHeight::new(11), Mlt::from_atoms(10)),
-            (BlockHeight::new(51), Mlt::from_atoms(5)),
-            (BlockHeight::new(101), Mlt::from_atoms(0)),
+            (BlockHeight::new(1), CoinUnit::from_atoms(20)),
+            (BlockHeight::new(11), CoinUnit::from_atoms(10)),
+            (BlockHeight::new(51), CoinUnit::from_atoms(5)),
+            (BlockHeight::new(101), CoinUnit::from_atoms(0)),
         ];
-        let schedule =
-            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        let schedule = EmissionScheduleTabular::new(
+            CoinUnit::ZERO,
+            CoinUnit::ZERO,
+            schedule.into_iter().collect(),
+        );
         assert_eq!(
             schedule.final_supply(),
-            Some(Mlt::from_atoms(200 + 400 + 250))
+            Some(CoinUnit::from_atoms(200 + 400 + 250))
         );
     }
 
     #[test]
     fn total_emission_4() {
-        let schedule = EmissionScheduleTabular::new(Mlt::ZERO, Mlt::from_atoms(1), BTreeMap::new());
+        let schedule =
+            EmissionScheduleTabular::new(CoinUnit::ZERO, CoinUnit::from_atoms(1), BTreeMap::new());
         assert_eq!(schedule.final_supply(), None);
     }
 
     #[test]
     fn total_emission_5() {
         let schedule = [
-            (BlockHeight::new(1), Mlt::from_atoms(20)),
-            (BlockHeight::new(11), Mlt::from_atoms(10)),
-            (BlockHeight::new(51), Mlt::from_atoms(5)),
-            (BlockHeight::new(101), Mlt::from_atoms(1)),
+            (BlockHeight::new(1), CoinUnit::from_atoms(20)),
+            (BlockHeight::new(11), CoinUnit::from_atoms(10)),
+            (BlockHeight::new(51), CoinUnit::from_atoms(5)),
+            (BlockHeight::new(101), CoinUnit::from_atoms(1)),
         ];
-        let schedule =
-            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        let schedule = EmissionScheduleTabular::new(
+            CoinUnit::ZERO,
+            CoinUnit::ZERO,
+            schedule.into_iter().collect(),
+        );
         assert_eq!(schedule.final_supply(), None);
     }
 
