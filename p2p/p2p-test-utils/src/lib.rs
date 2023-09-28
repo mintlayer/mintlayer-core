@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
@@ -30,6 +30,7 @@ use common::{
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
+use tokio::{sync::mpsc::UnboundedReceiver, time};
 use utils::atomics::SeqCstAtomicU64;
 
 pub fn start_subsystems(
@@ -114,4 +115,19 @@ impl P2pBasicTestTimeGetter {
     pub fn advance_time(&self, duration: Duration) {
         self.current_time_millis.fetch_add(duration.as_millis() as u64);
     }
+}
+
+/// A timeout for blocking calls.
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(60);
+/// A short timeout for events that shouldn't occur.
+pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
+
+pub async fn get_value_from_channel<T>(rx: &mut UnboundedReceiver<T>) -> Option<T> {
+    time::timeout(LONG_TIMEOUT, rx.recv())
+        .await
+        .expect("Failed to receive value in time")
+}
+
+pub async fn assert_no_value_in_channel<T: Debug>(rx: &mut UnboundedReceiver<T>) {
+    time::timeout(SHORT_TIMEOUT, rx.recv()).await.unwrap_err();
 }

@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, panic, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, panic, sync::Arc};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
+use p2p_test_utils::{assert_no_value_in_channel, get_value_from_channel, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 use tokio::{
@@ -63,11 +64,6 @@ use crate::{
 };
 
 pub mod test_node_group;
-
-/// A timeout for blocking calls.
-const LONG_TIMEOUT: Duration = Duration::from_secs(60);
-/// A short timeout for events that shouldn't occur.
-const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// A wrapper over other ends of the sync manager channels that simulates a test node.
 ///
@@ -216,10 +212,7 @@ impl TestNode {
 
     /// Receives a message from the sync manager.
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
-        time::timeout(LONG_TIMEOUT, self.sync_msg_receiver.recv())
-            .await
-            .expect("Failed to receive event in time")
-            .unwrap()
+        get_value_from_channel(&mut self.sync_msg_receiver).await.unwrap()
     }
 
     /// Try to receive a message from the sync manager.
@@ -238,7 +231,7 @@ impl TestNode {
 
     /// Panics if the sync manager returns an error.
     pub async fn assert_no_error(&mut self) {
-        time::timeout(SHORT_TIMEOUT, self.error_receiver.recv()).await.unwrap_err();
+        assert_no_value_in_channel(&mut self.error_receiver).await;
     }
 
     /// Receives the `AdjustPeerScore` event from the peer manager.
@@ -507,9 +500,8 @@ struct SyncingEventReceiverMock {
 #[async_trait]
 impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
-        time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
+        get_value_from_channel(&mut self.events_receiver)
             .await
-            .expect("Failed to receive event in time")
             .ok_or(P2pError::ChannelClosed)
     }
 }

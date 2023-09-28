@@ -121,10 +121,8 @@ pub struct P2pConfig {
     pub max_message_size: MaxMessageSize,
     /// A maximum number of announcements (hashes) for which we haven't receive transactions.
     pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
-    /// A maximum number of singular unconnected headers that a peer can send before
+    /// A maximum number of singular unconnected headers that a V1 peer can send before
     /// it will be considered malicious.
-    // TODO: this is a legacy behavior that should be removed in the protocol v2.
-    // See the issue #1110.
     pub max_singular_unconnected_headers: MaxUnconnectedHeaders,
     /// A timeout after which a peer is disconnected.
     pub sync_stalling_timeout: SyncStallingTimeout,

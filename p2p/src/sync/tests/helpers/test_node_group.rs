@@ -17,12 +17,12 @@ use common::{chain::GenBlock, primitives::Id};
 use crypto::random::Rng;
 use futures::{future::select_all, FutureExt};
 use logging::log;
+use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::PeerId;
 use tokio::time;
 
 use crate::{
     message::{SyncMessage, TransactionResponse},
-    sync::tests::helpers::LONG_TIMEOUT,
     PeerManagerEvent,
 };
 

@@ -19,12 +19,14 @@ use std::{
     time::Duration,
 };
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, primitives::time::Time};
 use crypto::random::Rng;
-use p2p::types::{peer_id::PeerId, socket_address::SocketAddress};
+use p2p::types::{
+    bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress,
+};
 
 use crate::crawler_p2p::crawler::{
-    address_data::AddressState, Crawler, CrawlerCommand, CrawlerEvent,
+    address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent,
 };
 
 /// Mock crawler
@@ -39,6 +41,7 @@ pub struct MockCrawler {
     pub pending_disconnects: BTreeSet<PeerId>,
     pub peers: BTreeMap<PeerId, MockPeer>,
     pub peer_addresses: BTreeMap<SocketAddress, PeerId>,
+    pub banned_addresses: BTreeMap<BannableAddress, Time>,
 }
 
 #[derive(Debug)]
@@ -55,14 +58,19 @@ pub struct AddressUpdate {
 }
 
 pub fn test_crawler(
+    config: CrawlerConfig,
     loaded_addresses: BTreeSet<SocketAddress>,
+    loaded_banned_addresses: BTreeMap<BannableAddress, Time>,
     added_addresses: BTreeSet<SocketAddress>,
 ) -> MockCrawler {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
     let crawler = Crawler::new(
+        Time::from_duration_since_epoch(Duration::ZERO),
         chain_config.clone(),
+        config,
         loaded_addresses.clone(),
+        loaded_banned_addresses.clone(),
         added_addresses,
     );
 
@@ -77,6 +85,7 @@ pub fn test_crawler(
         pending_disconnects: Default::default(),
         peers: Default::default(),
         peer_addresses: BTreeMap::new(),
+        banned_addresses: loaded_banned_addresses,
     }
 }
 
@@ -118,6 +127,10 @@ impl MockCrawler {
                 let removed = self.pending_connects.remove(address);
                 assert!(removed);
             }
+            CrawlerEvent::Misbehaved {
+                peer_id: _,
+                error: _,
+            } => {}
         }
 
         let mut cmd_handler = |cmd| match cmd {
@@ -165,6 +178,12 @@ impl MockCrawler {
                     new_state,
                 });
             }
+            CrawlerCommand::MarkAsBanned { address, ban_until } => {
+                self.banned_addresses.insert(address, ban_until);
+            }
+            CrawlerCommand::RemoveBannedStatus { address } => {
+                self.banned_addresses.remove(&address);
+            }
         };
 
         self.crawler.step(event, &mut cmd_handler, rng);
@@ -178,10 +197,61 @@ impl MockCrawler {
             assert!(peer.is_compatible);
         }
 
-        // Verify that all compatible nodes are reachable
+        // Verify that all compatible nodes are reachable (unless they are being disconnected
+        // at the moment) and all incompatible ones are non-reachable.
         for peer in self.peers.values() {
             let valid_ip = peer.is_compatible;
-            assert_eq!(self.reachable.contains(&peer.address), valid_ip);
+            let is_reachable = self.reachable.contains(&peer.address);
+            let peer_id = self.peer_addresses.get(&peer.address).unwrap();
+            let is_being_disconnected = self.pending_disconnects.contains(peer_id);
+
+            if valid_ip {
+                assert!(is_reachable || is_being_disconnected);
+            } else {
+                assert!(!is_reachable);
+            }
         }
+    }
+
+    pub fn now(&self) -> Time {
+        self.crawler.now
+    }
+
+    pub fn assert_banned_addresses(&self, expected: &[(BannableAddress, Time)]) {
+        let expected: BTreeMap<_, _> = expected.iter().copied().collect();
+        assert_eq!(self.banned_addresses, expected);
+        assert_eq!(self.crawler.banned_addresses, expected);
+    }
+
+    pub fn assert_ban_scores(&self, expected: &[(PeerId, u32)]) {
+        let expected: BTreeMap<_, _> = expected.iter().copied().collect();
+
+        for (peer_id, peer) in &self.crawler.outbound_peers {
+            assert_eq!(
+                // "Compare" peer_id too, so that it appears in the message if the assertion fails.
+                (*peer_id, peer.ban_score),
+                (*peer_id, *expected.get(peer_id).unwrap_or(&0))
+            );
+        }
+    }
+
+    pub fn assert_pending_connects(&self, expected: &[SocketAddress]) {
+        let expected: BTreeSet<_> = expected.iter().copied().collect();
+        assert_eq!(self.pending_connects, expected);
+    }
+
+    pub fn assert_pending_disconnects(&self, expected: &[PeerId]) {
+        let expected: BTreeSet<_> = expected.iter().copied().collect();
+        assert_eq!(self.pending_disconnects, expected);
+    }
+
+    pub fn assert_connected_peers(&self, expected: &[PeerId]) {
+        let expected: BTreeSet<_> = expected.iter().copied().collect();
+
+        let actual1: BTreeSet<_> = self.peers.keys().copied().collect();
+        assert_eq!(actual1, expected);
+
+        let actual2: BTreeSet<_> = self.crawler.outbound_peers.keys().copied().collect();
+        assert_eq!(actual2, expected);
     }
 }

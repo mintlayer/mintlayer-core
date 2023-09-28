@@ -18,7 +18,7 @@
 //! The mock simulates a network where peers go online and offline.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -31,12 +31,12 @@ use tokio::{
 
 use common::{
     chain::ChainConfig,
-    primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
+    primitives::{semver::SemVer, time::Time, user_agent::mintlayer_core_user_agent},
     time_getter::TimeGetter,
 };
 use p2p::{
-    config::{NodeType, P2pConfig},
-    error::{DialError, P2pError},
+    config::{BanDuration, BanThreshold, NodeType, P2pConfig},
+    error::{DialError, P2pError, ProtocolError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
@@ -44,8 +44,8 @@ use p2p::{
     },
     testing_utils::TEST_PROTOCOL_VERSION,
     types::{
-        ip_or_socket_address::IpOrSocketAddress, peer_id::PeerId, services::Services,
-        socket_address::SocketAddress,
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+        peer_id::PeerId, services::Services, socket_address::SocketAddress,
     },
     P2pEventHandler,
 };
@@ -53,19 +53,31 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
-    crawler_p2p::crawler_manager::{
-        storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
+    crawler_p2p::{
+        crawler::CrawlerConfig,
+        crawler_manager::{
+            storage::DnsServerStorage, storage_impl::DnsServerStorageImpl, CrawlerManager,
+            CrawlerManagerConfig,
+        },
     },
     dns_server::DnsServerCommand,
 };
 
 pub struct TestNode {
     pub chain_config: Arc<ChainConfig>,
+    /// If true, connecting to the node will produce a specific ConnectionError with a non-zero
+    /// ban score.
+    pub is_erratic: bool,
+}
+
+/// The error part of ConnectionError that "erratic" nodes produce.
+pub fn erratic_node_connection_error() -> P2pError {
+    P2pError::ProtocolError(ProtocolError::HandshakeExpected)
 }
 
 #[derive(Clone)]
 pub struct MockStateRef {
-    pub crawler_config: CrawlerManagerConfig,
+    pub crawler_mgr_config: CrawlerManagerConfig,
     pub online: Arc<Mutex<BTreeMap<SocketAddress, TestNode>>>,
     pub connected: Arc<Mutex<BTreeMap<SocketAddress, PeerId>>>,
     pub connection_attempts: Arc<Mutex<Vec<SocketAddress>>>,
@@ -74,10 +86,19 @@ pub struct MockStateRef {
 
 impl MockStateRef {
     pub fn node_online(&self, ip: SocketAddress) {
+        self.node_online_impl(ip, false)
+    }
+
+    pub fn erratic_node_online(&self, ip: SocketAddress) {
+        self.node_online_impl(ip, true)
+    }
+
+    fn node_online_impl(&self, ip: SocketAddress, is_erratic: bool) {
         let old = self.online.lock().unwrap().insert(
             ip,
             TestNode {
                 chain_config: Arc::new(common::chain::config::create_mainnet()),
+                is_erratic,
             },
         );
         assert!(old.is_none());
@@ -101,6 +122,11 @@ impl MockStateRef {
                 }),
             })
             .unwrap();
+    }
+
+    pub fn report_misbehavior(&self, ip: SocketAddress, error: P2pError) {
+        let peer_id = *self.connected.lock().unwrap().get(&ip).unwrap();
+        self.conn_tx.send(ConnectivityEvent::Misbehaved { peer_id, error }).unwrap();
     }
 }
 
@@ -144,35 +170,48 @@ impl NetworkingService for MockNetworkingService {
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
     fn connect(&mut self, address: SocketAddress, _services: Option<Services>) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
-        if let Some(node) = self.state.online.lock().unwrap().get(&address) {
-            let peer_id = PeerId::new();
-            let peer_info = PeerInfo {
-                peer_id,
-                protocol_version: TEST_PROTOCOL_VERSION,
-                network: *node.chain_config.magic_bytes(),
-                software_version: SemVer::new(1, 2, 3),
-                user_agent: mintlayer_core_user_agent(),
-                common_services: NodeType::DnsServer.into(),
-            };
-            let old = self.state.connected.lock().unwrap().insert(address, peer_id);
-            assert!(old.is_none());
-            self.state
-                .conn_tx
-                .send(ConnectivityEvent::OutboundAccepted {
-                    address,
-                    peer_info,
-                    receiver_address: None,
-                })
-                .unwrap();
-        } else {
-            self.state
-                .conn_tx
-                .send(ConnectivityEvent::ConnectionError {
-                    address,
-                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                })
-                .unwrap();
+        match self.state.online.lock().unwrap().get(&address) {
+            None => {
+                self.state
+                    .conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                    })
+                    .unwrap();
+            }
+            Some(node) if node.is_erratic => {
+                self.state
+                    .conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: erratic_node_connection_error(),
+                    })
+                    .unwrap();
+            }
+            Some(node) => {
+                let peer_id = PeerId::new();
+                let peer_info = PeerInfo {
+                    peer_id,
+                    protocol_version: TEST_PROTOCOL_VERSION,
+                    network: *node.chain_config.magic_bytes(),
+                    software_version: SemVer::new(1, 2, 3),
+                    user_agent: mintlayer_core_user_agent(),
+                    common_services: NodeType::DnsServer.into(),
+                };
+                let old = self.state.connected.lock().unwrap().insert(address, peer_id);
+                assert!(old.is_none());
+                self.state
+                    .conn_tx
+                    .send(ConnectivityEvent::OutboundAccepted {
+                        address,
+                        peer_info,
+                        receiver_address: None,
+                    })
+                    .unwrap();
+            }
         }
+
         Ok(())
     }
 
@@ -191,6 +230,10 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
             .unwrap()
             .0;
         self.state.connected.lock().unwrap().remove(&address).unwrap();
+        self.state
+            .conn_tx
+            .send(ConnectivityEvent::ConnectionClosed { peer_id })
+            .unwrap();
         Ok(())
     }
 
@@ -227,13 +270,17 @@ pub fn test_crawler(
         .into_iter()
         .map(|addr| IpOrSocketAddress::new_socket_address(addr.socket_addr()))
         .collect();
-    let crawler_config = CrawlerManagerConfig {
+    let crawler_mgr_config = CrawlerManagerConfig {
         reserved_nodes,
         default_p2p_port: 3031,
     };
+    let crawler_config = CrawlerConfig {
+        ban_duration: BanDuration::default(),
+        ban_threshold: BanThreshold::default(),
+    };
 
     let state = MockStateRef {
-        crawler_config: crawler_config.clone(),
+        crawler_mgr_config: crawler_mgr_config.clone(),
         online: Default::default(),
         connected: Default::default(),
         connection_attempts: Default::default(),
@@ -256,6 +303,7 @@ pub fn test_crawler(
 
     let crawler = CrawlerManager::<MockNetworkingService, _>::new(
         time_getter.get_time_getter(),
+        crawler_mgr_config,
         crawler_config,
         chain_config,
         conn,
@@ -287,4 +335,30 @@ pub async fn advance_time(
     tokio::time::timeout(Duration::from_millis(10), crawler.run())
         .await
         .expect_err("run should not return");
+}
+
+pub fn assert_known_addresses<N, S>(crawler: &CrawlerManager<N, S>, expected: &[SocketAddress])
+where
+    N: NetworkingService,
+    S: DnsServerStorage,
+    N::SyncingEventReceiver: SyncingEventReceiver,
+    N::ConnectivityHandle: ConnectivityService<N>,
+{
+    let loaded_storage = crawler.load_storage_for_tests().unwrap();
+    let expected: BTreeSet<_> = expected.iter().copied().collect();
+    assert_eq!(loaded_storage.known_addresses, expected);
+}
+
+pub fn assert_banned_addresses<N, S>(
+    crawler: &CrawlerManager<N, S>,
+    expected: &[(BannableAddress, Time)],
+) where
+    N: NetworkingService,
+    S: DnsServerStorage,
+    N::SyncingEventReceiver: SyncingEventReceiver,
+    N::ConnectivityHandle: ConnectivityService<N>,
+{
+    let loaded_storage = crawler.load_storage_for_tests().unwrap();
+    let expected: BTreeMap<_, _> = expected.iter().copied().collect();
+    assert_eq!(loaded_storage.banned_addresses, expected);
 }
