@@ -75,13 +75,10 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{
-            get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenData, TokenId,
-            TokenIssuanceVersion,
-        },
+        tokens::{get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenId},
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, OutPointSourceId, PoolId, RequiredConsensus, TokenOutput,
-        Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
+        TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -741,7 +738,8 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::Burn(_)
+                TxOutput::Transfer(_, _)
+                | TxOutput::Burn(_)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
@@ -787,42 +785,6 @@ where
                         Some(res)
                     }
                 },
-                TxOutput::Transfer(v, _) => {
-                    v.token_data().and_then(|token_data| match token_data {
-                        TokenData::TokenTransfer(_) => None,
-                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
-                            let consensus_status = self
-                                .chain_config
-                                .as_ref()
-                                .net_upgrade()
-                                .consensus_status(tx_source.expected_block_height());
-                            let token_version = match consensus_status {
-                                RequiredConsensus::IgnoreConsensus => None,
-                                RequiredConsensus::PoW(_) => Some(
-                                    self.chain_config
-                                        .as_ref()
-                                        .get_proof_of_work_config()
-                                        .token_issuance_version(),
-                                ),
-                                RequiredConsensus::PoS(pos_status) => {
-                                    Some(pos_status.get_chain_config().token_issuance_version())
-                                }
-                            };
-                            token_version.and_then(|token_version| match token_version {
-                                TokenIssuanceVersion::V0 => {
-                                    Some(Err(ConnectTransactionError::TokensError(
-                                        TokensError::DeprecatedTokenIssuanceVersion(
-                                            tx.get_id(),
-                                            TokenIssuanceVersion::V0,
-                                        ),
-                                    )))
-                                }
-                                TokenIssuanceVersion::V1 => None,
-                                _ => unreachable!(),
-                            })
-                        }
-                    })
-                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 

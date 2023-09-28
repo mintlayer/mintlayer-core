@@ -23,6 +23,7 @@ use crate::{
         },
         create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
+        tokens::TokenIssuanceVersion,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoSConsensusVersion,
         PoWChainConfig, UpgradeVersion,
     },
@@ -72,7 +73,10 @@ impl ChainType {
                             initial_difficulty: Some(
                                 pos_initial_difficulty(ChainType::Testnet).into(),
                             ),
-                            config: create_testnet_pos_config(PoSConsensusVersion::V0),
+                            config: create_testnet_pos_config(
+                                PoSConsensusVersion::V0,
+                                TokenIssuanceVersion::V0,
+                            ),
                         }),
                     ),
                     (
@@ -80,10 +84,12 @@ impl ChainType {
                         BlockHeight::new(9999999999),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: None,
-                            config: create_testnet_pos_config(PoSConsensusVersion::V1),
+                            config: create_testnet_pos_config(
+                                PoSConsensusVersion::V1,
+                                TokenIssuanceVersion::V1,
+                            ),
                         }),
                     ),
-                    // TODO: Add upgrade to TokenIssuanceVersion::V1
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }

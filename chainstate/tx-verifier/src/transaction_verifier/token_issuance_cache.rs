@@ -86,10 +86,10 @@ impl TokenIssuanceCache {
         let was_token_issued = get_tokens_issuance_v0_count(tx.outputs()) > 0;
 
         if was_token_issued {
-            // Check that only v0 tokens were issued
+            // Check if iv0 tokens are allowed to be issued at this height
             let consensus_status =
                 chain_config.net_upgrade().consensus_status(tx_source.expected_block_height());
-            let token_version = match consensus_status {
+            let latest_token_version = match consensus_status {
                 RequiredConsensus::IgnoreConsensus => None,
                 RequiredConsensus::PoW(_) => {
                     Some(chain_config.get_proof_of_work_config().token_issuance_version())
@@ -99,14 +99,14 @@ impl TokenIssuanceCache {
                 }
             };
 
-            if let Some(token_version) = token_version {
-                match token_version {
-                    TokenIssuanceVersion::V0 => { /* do nothing */ }
+            if let Some(latest_token_version) = latest_token_version {
+                match latest_token_version {
+                    TokenIssuanceVersion::V0 => { /* ok */ }
                     TokenIssuanceVersion::V1 => {
                         return Err(ConnectTransactionError::TokensError(
-                            TokensError::UnsupportedTokenIssuanceVersion(
+                            TokensError::DeprecatedTokenIssuanceVersion(
                                 tx.get_id(),
-                                TokenIssuanceVersion::V1,
+                                TokenIssuanceVersion::V0,
                             ),
                         ));
                     }

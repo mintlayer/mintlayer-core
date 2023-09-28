@@ -29,7 +29,6 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageWrite, PoolData,
 };
-use storage::MakeMapRef;
 use tokens_accounting::TokensAccountingStorageWrite;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
