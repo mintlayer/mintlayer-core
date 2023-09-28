@@ -19,7 +19,7 @@ use crate::{
     },
     chain::{
         output_value::OutputValue,
-        tokens::{TokenId, TokenIssuance},
+        tokens::{NftIssuance, TokenId, TokenIssuance},
         ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
@@ -124,6 +124,8 @@ pub enum TokenOutput {
     // Works only for Lockable tokens supply.
     #[codec(index = 3)]
     LockCirculatingSupply(TokenId),
+    #[codec(index = 4)]
+    IssueNft(TokenId, Box<NftIssuance>, Destination),
 }
 
 impl TxOutput {

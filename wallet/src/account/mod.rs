@@ -21,7 +21,7 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::AccountSpending::{self, Delegation};
 use common::primitives::id::WithId;
-use common::primitives::Idable;
+use common::primitives::{Idable, H256};
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
@@ -33,7 +33,8 @@ use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decomission_stake_pool_output, make_stake_output, StakePoolDataArguments,
+    make_decomission_stake_pool_output, make_stake_output, IssueNftArguments,
+    StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -42,7 +43,9 @@ use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::tokens::{TokenData, TokenId, TokenTransfer};
+use common::chain::tokens::{
+    make_token_id, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+};
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -609,6 +612,71 @@ impl Account {
         Ok(tx)
     }
 
+    pub fn create_issue_nft_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        nft_issue_arguments: IssueNftArguments,
+        median_time: BlockTimestamp,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
+        // and then replace it with when we can calculate the pool_id
+        let dummy_token_id = TokenId::new(H256::zero());
+        let dummy_issuance_output = TxOutput::Tokens(TokenOutput::IssueNft(
+            dummy_token_id,
+            Box::new(NftIssuance::V1(NftIssuanceV0 {
+                metadata: nft_issue_arguments.metadata,
+            })),
+            nft_issue_arguments.destination,
+        ));
+
+        let request = SendRequest::new().with_outputs([
+            dummy_issuance_output,
+            TxOutput::Burn(OutputValue::Coin(
+                self.chain_config.token_min_issuance_fee(),
+            )),
+        ]);
+        let mut request = self.select_inputs_for_send_request(
+            request,
+            vec![],
+            db_tx,
+            median_time,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+
+        let new_token_id = make_token_id(request.inputs()).ok_or(WalletError::NoUtxos)?;
+
+        // update the dummy_token_id with the new_token_id
+        let old_token_id = request
+            .get_outputs_mut()
+            .iter_mut()
+            .find_map(|output| match output {
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _) => None,
+                TxOutput::Tokens(token_output) => match token_output {
+                    TokenOutput::IssueFungibleToken(_)
+                    | TokenOutput::MintTokens(_, _, _)
+                    | TokenOutput::RedeemTokens(_, _)
+                    | TokenOutput::LockCirculatingSupply(_) => None,
+                    TokenOutput::IssueNft(token_id, _, _) => {
+                        (*token_id == dummy_token_id).then_some(token_id)
+                    }
+                },
+            })
+            .expect("find output with dummy_pool_id");
+        *old_token_id = new_token_id;
+
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
+        Ok(tx)
+    }
+
     pub fn get_pos_gen_block_data(
         &self,
         db_tx: &impl WalletStorageReadUnlocked,
@@ -774,7 +842,7 @@ impl Account {
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
             TxOutput::Tokens(tokens_output) => match tokens_output {
-                TokenOutput::MintTokens(_, _, d) => Some(d),
+                TokenOutput::MintTokens(_, _, d) | TokenOutput::IssueNft(_, _, d) => Some(d),
                 TokenOutput::IssueFungibleToken(_)
                 | TokenOutput::RedeemTokens(_, _)
                 | TokenOutput::LockCirculatingSupply(_) => None,

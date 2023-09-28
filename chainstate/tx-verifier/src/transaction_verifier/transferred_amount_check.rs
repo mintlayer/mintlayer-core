@@ -21,7 +21,7 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, token_id, TokenData, TokenId},
+        tokens::{get_tokens_issuance_count, make_token_id, TokenData, TokenId},
         AccountSpending, Block, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
@@ -121,7 +121,8 @@ fn get_output_value<P: PoSAccountingView>(
         TxOutput::Tokens(v) => match v {
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::LockCirculatingSupply(_)
-            | TokenOutput::RedeemTokens(_, _) => OutputValue::Coin(Amount::ZERO),
+            | TokenOutput::RedeemTokens(_, _)
+            | TokenOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
             TokenOutput::MintTokens(id, v, _) => OutputValue::TokenV1(*id, *v),
         },
     };
@@ -169,6 +170,9 @@ where
                 TxOutput::Tokens(v) => match v {
                     TokenOutput::MintTokens(token_id, amount, _) => {
                         OutputValue::TokenV1(*token_id, *amount)
+                    }
+                    TokenOutput::IssueNft(token_id, _, _) => {
+                        OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
                     }
                     TokenOutput::IssueFungibleToken(_)
                     | TokenOutput::RedeemTokens(_, _)
@@ -241,14 +245,16 @@ fn get_output_token_id_and_amount(
             }
             TokenData::TokenIssuance(issuance) => match include_issuance {
                 Some(tx) => {
-                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    let token_id =
+                        make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 }
                 None => None,
             },
             TokenData::NftIssuance(_) => match include_issuance {
                 Some(tx) => {
-                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    let token_id =
+                        make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 }
                 None => None,

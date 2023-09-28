@@ -17,7 +17,7 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        tokens::{is_token_or_nft_issuance, token_id, TokenId},
+        tokens::{is_token_or_nft_issuance, make_token_id, TokenId},
         AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -239,7 +239,6 @@ impl OutputCache {
                 TxOutput::Tokens(_) => {
                     // TODO: add support for tokens v1
                     // See https://github.com/mintlayer/mintlayer-core/issues/1237
-                    unimplemented!()
                 }
             };
         }
@@ -396,7 +395,7 @@ impl OutputCache {
         );
 
         let token_id = match tx {
-            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+            WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
             WalletTx::Block(_) => None,
         };
 
@@ -446,7 +445,7 @@ impl OutputCache {
                     .map(move |(output, outpoint)| {
                         let token_id = match tx {
                             WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
-                                .then_some(token_id(tx_data.get_transaction()))
+                                .then_some(make_token_id(tx_data.get_transaction().inputs()))
                                 .flatten(),
                             WalletTx::Block(_) => None,
                         };
