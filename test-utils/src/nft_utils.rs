@@ -19,7 +19,7 @@ use crate::random_string;
 use common::{
     chain::{
         config::ChainConfig,
-        tokens::{Metadata, NftIssuance, TokenCreator, TokenIssuance},
+        tokens::{Metadata, NftIssuance, TokenCreator, TokenIssuanceV0},
     },
     primitives::Amount,
 };
@@ -32,12 +32,15 @@ pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
     TokenCreator::from(public_key)
 }
 
-pub fn random_token_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng) -> TokenIssuance {
+pub fn random_token_issuance(
+    chain_config: Arc<ChainConfig>,
+    rng: &mut impl Rng,
+) -> TokenIssuanceV0 {
     let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
-    TokenIssuance {
+    TokenIssuanceV0 {
         token_ticker: random_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
         amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
         number_of_decimals: rng.gen_range(1..max_dec_count),

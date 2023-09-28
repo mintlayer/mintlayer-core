@@ -60,14 +60,13 @@ pub struct TokenTransfer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
-pub struct TokenIssuance {
+pub struct TokenIssuanceV0 {
     pub token_ticker: Vec<u8>,
     pub amount_to_issue: Amount,
     pub number_of_decimals: u8,
     pub metadata_uri: Vec<u8>,
 }
 
-// TODO: support upgrade from v0 to v1
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
@@ -75,7 +74,7 @@ pub enum TokenData {
     TokenTransfer(TokenTransfer),
     /// New token creation
     #[codec(index = 2)]
-    TokenIssuance(Box<TokenIssuance>),
+    TokenIssuance(Box<TokenIssuanceV0>),
     // A new NFT creation
     #[codec(index = 3)]
     NftIssuance(Box<NftIssuance>),
@@ -87,8 +86,8 @@ impl From<NftIssuance> for TokenData {
     }
 }
 
-impl From<TokenIssuance> for TokenData {
-    fn from(d: TokenIssuance) -> Self {
+impl From<TokenIssuanceV0> for TokenData {
+    fn from(d: TokenIssuanceV0) -> Self {
         Self::TokenIssuance(Box::new(d))
     }
 }

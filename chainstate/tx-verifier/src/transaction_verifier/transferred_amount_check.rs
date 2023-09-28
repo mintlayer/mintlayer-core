@@ -235,7 +235,7 @@ fn get_output_token_id_and_amount(
 ) -> Result<Option<(CoinOrTokenId, Amount)>, ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
-        OutputValue::Token(token_data) => match &**token_data {
+        OutputValue::TokenV0(token_data) => match &**token_data {
             TokenData::TokenTransfer(transfer) => {
                 Some((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
@@ -267,7 +267,7 @@ where
 {
     match output_value {
         OutputValue::Coin(amount) => Ok((CoinOrTokenId::Coin, *amount)),
-        OutputValue::Token(token_data) => match &**token_data {
+        OutputValue::TokenV0(token_data) => match &**token_data {
             TokenData::TokenTransfer(transfer) => {
                 Ok((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }

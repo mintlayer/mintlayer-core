@@ -50,7 +50,7 @@ use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, Trans
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
-use crate::{detail::tokens::check_tokens_issuance_versioned, BlockError, ChainstateConfig};
+use crate::{detail::tokens::check_tokens_issuance, BlockError, ChainstateConfig};
 
 use self::tx_verifier_storage::gen_block_index_getter;
 
@@ -770,16 +770,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         Ok(())
                     }
                     TxOutput::Tokens(token_output) => match token_output {
-                        TokenOutput::IssueFungibleToken(issuance) => {
-                            check_tokens_issuance_versioned(self.chain_config, issuance.as_ref())
-                                .map_err(|e| {
-                                    TokensError::IssueError(
-                                        e,
-                                        tx.transaction().get_id(),
-                                        block.get_id(),
-                                    )
-                                })
-                        }
+                        TokenOutput::IssueFungibleToken(issuance) => check_tokens_issuance(
+                            self.chain_config,
+                            issuance.as_ref(),
+                        )
+                        .map_err(|e| {
+                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                        }),
                         TokenOutput::MintTokens(_, _, _)
                         | TokenOutput::RedeemTokens(_, _)
                         | TokenOutput::LockCirculatingSupply(_) => Ok(()),
