@@ -19,7 +19,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{token_id, Metadata, NftIssuance, TokenData, TokenTransfer},
+        tokens::{make_token_id, Metadata, NftIssuanceV0, TokenData, TokenTransfer},
         Destination, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable},
@@ -59,7 +59,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-        let issuance_data = NftIssuance {
+        let issuance_data = NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -104,7 +104,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .next()
             .unwrap()
             .clone();
-        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
+        let token_id =
+            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // B1 - burn NFT in mainchain
         let block_index = tf
@@ -371,7 +372,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new NFT
-        let issuance_value = NftIssuance {
+        let issuance_value = NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -406,7 +407,8 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
+        let token_id =
+            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // Check NFT available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();

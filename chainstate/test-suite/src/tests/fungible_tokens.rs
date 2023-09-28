@@ -20,14 +20,14 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
-use common::chain::tokens::{Metadata, NftIssuance, TokenIssuanceV0, TokenTransfer};
+use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
 use common::chain::UtxoOutPoint;
 use common::primitives::{id, Id};
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{token_id, TokenData, TokenId},
+        tokens::{make_token_id, TokenData, TokenId},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
@@ -485,7 +485,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
         assert_eq!(
             get_output_value(&block.transactions()[0].transaction().outputs()[0]).unwrap(),
             output_value.clone().into()
@@ -833,7 +833,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id = block.transactions()[0].transaction().get_id().into();
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Split tokens in outputs
         let split_block = tf
@@ -943,7 +943,7 @@ fn burn_tokens(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
             block.transactions()[0].transaction().get_id().into();
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try burn more than we have in input
         let result = tf
@@ -1151,7 +1151,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let issuance_block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
             issuance_block.transactions()[0].transaction().get_id().into();
-        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
+        let token_id =
+            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // B1 - burn all tokens in mainchain
         let block_index = tf
@@ -1439,7 +1440,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
             block.transactions()[0].transaction().get_id().into();
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
         let result = tf
@@ -1537,7 +1538,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
             block.transactions()[0].transaction().get_id().into();
-        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
         let result = tf
@@ -1645,7 +1646,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let first_issuance_outpoint_id: OutPointSourceId =
             block.transactions()[0].transaction().get_id().into();
-        let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        let first_token_id = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
@@ -1692,7 +1693,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let second_issuance_outpoint_id: OutPointSourceId =
             block.transactions()[0].transaction().get_id().into();
-        let _ = token_id(block.transactions()[0].transaction()).unwrap();
+        let _ = make_token_id(block.transactions()[0].transaction().inputs()).unwrap();
 
         // Try to spend sum of input tokens
 
@@ -1778,7 +1779,8 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
+        let token_id =
+            make_token_id(issuance_block.transactions()[0].transaction().inputs()).unwrap();
 
         // Check tokens available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
@@ -1933,7 +1935,7 @@ fn chosen_hashes_for_token_data() {
     .assert_debug_eq(&Id::<TokenIssuanceV0>::new(hash_stream.finalize().into()).to_hash());
 
     // NFT issuance
-    let nft_issuance = NftIssuance {
+    let nft_issuance = NftIssuanceV0 {
         metadata: Metadata {
             creator: None,
             name: b"SOME".to_vec(),
@@ -1951,7 +1953,7 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0x5ab12d01286027603a6483405b9a970c094c16f3f51be2fa98f8c936edd76abe
         "#]]
-    .assert_debug_eq(&Id::<NftIssuance>::new(hash_stream.finalize().into()).to_hash());
+    .assert_debug_eq(&Id::<NftIssuanceV0>::new(hash_stream.finalize().into()).to_hash());
 
     // Token Transfer
     let token_data = TokenData::TokenTransfer(TokenTransfer {
@@ -2006,7 +2008,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
-                    token_id: token_id(tx_1.transaction()).unwrap(),
+                    token_id: make_token_id(tx_1.transaction().inputs()).unwrap(),
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 })
                 .into(),

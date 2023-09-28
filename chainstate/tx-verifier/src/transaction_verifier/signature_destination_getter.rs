@@ -130,6 +130,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                             TxOutput::Tokens(v) => match v {
                                 TokenOutput::MintTokens(_, _, d) => Ok(d.clone()),
+                                TokenOutput::IssueNft(_, _, d) => Ok(d.clone()),
                                 TokenOutput::IssueFungibleToken(_)
                                 | TokenOutput::RedeemTokens(_, _)
                                 | TokenOutput::LockCirculatingSupply(_) => {

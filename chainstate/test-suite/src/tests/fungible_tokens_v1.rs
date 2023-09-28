@@ -19,7 +19,9 @@ use chainstate::{
 };
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::tokens::{token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply};
+use common::chain::tokens::{
+    make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+};
 use common::chain::{Block, GenBlock, UtxoOutPoint};
 use common::primitives::signed_amount::SignedAmount;
 use common::primitives::Id;
@@ -72,7 +74,7 @@ fn issue_token_from_block(
         ))))
         .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
         .build();
-    let token_id = token_id(tx.transaction()).unwrap();
+    let token_id = make_token_id(tx.transaction().inputs()).unwrap();
     let tx_id = tx.transaction().get_id();
     let block = tf.make_block_builder().add_transaction(tx).with_parent(parent_block_id).build();
     let block_id = block.get_id();
@@ -345,7 +347,7 @@ fn token_issue_test(#[case] seed: Seed) {
             ))))
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
-        let token_id = token_id(tx.transaction()).unwrap();
+        let token_id = make_token_id(tx.transaction().inputs()).unwrap();
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let actual_token_data =

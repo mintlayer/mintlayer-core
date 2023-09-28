@@ -214,7 +214,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
             )))
             .build();
         let tx0_id = tx0.transaction().get_id();
-        let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
+        let token_id = common::chain::tokens::make_token_id(tx0.transaction().inputs()).unwrap();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let (stake_pool_data, _) =

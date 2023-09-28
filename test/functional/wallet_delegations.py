@@ -39,19 +39,16 @@ from test_framework.mintlayer import (
     outpoint_obj,
     signed_tx_obj,
 )
-from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
+from scalecodec.base import ScaleBytes
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.mintlayer import (make_tx, reward_input)
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
-from test_framework.util import (
-    assert_equal,
-)
+from test_framework.util import assert_equal
 
 import asyncio
 import sys
-import random, time
+import time
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"

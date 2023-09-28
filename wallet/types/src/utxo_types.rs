@@ -56,6 +56,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         TxOutput::Tokens(tokens_output) => match tokens_output {
             TokenOutput::MintTokens(_, _, _) => Some(UtxoType::MintTokens),
             TokenOutput::IssueFungibleToken(_)
+            | TokenOutput::IssueNft(_, _, _)
             | TokenOutput::RedeemTokens(_, _)
             | TokenOutput::LockCirculatingSupply(_) => None,
         },

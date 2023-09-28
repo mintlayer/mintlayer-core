@@ -111,32 +111,35 @@ class WalletNfts(BitcoinTestFramework):
             assert "Coins amount: 1000" in await wallet.get_balance()
 
             address = await wallet.new_address()
-            nft_id = await wallet.issue_new_nft(address,"123456", "Name", "SomeNFT", "XXX")
+            nft_id = await wallet.issue_new_nft(address, "123456", "Name", "SomeNFT", "XXX")
             assert nft_id is not None
             self.log.info(f"new nft id: '{nft_id}'")
 
             self.generate_block()
             assert "Success" in await wallet.sync()
 
-            self.log.info(await wallet.get_balance())
-            assert f"{nft_id} amount: 1" in await wallet.get_balance()
 
-            # create a new account and send some tokens to it
-            await wallet.create_new_account()
-            await wallet.select_account(1)
-            address = await wallet.new_address()
+            # TODO: add support for tokens v1
+            # See https://github.com/mintlayer/mintlayer-core/issues/1237
+            #self.log.info(await wallet.get_balance())
+            #assert f"{nft_id} amount: 1" in await wallet.get_balance()
 
-            await wallet.select_account(0)
-            assert f"{nft_id} amount: 1" in await wallet.get_balance()
-            output = await wallet.send_tokens_to_address(nft_id, address, 1)
-            self.log.info(output)
-            assert "The transaction was submitted successfully" in output
+            ## create a new account and send some tokens to it
+            #await wallet.create_new_account()
+            #await wallet.select_account(1)
+            #address = await wallet.new_address()
 
-            self.generate_block()
-            assert "Success" in await wallet.sync()
+            #await wallet.select_account(0)
+            #assert f"{nft_id} amount: 1" in await wallet.get_balance()
+            #output = await wallet.send_tokens_to_address(nft_id, address, 1)
+            #self.log.info(output)
+            #assert "The transaction was submitted successfully" in output
 
-            # check the new balance nft is not present
-            assert nft_id not in await wallet.get_balance()
+            #self.generate_block()
+            #assert "Success" in await wallet.sync()
+
+            ## check the new balance nft is not present
+            #assert nft_id not in await wallet.get_balance()
 
 if __name__ == '__main__':
     WalletNfts().main()

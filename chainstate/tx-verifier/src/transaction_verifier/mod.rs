@@ -75,7 +75,9 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_token_supply_change_count, get_tokens_issuance_count, token_id, TokenId},
+        tokens::{
+            get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenId,
+        },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
         TxMainChainIndex, TxOutput, UtxoOutPoint,
@@ -746,7 +748,7 @@ where
                 | TxOutput::LockThenTransfer(_, _, _) => None,
                 TxOutput::Tokens(token_output) => match token_output {
                     TokenOutput::IssueFungibleToken(issuance_data) => {
-                        let result = token_id(tx)
+                        let result = make_token_id(tx.inputs())
                             .ok_or(ConnectTransactionError::TokensError(
                                 TokensError::TokenIdCantBeCalculated,
                             ))
@@ -783,6 +785,7 @@ where
                             .map_err(ConnectTransactionError::TokensAccountingError);
                         Some(res)
                     }
+                    TokenOutput::IssueNft(_, _, _) => None,
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;

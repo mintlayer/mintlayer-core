@@ -77,11 +77,11 @@ pub enum TokenData {
     TokenIssuance(Box<TokenIssuanceV0>),
     // A new NFT creation
     #[codec(index = 3)]
-    NftIssuance(Box<NftIssuance>),
+    NftIssuance(Box<NftIssuanceV0>),
 }
 
-impl From<NftIssuance> for TokenData {
-    fn from(d: NftIssuance) -> Self {
+impl From<NftIssuanceV0> for TokenData {
+    fn from(d: NftIssuanceV0) -> Self {
         Self::NftIssuance(Box::new(d))
     }
 }
