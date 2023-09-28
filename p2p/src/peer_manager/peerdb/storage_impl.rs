@@ -18,6 +18,7 @@ use std::time::Duration;
 use crate::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
 
 use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
+use common::primitives::time::Time;
 use serialization::{encoded::Encoded, DecodeAll, Encode};
 use storage::MakeMapRef;
 
@@ -32,7 +33,7 @@ storage::decl_schema! {
         /// Table for known addresses
         pub DBKnownAddresses: Map<String, ()>,
 
-        /// Table for banned addresses
+        /// Table for banned addresses vs when they can be unbanned (Duration is timestamp since UNIX Epoch)
         pub DBBannedAddresses: Map<String, Duration>,
 
         /// Table for anchor peers addresses
@@ -62,12 +63,10 @@ impl<'st, B: storage::Backend> PeerDbStorageWrite for PeerDbStoreTxRw<'st, B> {
         self.storage().get_mut::<DBKnownAddresses, _>().del(address)
     }
 
-    fn add_banned_address(
-        &mut self,
-        address: &str,
-        duration: Duration,
-    ) -> Result<(), storage::Error> {
-        self.storage().get_mut::<DBBannedAddresses, _>().put(address, duration)
+    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error> {
+        self.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put(address, time.as_duration_since_epoch())
     }
 
     fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
@@ -98,9 +97,11 @@ impl<'st, B: storage::Backend> PeerDbStorageRead for PeerDbStoreTxRo<'st, B> {
         Ok(iter.map(|(key, _value)| key).collect::<Vec<_>>())
     }
 
-    fn get_banned_addresses(&self) -> Result<Vec<(String, Duration)>, storage::Error> {
+    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error> {
         let map = self.storage().get::<DBBannedAddresses, _>();
-        let iter = map.prefix_iter_decoded(&())?;
+        let iter = map
+            .prefix_iter_decoded(&())?
+            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)));
         Ok(iter.collect::<Vec<_>>())
     }
 

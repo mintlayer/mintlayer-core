@@ -349,7 +349,9 @@ fn test_filter_by_last_block_time() {
                     net_group_keyed: NetGroupKeyed(1),
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Duration::from_secs(10000000)),
+                    last_tip_block_time: Some(Time::from_duration_since_epoch(
+                        Duration::from_secs(10000000)
+                    )),
                     last_tx_time: None,
                 },
             ]),
@@ -375,7 +377,9 @@ fn test_filter_by_last_block_time() {
                     net_group_keyed: NetGroupKeyed(1),
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Duration::from_secs(10000000)),
+                    last_tip_block_time: Some(Time::from_duration_since_epoch(
+                        Duration::from_secs(10000000)
+                    )),
                     last_tx_time: None,
                 },
                 EvictionCandidate {
@@ -384,7 +388,9 @@ fn test_filter_by_last_block_time() {
                     net_group_keyed: NetGroupKeyed(1),
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Duration::from_secs(10000001)),
+                    last_tip_block_time: Some(Time::from_duration_since_epoch(
+                        Duration::from_secs(10000001)
+                    )),
                     last_tx_time: None,
                 },
                 EvictionCandidate {
@@ -393,7 +399,9 @@ fn test_filter_by_last_block_time() {
                     net_group_keyed: NetGroupKeyed(1),
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
-                    last_tip_block_time: Some(Duration::from_secs(10000002)),
+                    last_tip_block_time: Some(Time::from_duration_since_epoch(
+                        Duration::from_secs(10000002)
+                    )),
                     last_tx_time: None,
                 },
             ]),
@@ -405,7 +413,7 @@ fn test_filter_by_last_block_time() {
             net_group_keyed: NetGroupKeyed(1),
             ping_min: 123,
             peer_role: PeerRole::Inbound,
-            last_tip_block_time: Some(Duration::from_secs(10000000)),
+            last_tip_block_time: Some(Time::from_secs_since_epoch(10000000)),
             last_tx_time: None,
         },]
     );
@@ -444,7 +452,7 @@ fn test_filter_by_last_transaction_time() {
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
-                    last_tx_time: Some(Duration::from_secs(1000000)),
+                    last_tx_time: Some(Time::from_secs_since_epoch(1000000)),
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -479,7 +487,7 @@ fn test_filter_by_last_transaction_time() {
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
-                    last_tx_time: Some(Duration::from_secs(10000000)),
+                    last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -488,7 +496,7 @@ fn test_filter_by_last_transaction_time() {
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
-                    last_tx_time: Some(Duration::from_secs(10000001)),
+                    last_tx_time: Some(Time::from_secs_since_epoch(10000001)),
                 },
                 EvictionCandidate {
                     age: Duration::ZERO,
@@ -497,7 +505,7 @@ fn test_filter_by_last_transaction_time() {
                     ping_min: 123,
                     peer_role: PeerRole::Inbound,
                     last_tip_block_time: None,
-                    last_tx_time: Some(Duration::from_secs(10000002)),
+                    last_tx_time: Some(Time::from_secs_since_epoch(10000002)),
                 },
             ]),
             2
@@ -509,7 +517,7 @@ fn test_filter_by_last_transaction_time() {
             ping_min: 123,
             peer_role: PeerRole::Inbound,
             last_tip_block_time: None,
-            last_tx_time: Some(Duration::from_secs(10000000)),
+            last_tx_time: Some(Time::from_secs_since_epoch(10000000)),
         },]
     );
 }
@@ -749,7 +757,7 @@ fn test_block_relay_eviction_no_blocks() {
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
                 peer_role: PeerRole::OutboundBlockRelay,
-                last_tip_block_time: Some(Duration::from_secs(10000)),
+                last_tip_block_time: Some(Time::from_secs_since_epoch(10000)),
                 last_tx_time: None,
             },
             EvictionCandidate {
@@ -758,7 +766,7 @@ fn test_block_relay_eviction_no_blocks() {
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
                 peer_role: PeerRole::OutboundBlockRelay,
-                last_tip_block_time: Some(Duration::from_secs(20000)),
+                last_tip_block_time: Some(Time::from_secs_since_epoch(20000)),
                 last_tx_time: None,
             },
             EvictionCandidate {
@@ -791,7 +799,7 @@ fn test_block_relay_eviction_old_blocks() {
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
                 peer_role: PeerRole::OutboundBlockRelay,
-                last_tip_block_time: Some(Duration::from_secs(10000)),
+                last_tip_block_time: Some(Time::from_secs_since_epoch(10000)),
                 last_tx_time: None,
             },
             EvictionCandidate {
@@ -800,7 +808,7 @@ fn test_block_relay_eviction_old_blocks() {
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
                 peer_role: PeerRole::OutboundBlockRelay,
-                last_tip_block_time: Some(Duration::from_secs(20000)),
+                last_tip_block_time: Some(Time::from_secs_since_epoch(20000)),
                 last_tx_time: None,
             },
             EvictionCandidate {
@@ -809,7 +817,7 @@ fn test_block_relay_eviction_old_blocks() {
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
                 peer_role: PeerRole::OutboundBlockRelay,
-                last_tip_block_time: Some(Duration::from_secs(30000)),
+                last_tip_block_time: Some(Time::from_secs_since_epoch(30000)),
                 last_tx_time: None,
             },
         ])),

@@ -61,7 +61,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-            BlockTimestamp::from_duration_since_epoch(current_time),
+            BlockTimestamp::from_time(current_time),
         );
 
         let spend_locked_tx = TransactionBuilder::new()
@@ -77,7 +77,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
-                    &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                    &BlockTimestamp::from_time(tf.current_time()),
                     None
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
@@ -96,7 +96,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             .connect_transaction(
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                &BlockTimestamp::from_time(tf.current_time()),
                 None,
             )
             .unwrap();
@@ -124,7 +124,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(current_time),
+            BlockTimestamp::from_time(current_time),
         );
 
         let spend_locked_tx = TransactionBuilder::new()
@@ -140,7 +140,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::for_mempool(&best_block_index),
                     &spend_locked_tx,
-                    &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                    &BlockTimestamp::from_time(tf.current_time()),
                     None,
                 ),
                 Err(ConnectTransactionError::TimeLockViolation(_))
@@ -162,7 +162,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             .connect_transaction(
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                &BlockTimestamp::from_time(tf.current_time()),
                 None,
             )
             .unwrap();
@@ -250,7 +250,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             .connect_transaction(
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                &BlockTimestamp::from_time(tf.current_time()),
                 None,
             )
             .unwrap();
@@ -344,7 +344,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             .connect_transaction(
                 &TransactionSourceForConnect::for_mempool(&best_block_index),
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(time::get_time()),
+                &BlockTimestamp::from_time(time::get_time()),
                 None,
             )
             .unwrap();

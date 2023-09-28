@@ -16,7 +16,6 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
-    time::Duration,
 };
 
 use itertools::Itertools;
@@ -28,9 +27,10 @@ use tokio::{
 use chainstate::{chainstate_interface::ChainstateInterface, BlockIndex, BlockSource, Locator};
 use common::{
     chain::{
-        block::signed_block_header::SignedBlockHeader, Block, ChainConfig, GenBlock, Transaction,
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
+        Block, ChainConfig, GenBlock, Transaction,
     },
-    primitives::{Id, Idable},
+    primitives::{time::Time, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -546,10 +546,15 @@ where
     // TODO: this must be removed; but at this moment this is not really possible, because
     // blockprod currently creates new blocks in the future, near the maximally allowed mark.
     // Also, see the issue #1024.
-    async fn wait_for_clock_diff(&self, block_timestamp: Duration) {
-        let max_block_timestamp =
-            self.time_getter.get_time() + *self.chain_config.max_future_block_time_offset();
+    async fn wait_for_clock_diff(&self, block_timestamp: BlockTimestamp) {
+        let max_accepted_time = (self.time_getter.get_time()
+            + *self.chain_config.max_future_block_time_offset())
+        .expect("Both values come from this node's clock; so cannot fail");
+        let max_block_timestamp = BlockTimestamp::from_time(max_accepted_time);
         if block_timestamp > max_block_timestamp {
+            let block_timestamp = block_timestamp.as_duration_since_epoch();
+            let max_block_timestamp = max_block_timestamp.as_duration_since_epoch();
+
             let clock_diff =
                 block_timestamp.checked_sub(max_block_timestamp).unwrap_or_else(|| {
                     panic!(
@@ -558,6 +563,7 @@ where
                         max_block_timestamp.as_secs()
                     )
                 });
+
             let sleep_time = std::cmp::min(clock_diff, *self.p2p_config.max_clock_diff);
             log::debug!(
                 "[peer id = {}] Block timestamp from the future ({} seconds)",
@@ -579,8 +585,7 @@ where
         }
 
         let last_header = headers.last().expect("Headers shouldn't be empty");
-        self.wait_for_clock_diff(last_header.timestamp().as_duration_since_epoch())
-            .await;
+        self.wait_for_clock_diff(last_header.timestamp()).await;
 
         if headers.len() > *self.p2p_config.msg_header_count_limit {
             return Err(P2pError::ProtocolError(
@@ -963,8 +968,10 @@ where
 
     async fn disconnect_if_stalling(&mut self) -> Result<()> {
         let cur_time = self.time_getter.get_time();
-        let is_stalling = |activity_time: Option<Duration>| {
-            cur_time >= activity_time.unwrap_or(cur_time) + *self.p2p_config.sync_stalling_timeout
+        let is_stalling = |activity_time: Option<Time>| {
+            cur_time
+                >= (activity_time.unwrap_or(cur_time) + *self.p2p_config.sync_stalling_timeout)
+                    .expect("All from local clock. Cannot fail.")
         };
         let headers_req_stalling = is_stalling(self.peer_activity.expecting_headers_since());
         let blocks_req_stalling = is_stalling(self.peer_activity.expecting_blocks_since());

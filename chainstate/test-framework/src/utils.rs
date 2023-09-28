@@ -373,7 +373,7 @@ pub fn create_chain_config_with_staking_pool(
     let genesis_time = common::time_getter::TimeGetter::default().get_time();
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_duration_since_epoch(genesis_time),
+        BlockTimestamp::from_time(genesis_time),
         vec![mint_output, pool],
     );
 

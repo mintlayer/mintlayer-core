@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
+use common::primitives::time::Time;
 use crypto::random::Rng;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
@@ -53,9 +54,9 @@ pub struct EvictionCandidate {
     /// Inbound or Outbound
     peer_role: PeerRole,
 
-    last_tip_block_time: Option<Duration>,
+    last_tip_block_time: Option<Time>,
 
-    last_tx_time: Option<Duration>,
+    last_tx_time: Option<Time>,
 }
 
 pub struct RandomState(u64, u64);
@@ -73,7 +74,7 @@ impl RandomState {
 }
 
 impl EvictionCandidate {
-    pub fn new(peer: &PeerContext, random_state: &RandomState, now: Duration) -> Self {
+    pub fn new(peer: &PeerContext, random_state: &RandomState, now: Time) -> Self {
         EvictionCandidate {
             age: now.saturating_sub(peer.created_at),
             peer_id: peer.info.peer_id,

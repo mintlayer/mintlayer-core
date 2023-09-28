@@ -521,7 +521,7 @@ pub fn make_new_block(
     rng: &mut impl Rng,
 ) -> Block {
     let random_bytes = get_random_bytes(rng);
-    let timestamp = BlockTimestamp::from_duration_since_epoch(time_getter.get_time());
+    let timestamp = BlockTimestamp::from_time(time_getter.get_time());
 
     let input = match prev_block {
         None => common::chain::OutPointSourceId::BlockReward(chain_config.genesis_block_id()),

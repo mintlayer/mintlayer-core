@@ -36,7 +36,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction,
     },
-    primitives::{amount::Amount, BlockHeight, Id},
+    primitives::{amount::Amount, time::Time, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -177,7 +177,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         self.memory_usage_estimator.estimate_memory_usage(&self.store)
     }
 
-    fn rolling_fee_halflife(&self) -> Time {
+    fn rolling_fee_halflife(&self) -> Duration {
         let mem_usage = self.memory_usage();
         if mem_usage < self.max_size.as_bytes() / 4 {
             ROLLING_FEE_BASE_HALFLIFE / 4
@@ -202,7 +202,8 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         {
             return rolling_fee_rate.rolling_minimum_fee_rate();
         } else if self.clock.get_time()
-            > rolling_fee_rate.last_rolling_fee_update() + ROLLING_FEE_DECAY_INTERVAL
+            > (rolling_fee_rate.last_rolling_fee_update() + ROLLING_FEE_DECAY_INTERVAL)
+                .expect("Both times come from the same clock, so this cannot happen")
         {
             // Decay the rolling fee
             self.decay_rolling_fee_rate();
@@ -374,7 +375,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let mut tx_verifier = self.tx_verifier.derive_child();
 
             let verifier_time =
-                self.clock.get_time().saturating_add(config::FUTURE_TIMELOCK_TOLERANCE_SECS);
+                self.clock.get_time().saturating_duration_add(config::FUTURE_TIMELOCK_TOLERANCE);
             let effective_height = (current_best.block_height()
                 + config::FUTURE_TIMELOCK_TOLERANCE_BLOCKS)
                 .expect("Block height overflow");
@@ -385,7 +386,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                     effective_height,
                 ),
                 transaction.transaction(),
-                &BlockTimestamp::from_duration_since_epoch(verifier_time),
+                &BlockTimestamp::from_time(verifier_time),
                 None,
             );
 

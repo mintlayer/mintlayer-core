@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use common::{
     chain::Transaction,
-    primitives::{semver::SemVer, user_agent::UserAgent, Id},
+    primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id},
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
@@ -72,6 +72,10 @@ impl P2pTimestamp {
 
     pub fn as_duration_since_epoch(&self) -> Duration {
         Duration::from_secs(self.0)
+    }
+
+    pub fn from_time(time: Time) -> Self {
+        Self::from_duration_since_epoch(time.as_duration_since_epoch())
     }
 }
 

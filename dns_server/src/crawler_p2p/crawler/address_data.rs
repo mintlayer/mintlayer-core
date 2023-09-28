@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::primitives::time::Time;
 use utils::const_value::ConstValue;
 
 /// Address state transition
@@ -64,7 +65,7 @@ pub enum AddressState {
         was_reachable: bool,
 
         /// The time when the address went into the disconnected state
-        disconnected_at: Duration,
+        disconnected_at: Time,
     },
 
     /// This is a final state where an address is marked as unreachable and there will be no more attempts to connect to it.
@@ -77,7 +78,7 @@ pub enum AddressState {
         was_reachable: bool,
 
         /// At which time the address would be removed from memory
-        erase_after: Duration,
+        erase_after: Time,
     },
 }
 
@@ -192,7 +193,7 @@ impl AddressState {
 
 impl AddressData {
     /// Returns true when it is time to attempt a new outbound connection
-    pub fn connect_now(&self, now: Duration) -> bool {
+    pub fn connect_now(&self, now: Time) -> bool {
         match self.state {
             AddressState::Connected {}
             | AddressState::Connecting {
@@ -214,10 +215,10 @@ impl AddressData {
                 was_reachable,
                 disconnected_at,
             } => {
-                let age = now - disconnected_at;
+                let age = (now - disconnected_at).expect("Must work 1");
                 if *self.reserved {
                     // Try to connect to the reserved nodes more often
-                    let age = now - disconnected_at;
+                    let age = (now - disconnected_at).expect("Must work 2");
                     match fail_count {
                         0 => true,
                         1 => age > Duration::from_secs(60),
@@ -244,7 +245,7 @@ impl AddressData {
     }
 
     /// Returns true if the address should be kept in memory
-    pub fn retain(&self, now: Duration) -> bool {
+    pub fn retain(&self, now: Time) -> bool {
         match self.state {
             // Always keep user added addresses
             AddressState::Unreachable {
@@ -256,7 +257,7 @@ impl AddressData {
         }
     }
 
-    pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Duration) {
+    pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Time) {
         match transition {
             AddressStateTransitionTo::Connecting => {
                 assert!(matches!(self.state, AddressState::Disconnected { .. }));
@@ -303,7 +304,8 @@ impl AddressData {
                     (false, false) => AddressState::Unreachable {
                         fail_count: self.state.fail_count() + 1,
                         was_reachable: self.state.was_reachable(),
-                        erase_after: now + PURGE_UNREACHABLE_TIME,
+                        erase_after: (now + PURGE_UNREACHABLE_TIME)
+                            .expect("All from local clocks; cannot fail"),
                     },
                     _ => AddressState::Disconnected {
                         fail_count: self.state.fail_count() + 1,

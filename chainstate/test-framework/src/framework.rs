@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc};
 
 use rstest::rstest;
 
@@ -26,7 +26,7 @@ use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, Chainst
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
-    primitives::{id::WithId, BlockHeight, Id, Idable},
+    primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use crypto::{
@@ -79,7 +79,7 @@ impl TestFramework {
     }
 
     /// Get the current time using the time getter that was supplied to the test-framework
-    pub fn current_time(&self) -> Duration {
+    pub fn current_time(&self) -> Time {
         self.time_getter.get_time()
     }
 

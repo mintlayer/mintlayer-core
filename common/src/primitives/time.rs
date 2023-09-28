@@ -29,10 +29,10 @@ pub fn duration_from_int(v: u64) -> Duration {
 static TIME_SOURCE: AtomicU64 = AtomicU64::new(0);
 
 /// Return mocked time if set, otherwise return `None`
-fn get_mocked_time() -> Option<Duration> {
+fn get_mocked_time() -> Option<Time> {
     let value = TIME_SOURCE.load(Ordering::SeqCst);
     if value != 0 {
-        Some(duration_from_int(value))
+        Some(Time::from_duration_since_epoch(duration_from_int(value)))
     } else {
         None
     }
@@ -50,12 +50,80 @@ pub fn set(now: Duration) -> Result<(), std::num::TryFromIntError> {
 }
 
 /// Either gets the current time or panics
-pub fn get_time() -> Duration {
+pub fn get_time() -> Time {
     match get_mocked_time() {
         Some(mocked_time) => mocked_time,
-        None => SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards"),
+        None => Time::from_duration_since_epoch(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Time went backwards"),
+        ),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Time {
+    /// Time, stored as duration since SystemTime::UNIX_EPOCH
+    time: Duration,
+}
+
+impl Time {
+    pub const fn as_duration_since_epoch(&self) -> Duration {
+        self.time
+    }
+
+    pub const fn as_secs_since_epoch(&self) -> u64 {
+        self.time.as_secs()
+    }
+
+    pub const fn from_duration_since_epoch(duration: Duration) -> Self {
+        Self { time: duration }
+    }
+
+    pub const fn from_secs_since_epoch(seconds: u64) -> Self {
+        Self {
+            time: Duration::from_secs(seconds),
+        }
+    }
+
+    pub const fn saturating_duration_add(&self, duration: Duration) -> Self {
+        Self {
+            time: self.time.saturating_add(duration),
+        }
+    }
+
+    pub const fn saturating_duration_sub(&self, t: Duration) -> Self {
+        Self {
+            time: self.time.saturating_sub(t),
+        }
+    }
+
+    pub const fn saturating_sub(&self, t: Self) -> Duration {
+        self.time.saturating_sub(t.time)
+    }
+}
+
+impl std::ops::Add<Duration> for Time {
+    type Output = Option<Self>;
+
+    fn add(self, other: Duration) -> Option<Self> {
+        self.time.checked_add(other).map(|time| Self { time })
+    }
+}
+
+impl std::ops::Sub<Duration> for Time {
+    type Output = Option<Self>;
+
+    fn sub(self, other: Duration) -> Option<Self> {
+        self.time.checked_sub(other).map(|time| Self { time })
+    }
+}
+
+impl std::ops::Sub<Time> for Time {
+    type Output = Option<Duration>;
+
+    fn sub(self, other: Time) -> Option<Duration> {
+        self.time.checked_sub(other.as_duration_since_epoch())
     }
 }
 
@@ -71,23 +139,23 @@ mod tests {
         logging::init_logging();
         set(Duration::from_secs(1337)).unwrap();
 
-        log::info!("p2p time: {}", get_time().as_secs());
+        log::info!("p2p time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!("p2p time: {}", get_time().as_secs());
-        assert_eq!(get_time().as_secs(), 1337);
+        log::info!("p2p time: {}", get_time().as_secs_since_epoch());
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
         std::thread::sleep(Duration::from_secs(1));
 
-        log::info!("rpc time: {}", get_time().as_secs());
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_millis(500));
 
-        assert_eq!(get_time().as_secs(), 1337);
-        log::info!("rpc time: {}", get_time().as_secs());
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
         std::thread::sleep(Duration::from_millis(500));
 
         reset();
-        assert_ne!(get_time().as_secs(), 1337);
-        log::info!("rpc time: {}", get_time().as_secs());
+        assert_ne!(get_time().as_secs_since_epoch(), 1337);
+        log::info!("rpc time: {}", get_time().as_secs_since_epoch());
     }
 
     #[test]
@@ -96,8 +164,8 @@ mod tests {
         assert_eq!(get_mocked_time(), None);
 
         set(Duration::from_secs(1337)).unwrap();
-        assert_eq!(get_time().as_secs(), 1337);
-        assert_eq!(get_mocked_time(), Some(Duration::from_secs(1337)));
+        assert_eq!(get_time().as_secs_since_epoch(), 1337);
+        assert_eq!(get_mocked_time(), Some(Time::from_secs_since_epoch(1337)));
 
         reset();
         assert_eq!(get_mocked_time(), None);

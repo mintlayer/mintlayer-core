@@ -65,7 +65,7 @@ impl<'f> PoSBlockBuilder<'f> {
     pub fn new(framework: &'f mut TestFramework, rng: &mut (impl Rng + CryptoRng)) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
-        let timestamp = BlockTimestamp::from_duration_since_epoch(framework.time_getter.get_time());
+        let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
 
         let (staker_vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let (staker_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -302,7 +302,7 @@ impl<'f> PoSBlockBuilder<'f> {
         pos_mine(
             &self.framework.storage,
             pos_status.get_chain_config(),
-            BlockTimestamp::from_duration_since_epoch(self.framework.current_time()),
+            BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
             &self.staker_vrf_sk,

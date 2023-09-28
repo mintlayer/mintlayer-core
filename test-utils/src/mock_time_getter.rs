@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::time::Time;
 use common::time_getter::{TimeGetter, TimeGetterFn};
 use std::{sync::Arc, time::Duration};
 use utils::atomics::SeqCstAtomicU64;
@@ -37,8 +38,8 @@ impl MockedMsecTimeGetterFn {
 }
 
 impl TimeGetterFn for MockedMsecTimeGetterFn {
-    fn get_time(&self) -> Duration {
-        Duration::from_millis(self.multiplier * self.count.load())
+    fn get_time(&self) -> Time {
+        Time::from_duration_since_epoch(Duration::from_millis(self.multiplier * self.count.load()))
     }
 }
 
@@ -54,7 +55,10 @@ mod test {
         let time_getter = mocked_time_getter_seconds(Arc::clone(&seconds));
         let time = time_getter.get_time();
         seconds.fetch_add(123);
-        assert_eq!(time_getter.get_time() - time, Duration::from_secs(123));
+        assert_eq!(
+            time_getter.get_time().as_duration_since_epoch() - time.as_duration_since_epoch(),
+            Duration::from_secs(123)
+        );
     }
 
     #[test]
@@ -63,6 +67,9 @@ mod test {
         let time_getter = mocked_time_getter_milliseconds(Arc::clone(&milliseconds));
         let time = time_getter.get_time();
         milliseconds.fetch_add(123);
-        assert_eq!(time_getter.get_time() - time, Duration::from_millis(123));
+        assert_eq!(
+            time_getter.get_time().as_duration_since_epoch() - time.as_duration_since_epoch(),
+            Duration::from_millis(123)
+        );
     }
 }
