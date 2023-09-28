@@ -112,7 +112,6 @@ impl ChainType {
                             ),
                         }),
                     ),
-                    // TODO: Add upgrade to TokenIssuanceVersion::V1
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
