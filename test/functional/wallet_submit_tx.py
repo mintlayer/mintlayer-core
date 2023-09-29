@@ -26,7 +26,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
@@ -77,11 +77,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
             self.log.info(f"best block height = {best_block_height}")
-            assert best_block_height == '0'
+            assert_equal(best_block_height, '0')
 
             # new address
             pub_key_bytes = await wallet.new_public_key()
-            assert len(pub_key_bytes) == 33
+            assert_equal(len(pub_key_bytes), 33)
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
@@ -102,18 +102,16 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert not node.mempool_contains_tx(tx_id)
 
             # sync the wallet
-            output = await wallet.sync()
-            assert "Success" in output
+            assert_in("Success", await wallet.sync())
 
             # check wallet best block if it is synced
             best_block_height = await wallet.get_best_block_height()
-            assert best_block_height == '1'
+            assert_equal(best_block_height, '1')
 
             best_block_id = await wallet.get_best_block()
-            assert best_block_id == block_id
+            assert_equal(best_block_id, block_id)
 
-            balance = await wallet.get_balance()
-            assert "Coins amount: 10" in balance
+            assert_in("Coins amount: 10", await wallet.get_balance())
 
 
 if __name__ == '__main__':

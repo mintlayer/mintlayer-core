@@ -44,6 +44,9 @@ def assert_fee_amount(fee, tx_size, feerate_BTC_kvB):
     if fee > high_fee:
         raise AssertionError("Fee of %s BTC too high! (Should be %s BTC)" % (str(fee), str(target_fee)))
 
+def assert_in(thing1: str, thing2: str):
+    if thing1 not in thing2:
+        raise AssertionError(f"{thing1} is not in {thing2}")
 
 def assert_equal(thing1, thing2, *args):
     if thing1 != thing2 or any(thing1 != arg for arg in args):

@@ -42,16 +42,13 @@ from test_framework.mintlayer import (
 from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_greater_than, assert_in
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
-from test_framework.util import (
-    assert_equal,
-)
 
 import asyncio
 import sys
-import random, time, re
+import time, re
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
@@ -294,11 +291,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
             self.log.info(f"best block height = {best_block_height}")
-            assert best_block_height == '0'
+            assert_equal(best_block_height, '0')
 
             # new address
             pub_key_bytes = await wallet.new_public_key()
-            assert len(pub_key_bytes) == 33
+            assert_equal(len(pub_key_bytes), 33)
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
@@ -314,118 +311,121 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             self.setup_pool_and_transfer([encoded_tx])
 
             # sync the wallet
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check wallet best block if it is synced
             best_block_height = await wallet.get_best_block_height()
-            assert best_block_height == '1'
+            assert_in(best_block_height, '1')
 
             balance = await wallet.get_balance()
-            assert "Coins amount: 50000" in balance
+            assert_in("Coins amount: 50000", balance)
 
-            assert "Success" in await wallet.create_new_account()
-            assert "Success" in await wallet.select_account(1)
+            assert_in("Success", await wallet.create_new_account())
+            assert_in("Success", await wallet.select_account(1))
             acc1_address = await wallet.new_address()
-            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "The transaction was submitted successfully" in await wallet.send_to_address(acc1_address, 100)
-            assert "Success" in await wallet.select_account(1)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 100))
+            assert_in("Success", await wallet.select_account(1))
             transactions = node.mempool_transactions()
 
-            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "The transaction was submitted successfully" in await wallet.create_stake_pool(40000, 0, 0.5)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(40000, 0, 0.5))
             transactions2 = node.mempool_transactions()
             for tx in transactions2:
                 if tx not in transactions:
                     transactions.append(tx)
 
             self.gen_pos_block(transactions, 2)
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()
-            assert len(pools) == 1
-            assert pools[0].balance == 40000
+            assert_equal(len(pools), 1)
+            assert_equal(pools[0].balance, 40000)
 
-            assert "Success" in await wallet.select_account(1)
+            assert_in("Success", await wallet.select_account(1))
             delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             assert delegation_id is not None
             transactions = node.mempool_transactions()
 
             # still not in a block
             delegations = await wallet.list_delegation_ids()
-            assert len(delegations) == 0
+            assert_equal(len(delegations), 0)
 
-            assert "Success" in await wallet.stake_delegation(10, delegation_id)
+            assert_in("Success", await wallet.stake_delegation(10, delegation_id))
             transactions2 = node.mempool_transactions()
             for tx in transactions2:
                 if tx not in transactions:
                     transactions.append(tx)
 
             self.gen_pos_block(transactions, 3)
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
             last_block_id = self.previous_block_id()
 
             delegations = await wallet.list_delegation_ids()
-            assert len(delegations) == 1
-            assert delegations[0].balance == 10
+            assert_equal(len(delegations), 1)
+            assert_equal(delegations[0].balance, 10)
 
-            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "Staking started successfully" in await wallet.start_staking()
-            assert "Success" in await wallet.select_account(1)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            assert_in("Staking started successfully", await wallet.start_staking())
+            assert_in("Success", await wallet.select_account(1))
 
             last_delegation_balance = delegations[0].balance
             for _ in range(4, 10):
                 tip_id = node.chainstate_best_block_id()
-                assert "The transaction was submitted successfully" in await wallet.send_to_address(acc1_address, 1)
+                assert_in("The transaction was submitted successfully", await wallet.send_to_address(acc1_address, 1))
                 transactions = node.mempool_transactions()
                 self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-                assert "Success" in await wallet.sync()
+                assert_in("Success", await wallet.sync())
 
                 delegations = await wallet.list_delegation_ids()
-                assert len(delegations) == 1
-                assert delegations[0].balance > last_delegation_balance
+                assert_equal(len(delegations), 1)
+                assert_greater_than(delegations[0].balance, last_delegation_balance)
                 last_delegation_balance = delegations[0].balance
 
             # stake to acc1 delegation from acc 0
-            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "Success" in await wallet.stake_delegation(10, delegation_id)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            assert_in("Success", await wallet.stake_delegation(10, delegation_id))
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check that we still don't have any delagations for this account
             delegations = await wallet.list_delegation_ids()
-            assert len(delegations) == 0
+            assert_equal(len(delegations), 0)
 
             # create a delegation from acc 0 but with destination address for acc1
             delegation_id = await wallet.create_delegation(acc1_address, pools[0].pool_id)
             tip_id = node.chainstate_best_block_id()
             self.wait_until(lambda: node.chainstate_best_block_id() != tip_id, timeout = 5)
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check that we still don't have any delagations for this account
             delegations = await wallet.list_delegation_ids()
-            assert len(delegations) == 0
+            assert_equal(len(delegations), 0)
 
-            assert "Success" in await wallet.select_account(1)
+            assert_in("Success", await wallet.select_account(1))
             delegations = await wallet.list_delegation_ids()
-            assert len(delegations) == 2
+            assert_equal(len(delegations), 2)
             assert delegation_id in [delegation.delegation_id for delegation in delegations]
 
-            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            assert "Success" in await wallet.stop_staking()
-            assert "The transaction was submitted successfully" in await wallet.decommission_stake_pool(pools[0].pool_id)
+            assert_in("Success", await wallet.select_account(DEFAULT_ACCOUNT_INDEX))
+            assert_in("Success", await wallet.stop_staking())
+            assert_in("The transaction was submitted successfully", await wallet.decommission_stake_pool(pools[0].pool_id))
 
             transactions = node.mempool_transactions()
             block_height = await wallet.get_best_block_height()
             self.gen_pos_block(transactions, int(block_height)+1, last_block_id)
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             pools = await wallet.list_pool_ids()
-            assert len(pools) == 0
+            assert_equal(len(pools), 0)
 
             balance = await wallet.get_balance("locked")
-            pattern = r"Coins amount: 4\d{4}"
+            pattern = r"Coins amount: (\d{5})"
             result = re.search(pattern, balance)
             assert(result)
+            g = result.group(1)
+            self.log.info(f"extracted group {g}")
+            assert_greater_than(int(g), 40000)
 
 
 if __name__ == '__main__':

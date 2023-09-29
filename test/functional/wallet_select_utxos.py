@@ -28,7 +28,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import UtxoOutpoint, WalletCliController
 
@@ -79,7 +79,7 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
             self.log.info(f"best block height = {best_block_height}")
-            assert best_block_height == '0'
+            assert_equal(best_block_height, '0')
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
@@ -90,7 +90,7 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
             num_utxos = 5
             for _ in range(num_utxos):
                 pub_key_bytes = await wallet.new_public_key()
-                assert len(pub_key_bytes) == 33
+                assert_equal(len(pub_key_bytes), 33)
                 addresses.append(pub_key_bytes)
 
             # Submit a valid transaction
@@ -108,29 +108,29 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
 
             # sync the wallet
             output = await wallet.sync()
-            assert "Success" in output
+            assert_in("Success", output)
 
             # check wallet best block if it is synced
             best_block_height = await wallet.get_best_block_height()
-            assert best_block_height == '1'
+            assert_equal(best_block_height, '1')
 
             best_block_id = await wallet.get_best_block()
-            assert best_block_id == block_id
+            assert_equal(best_block_id, block_id)
 
             balance = await wallet.get_balance()
-            assert f"Coins amount: {10*num_utxos}" in balance
+            assert_in(f"Coins amount: {10*num_utxos}", balance)
 
             utxos = await wallet.list_utxos()
-            assert len(utxos) == num_utxos
+            assert_equal(len(utxos), num_utxos)
 
             address = await wallet.new_address()
 
             # try to select one and send more than it has it should fail
             selected_utxos = utxos[:1]
             output = await wallet.send_to_address(address, 11, selected_utxos)
-            assert "Controller error: Wallet error: Coin selection error: Not enough funds" in output
+            assert_in("Controller error: Wallet error: Coin selection error: Not enough funds", output)
             # check that we didn't spent any utxos
-            assert utxos == await wallet.list_utxos()
+            assert_equal(utxos, await wallet.list_utxos())
 
             # select the first 3 and check that they will be spent
             selected_utxos = utxos[:3]
@@ -142,29 +142,29 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
 
             # sync the wallet
             output = await wallet.sync()
-            assert "Success" in output
+            assert_in("Success", output)
 
             new_utxos = await wallet.list_utxos()
             self.log.info(f"old utxos {len(utxos)}: {utxos}")
             self.log.info(f"new utxos {len(new_utxos)}: {new_utxos}")
             # check that the new utxos have the selected utxos removed,
             # but have a new one from the transfer and one more from the change
-            assert len(new_utxos) == num_utxos - len(selected_utxos) + 2
+            assert_equal(len(new_utxos), num_utxos - len(selected_utxos) + 2)
             # check selected utxos are no longer present
             assert all(selected_utxo not in new_utxos for selected_utxo in selected_utxos)
             # check not-selected utxos are still present
             assert all(not_selected_utxo in new_utxos for not_selected_utxo in not_selected_utxos)
 
             # try to select already spent utxo
-            assert "Selected UTXO is already consumed" in await wallet.send_to_address(address, 11, selected_utxos)
+            assert_in("Selected UTXO is already consumed", await wallet.send_to_address(address, 11, selected_utxos))
 
             # try to select unknown utxo
             unknown_utxo_id = "0" * len(selected_utxos[0].id)
             unknown_utxo = UtxoOutpoint(unknown_utxo_id, 1)
-            assert "Cannot find UTXO" in await wallet.send_to_address(address, 11, [unknown_utxo])
+            assert_in("Cannot find UTXO", await wallet.send_to_address(address, 11, [unknown_utxo]))
 
             # check that we didn't spent any utxos
-            assert new_utxos == await wallet.list_utxos()
+            assert_equal(new_utxos, await wallet.list_utxos())
 
 
 
