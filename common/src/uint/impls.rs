@@ -65,7 +65,7 @@ macro_rules! construct_uint {
                 self.widening_mul_u64(other as u64).0
             }
 
-            pub fn widening_mul_u64(self, rhs: u64) -> (Self, u64) {
+            fn widening_mul_u64(self, rhs: u64) -> (Self, u64) {
                 const U64_MAX: u128 = u64::MAX as u128;
                 let lhs = &self.0;
                 let mut res = [0u64; $n_words];
@@ -235,11 +235,7 @@ macro_rules! construct_uint {
                 }
             }
 
-            pub fn overflowing_add_with_carry(
-                &self,
-                other: &Self,
-                mut carry: bool,
-            ) -> (Self, bool) {
+            fn overflowing_add_with_carry(&self, other: &Self, mut carry: bool) -> (Self, bool) {
                 let lhs = &self.0;
                 let rhs = &other.0;
                 let mut ret = [0u64; $n_words];
@@ -252,7 +248,7 @@ macro_rules! construct_uint {
                 (Self(ret), carry)
             }
 
-            pub fn overflowing_add(&self, other: &Self) -> (Self, bool) {
+            fn overflowing_add(&self, other: &Self) -> (Self, bool) {
                 self.overflowing_add_with_carry(other, false)
             }
 
@@ -270,8 +266,6 @@ macro_rules! construct_uint {
                 self.div_rem(*other).1
             }
 
-            // TODO: use checked functions for all operations
-            //       mintlayer/mintlayer-core/-/issues/1132
             pub fn checked_add(&self, other: &Self) -> Option<Self> {
                 let (result, carry) = self.overflowing_add(other);
                 (!carry).then_some(result)
@@ -326,7 +320,8 @@ macro_rules! construct_uint {
                 (*other != Self::ZERO).then(|| self.unchecked_rem(other))
             }
 
-            pub fn overflowing_mul(&self, other: &Self) -> Self {
+            #[allow(dead_code)]
+            fn overflowing_mul(&self, other: &Self) -> Self {
                 self.widening_mul(other).0
             }
         }
