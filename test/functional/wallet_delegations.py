@@ -35,7 +35,7 @@ from test_framework.mintlayer import (
     base_tx_obj,
     block_input_data_obj,
     mintlayer_hash,
-    MLT_COIN,
+    ATOMS_PER_COIN,
     outpoint_obj,
     signed_tx_obj,
 )
@@ -234,7 +234,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": 40_000*MLT_COIN,
+                                "value": 40_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -305,7 +305,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 50_000 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 50_000 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")

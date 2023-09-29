@@ -19,7 +19,7 @@ import hashlib
 import scalecodec
 import time
 
-MLT_COIN = 100_000_000_000
+ATOMS_PER_COIN = 100_000_000_000
 
 base_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('TransactionV1')
 block_header_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockHeader')
