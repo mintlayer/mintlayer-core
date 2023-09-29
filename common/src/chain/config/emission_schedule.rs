@@ -44,7 +44,7 @@ impl EmissionSchedule {
         Self(f)
     }
 
-    /// Get total MLT amount issued up to given block height.
+    /// Get total coin amount issued up to given block height.
     ///
     /// This includes all coins ever created up to given block height, including premine and any
     /// coins that have been burnt or made irrecoverable.
@@ -75,7 +75,7 @@ impl std::fmt::Debug for EmissionSchedule {
 /// The table has a string representation, described in [Self::from_str].
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct EmissionScheduleTabular {
-    /// The initial supply, in MLTs
+    /// The initial supply, in coins
     initial_supply: CoinUnit,
     /// The initial per-block subsidy, before the first period kicks in.
     initial_subsidy: CoinUnit,
@@ -106,7 +106,7 @@ impl EmissionScheduleTabular {
     /// All subsidy periods, starting at block height 0
     pub fn subsidy_periods(&self) -> impl Iterator<Item = (BlockHeight, CoinUnit)> + '_ {
         std::iter::once((BlockHeight::zero(), self.initial_subsidy))
-            .chain(self.periods.iter().map(|(ht, mlt)| (*ht, *mlt)))
+            .chain(self.periods.iter().map(|(ht, coin)| (*ht, *coin)))
     }
 
     /// Get the initial supply
@@ -117,7 +117,10 @@ impl EmissionScheduleTabular {
     /// Get tail emission block height and per-block amount
     pub fn tail_emission(&self) -> (BlockHeight, CoinUnit) {
         let empty_tail = || (BlockHeight::zero(), self.initial_subsidy);
-        self.periods.iter().next_back().map_or_else(empty_tail, |(ht, mlt)| (*ht, *mlt))
+        self.periods
+            .iter()
+            .next_back()
+            .map_or_else(empty_tail, |(ht, coin)| (*ht, *coin))
     }
 
     /// Final supply. `None` if the supply increases indefinitely
@@ -172,8 +175,8 @@ impl EmissionScheduleTabular {
 impl std::fmt::Display for EmissionScheduleTabular {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}+{}", self.initial_supply, self.initial_subsidy)?;
-        for (ht, mlt) in &self.periods {
-            write!(f, ",{ht}:+{mlt}")?;
+        for (ht, coin) in &self.periods {
+            write!(f, ",{ht}:+{coin}")?;
         }
         Ok(())
     }
@@ -200,33 +203,33 @@ impl FromStr for EmissionScheduleTabular {
     ///
     /// The string format is as follows:
     ///
-    /// * The initial supply a MLT amount
+    /// * The initial supply a coin amount
     /// * Followed by the "`+`" sign
-    /// * Followed by the initial block subsidy in MLT
+    /// * Followed by the initial block subsidy in coins
     /// * Optionally a comma followed by comma-separated subsidy period entries, consisting of:
     ///   * The block height at which the period starts
     ///   * Followed by "`:+`"
-    ///   * Followed by the per-block MLT subsidy in this period
+    ///   * Followed by the per-block coin subsidy in this period
     ///
-    /// All MLT amounts are allowed to contain fractions, up to the precision of 1 atom.
+    /// All coin amounts are allowed to contain fractions, up to the precision of 1 atom.
     ///
     /// ## Examples
     ///
-    /// Start with 100 MLTs, no additional emission:
+    /// Start with 100 coins, no additional emission:
     /// ```
     /// # use common::chain::config::emission_schedule::*;
     /// let es: EmissionScheduleTabular = "100+0".parse().unwrap();
     /// assert_eq!(es.final_supply(), Some(CoinUnit::from_coins(100)));
     /// ```
     ///
-    /// Start with 1000 MLTs, add 0.1 MLT each block forever:
+    /// Start with 1000 coins, add 0.1 coins each block forever:
     /// ```
     /// # use common::chain::config::emission_schedule::*;
     /// let es: EmissionScheduleTabular = "1000+0.1".parse().unwrap();
     /// assert_eq!(es.final_supply(), None);
     /// ```
     ///
-    /// Start with 1000 MLTs, add 1 MLT each block up to block 500, no subsidy afterwards:
+    /// Start with 1000 coins, add 1 coin each block up to block 500, no subsidy afterwards:
     /// ```
     /// # use common::chain::config::emission_schedule::*;
     /// let es: EmissionScheduleTabular = "1000+1,500:+0".parse().unwrap();
@@ -253,10 +256,10 @@ impl FromStr for EmissionScheduleTabular {
         let periods: Result<BTreeMap<BlockHeight, CoinUnit>, Self::Err> = parts
             .zip(1..)
             .map(|(s, n)| {
-                let (ht, mlt) = s.trim().split_once(":+").ok_or(Self::Err::NoSubsidy(n))?;
+                let (ht, coin) = s.trim().split_once(":+").ok_or(Self::Err::NoSubsidy(n))?;
                 let ht: BlockHeight = ht.parse().map_err(|e| Self::Err::BlockHeight(n, e))?;
-                let mlt: CoinUnit = mlt.parse().map_err(|e| Self::Err::Subsidy(n, e))?;
-                Ok((ht, mlt))
+                let coin: CoinUnit = coin.parse().map_err(|e| Self::Err::Subsidy(n, e))?;
+                Ok((ht, coin))
             })
             .collect();
 
@@ -462,7 +465,7 @@ mod tests {
 
     #[test]
     fn subsidy_calculation_nonnegative() {
-        // Note: The es.subsidy() method contains an assertion that fires if the MLT amount < 0.
+        // Note: The es.subsidy() method contains an assertion that fires if the coin amount < 0.
         let es = mainnet_default_schedule();
 
         // Check heights up to 2 million exhaustively
