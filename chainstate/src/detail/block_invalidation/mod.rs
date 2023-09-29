@@ -175,8 +175,11 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             let cur_best_block_index = get_best_block_index(&chainstate_ref)?;
             let cur_best_chain_trust = cur_best_block_index.chain_trust();
 
-            let best_chain_candidates =
-                BestChainCandidates::new(&chainstate_ref, cur_best_chain_trust + Uint256::ONE)?;
+            let best_chain_candidates = BestChainCandidates::new(
+                &chainstate_ref,
+                (cur_best_chain_trust + Uint256::ONE)
+                    .expect("Chain trust won't be saturated in a very long time"),
+            )?;
 
             (cur_best_chain_trust, best_chain_candidates)
         };

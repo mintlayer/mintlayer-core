@@ -65,7 +65,7 @@ macro_rules! construct_uint {
                 self.widening_mul_u64(other as u64).0
             }
 
-            pub fn widening_mul_u64(self, rhs: u64) -> (Self, u64) {
+            fn widening_mul_u64(self, rhs: u64) -> (Self, u64) {
                 const U64_MAX: u128 = u64::MAX as u128;
                 let lhs = &self.0;
                 let mut res = [0u64; $n_words];
@@ -211,7 +211,7 @@ macro_rules! construct_uint {
                 loop {
                     if sub_copy >= shift_copy {
                         ret[shift / 64] |= 1 << (shift % 64);
-                        sub_copy = sub_copy - shift_copy;
+                        sub_copy = sub_copy.unchecked_sub(&shift_copy);
                     }
                     shift_copy = shift_copy >> 1;
                     if shift == 0 {
@@ -223,23 +223,7 @@ macro_rules! construct_uint {
                 ($name(ret), sub_copy)
             }
 
-            /// Increment by 1
-            #[inline]
-            pub fn increment(&mut self) {
-                let &mut $name(ref mut arr) = self;
-                for i in 0..$n_words {
-                    arr[i] = arr[i].wrapping_add(1);
-                    if arr[i] != 0 {
-                        break;
-                    }
-                }
-            }
-
-            pub fn overflowing_add_with_carry(
-                &self,
-                other: &Self,
-                mut carry: bool,
-            ) -> (Self, bool) {
+            fn overflowing_add_with_carry(&self, other: &Self, mut carry: bool) -> (Self, bool) {
                 let lhs = &self.0;
                 let rhs = &other.0;
                 let mut ret = [0u64; $n_words];
@@ -252,19 +236,31 @@ macro_rules! construct_uint {
                 (Self(ret), carry)
             }
 
-            pub fn overflowing_add(&self, other: &Self) -> (Self, bool) {
+            fn overflowing_add(&self, other: &Self) -> (Self, bool) {
                 self.overflowing_add_with_carry(other, false)
             }
 
-            // TODO: use checked functions for all operations
-            //       mintlayer/mintlayer-core/-/issues/1132
+            fn unchecked_sub(&self, other: &Self) -> Self {
+                let a = self.overflowing_add(&!*other).0;
+                let one: $name = $crate::uint::BitArray::one();
+                a.overflowing_add(&one).0
+            }
+
+            fn unchecked_div(&self, other: &Self) -> Self {
+                self.div_rem(*other).0
+            }
+
+            fn unchecked_rem(&self, other: &Self) -> Self {
+                self.div_rem(*other).1
+            }
+
             pub fn checked_add(&self, other: &Self) -> Option<Self> {
                 let (result, carry) = self.overflowing_add(other);
                 (!carry).then_some(result)
             }
 
             pub fn checked_sub(&self, other: &Self) -> Option<Self> {
-                (*self >= *other).then(|| *self - *other)
+                (*self >= *other).then(|| self.unchecked_sub(other))
             }
 
             pub fn widening_mul(&self, other: &Self) -> (Self, Self) {
@@ -305,7 +301,11 @@ macro_rules! construct_uint {
             }
 
             pub fn checked_div(&self, other: &Self) -> Option<Self> {
-                (*other != Self::ZERO).then(|| *self / *other)
+                (*other != Self::ZERO).then(|| self.unchecked_div(other))
+            }
+
+            pub fn checked_rem(&self, other: &Self) -> Option<Self> {
+                (*other != Self::ZERO).then(|| self.unchecked_rem(other))
             }
         }
 
@@ -381,43 +381,43 @@ macro_rules! construct_uint {
         }
 
         impl ::core::ops::Add<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn add(self, other: $name) -> $name {
-                self.overflowing_add(&other).0
+            fn add(self, other: $name) -> Option<$name> {
+                self.checked_add(&other)
             }
         }
 
         impl ::core::ops::Sub<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
             #[inline]
-            fn sub(self, other: $name) -> $name {
-                self + !other + $crate::uint::BitArray::one()
+            fn sub(self, other: $name) -> Option<$name> {
+                self.checked_sub(&other)
             }
         }
 
         impl ::core::ops::Mul<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn mul(self, other: $name) -> $name {
-                self.checked_mul(&other).expect("overflow")
+            fn mul(self, other: $name) -> Option<$name> {
+                self.checked_mul(&other)
             }
         }
 
         impl ::core::ops::Div<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn div(self, other: $name) -> $name {
-                self.div_rem(other).0
+            fn div(self, other: $name) -> Option<$name> {
+                self.checked_div(&other)
             }
         }
 
         impl ::core::ops::Rem<$name> for $name {
-            type Output = $name;
+            type Output = Option<$name>;
 
-            fn rem(self, other: $name) -> $name {
-                self.div_rem(other).1
+            fn rem(self, other: $name) -> Option<$name> {
+                self.checked_rem(&other)
             }
         }
 
@@ -852,7 +852,7 @@ mod tests {
         let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
         let copy = init;
 
-        let add = init + copy;
+        let add = (init + copy).unwrap();
         assert_eq!(add, Uint256([0xBD5B7DDFBD5B7DDEu64, 1, 0, 0]));
         // Bitshifts
         let shl = add << 88;
@@ -864,13 +864,13 @@ mod tests {
         );
         // Increment
         let mut incr = shr;
-        incr.increment();
+        incr = (incr + 1u64.into()).unwrap();
         assert_eq!(
             incr,
             Uint256([0x7DDE000000000001u64, 0x0001BD5B7DDFBD5B, 0, 0])
         );
         // Subtraction
-        let sub = incr - init;
+        let sub = (incr - init).unwrap();
         assert_eq!(
             sub,
             Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
@@ -883,25 +883,29 @@ mod tests {
         );
         // Division
         assert_eq!(
-            Uint256::from_u64(105) / Uint256::from_u64(5),
+            (Uint256::from_u64(105) / Uint256::from_u64(5)).unwrap(),
             Uint256::from_u64(21)
         );
-        let div = mult / Uint256::from_u64(300);
+        let div = (mult / Uint256::from_u64(300)).unwrap();
         assert_eq!(
             div,
             Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
         );
 
         assert_eq!(
-            Uint256::from_u64(105) % Uint256::from_u64(5),
+            (Uint256::from_u64(105) % Uint256::from_u64(5)).unwrap(),
             Uint256::from_u64(0)
         );
         assert_eq!(
-            Uint256::from_u64(35498456) % Uint256::from_u64(3435),
+            (Uint256::from_u64(35498456) % Uint256::from_u64(3435)).unwrap(),
             Uint256::from_u64(1166)
         );
-        let rem_src = mult * Uint256::from_u64(39842) + Uint256::from_u64(9054);
-        assert_eq!(rem_src % Uint256::from_u64(39842), Uint256::from_u64(9054));
+        let m = (mult * Uint256::from_u64(39842)).unwrap();
+        let rem_src = (m + Uint256::from_u64(9054)).unwrap();
+        assert_eq!(
+            (rem_src % Uint256::from_u64(39842)).unwrap(),
+            Uint256::from_u64(9054)
+        );
         // TODO: bit inversion
     }
 
@@ -948,14 +952,14 @@ mod tests {
     pub fn multiplication_test() {
         let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
-        let u128_res = u64_val * u64_val;
+        let u128_res = (u64_val * u64_val).unwrap();
 
         assert_eq!(
             u128_res,
             Uint256([0x048D1354216DA321u64, 0xC1B1CD13A4D13D46, 0, 0])
         );
 
-        let u256_res = u128_res * u128_res;
+        let u256_res = (u128_res * u128_res).unwrap();
 
         assert_eq!(
             u256_res,
@@ -974,7 +978,7 @@ mod tests {
             0x7FFFFFFFFFFFFFFF,
         ])
         .into();
-        let u512_res = u256_val * u256_val;
+        let u512_res = (u256_val * u256_val).unwrap();
         assert_eq!(
             u512_res,
             Uint512([
@@ -998,7 +1002,7 @@ mod tests {
             0xFFFFFFFFFFFFFFFFu64,
             0xEFFFFFFFFFFFFFFFu64,
         ]);
-        val.increment();
+        val = (val + 1u64.into()).unwrap();
         assert_eq!(
             val,
             Uint256([
@@ -1008,7 +1012,7 @@ mod tests {
                 0xEFFFFFFFFFFFFFFFu64,
             ])
         );
-        val.increment();
+        val = (val + 1u64.into()).unwrap();
         assert_eq!(
             val,
             Uint256([
@@ -1019,37 +1023,27 @@ mod tests {
             ])
         );
 
-        let mut val = Uint256([
+        let val = Uint256([
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
         ]);
-        val.increment();
-        assert_eq!(
-            val,
-            Uint256([
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-            ])
-        );
+        assert!((val + 1u64.into()).is_none());
 
         let max_val_u256 = Uint256::MAX;
         let mut a = Uint512::from(max_val_u256);
-        a.increment();
+        a = (a + 1u64.into()).unwrap();
         assert_eq!(a, Uint512([0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]));
 
-        let mut max_val = Uint512::MAX;
-        max_val.increment();
-        assert_eq!(max_val, Uint512::ZERO);
+        let max_val = Uint512::MAX;
+        assert!((max_val + 1u64.into()).is_none());
     }
 
     #[test]
     pub fn uint256_bitslice_test() {
         let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
-        let add = init + (init << 64);
+        let add = (init + (init << 64)).unwrap();
         assert_eq!(add.bit_slice(64, 128), init);
         assert_eq!(add.mask(64), init);
     }
@@ -1061,7 +1055,7 @@ mod tests {
         let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
         assert_eq!(init << 64, Uint256([0, 0xDEADBEEFDEADBEEF, 0, 0]));
-        let add = (init << 64) + init;
+        let add = ((init << 64) + init).unwrap();
         assert_eq!(add, Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0]));
         assert_eq!(add >> 64, Uint256([0xDEADBEEFDEADBEEF, 0, 0, 0]));
         assert_eq!(
@@ -1126,7 +1120,7 @@ mod tests {
         let b = Uint512([u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(Uint256::try_from(b).unwrap(), a);
 
-        let a = Uint512::from(Uint256::MAX) + Uint512::ONE;
+        let a = (Uint512::from(Uint256::MAX) + Uint512::ONE).unwrap();
         assert_eq!(
             Uint256::try_from(a).unwrap_err(),
             UintConversionError::ConversionOverflow
@@ -1166,7 +1160,7 @@ mod tests {
         let b = Uint256([u64::MAX, u64::MAX, 0x00, 0x00]);
         assert_eq!(u128::try_from(b).unwrap(), a);
 
-        let a = Uint256::from(u128::MAX) + Uint256::ONE;
+        let a = (Uint256::from(u128::MAX) + Uint256::ONE).unwrap();
         assert_eq!(
             u128::try_from(a).unwrap_err(),
             UintConversionError::ConversionOverflow
@@ -1192,8 +1186,8 @@ mod tests {
         }
         {
             let a: Uint128 = rng.gen::<u128>().into();
-            let b = Uint128::MAX - a;
-            assert_eq!(a.checked_add(&b), Some(a + b));
+            let b = (Uint128::MAX - a).unwrap();
+            assert_eq!(a.checked_add(&b), Some(a.overflowing_add(&b).0));
         }
     }
 
@@ -1211,7 +1205,7 @@ mod tests {
             let a = rng.gen::<u128>();
             let b: Uint128 = rng.gen_range(0..a).into();
             let a: Uint128 = a.into();
-            assert_eq!(a.checked_sub(&b), Some(a - b));
+            assert_eq!(a.checked_sub(&b), Some(a.unchecked_sub(&b)));
             assert_eq!(b.checked_sub(&a), None);
         }
     }
@@ -1237,7 +1231,7 @@ mod tests {
         {
             let a = Uint128::from_u64(rng.gen::<u64>());
             let b = Uint128::from_u64(rng.gen::<u64>());
-            assert_eq!(a.checked_mul(&b), Some(a * b));
+            assert_eq!(a.checked_mul(&b), Some(a.widening_mul(&b).0));
         }
     }
 
@@ -1259,7 +1253,7 @@ mod tests {
         {
             let a: Uint128 = rng.gen::<u128>().into();
             let b: Uint128 = rng.gen::<u128>().into();
-            assert_eq!(a.checked_div(&b), Some(a / b));
+            assert_eq!(a.checked_div(&b), Some(a.unchecked_div(&b)));
         }
     }
 }

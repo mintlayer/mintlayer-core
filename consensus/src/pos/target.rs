@@ -83,12 +83,25 @@ fn calculate_new_target(
     );
     let prev_target: Uint512 = (*prev_target).into();
 
-    let new_target = prev_target * actual_block_time / target_block_time;
-    let difficulty_change_limit = prev_target
-        * Uint512::from_u64(pos_config.difficulty_change_limit().value().into())
-        / Uint512::from_u64(1000);
-    let lower_limit = prev_target - difficulty_change_limit;
-    let upper_limit = prev_target + difficulty_change_limit;
+    let new_target = {
+        let numerator =
+            (prev_target * actual_block_time).expect("Source types are smaller than these types");
+        let denominator = target_block_time;
+        (numerator / denominator).expect("Target block time is not zero given its type")
+    };
+
+    let difficulty_change_limit = {
+        let numerator = (prev_target
+            * Uint512::from_u64(pos_config.difficulty_change_limit().value().into()))
+        .expect("Original types are smaller");
+        let denominator = Uint512::from_u64(1000);
+        (numerator / denominator).expect("Denominator is not zero")
+    };
+
+    let lower_limit = (prev_target - difficulty_change_limit)
+        .expect("Cannot fail because difficulty_change_limit is in [0, 1]");
+    let upper_limit = (prev_target + difficulty_change_limit)
+        .expect("Cannot fail because it was converted from Uint256 to Uint512");
     let new_target = num::clamp(new_target, lower_limit, upper_limit);
     let new_target = Uint256::try_from(new_target).unwrap_or(pos_config.target_limit());
 
@@ -980,7 +993,7 @@ mod tests {
             let current_hash: Uint512 = current_hash.try_into().unwrap();
 
             // add block if hash satisfies the target
-            if current_hash <= target_u512 * pool_balance {
+            if current_hash <= (target_u512 * pool_balance).unwrap() {
                 let block = make_block(&mut rng, tip_id, block_timestamp, target);
                 tip_height = tip_height.next_height();
                 let new_tip = BlockIndex::new(
