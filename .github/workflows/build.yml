@@ -62,7 +62,9 @@ jobs:
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
-        run: cargo test --release --all
+        run: cargo test --release --workspace
+      - name: Run doc tests
+        run: cargo test --release --doc
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
         run: cargo test --release -p common mixed_sighash_types -- --ignored
@@ -101,7 +103,9 @@ jobs:
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
-        run: cargo test --release --all
+        run: cargo test --release --workspace
+      - name: Run doc tests
+        run: cargo test --release --doc
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
         run: cargo test --release mixed_sighash_types
@@ -136,7 +140,9 @@ jobs:
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
-        run: cargo test --release --all
+        run: cargo test --release --workspace
+      - name: Run doc tests
+        run: cargo test --release --doc
       # This test is ignored, so it needs to run separately.
       - name: Run mixed_sighash_types test
         run: cargo test --release mixed_sighash_types
