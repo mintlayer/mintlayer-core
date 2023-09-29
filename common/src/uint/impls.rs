@@ -223,18 +223,6 @@ macro_rules! construct_uint {
                 ($name(ret), sub_copy)
             }
 
-            /// Increment by 1
-            #[inline]
-            pub fn increment(&mut self) {
-                let &mut $name(ref mut arr) = self;
-                for i in 0..$n_words {
-                    arr[i] = arr[i].wrapping_add(1);
-                    if arr[i] != 0 {
-                        break;
-                    }
-                }
-            }
-
             fn overflowing_add_with_carry(&self, other: &Self, mut carry: bool) -> (Self, bool) {
                 let lhs = &self.0;
                 let rhs = &other.0;
@@ -876,7 +864,7 @@ mod tests {
         );
         // Increment
         let mut incr = shr;
-        incr.increment();
+        incr = (incr + 1u64.into()).unwrap();
         assert_eq!(
             incr,
             Uint256([0x7DDE000000000001u64, 0x0001BD5B7DDFBD5B, 0, 0])
@@ -1014,7 +1002,7 @@ mod tests {
             0xFFFFFFFFFFFFFFFFu64,
             0xEFFFFFFFFFFFFFFFu64,
         ]);
-        val.increment();
+        val = (val + 1u64.into()).unwrap();
         assert_eq!(
             val,
             Uint256([
@@ -1024,7 +1012,7 @@ mod tests {
                 0xEFFFFFFFFFFFFFFFu64,
             ])
         );
-        val.increment();
+        val = (val + 1u64.into()).unwrap();
         assert_eq!(
             val,
             Uint256([
@@ -1035,31 +1023,21 @@ mod tests {
             ])
         );
 
-        let mut val = Uint256([
+        let val = Uint256([
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
             0xFFFFFFFFFFFFFFFFu64,
         ]);
-        val.increment();
-        assert_eq!(
-            val,
-            Uint256([
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-                0x0000000000000000u64,
-            ])
-        );
+        assert!((val + 1u64.into()).is_none());
 
         let max_val_u256 = Uint256::MAX;
         let mut a = Uint512::from(max_val_u256);
-        a.increment();
+        a = (a + 1u64.into()).unwrap();
         assert_eq!(a, Uint512([0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]));
 
-        let mut max_val = Uint512::MAX;
-        max_val.increment();
-        assert_eq!(max_val, Uint512::ZERO);
+        let max_val = Uint512::MAX;
+        assert!((max_val + 1u64.into()).is_none());
     }
 
     #[test]

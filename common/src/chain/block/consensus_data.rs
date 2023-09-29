@@ -145,9 +145,9 @@ impl PoWData {
         let target: Uint256 = self.bits.try_into().ok()?;
         let mut ret = !target;
         let mut ret1 = target;
-        ret1.increment();
+        ret1 = (ret1 + Uint256::ONE)?;
         ret = (ret / ret1)?;
-        ret.increment();
+        ret = (ret + Uint256::ONE).unwrap_or(Uint256::MAX);
         Some(ret)
     }
 }
