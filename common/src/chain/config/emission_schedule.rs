@@ -216,7 +216,7 @@ impl FromStr for EmissionScheduleTabular {
     /// ```
     /// # use common::chain::config::emission_schedule::*;
     /// let es: EmissionScheduleTabular = "100+0".parse().unwrap();
-    /// assert_eq!(es.final_supply(), Some(Mlt::from_mlt(100)));
+    /// assert_eq!(es.final_supply(), Some(CoinUnit::from_coins(100)));
     /// ```
     ///
     /// Start with 1000 MLTs, add 0.1 MLT each block forever:
