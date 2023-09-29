@@ -15,17 +15,29 @@
 
 use super::*;
 
+use rand::rngs::mock::StepRng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_exponential_rand(#[case] seed: Seed) {
+fn test_average_value(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let count = 1000;
     let sum: f64 = (0..count).map(|_| exponential_rand(&mut rng)).sum();
     let average = sum / count as f64;
     assert!(0.8 < average && average < 1.2);
+}
+
+#[test]
+fn expect_finite_values_in_degenerate_cases() {
+    let mut always_zero_rng = StepRng::new(0, 0);
+    let val = exponential_rand(&mut always_zero_rng);
+    assert!(val.is_finite());
+
+    let mut always_max_rng = StepRng::new(u64::MAX, 0);
+    let val = exponential_rand(&mut always_max_rng);
+    assert!(val.is_finite());
 }

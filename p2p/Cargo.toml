@@ -60,6 +60,7 @@ test-utils = { path = "../test-utils" }
 criterion.workspace = true
 ctor.workspace = true
 portpicker.workspace = true
+rand.workspace = true
 rstest.workspace = true
 
 [[test]]

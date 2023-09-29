@@ -23,6 +23,7 @@ zeroize.workspace = true
 test-utils = { path = "../test-utils" }
 
 criterion.workspace = true
+rand.workspace = true
 rstest.workspace = true
 static_assertions.workspace = true
 
