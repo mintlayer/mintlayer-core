@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("LMDB only compiles for 64-bit targets due to the way memory mapping works");
+
 mod error;
 pub mod initial_map_size;
 pub mod memsize;
