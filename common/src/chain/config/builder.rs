@@ -23,8 +23,8 @@ use crate::{
         },
         create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoSConsensusVersion,
-        PoWChainConfig, UpgradeVersion,
+        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        PoSConsensusVersion, PoWChainConfig, UpgradeVersion,
     },
     primitives::{
         id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, Id, Idable, H256,
@@ -155,8 +155,8 @@ impl Builder {
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
-            coin_decimals: Mlt::DECIMALS,
-            coin_ticker: Mlt::TICKER,
+            coin_decimals: CoinUnit::DECIMALS,
+            coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
             software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))

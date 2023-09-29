@@ -227,7 +227,7 @@ fn effective_pool_balance_impl(
 mod tests {
     use super::*;
 
-    use common::{chain::Mlt, primitives::Amount};
+    use common::{chain::CoinUnit, primitives::Amount};
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
@@ -262,11 +262,11 @@ mod tests {
 
     #[test]
     fn calculate_effective_pool_balance_fixed_values() {
-        let final_supply = Mlt::from_mlt(600_000_000).to_amount_atoms();
+        let final_supply = CoinUnit::from_coins(600_000_000).to_amount_atoms();
 
         {
-            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
-            let pledge_amount = Mlt::from_mlt(40_000).to_amount_atoms();
+            let pool_balance = CoinUnit::from_coins(200_000).to_amount_atoms();
+            let pledge_amount = CoinUnit::from_coins(40_000).to_amount_atoms();
 
             let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
             let expected = Amount::from_atoms(18679146570104142);
@@ -274,8 +274,8 @@ mod tests {
         }
 
         {
-            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
-            let pledge_amount = Mlt::from_mlt(80_000).to_amount_atoms();
+            let pool_balance = CoinUnit::from_coins(200_000).to_amount_atoms();
+            let pledge_amount = CoinUnit::from_coins(80_000).to_amount_atoms();
 
             let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
             let expected = Amount::from_atoms(18735220536467646);
@@ -283,8 +283,8 @@ mod tests {
         }
 
         {
-            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
-            let pledge_amount = Mlt::from_mlt(150_000).to_amount_atoms();
+            let pool_balance = CoinUnit::from_coins(200_000).to_amount_atoms();
+            let pledge_amount = CoinUnit::from_coins(150_000).to_amount_atoms();
 
             let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
             let expected = Amount::from_atoms(18773381985798363);
@@ -292,7 +292,7 @@ mod tests {
         }
 
         {
-            let pool_balance = Mlt::from_mlt(200_000).to_amount_atoms();
+            let pool_balance = CoinUnit::from_coins(200_000).to_amount_atoms();
             let pledge_amount = pool_balance;
 
             let actual = effective_pool_balance(pledge_amount, pool_balance, final_supply).unwrap();
@@ -336,7 +336,7 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
     #[trace]
-    #[case(Seed::from_entropy(), Mlt::from_mlt(600_000_000).to_amount_atoms())]
+    #[case(Seed::from_entropy(), CoinUnit::from_coins(600_000_000).to_amount_atoms())]
     fn calculate_effective_pool_balance_not_saturated(
         #[case] seed: Seed,
         #[case] final_supply: Amount,
@@ -361,7 +361,7 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy(), Amount::from_atoms(600_000))]
     #[trace]
-    #[case(Seed::from_entropy(), Mlt::from_mlt(600_000_000).to_amount_atoms())]
+    #[case(Seed::from_entropy(), CoinUnit::from_coins(600_000_000).to_amount_atoms())]
     fn calculate_effective_balance_capped(#[case] seed: Seed, #[case] final_supply: Amount) {
         let mut rng = make_seedable_rng(seed);
 
@@ -384,7 +384,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn no_overflow_for_bigger_final_supply(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let final_supply = Mlt::from_mlt(600_000_000_000).to_amount_atoms();
+        let final_supply = CoinUnit::from_coins(600_000_000_000).to_amount_atoms();
 
         let cap = (final_supply / 100).unwrap();
         let pool_balance =
@@ -407,10 +407,11 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn effective_balance_proportional(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let final_supply = Mlt::from_mlt(rng.gen_range(1_000_000..600_000_000)).to_amount_atoms();
+        let final_supply =
+            CoinUnit::from_coins(rng.gen_range(1_000_000..600_000_000)).to_amount_atoms();
         let pool_balance = (final_supply / 1000).unwrap();
 
-        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+        let step = CoinUnit::from_coins(1000).to_amount_atoms().into_atoms();
 
         let effective_balances: Vec<Amount> = (0..pool_balance.into_atoms())
             .step_by(step as usize)
@@ -436,9 +437,10 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn effective_balance_curve(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let final_supply = Mlt::from_mlt(rng.gen_range(10_000..600_000_000)).to_amount_atoms();
+        let final_supply =
+            CoinUnit::from_coins(rng.gen_range(10_000..600_000_000)).to_amount_atoms();
 
-        let min_pool_balance = Mlt::from_mlt(1).to_amount_atoms();
+        let min_pool_balance = CoinUnit::from_coins(1).to_amount_atoms();
         let max_pool_balance = (final_supply * (*POOL_SATURATION_LEVEL.numer()))
             .and_then(|v| v / *POOL_SATURATION_LEVEL.denom())
             .unwrap();
@@ -446,7 +448,7 @@ mod tests {
             rng.gen_range(min_pool_balance.into_atoms()..max_pool_balance.into_atoms()),
         );
 
-        let step = Mlt::from_mlt(1000).to_amount_atoms().into_atoms();
+        let step = CoinUnit::from_coins(1000).to_amount_atoms().into_atoms();
 
         // calculate the peak point of the curve
         let pledge_peak = {
@@ -495,11 +497,11 @@ mod tests {
             .to_amount_atoms();
         let pool_balance = (final_supply / K).unwrap();
 
-        let pledge_amount1 = Mlt::from_mlt(40_000).to_amount_atoms();
+        let pledge_amount1 = CoinUnit::from_coins(40_000).to_amount_atoms();
         let effective_balance1 =
             effective_pool_balance(pledge_amount1, pool_balance, final_supply).unwrap();
 
-        let pledge_amount2 = Mlt::from_mlt(80_000).to_amount_atoms();
+        let pledge_amount2 = CoinUnit::from_coins(80_000).to_amount_atoms();
         let effective_balance2 =
             effective_pool_balance(pledge_amount2, pool_balance, final_supply).unwrap();
 

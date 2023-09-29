@@ -29,7 +29,7 @@ Check that:
 from time import time
 import scalecodec
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (calc_tx_id, make_tx_dict, reward_input, tx_input, MLT_COIN, tx_output)
+from test_framework.mintlayer import (calc_tx_id, make_tx_dict, reward_input, tx_input, ATOMS_PER_COIN, tx_output)
 from test_framework.util import assert_raises_rpc_error
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
@@ -104,11 +104,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 10 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             total = 300000
             output2 = {
-                'Transfer': [ { 'Coin': total * MLT_COIN }, { 'AnyoneCanSpend': None } ],
+                'Transfer': [ { 'Coin': total * ATOMS_PER_COIN }, { 'AnyoneCanSpend': None } ],
             }
             encoded_tx, tx_id = self.make_tx([reward_input(tip_id)], [output2, output], 0)
 

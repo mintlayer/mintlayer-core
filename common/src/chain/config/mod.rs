@@ -20,7 +20,7 @@ pub mod regtest;
 pub use builder::Builder;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use emission_schedule::Mlt;
+use emission_schedule::CoinUnit;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
@@ -80,6 +80,15 @@ impl ChainType {
             ChainType::Testnet => "testnet",
             ChainType::Regtest => "regtest",
             ChainType::Signet => "signet",
+        }
+    }
+
+    const fn coin_ticker(&self) -> &'static str {
+        match self {
+            ChainType::Mainnet => "ML",
+            ChainType::Testnet => "TML",
+            ChainType::Regtest => "RML",
+            ChainType::Signet => "SML",
         }
     }
 
@@ -157,7 +166,7 @@ pub struct ChainConfig {
     coin_decimals: u8,
     coin_ticker: &'static str,
     emission_schedule: EmissionSchedule,
-    final_supply: Option<Mlt>, // `None` if the supply increases indefinitely
+    final_supply: Option<CoinUnit>, // `None` if the supply increases indefinitely
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
@@ -493,7 +502,7 @@ impl ChainConfig {
         self.min_stake_pool_pledge
     }
 
-    pub fn final_supply(&self) -> Option<Mlt> {
+    pub fn final_supply(&self) -> Option<CoinUnit> {
         self.final_supply
     }
 }
@@ -508,7 +517,7 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
-const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(100 * Mlt::ATOMS_PER_MLT);
+const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(100 * CoinUnit::ATOMS_PER_COIN);
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
 const TOKEN_MIN_HASH_LEN: usize = 4;
@@ -517,7 +526,7 @@ const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
-const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * Mlt::ATOMS_PER_MLT);
+const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * CoinUnit::ATOMS_PER_COIN);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
@@ -549,8 +558,8 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // We add 3_600_000_000 MLT to the genesis mint account since it's just for testing. Nothing else changes.
-    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * Mlt::ATOMS_PER_MLT);
+    // We add 3_600_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
+    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * CoinUnit::ATOMS_PER_COIN);
     let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");

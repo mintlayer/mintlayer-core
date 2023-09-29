@@ -23,7 +23,7 @@ from test_framework.mintlayer import (
     make_delegation_id,
     make_pool_id,
     hex_to_dec_array,
-    MLT_COIN,
+    ATOMS_PER_COIN,
     outpoint_obj,
     signed_tx_obj,
 )
@@ -405,7 +405,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": 40_000*MLT_COIN,
+                                "value": 40_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -424,7 +424,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
 
         (stake_sk_1, stake_pk_1) = self.new_stake_keys()
         (vrf_sk_1, vrf_pk_1) = self.new_vrf_keys()
-        pool_1_pledge = 40_000*MLT_COIN
+        pool_1_pledge = 40_000*ATOMS_PER_COIN
 
         genesis_kernel0_outpoint = {
             "id": {
@@ -433,7 +433,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 0,
         }
         (pool_id_1, tx1_encoded, tx1_id) = self.create_pool_tx(
-            genesis_kernel0_outpoint, stake_pk_1, vrf_pk_1, pool_1_pledge, 1000, 400_000*MLT_COIN)
+            genesis_kernel0_outpoint, stake_pk_1, vrf_pk_1, pool_1_pledge, 1000, 400_000*ATOMS_PER_COIN)
 
         tx1_outpoint = {
             "id": {
@@ -442,7 +442,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 1,
         }
         (delegation_id_1, tx2_encoded, tx2_id) = self.create_delegation_id_tx(
-            tx1_outpoint, pool_id_1, 400_000*MLT_COIN)
+            tx1_outpoint, pool_id_1, 400_000*ATOMS_PER_COIN)
 
         tx2_outpoint = {
             "id": {
@@ -451,7 +451,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 1,
         }
         (tx3_encoded, tx3_id) = self.create_delegate_staking_tx(
-            tx2_outpoint, delegation_id_1, 160_000*MLT_COIN, 200_000*MLT_COIN)
+            tx2_outpoint, delegation_id_1, 160_000*ATOMS_PER_COIN, 200_000*ATOMS_PER_COIN)
 
         self.generate_and_submit_block(0, block_input_data, [
             tx1_encoded, tx2_encoded, tx3_encoded])
@@ -490,7 +490,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
 
         (stake_sk_2, stake_pk_2) = self.new_stake_keys()
         (vrf_sk_2, vrf_pk_2) = self.new_vrf_keys()
-        pool_2_pledge = 150_000*MLT_COIN
+        pool_2_pledge = 150_000*ATOMS_PER_COIN
 
         tx3_outpoint = {
             "id": {
@@ -500,7 +500,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
         }
 
         (pool_id_2, tx4_encoded, tx4_id) = self.create_pool_tx(
-            tx3_outpoint, stake_pk_2, vrf_pk_2, pool_2_pledge, 1000, 50_000*MLT_COIN)
+            tx3_outpoint, stake_pk_2, vrf_pk_2, pool_2_pledge, 1000, 50_000*ATOMS_PER_COIN)
 
         tx4_outpoint = {
             "id": {
@@ -509,7 +509,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 1,
         }
         (delegation_id_2, tx5_encoded, tx5_id) = self.create_delegation_id_tx(
-            tx4_outpoint, pool_id_2, 50_000*MLT_COIN)
+            tx4_outpoint, pool_id_2, 50_000*ATOMS_PER_COIN)
 
         tx5_outpoint = {
             "id": {
@@ -518,7 +518,7 @@ class StakingIncentivesTest(BitcoinTestFramework):
             "index": 1,
         }
         (tx6_encoded, tx6_id) = self.create_delegate_staking_tx(
-            tx5_outpoint, delegation_id_2, 50_000*MLT_COIN, 0)
+            tx5_outpoint, delegation_id_2, 50_000*ATOMS_PER_COIN, 0)
 
         self.generate_and_submit_block(0, block_input_data, [
             tx4_encoded, tx5_encoded, tx6_encoded])

@@ -31,9 +31,9 @@ use common::{
         },
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
-        Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades,
-        OutPointSourceId, PoSChainConfig, PoolId, RequiredConsensus, TxInput, TxOutput,
-        UpgradeVersion, UtxoOutPoint,
+        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, RequiredConsensus, TxInput,
+        TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -325,7 +325,7 @@ pub fn create_chain_config_with_default_staking_pool(
     vrf_pk: VRFPublicKey,
 ) -> (ConfigBuilder, PoolId) {
     let stake_amount = create_unit_test_config().min_stake_pool_pledge();
-    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::CoinUnit::ATOMS_PER_COIN);
 
     let genesis_pool_id = PoolId::new(H256::random_using(rng));
     let genesis_stake_pool_data = StakePoolData::new(
@@ -421,7 +421,7 @@ pub fn pos_mine(
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
-    final_supply: Mlt,
+    final_supply: CoinUnit,
     epoch_index: EpochIndex,
     target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {

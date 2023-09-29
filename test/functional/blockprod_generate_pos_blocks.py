@@ -21,7 +21,7 @@ from test_framework.mintlayer import (
     base_tx_obj,
     block_input_data_obj,
     mintlayer_hash,
-    MLT_COIN,
+    ATOMS_PER_COIN,
     outpoint_obj,
     signed_tx_obj,
 )
@@ -203,7 +203,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": 40_000*MLT_COIN,
+                                "value": 40_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -238,7 +238,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "Transfer": [
                             {
-                                "Coin": 100_000*MLT_COIN,
+                                "Coin": 100_000*ATOMS_PER_COIN,
                             },
                             "AnyoneCanSpend",
                         ],
@@ -311,7 +311,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             new_pool_id,
                             {
-                                "value": 100_000*MLT_COIN,
+                                "value": 100_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": new_stake_public_key,
                                 },
@@ -349,7 +349,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             "CreateStakePool": [
                 new_pool_id,
                 {
-                    "value": 100_000*MLT_COIN,
+                    "value": 100_000*ATOMS_PER_COIN,
                     "staker": {
                         "PublicKey": new_stake_public_key,
                     },
