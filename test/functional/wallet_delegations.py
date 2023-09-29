@@ -51,7 +51,7 @@ from test_framework.util import (
 
 import asyncio
 import sys
-import random, time
+import random, time, re
 
 GENESIS_POOL_ID = "123c4c600097c513e088b9be62069f0c74c7671c523c8e3469a1c3f14b7ea2c4"
 GENESIS_STAKE_PRIVATE_KEY = "8717e6946febd3a33ccdc3f3a27629ec80c33461c33a0fc56b4836fcedd26638"
@@ -253,7 +253,8 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
         self.generate_block(1, block_input_data, transactions)
 
-    def gen_pos_block(self, transactions, block_height):
+    def gen_pos_block(self, transactions, block_height, block_id=None):
+        block_id = self.previous_block_id() if block_id is None else block_id
         block_input_data = block_input_data_obj.encode({
             "PoS": {
                 "stake_private_key": self.stake_private_key(GENESIS_STAKE_PRIVATE_KEY),
@@ -263,7 +264,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                         {
                             "Utxo": {
                                 "id": {
-                                    "BlockReward": self.previous_block_id()
+                                    "BlockReward": block_id
                                 },
                                 "index": 0,
                             },
@@ -286,7 +287,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with WalletCliController(node, self.config, self.log) as wallet:
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
             # new wallet
             await wallet.create_wallet()
 
@@ -361,6 +362,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             self.gen_pos_block(transactions, 3)
             assert "Success" in await wallet.sync()
+            last_block_id = self.previous_block_id()
 
             delegations = await wallet.list_delegation_ids()
             assert len(delegations) == 1
@@ -407,6 +409,23 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             delegations = await wallet.list_delegation_ids()
             assert len(delegations) == 2
             assert delegation_id in [delegation.delegation_id for delegation in delegations]
+
+            assert "Success" in await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
+            assert "Success" in await wallet.stop_staking()
+            assert "The transaction was submitted successfully" in await wallet.decommission_stake_pool(pools[0].pool_id)
+
+            transactions = node.mempool_transactions()
+            block_height = await wallet.get_best_block_height()
+            self.gen_pos_block(transactions, int(block_height)+1, last_block_id)
+            assert "Success" in await wallet.sync()
+
+            pools = await wallet.list_pool_ids()
+            assert len(pools) == 0
+
+            balance = await wallet.get_balance("locked")
+            pattern = r"Coins amount: 4\d{4}"
+            result = re.search(pattern, balance)
+            assert(result)
 
 
 if __name__ == '__main__':

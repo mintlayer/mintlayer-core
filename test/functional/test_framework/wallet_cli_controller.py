@@ -48,16 +48,17 @@ class DelegationData:
 
 class WalletCliController:
 
-    def __init__(self, node, config, log, wallet_args: List[str] = []):
+    def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
         self.log = log
         self.node = node
         self.config = config
         self.wallet_args = wallet_args
+        self.chain_config_args = chain_config_args
 
     async def __aenter__(self):
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
-        wallet_args = ["--network", "regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file] + self.wallet_args
+        wallet_args = ["--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file] + self.wallet_args + ["regtest"] + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 
@@ -208,6 +209,9 @@ class WalletCliController:
                                 decommission_key: Optional[str] = '') -> str:
         return await self._write_command(f"createstakepool {amount} {cost_per_block} {margin_ratio_per_thousand} {decommission_key}\n")
 
+    async def decommission_stake_pool(self, pool_id: str) -> str:
+        return await self._write_command(f"decommissionstakepool {pool_id}\n")
+
     async def list_pool_ids(self) -> List[PoolData]:
         output = await self._write_command("listpoolids\n")
         pattern = r'Pool Id: ([a-zA-Z0-9]+), Balance: (\d+),'
@@ -238,8 +242,11 @@ class WalletCliController:
     async def start_staking(self) -> str:
         return await self._write_command(f"startstaking\n")
 
+    async def stop_staking(self) -> str:
+        return await self._write_command(f"stopstaking\n")
+
     async def get_addresses_usage(self) -> str:
         return await self._write_command("showreceiveaddresses\n")
 
-    async def get_balance(self) -> str:
-        return await self._write_command("getbalance\n")
+    async def get_balance(self, with_locked: str = 'unlocked') -> str:
+        return await self._write_command(f"getbalance {with_locked}\n")
