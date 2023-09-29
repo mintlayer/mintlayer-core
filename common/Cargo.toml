@@ -16,7 +16,9 @@ serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
 utils = {path = '../utils'}
 
+anyhow.workspace = true
 bech32.workspace = true
+clap = { workspace = true, features = ["derive"] }
 fixed-hash.workspace = true
 generic-array.workspace = true
 hex.workspace = true
@@ -30,6 +32,7 @@ serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 thiserror.workspace = true
 variant_count.workspace = true
+paste.workspace = true
 
 regex = "1.9"
 

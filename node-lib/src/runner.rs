@@ -18,27 +18,16 @@
 use std::{
     fs::File,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
-    time::Duration,
 };
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
 use chainstate_launcher::StorageBackendConfig;
-use paste::paste;
 
 use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
-use common::{
-    chain::{
-        config::{
-            regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
-            Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
-        },
-        create_regtest_pos_config, pos_initial_difficulty, ConsensusUpgrade, Destination,
-        NetUpgrades, PoSConsensusVersion, UpgradeVersion,
-    },
-    primitives::{semver::SemVer, BlockHeight},
+use common::chain::config::{
+    regtest_options::regtest_chain_config, Builder as ChainConfigBuilder, ChainConfig, ChainType,
 };
 use logging::log;
 
@@ -56,7 +45,6 @@ use crate::{
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
-    regtest_options::ChainConfigOptions,
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -215,7 +203,7 @@ pub async fn setup(options: Options) -> Result<Node> {
             .await
         }
         Command::Regtest(ref regtest_options) => {
-            let chain_config = regtest_chain_config(&command, &regtest_options.chain_config)?;
+            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
             start(
                 &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
@@ -321,128 +309,6 @@ async fn start(
         controller,
         lock_file,
     })
-}
-
-fn regtest_chain_config(command: &Command, options: &ChainConfigOptions) -> Result<ChainConfig> {
-    match command {
-        Command::Regtest(_) => {}
-        Command::Mainnet(_) | Command::Testnet(_) => {
-            panic!("RegTest configuration options must only be used on RegTest")
-        }
-    };
-
-    let ChainConfigOptions {
-        chain_magic_bytes,
-        chain_max_future_block_time_offset,
-        software_version: chain_software_version,
-        chain_target_block_spacing,
-        chain_coin_decimals,
-        chain_emission_schedule,
-        chain_max_block_header_size,
-        chain_max_block_size_with_standard_txs,
-        chain_max_block_size_with_smart_contracts,
-        chain_pos_netupgrades,
-        chain_pos_netupgrades_v0_to_v1,
-        chain_initial_difficulty,
-        chain_genesis_block_timestamp,
-        chain_genesis_staking_settings,
-    } = options;
-
-    let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
-
-    macro_rules! update_builder {
-        ($field: ident) => {
-            update_builder!($field, std::convert::identity)
-        };
-        ($field: ident, $converter: stmt) => {
-            paste! {
-                if let Some(val) = [<chain_ $field>] {
-                    builder = builder.$field($converter(val.to_owned()));
-                }
-            }
-        };
-        ($field: ident, $converter: stmt, map_err) => {
-            paste! {
-                if let Some(val) = [<chain_ $field>] {
-                    builder = builder.$field($converter(val.to_owned()).map_err(|e| anyhow!(e))?);
-                }
-            }
-        };
-    }
-
-    let magic_bytes_from_string = |magic_string: String| -> Result<[u8; 4]> {
-        ensure!(magic_string.len() == 4, "Invalid size of magic_bytes");
-        let mut result: [u8; 4] = [0; 4];
-        for (i, byte) in magic_string.bytes().enumerate() {
-            result[i] = byte;
-        }
-        Ok(result)
-    };
-    update_builder!(magic_bytes, magic_bytes_from_string, map_err);
-    update_builder!(max_future_block_time_offset, Duration::from_secs);
-    update_builder!(software_version, SemVer::try_from, map_err);
-    update_builder!(target_block_spacing, Duration::from_secs);
-    update_builder!(coin_decimals);
-    if let Some(val) = chain_emission_schedule {
-        builder =
-            builder.emission_schedule_tabular(EmissionScheduleTabular::from_str(val.as_str())?);
-    }
-    update_builder!(max_block_header_size);
-    update_builder!(max_block_size_with_standard_txs);
-    update_builder!(max_block_size_with_smart_contracts);
-
-    if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
-            create_regtest_pos_genesis(
-                chain_genesis_staking_settings.clone(),
-                *chain_genesis_block_timestamp,
-                Destination::AnyoneCanSpend,
-            ),
-        );
-    } else {
-        builder = builder.genesis_custom(create_regtest_pow_genesis(
-            *chain_genesis_block_timestamp,
-            Destination::AnyoneCanSpend,
-        ));
-    }
-
-    if let Some(upgrade_height) = chain_pos_netupgrades_v0_to_v1 {
-        builder = builder
-            .net_upgrades(
-                NetUpgrades::initialize(vec![
-                    (
-                        BlockHeight::zero(),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-                    ),
-                    (
-                        BlockHeight::new(1),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: Some(
-                                chain_initial_difficulty
-                                    .map(common::primitives::Compact)
-                                    .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
-                            ),
-                            config: create_regtest_pos_config(PoSConsensusVersion::V0),
-                        }),
-                    ),
-                    (
-                        (*upgrade_height).into(),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: None,
-                            config: create_regtest_pos_config(PoSConsensusVersion::V1),
-                        }),
-                    ),
-                ])
-                .expect("NetUpgrades init cannot fail"),
-            )
-            .genesis_custom(create_regtest_pos_genesis(
-                chain_genesis_staking_settings.clone(),
-                *chain_genesis_block_timestamp,
-                Destination::AnyoneCanSpend,
-            ));
-    }
-
-    Ok(builder.build())
 }
 
 #[cfg(test)]

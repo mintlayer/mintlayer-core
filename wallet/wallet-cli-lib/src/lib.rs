@@ -26,8 +26,11 @@ use std::sync::Arc;
 
 use cli_event_loop::Event;
 use commands::WalletCommand;
-use common::chain::{config::ChainType, ChainConfig};
-use config::WalletCliArgs;
+use common::chain::{
+    config::{regtest_options::regtest_chain_config, ChainType},
+    ChainConfig,
+};
+use config::{Network, WalletCliArgs};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
 use rpc::RpcAuthData;
@@ -78,9 +81,23 @@ pub async fn run(
         Mode::NonInteractive
     };
 
-    let chain_type: ChainType = network.into();
-    let chain_config = chain_config
-        .unwrap_or_else(|| Arc::new(common::chain::config::Builder::new(chain_type).build()));
+    let chain_type: ChainType = (&network).into();
+    let chain_config = match chain_config {
+        Some(chain_config) => chain_config,
+        None => match network {
+            Network::Regtest(regtest_options) => {
+                eprintln!("\n\nRegtest config {}", chain_type.name());
+                Arc::new(
+                    regtest_chain_config(&regtest_options)
+                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
+                )
+            }
+            _ => {
+                eprintln!("\n\nNot regtest {}", chain_type.name());
+                Arc::new(common::chain::config::Builder::new(chain_type).build())
+            }
+        },
+    };
 
     // TODO: Use the constant with the node
     let default_http_rpc_addr = || "127.0.0.1:3030".to_owned();

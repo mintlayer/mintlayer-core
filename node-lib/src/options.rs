@@ -18,14 +18,11 @@
 use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
-use common::chain::config::ChainType;
+use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use utils::default_data_dir::default_data_dir_common;
 
-use crate::{
-    config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
-    regtest_options::RegtestOptions,
-};
+use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
 
 const CONFIG_NAME: &str = "config.toml";
 
@@ -49,6 +46,14 @@ pub enum Command {
     Testnet(RunOptions),
     /// Run the regtest node.
     Regtest(Box<RegtestOptions>),
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct RegtestOptions {
+    #[clap(flatten)]
+    pub run_options: RunOptions,
+    #[clap(flatten)]
+    pub chain_config: ChainConfigOptions,
 }
 
 #[derive(Args, Clone, Debug, Default)]
