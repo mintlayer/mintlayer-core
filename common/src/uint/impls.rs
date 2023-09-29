@@ -319,11 +319,6 @@ macro_rules! construct_uint {
             pub fn checked_rem(&self, other: &Self) -> Option<Self> {
                 (*other != Self::ZERO).then(|| self.unchecked_rem(other))
             }
-
-            #[allow(dead_code)]
-            fn overflowing_mul(&self, other: &Self) -> Self {
-                self.widening_mul(other).0
-            }
         }
 
         impl From<[u8; $n_words * 8]> for $name {
@@ -1258,7 +1253,7 @@ mod tests {
         {
             let a = Uint128::from_u64(rng.gen::<u64>());
             let b = Uint128::from_u64(rng.gen::<u64>());
-            assert_eq!(a.checked_mul(&b), Some(a.overflowing_mul(&b)));
+            assert_eq!(a.checked_mul(&b), Some(a.widening_mul(&b).0));
         }
     }
 
