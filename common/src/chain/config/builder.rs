@@ -21,7 +21,9 @@ use crate::{
             create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
             emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
+        get_initial_randomness,
+        pos::config_builder::PoSChainConfigBuilder,
+        pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
         CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
         PoSConsensusVersion, PoWChainConfig, UpgradeVersion,
@@ -72,7 +74,9 @@ impl ChainType {
                             initial_difficulty: Some(
                                 pos_initial_difficulty(ChainType::Testnet).into(),
                             ),
-                            config: create_testnet_pos_config(PoSConsensusVersion::V0),
+                            config: PoSChainConfigBuilder::new(ChainType::Testnet)
+                                .consensus_version(PoSConsensusVersion::V0)
+                                .build(),
                         }),
                     ),
                     (
@@ -80,7 +84,9 @@ impl ChainType {
                         BlockHeight::new(9999999999),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: None,
-                            config: create_testnet_pos_config(PoSConsensusVersion::V1),
+                            config: PoSChainConfigBuilder::new(ChainType::Testnet)
+                                .consensus_version(PoSConsensusVersion::V1)
+                                .build(),
                         }),
                     ),
                 ];

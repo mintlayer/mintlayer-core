@@ -21,10 +21,10 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSConsensusVersion, TxInput,
-        TxOutput, UpgradeVersion, UtxoOutPoint,
+        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput,
+        UpgradeVersion, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable},
     Uint256,
 };
 use crypto::{
@@ -51,32 +51,18 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    1,
-                    100.into(),
-                    1.into(),
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .decommission_maturity_distance(BlockDistance::new(100))
+                    .build(),
             }),
         ),
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    1,
-                    50.into(), // decrease maturity setting
-                    1.into(),
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .decommission_maturity_distance(BlockDistance::new(50))
+                    .build(),
             }),
         ),
     ];
@@ -201,32 +187,19 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    1,
-                    1.into(),
-                    100.into(),
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .spend_share_maturity_distance(BlockDistance::new(100))
+                    .build(),
             }),
         ),
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    1,
-                    1.into(),
-                    50.into(), // decrease maturity setting
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    // decrease maturity setting
+                    .spend_share_maturity_distance(BlockDistance::new(50))
+                    .build(),
             }),
         ),
     ];

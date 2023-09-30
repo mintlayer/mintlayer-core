@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
@@ -22,8 +22,8 @@ use common::{
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
         stakelock::StakePoolData,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
-        PoSChainConfig, PoSConsensusVersion, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
+        RequiredConsensus, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -233,6 +233,7 @@ mod collect_transactions {
 }
 
 mod produce_block {
+    use common::chain::PoSChainConfigBuilder;
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -1252,16 +1253,7 @@ mod produce_block {
                 vec![kernel_input_utxo.clone()],
             );
 
-            let easy_pos_config = PoSChainConfig::new(
-                Uint256::MAX,
-                NonZeroU64::new(2 * 60).expect("cannot be 0").into(),
-                2000.into(),
-                2000.into(),
-                5,
-                PerThousand::new(1).expect("must be valid"),
-                PoSConsensusVersion::V1,
-            )
-            .expect("Valid PoS config values");
+            let easy_pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
 
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,

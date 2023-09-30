@@ -23,7 +23,6 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
-        create_unittest_pos_config,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -32,8 +31,8 @@ use common::{
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, RequiredConsensus, TxInput,
-        TxOutput, UpgradeVersion, UtxoOutPoint,
+        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
+        RequiredConsensus, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -360,7 +359,7 @@ pub fn create_chain_config_with_staking_pool(
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];

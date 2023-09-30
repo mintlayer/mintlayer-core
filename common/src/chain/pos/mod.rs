@@ -13,18 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, str::FromStr};
+use std::str::FromStr;
 
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    primitives::{per_thousand::PerThousand, BlockDistance, Id, H256},
+    primitives::{Id, H256},
     Uint256,
 };
 
 use super::{config::ChainType, ChainConfig};
+
+pub mod config;
+pub mod config_builder;
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
@@ -42,24 +45,6 @@ impl PoSConsensusVersion {
     pub const V0: Self = Self(0);
     /// Incentivize pledging and prevent centralization with capped probability
     pub const V1: Self = Self(1);
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub struct PoSChainConfig {
-    /// The lowest possible difficulty
-    target_limit: Uint256,
-    /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
-    target_block_time: NonZeroU64,
-    /// The distance required to pass to allow spending the decommission pool
-    decommission_maturity_distance: BlockDistance,
-    /// The distance required to pass to allow spending delegation share
-    spend_share_maturity_distance: BlockDistance,
-    /// Max number of blocks required to calculate average block time. Min is 2
-    block_count_to_average_for_blocktime: usize,
-    /// The limit on how much the difficulty can go up or down after each block
-    difficulty_change_limit: PerThousand,
-    /// Version of the consensus protocol
-    consensus_version: PoSConsensusVersion,
 }
 
 impl serde::Serialize for PoolId {
@@ -116,7 +101,6 @@ impl Addressable for DelegationId {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
     }
-
     fn json_wrapper_prefix() -> &'static str {
         "HexifiedDelegationId"
     }
@@ -131,108 +115,6 @@ impl serde::Serialize for DelegationId {
 impl<'de> serde::Deserialize<'de> for DelegationId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
-    }
-}
-
-impl PoSChainConfig {
-    pub fn new(
-        target_limit: Uint256,
-        target_block_time: u64,
-        decommission_maturity_distance: BlockDistance,
-        spend_share_maturity_distance: BlockDistance,
-        block_count_to_average_for_blocktime: usize,
-        difficulty_change_limit: PerThousand,
-        consensus_version: PoSConsensusVersion,
-    ) -> Option<Self> {
-        let target_block_time = NonZeroU64::new(target_block_time)?;
-        if block_count_to_average_for_blocktime < 2 {
-            return None;
-        }
-
-        Some(Self {
-            target_limit,
-            target_block_time,
-            decommission_maturity_distance,
-            spend_share_maturity_distance,
-            block_count_to_average_for_blocktime,
-            difficulty_change_limit,
-            consensus_version,
-        })
-    }
-
-    pub fn target_limit(&self) -> Uint256 {
-        self.target_limit
-    }
-
-    pub fn target_block_time(&self) -> NonZeroU64 {
-        self.target_block_time
-    }
-
-    pub fn decommission_maturity_distance(&self) -> BlockDistance {
-        self.decommission_maturity_distance
-    }
-
-    pub fn spend_share_maturity_distance(&self) -> BlockDistance {
-        self.spend_share_maturity_distance
-    }
-
-    pub fn block_count_to_average_for_blocktime(&self) -> usize {
-        self.block_count_to_average_for_blocktime
-    }
-
-    pub fn difficulty_change_limit(&self) -> PerThousand {
-        self.difficulty_change_limit
-    }
-
-    pub fn consensus_version(&self) -> PoSConsensusVersion {
-        self.consensus_version
-    }
-}
-
-const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
-const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
-
-pub fn create_testnet_pos_config(consensus_version: PoSConsensusVersion) -> PoSChainConfig {
-    let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
-    let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-        .expect("Target block time cannot be zero as per NonZeroU64");
-
-    PoSChainConfig {
-        target_limit,
-        target_block_time,
-        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-        consensus_version,
-    }
-}
-
-pub fn create_unittest_pos_config() -> PoSChainConfig {
-    PoSChainConfig {
-        target_limit: Uint256::MAX,
-        target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-        consensus_version: PoSConsensusVersion::V1,
-    }
-}
-
-pub fn create_regtest_pos_config(consensus_version: PoSConsensusVersion) -> PoSChainConfig {
-    let target_block_time = NonZeroU64::new(2 * 60).expect("cannot be 0");
-    let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-        .expect("Target block time cannot be zero as per NonZeroU64");
-
-    PoSChainConfig {
-        target_limit,
-        target_block_time,
-        decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-        block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-        difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-        consensus_version,
     }
 }
 

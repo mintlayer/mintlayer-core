@@ -23,8 +23,8 @@ use crate::{
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder, ChainType, EmissionScheduleTabular,
         },
-        create_regtest_pos_config, pos_initial_difficulty, ConsensusUpgrade, Destination,
-        NetUpgrades, PoSConsensusVersion, UpgradeVersion,
+        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfigBuilder,
+        PoSConsensusVersion, UpgradeVersion,
     },
     primitives::{self, semver::SemVer, BlockHeight},
 };
@@ -185,14 +185,18 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                                     .map(primitives::Compact)
                                     .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
                             ),
-                            config: create_regtest_pos_config(PoSConsensusVersion::V0),
+                            config: PoSChainConfigBuilder::new(ChainType::Regtest)
+                                .consensus_version(PoSConsensusVersion::V0)
+                                .build(),
                         }),
                     ),
                     (
                         (*upgrade_height).into(),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: None,
-                            config: create_regtest_pos_config(PoSConsensusVersion::V1),
+                            config: PoSChainConfigBuilder::new(ChainType::Regtest)
+                                .consensus_version(PoSConsensusVersion::V1)
+                                .build(),
                         }),
                     ),
                 ])

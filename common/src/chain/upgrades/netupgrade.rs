@@ -18,7 +18,7 @@ use std::ops::Range;
 use crate::chain::config::ChainType;
 use crate::chain::pow::limit;
 use crate::chain::{
-    create_regtest_pos_config, pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion,
+    pos_initial_difficulty, PoSChainConfig, PoSChainConfigBuilder, PoSConsensusVersion,
 };
 use crate::primitives::{BlockHeight, Compact};
 
@@ -66,7 +66,9 @@ impl NetUpgrades<UpgradeVersion> {
                 BlockHeight::new(1),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                     initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                    config: create_regtest_pos_config(PoSConsensusVersion::V1),
+                    config: PoSChainConfigBuilder::new(ChainType::Regtest)
+                        .consensus_version(PoSConsensusVersion::V1)
+                        .build(),
                 }),
             ),
         ])
@@ -257,7 +259,7 @@ impl NetUpgrades<UpgradeVersion> {
 mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
-    use crate::chain::{create_unittest_pos_config, Activate};
+    use crate::chain::Activate;
     use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
 
@@ -375,7 +377,7 @@ mod tests {
                 first_pos_upgrade,
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                     initial_difficulty: Some(Uint256::from_u64(1500).into()),
-                    config: create_unittest_pos_config(),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
                 }),
             ),
             (
@@ -410,12 +412,14 @@ mod tests {
             upgrades.consensus_status(10_000.into()),
             RequiredConsensus::PoS(PoSStatus::Threshold {
                 initial_difficulty: Some(Uint256::from_u64(1500).into()),
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             },)
         );
         assert_eq!(
             upgrades.consensus_status(14_999.into()),
-            RequiredConsensus::PoS(PoSStatus::Ongoing(create_unittest_pos_config()))
+            RequiredConsensus::PoS(PoSStatus::Ongoing(
+                PoSChainConfigBuilder::new_for_unit_test().build()
+            ))
         );
         assert_eq!(
             upgrades.consensus_status(15_000.into()),

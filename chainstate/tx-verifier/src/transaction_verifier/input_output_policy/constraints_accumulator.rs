@@ -207,11 +207,10 @@ mod tests {
         chain::{
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
             timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade,
-            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfig,
-            PoSConsensusVersion, PoolId, TxOutput, UpgradeVersion, UtxoOutPoint,
+            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
+            PoolId, TxOutput, UpgradeVersion, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
-        Uint256,
     };
     use crypto::{
         random::{CryptoRng, Rng},
@@ -426,16 +425,10 @@ mod tests {
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    1,
-                    required_decommission_maturity.into(),
-                    required_spend_share_maturity.into(),
-                    2,
-                    PerThousand::new(0).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .decommission_maturity_distance(required_decommission_maturity.into())
+                    .spend_share_maturity_distance(required_spend_share_maturity.into())
+                    .build(),
             }),
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
