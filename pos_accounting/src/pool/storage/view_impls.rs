@@ -15,6 +15,7 @@
 
 use std::collections::BTreeMap;
 
+use chainstate_types::storage_result;
 use common::{
     chain::{DelegationId, PoolId},
     primitives::Amount,
@@ -33,53 +34,59 @@ use crate::{
 };
 
 impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAccountingDB<S, T> {
-    type Error = Error;
+    type Error = S::Error;
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.store.get_pool_balance(pool_id).map_err(Error::from)
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        self.store.get_pool_balance(pool_id)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.store.get_pool_data(pool_id).map_err(Error::from)
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+        self.store.get_pool_data(pool_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.store.get_pool_delegations_shares(pool_id).map_err(Error::from)
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        self.store.get_pool_delegations_shares(pool_id)
     }
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        self.store.get_delegation_balance(delegation_id).map_err(Error::from)
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        self.store.get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
-        self.store.get_delegation_data(delegation_id).map_err(Error::from)
+    ) -> Result<Option<DelegationData>, Self::Error> {
+        self.store.get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.store
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Error::from)
+    ) -> Result<Option<Amount>, Self::Error> {
+        self.store.get_pool_delegation_share(pool_id, delegation_id)
     }
 }
 
-impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> FlushablePoSAccountingView
-    for PoSAccountingDB<S, T>
+impl<S: PoSAccountingStorageWrite<T, Error = storage_result::Error>, T: StorageTag>
+    FlushablePoSAccountingView for PoSAccountingDB<S, T>
 {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error> {
+    type Error = Error;
+
+    fn batch_write_delta(
+        &mut self,
+        data: PoSAccountingDeltaData,
+    ) -> Result<DeltaMergeUndo, Self::Error> {
         self.merge_with_delta(data)
     }
 }

@@ -35,7 +35,7 @@ use common::{
 };
 use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData,
+    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
@@ -370,14 +370,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingStorageRead
     for ChainstateRef<'a, S, V>
 {
     type Error = pos_accounting::Error;
-
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.get_pool_data(pool_id).map(|v| v.is_some())
-    }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_balance(pool_id)
@@ -421,6 +417,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
     for ChainstateRef<'a, S, V>
 {
+    type Error = pos_accounting::Error;
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,

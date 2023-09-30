@@ -56,6 +56,8 @@ pub trait PoSAccountingView {
 }
 
 pub trait FlushablePoSAccountingView {
+    type Error: std::error::Error;
+
     fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error>;
 }
 

@@ -45,7 +45,9 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
+use pos_accounting::{
+    PoSAccountingDB, PoSAccountingDelta, PoSAccountingStorageRead, PoSAccountingView,
+};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
@@ -153,7 +155,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn make_pos_accounting_view(
         &self,
-    ) -> impl PoSAccountingView<Error = pos_accounting::Error> + '_ {
+    ) -> impl PoSAccountingView<Error = <S as PoSAccountingStorageRead<TipStorageTag>>::Error> + '_
+    {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
     }
 

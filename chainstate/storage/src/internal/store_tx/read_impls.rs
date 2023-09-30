@@ -248,6 +248,7 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
     }
@@ -288,6 +289,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }
@@ -484,6 +486,7 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
     }
@@ -524,6 +527,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }

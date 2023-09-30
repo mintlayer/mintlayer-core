@@ -145,6 +145,7 @@ pub trait PoSAccountingStorageWriteSealed: PoSAccountingStorageReadSealed {
 macro_rules! impl_sealed_read_ops {
     ($StoreType:ident) => {
         impl PoSAccountingStorageRead<crate::SealedStorageTag> for $StoreType {
+            type Error = crate::Error;
             fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
                 self.get_pool_balance_sealed(pool_id)
             }
@@ -183,6 +184,7 @@ macro_rules! impl_sealed_read_ops {
 macro_rules! impl_tip_read_ops {
     ($StoreType:ident) => {
         impl PoSAccountingStorageRead<crate::TipStorageTag> for $StoreType {
+            type Error = crate::Error;
             fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
                 self.get_pool_balance_tip(pool_id)
             }

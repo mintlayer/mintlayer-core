@@ -441,7 +441,7 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn otry_reorg_past_limit_in_fork(#[case] seed: Seed) {
+fn try_reorg_past_limit_in_fork(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 

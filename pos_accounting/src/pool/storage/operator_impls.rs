@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::storage_result;
 use common::{
     chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
@@ -35,8 +36,8 @@ use crate::{
     PoSAccountingDB, StorageTag,
 };
 
-impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
-    for PoSAccountingDB<S, T>
+impl<S: PoSAccountingStorageWrite<T, Error = storage_result::Error>, T: StorageTag>
+    PoSAccountingOperations for PoSAccountingDB<S, T>
 {
     fn create_pool(
         &mut self,
@@ -240,7 +241,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
     }
 }
 
-impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
+impl<S: PoSAccountingStorageWrite<T, Error = storage_result::Error>, T: StorageTag>
+    PoSAccountingDB<S, T>
+{
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         match undo.data_undo {
             PoolDataUndo::Data(v) => v,

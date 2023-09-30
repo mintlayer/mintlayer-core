@@ -50,7 +50,9 @@ impl<S, T> PoSAccountingDB<S, T> {
     }
 }
 
-impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
+impl<S: PoSAccountingStorageWrite<T, Error = storage_result::Error>, T: StorageTag>
+    PoSAccountingDB<S, T>
+{
     pub fn merge_with_delta(
         &mut self,
         other: PoSAccountingDeltaData,

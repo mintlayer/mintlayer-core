@@ -86,8 +86,8 @@ use common::{
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView, PoolData,
+    PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -142,10 +142,17 @@ pub struct TransactionVerifier<C, S, U, A, T> {
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone>
-    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
+    TransactionVerifier<
+        C,
+        S,
+        UtxosDB<S>,
+        PoSAccountingDB<S, pos_accounting::DefaultStorageTag>,
+        TokensAccountingDB<S>,
+    >
 {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
-        let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
+        let accounting_delta_adapter =
+            PoSAccountingDeltaAdapter::new(PoSAccountingDB::new(storage.shallow_clone()));
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
         let best_block = storage

@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::storage_result::Error;
+use chainstate_types::storage_result::{self, Error};
 use common::{
     chain::{DelegationId, PoolId},
     primitives::{Amount, H256},
@@ -134,6 +134,8 @@ impl InMemoryPoSAccounting {
 }
 
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {
+    type Error = storage_result::Error;
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         Ok(self.pool_balances.get(&pool_id).copied())
     }

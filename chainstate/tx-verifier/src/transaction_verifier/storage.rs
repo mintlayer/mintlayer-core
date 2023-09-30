@@ -25,7 +25,8 @@ use common::{
     primitives::Id,
 };
 use pos_accounting::{
-    AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
+    AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingStorageRead,
 };
 use thiserror::Error;
 use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
@@ -76,10 +77,8 @@ impl HasTxIndexDisabledError for TransactionVerifierStorageError {
     }
 }
 
-// TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
-//              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef:
-    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead
+    UtxosStorageRead + PoSAccountingStorageRead + TokensAccountingStorageRead
 where
     <Self as TransactionVerifierStorageRef>::Error: HasTxIndexDisabledError,
 {

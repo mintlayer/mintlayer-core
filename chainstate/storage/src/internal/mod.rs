@@ -308,6 +308,7 @@ impl<B: storage::Backend> UtxosStorageRead for Store<B> {
 }
 
 impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tx, pool_id)
@@ -349,6 +350,7 @@ impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
 }
 
 impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B> {
+    type Error = crate::Error;
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tx, pool_id)

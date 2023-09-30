@@ -39,7 +39,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
-use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
 use utxo::{Utxo, UtxosView};
 

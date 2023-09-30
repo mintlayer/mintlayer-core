@@ -25,8 +25,6 @@ use common::{
 
 use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
-use chainstate_types::storage_result;
-
 pub mod in_memory;
 
 pub trait StorageTag {}
@@ -35,85 +33,76 @@ pub struct DefaultStorageTag;
 impl StorageTag for DefaultStorageTag {}
 
 pub trait PoSAccountingStorageRead<Tag: StorageTag = DefaultStorageTag> {
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, storage_result::Error>;
+    type Error: std::error::Error;
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, storage_result::Error>;
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error>;
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, storage_result::Error>;
+    ) -> Result<Option<Amount>, Self::Error>;
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, storage_result::Error>;
+    ) -> Result<Option<DelegationData>, Self::Error>;
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, storage_result::Error>;
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error>;
 
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, storage_result::Error>;
+    ) -> Result<Option<Amount>, Self::Error>;
 }
 
 pub trait PoSAccountingStorageWrite<Tag: StorageTag = DefaultStorageTag>:
     PoSAccountingStorageRead<Tag>
 {
-    fn set_pool_balance(
-        &mut self,
-        pool_id: PoolId,
-        amount: Amount,
-    ) -> Result<(), storage_result::Error>;
+    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Self::Error>;
 
-    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
+    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Self::Error>;
 
-    fn set_pool_data(
-        &mut self,
-        pool_id: PoolId,
-        pool_data: &PoolData,
-    ) -> Result<(), storage_result::Error>;
+    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> Result<(), Self::Error>;
 
-    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
+    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), Self::Error>;
 
     fn set_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
         amount: Amount,
-    ) -> Result<(), storage_result::Error>;
+    ) -> Result<(), Self::Error>;
 
     fn del_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
-    ) -> Result<(), storage_result::Error>;
+    ) -> Result<(), Self::Error>;
 
     fn set_delegation_data(
         &mut self,
         delegation_id: DelegationId,
         delegation_data: &DelegationData,
-    ) -> Result<(), storage_result::Error>;
+    ) -> Result<(), Self::Error>;
 
-    fn del_delegation_data(
-        &mut self,
-        delegation_id: DelegationId,
-    ) -> Result<(), storage_result::Error>;
+    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> Result<(), Self::Error>;
 
     fn set_pool_delegation_share(
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
         amount: Amount,
-    ) -> Result<(), storage_result::Error>;
+    ) -> Result<(), Self::Error>;
 
     fn del_pool_delegation_share(
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<(), storage_result::Error>;
+    ) -> Result<(), Self::Error>;
 }
 
 impl<V, T> PoSAccountingStorageRead<T> for V
@@ -122,32 +111,34 @@ where
     T: StorageTag,
     <V as Deref>::Target: PoSAccountingStorageRead<T>,
 {
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, storage_result::Error> {
+    type Error = <V::Target as PoSAccountingStorageRead<T>>::Error;
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         self.deref().get_pool_balance(pool_id)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, storage_result::Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         self.deref().get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, storage_result::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         self.deref().get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, storage_result::Error> {
+    ) -> Result<Option<DelegationData>, Self::Error> {
         self.deref().get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, storage_result::Error> {
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
         self.deref().get_pool_delegations_shares(pool_id)
     }
 
@@ -155,7 +146,7 @@ where
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, storage_result::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         self.deref().get_pool_delegation_share(pool_id, delegation_id)
     }
 }
@@ -166,27 +157,19 @@ where
     T: StorageTag,
     <V as Deref>::Target: PoSAccountingStorageWrite<T>,
 {
-    fn set_pool_balance(
-        &mut self,
-        pool_id: PoolId,
-        amount: Amount,
-    ) -> Result<(), storage_result::Error> {
+    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Self::Error> {
         self.deref_mut().set_pool_balance(pool_id, amount)
     }
 
-    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error> {
+    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Self::Error> {
         self.deref_mut().del_pool_balance(pool_id)
     }
 
-    fn set_pool_data(
-        &mut self,
-        pool_id: PoolId,
-        pool_data: &PoolData,
-    ) -> Result<(), storage_result::Error> {
+    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> Result<(), Self::Error> {
         self.deref_mut().set_pool_data(pool_id, pool_data)
     }
 
-    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error> {
+    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), Self::Error> {
         self.deref_mut().del_pool_data(pool_id)
     }
 
@@ -194,14 +177,14 @@ where
         &mut self,
         delegation_target: DelegationId,
         amount: Amount,
-    ) -> Result<(), storage_result::Error> {
+    ) -> Result<(), Self::Error> {
         self.deref_mut().set_delegation_balance(delegation_target, amount)
     }
 
     fn del_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
-    ) -> Result<(), storage_result::Error> {
+    ) -> Result<(), Self::Error> {
         self.deref_mut().del_delegation_balance(delegation_target)
     }
 
@@ -209,14 +192,11 @@ where
         &mut self,
         delegation_id: DelegationId,
         delegation_data: &DelegationData,
-    ) -> Result<(), storage_result::Error> {
+    ) -> Result<(), Self::Error> {
         self.deref_mut().set_delegation_data(delegation_id, delegation_data)
     }
 
-    fn del_delegation_data(
-        &mut self,
-        delegation_id: DelegationId,
-    ) -> Result<(), storage_result::Error> {
+    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> Result<(), Self::Error> {
         self.deref_mut().del_delegation_data(delegation_id)
     }
 
@@ -225,7 +205,7 @@ where
         pool_id: PoolId,
         delegation_id: DelegationId,
         amount: Amount,
-    ) -> Result<(), storage_result::Error> {
+    ) -> Result<(), Self::Error> {
         self.deref_mut().set_pool_delegation_share(pool_id, delegation_id, amount)
     }
 
@@ -233,7 +213,7 @@ where
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<(), storage_result::Error> {
+    ) -> Result<(), Self::Error> {
         self.deref_mut().del_pool_delegation_share(pool_id, delegation_id)
     }
 }

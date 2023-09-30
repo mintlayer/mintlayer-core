@@ -25,7 +25,7 @@ use common::{
     },
     primitives::BlockHeight,
 };
-use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingView};
+use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use thiserror::Error;
 use tx_verifier::transaction_verifier::error::SpendStakeError;
 use utils::tap_error_log::LogError;

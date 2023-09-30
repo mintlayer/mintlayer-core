@@ -148,7 +148,12 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
 }
 
 impl<P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<P> {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error> {
+    type Error = Error;
+
+    fn batch_write_delta(
+        &mut self,
+        data: PoSAccountingDeltaData,
+    ) -> Result<DeltaMergeUndo, Self::Error> {
         self.merge_with_delta(data)
     }
 }
