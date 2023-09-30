@@ -86,6 +86,8 @@ impl ChainType {
                             initial_difficulty: None,
                             config: PoSChainConfigBuilder::new(ChainType::Testnet)
                                 .consensus_version(PoSConsensusVersion::V1)
+                                .decommission_maturity_distance(BlockDistance::new(7200))
+                                .spend_share_maturity_distance(BlockDistance::new(7200))
                                 .build(),
                         }),
                     ),
