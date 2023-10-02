@@ -637,6 +637,40 @@ pub fn create_unit_test_config() -> ChainConfig {
         .build()
 }
 
+/// This function ensure that IgnoreConsensus will never be used in anything other than regtest
+pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
+    match chain_config.chain_type() {
+        ChainType::Regtest => {
+            return;
+        }
+        ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => {}
+    }
+
+    let upgrades = chain_config.net_upgrade();
+
+    let all_upgrades = upgrades.all_upgrades();
+
+    for upgrade in all_upgrades {
+        let upgrade_height = &upgrade.0;
+        let upgrade_data = &upgrade.1;
+
+        // We skip genesis
+        if *upgrade_height == 0.into() && all_upgrades.len() > 1 {
+            continue;
+        }
+
+        let consensus = upgrades.consensus_status(*upgrade_height);
+        assert_ne!(
+            RequiredConsensus::IgnoreConsensus,
+            consensus,
+            "Upgrade {:?} at height {} is ignoring consensus in net type {}. This is only allowed in regtest",
+            upgrade_data,
+            upgrade_height,
+            chain_config.chain_type().name()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -815,5 +849,31 @@ mod tests {
             .sealed_epoch_distance_from_tip(seal_to_tip_distance)
             .build();
         assert_eq!(expected_epoch, config.sealed_epoch_index(&block_height));
+    }
+
+    #[test]
+    fn test_ignore_consensus_in_mainnet() {
+        let config = create_mainnet();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(expected = "at height 0 is ignoring consensus in net type mainnet")]
+    fn test_ignore_consensus_outside_regtest_in_no_upgrades() {
+        let config =
+            Builder::new(ChainType::Mainnet).net_upgrades(NetUpgrades::unit_tests()).build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(expected = "at height 1 is ignoring consensus in net type mainnet")]
+    fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
+        let config = Builder::new(ChainType::Mainnet)
+            .net_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
+            .build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
     }
 }
