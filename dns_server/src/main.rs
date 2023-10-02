@@ -31,6 +31,8 @@ use p2p::{
 use utils::atomics::SeqCstAtomicBool;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
+use crate::crawler_p2p::crawler::CrawlerConfig;
+
 mod config;
 mod crawler_p2p;
 mod dns_server;
@@ -107,13 +109,19 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerErro
         Default::default(),
     ))?;
 
-    let crawler_config = CrawlerManagerConfig {
+    let crawler_mgr_config = CrawlerManagerConfig {
         reserved_nodes: config.reserved_node.clone(),
         default_p2p_port: chain_config.p2p_port(),
     };
 
+    let crawler_config = CrawlerConfig {
+        ban_duration: p2p_config.ban_duration.clone(),
+        ban_threshold: p2p_config.ban_threshold.clone(),
+    };
+
     let mut crawler_manager = CrawlerManager::<p2p::P2pNetworkingService, _>::new(
         time_getter,
+        crawler_mgr_config,
         crawler_config,
         chain_config,
         conn,

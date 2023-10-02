@@ -17,7 +17,7 @@ pub mod storage;
 pub mod storage_impl;
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     sync::Arc,
     time::Duration,
@@ -38,8 +38,8 @@ use p2p::{
         peerdb_common::{storage::update_db, TransactionRo, TransactionRw},
     },
     types::{
-        ip_or_socket_address::IpOrSocketAddress, peer_address::PeerAddress, peer_id::PeerId,
-        socket_address::SocketAddress, IsGlobalIp,
+        bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
+        peer_address::PeerAddress, peer_id::PeerId, socket_address::SocketAddress, IsGlobalIp,
     },
 };
 use tokio::sync::mpsc;
@@ -48,7 +48,7 @@ use crate::{dns_server::DnsServerCommand, error::DnsServerError};
 
 use self::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
 
-use super::crawler::{Crawler, CrawlerCommand, CrawlerEvent};
+use super::crawler::{Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent};
 
 /// How often the server performs maintenance (tries to connect to new nodes)
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -91,14 +91,31 @@ pub struct CrawlerManager<N: NetworkingService, S> {
     dns_server_cmd_tx: mpsc::UnboundedSender<DnsServerCommand>,
 }
 
+// Note: "pub" access is only needed because of the "load_storage_for_tests" function.
+pub struct LoadedStorage {
+    pub known_addresses: BTreeSet<SocketAddress>,
+    pub banned_addresses: BTreeMap<BannableAddress, Time>,
+}
+
+impl LoadedStorage {
+    pub fn new() -> Self {
+        Self {
+            known_addresses: BTreeSet::new(),
+            banned_addresses: BTreeMap::new(),
+        }
+    }
+}
+
 impl<N: NetworkingService, S: DnsServerStorage> CrawlerManager<N, S>
 where
     N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         time_getter: TimeGetter,
         config: CrawlerManagerConfig,
+        crawler_config: CrawlerConfig,
         chain_config: Arc<ChainConfig>,
         conn: N::ConnectivityHandle,
         sync: N::SyncingEventReceiver,
@@ -108,7 +125,7 @@ where
         let last_crawler_timer = time_getter.get_time();
 
         // Addresses that are stored in the DB as reachable
-        let loaded_addresses: BTreeSet<SocketAddress> = Self::load_storage(&storage)?;
+        let loaded_storage = Self::load_storage(&storage)?;
 
         // Addresses listed as reachable from the command line
         let reserved_addresses: BTreeSet<SocketAddress> = config
@@ -119,7 +136,14 @@ where
 
         assert!(conn.local_addresses().is_empty());
 
-        let crawler = Crawler::new(chain_config, loaded_addresses, reserved_addresses);
+        let crawler = Crawler::new(
+            last_crawler_timer,
+            chain_config,
+            crawler_config,
+            loaded_storage.known_addresses,
+            loaded_storage.banned_addresses,
+            reserved_addresses,
+        );
 
         Ok(Self {
             time_getter,
@@ -133,7 +157,7 @@ where
         })
     }
 
-    fn load_storage(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
+    fn load_storage(storage: &S) -> Result<LoadedStorage, DnsServerError> {
         let tx = storage.transaction_ro()?;
         let version = tx.get_version()?;
         tx.close();
@@ -145,18 +169,28 @@ where
         }
     }
 
-    fn init_storage(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
+    fn init_storage(storage: &S) -> Result<LoadedStorage, DnsServerError> {
         let mut tx = storage.transaction_rw()?;
         tx.set_version(STORAGE_VERSION)?;
         tx.commit()?;
-        Ok(BTreeSet::new())
+        Ok(LoadedStorage::new())
     }
 
-    fn load_storage_v1(storage: &S) -> Result<BTreeSet<SocketAddress>, DnsServerError> {
+    fn load_storage_v1(storage: &S) -> Result<LoadedStorage, DnsServerError> {
         let tx = storage.transaction_ro()?;
-        let addresses =
+        let known_addresses =
             tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()).collect();
-        Ok(addresses)
+
+        let banned_addresses = tx
+            .get_banned_addresses()?
+            .iter()
+            .filter_map(|(address, ban_until)| address.parse().ok().map(|addr| (addr, *ban_until)))
+            .collect();
+
+        Ok(LoadedStorage {
+            known_addresses,
+            banned_addresses,
+        })
     }
 
     fn handle_conn_message(&mut self, peer_id: PeerId, message: PeerManagerMessage) {
@@ -219,12 +253,8 @@ where
             ConnectivityEvent::ConnectionClosed { peer_id } => {
                 self.send_crawler_event(CrawlerEvent::Disconnected { peer_id });
             }
-            ConnectivityEvent::Misbehaved {
-                peer_id: _,
-                error: _,
-            } => {
-                // Ignore all misbehave reports
-                // TODO: Should we ban peers when they send unexpected messages?
+            ConnectivityEvent::Misbehaved { peer_id, error } => {
+                self.send_crawler_event(CrawlerEvent::Misbehaved { peer_id, error });
             }
         }
     }
@@ -309,6 +339,16 @@ where
                     _ => {}
                 }
             }
+            CrawlerCommand::MarkAsBanned { address, ban_until } => {
+                update_db(storage, |tx| {
+                    tx.add_banned_address(&address.to_string(), ban_until)
+                })
+                .expect("update_db must succeed (add_banned_address)");
+            }
+            CrawlerCommand::RemoveBannedStatus { address } => {
+                update_db(storage, |tx| tx.del_banned_address(&address.to_string()))
+                    .expect("update_db must succeed (del_banned_address)");
+            }
         }
     }
 
@@ -344,6 +384,11 @@ where
                 },
             }
         }
+    }
+
+    #[cfg(test)]
+    pub fn load_storage_for_tests(&self) -> Result<LoadedStorage, DnsServerError> {
+        Self::load_storage(&self.storage)
     }
 }
 

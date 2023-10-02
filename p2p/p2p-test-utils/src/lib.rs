@@ -115,3 +115,46 @@ impl P2pBasicTestTimeGetter {
         self.current_time_millis.fetch_add(duration.as_millis() as u64);
     }
 }
+
+/// A timeout for blocking calls.
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(60);
+/// A short timeout for events that shouldn't occur.
+pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Await for the specified future for some reasonably big amount of time; panic if the timeout
+/// is reached.
+// Note: this is implemented as a macro until #[track_caller] works correctly with async functions
+// (needed to print the caller location if 'unwrap' fails). Same for the other macros below.
+#[macro_export]
+macro_rules! expect_future_val {
+    ($fut:expr) => {
+        tokio::time::timeout($crate::LONG_TIMEOUT, $fut)
+            .await
+            .expect("Failed to receive value in time")
+    };
+}
+
+/// Await for the specified future for a short time, expecting a timeout.
+#[macro_export]
+macro_rules! expect_no_future_val {
+    ($fut:expr) => {
+        tokio::time::timeout($crate::SHORT_TIMEOUT, $fut).await.unwrap_err();
+    };
+}
+
+/// Try receiving a message from the tokio channel; panic if the channel is closed or the timeout
+/// is reached.
+#[macro_export]
+macro_rules! expect_recv {
+    ($rx:expr) => {
+        $crate::expect_future_val!($rx.recv()).unwrap()
+    };
+}
+
+/// Try receiving a message from the tokio channel; expect that a timeout is reached.
+#[macro_export]
+macro_rules! expect_no_recv {
+    ($rx:expr) => {
+        $crate::expect_no_future_val!($rx.recv())
+    };
+}

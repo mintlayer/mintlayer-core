@@ -225,17 +225,6 @@ pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory>
     PeerDbStorageImpl::new(storage).unwrap()
 }
 
-/// Receive a message from the tokio channel.
-/// Panics if the channel is closed or no message received in 10 seconds.
-#[macro_export]
-macro_rules! expect_recv {
-    // Implemented as a macro until #[track_caller] works correctly with async functions
-    // (needed to print the caller location if unwraps fail)
-    ($x:expr) => {
-        tokio::time::timeout(Duration::from_secs(10), $x.recv()).await.unwrap().unwrap()
-    };
-}
-
 pub fn test_p2p_config() -> P2pConfig {
     P2pConfig {
         bind_addresses: Default::default(),

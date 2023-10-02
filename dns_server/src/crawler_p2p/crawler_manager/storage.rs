@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::time::Time;
 use p2p::peer_manager::peerdb_common::{TransactionRo, TransactionRw, Transactional};
 
 pub trait DnsServerStorageRead {
     fn get_version(&self) -> Result<Option<u32>, storage::Error>;
 
     fn get_addresses(&self) -> Result<Vec<String>, storage::Error>;
+
+    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error>;
 }
 
 pub trait DnsServerStorageWrite {
@@ -27,6 +30,10 @@ pub trait DnsServerStorageWrite {
     fn add_address(&mut self, address: &str) -> Result<(), storage::Error>;
 
     fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
+
+    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error>;
+
+    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
 // Note: here we want to say something like:

@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use super::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite};
+use common::primitives::time::Time;
 use p2p::peer_manager::peerdb_common::storage_impl::{StorageImpl, StorageTxRo, StorageTxRw};
 use serialization::{encoded::Encoded, DecodeAll, Encode};
 use storage::MakeMapRef;
@@ -28,6 +31,9 @@ storage::decl_schema! {
 
         /// Table for all reachable addresses
         pub DBAddresses: Map<String, ()>,
+
+        /// Table for banned addresses
+        pub DBBannedAddresses: Map<String, Duration>,
     }
 }
 
@@ -52,6 +58,16 @@ impl<'st, B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'st,
     fn del_address(&mut self, address: &str) -> Result<(), storage::Error> {
         self.storage().get_mut::<DBAddresses, _>().del(address)
     }
+
+    fn add_banned_address(&mut self, address: &str, time: Time) -> Result<(), storage::Error> {
+        self.storage()
+            .get_mut::<DBBannedAddresses, _>()
+            .put(address, time.as_duration_since_epoch())
+    }
+
+    fn del_banned_address(&mut self, address: &str) -> Result<(), storage::Error> {
+        self.storage().get_mut::<DBBannedAddresses, _>().del(address)
+    }
 }
 
 impl<'st, B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'st, B> {
@@ -66,6 +82,14 @@ impl<'st, B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'st, 
     fn get_addresses(&self) -> Result<Vec<String>, storage::Error> {
         let map = self.storage().get::<DBAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?.map(|(addr, ())| addr);
+        Ok(iter.collect::<Vec<_>>())
+    }
+
+    fn get_banned_addresses(&self) -> Result<Vec<(String, Time)>, storage::Error> {
+        let map = self.storage().get::<DBBannedAddresses, _>();
+        let iter = map
+            .prefix_iter_decoded(&())?
+            .map(|(addr, dur)| (addr, Time::from_duration_since_epoch(dur)));
         Ok(iter.collect::<Vec<_>>())
     }
 }

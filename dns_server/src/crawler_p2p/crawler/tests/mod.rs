@@ -16,15 +16,19 @@
 mod mock_crawler;
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     time::Duration,
 };
 
-use common::primitives::user_agent::mintlayer_core_user_agent;
+use chainstate::ban_score::BanScore;
+use common::{
+    chain::ChainConfig,
+    primitives::{time::Time, user_agent::mintlayer_core_user_agent},
+};
 use p2p::{
-    config::NodeType,
-    error::{DialError, P2pError},
+    config::{BanDuration, BanThreshold, NodeType},
+    error::{DialError, P2pError, ProtocolError},
     net::types::PeerInfo,
     testing_utils::TEST_PROTOCOL_VERSION,
     types::{peer_id::PeerId, socket_address::SocketAddress},
@@ -41,6 +45,8 @@ use mock_crawler::test_crawler;
 
 use crate::crawler_p2p::crawler::CrawlerEvent;
 
+use super::CrawlerConfig;
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -49,7 +55,12 @@ fn basic(#[case] seed: Seed) {
     let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let peer1 = PeerId::new();
     let chain_config = common::chain::config::create_mainnet();
-    let mut crawler = test_crawler(BTreeSet::new(), [node1].into_iter().collect());
+    let mut crawler = test_crawler(
+        make_config(),
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1].into_iter().collect(),
+    );
 
     crawler.timer(Duration::from_secs(100), &mut rng);
     assert_eq!(crawler.pending_connects.len(), 1);
@@ -58,14 +69,7 @@ fn basic(#[case] seed: Seed) {
     crawler.step(
         CrawlerEvent::Connected {
             address: node1,
-            peer_info: PeerInfo {
-                peer_id: peer1,
-                protocol_version: TEST_PROTOCOL_VERSION,
-                network: *chain_config.magic_bytes(),
-                software_version: *chain_config.software_version(),
-                user_agent: mintlayer_core_user_agent(),
-                common_services: NodeType::DnsServer.into(),
-            },
+            peer_info: make_peer_info(peer1, &chain_config),
         },
         &mut rng,
     );
@@ -90,14 +94,7 @@ fn basic(#[case] seed: Seed) {
     crawler.step(
         CrawlerEvent::Connected {
             address: node2,
-            peer_info: PeerInfo {
-                peer_id: peer2,
-                protocol_version: TEST_PROTOCOL_VERSION,
-                network: *chain_config.magic_bytes(),
-                software_version: *chain_config.software_version(),
-                user_agent: mintlayer_core_user_agent(),
-                common_services: NodeType::DnsServer.into(),
-            },
+            peer_info: make_peer_info(peer2, &chain_config),
         },
         &mut rng,
     );
@@ -147,7 +144,7 @@ fn randomized(#[case] seed: Seed) {
     let loaded_count = rng.gen_range(0..10);
     let loaded_nodes = nodes.choose_multiple(&mut rng, loaded_count).cloned().collect();
 
-    let mut crawler = test_crawler(loaded_nodes, reserved_nodes);
+    let mut crawler = test_crawler(make_config(), loaded_nodes, BTreeMap::new(), reserved_nodes);
 
     for _ in 0..rng.gen_range(0..100000) {
         crawler.timer(Duration::from_secs(rng.gen_range(0..100)), &mut rng);
@@ -170,14 +167,7 @@ fn randomized(#[case] seed: Seed) {
             crawler.step(
                 CrawlerEvent::Connected {
                     address,
-                    peer_info: PeerInfo {
-                        peer_id: PeerId::new(),
-                        protocol_version: TEST_PROTOCOL_VERSION,
-                        network: *chain_config.magic_bytes(),
-                        software_version: *chain_config.software_version(),
-                        user_agent: mintlayer_core_user_agent(),
-                        common_services: NodeType::DnsServer.into(),
-                    },
+                    peer_info: make_peer_info(PeerId::new(), &chain_config),
                 },
                 &mut rng,
             )
@@ -189,14 +179,7 @@ fn randomized(#[case] seed: Seed) {
             crawler.step(
                 CrawlerEvent::Connected {
                     address,
-                    peer_info: PeerInfo {
-                        peer_id: PeerId::new(),
-                        protocol_version: TEST_PROTOCOL_VERSION,
-                        network: [255, 255, 255, 255],
-                        software_version: *chain_config.software_version(),
-                        user_agent: mintlayer_core_user_agent(),
-                        common_services: NodeType::DnsServer.into(),
-                    },
+                    peer_info: make_peer_info(PeerId::new(), &chain_config),
                 },
                 &mut rng,
             )
@@ -230,13 +213,18 @@ fn incompatible_node(#[case] seed: Seed) {
     let node1: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let peer1 = PeerId::new();
     let chain_config = common::chain::config::create_mainnet();
-    let mut crawler = test_crawler(BTreeSet::new(), [node1].into_iter().collect());
+    let mut crawler = test_crawler(
+        make_config(),
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1].into_iter().collect(),
+    );
 
-    // // Crawler attempts to connect to the specified node
+    // Crawler attempts to connect to the specified node
     crawler.timer(Duration::from_secs(100), &mut rng);
     assert!(crawler.pending_connects.contains(&node1));
 
-    // // Connection to the node is successful
+    // Connection to the node is successful
     crawler.step(
         CrawlerEvent::Connected {
             address: node1,
@@ -264,7 +252,9 @@ fn long_offline(#[case] seed: Seed) {
     let loaded_node: SocketAddress = "1.0.0.0:3031".parse().unwrap();
     let added_node: SocketAddress = "2.0.0.0:3031".parse().unwrap();
     let mut crawler = test_crawler(
+        make_config(),
         [loaded_node].into_iter().collect(),
+        BTreeMap::new(),
         [added_node].into_iter().collect(),
     );
     assert!(crawler.persistent.contains(&loaded_node));
@@ -298,4 +288,369 @@ fn long_offline(#[case] seed: Seed) {
     assert!(!crawler.connect_requests.iter().any(|addr| *addr == loaded_node));
     assert!(crawler.connect_requests.iter().any(|addr| *addr == added_node));
     crawler.connect_requests.clear();
+}
+
+// Connect to two peers and then send CrawlerEvent::Misbehaved for one of them several times,
+// making sure that the ban score is updated accordingly and that eventually the peer is banned.
+// Also check that we don't reconnect to the banned peer until the ban end is reached.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_misbehaved_peer(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
+    let peer1 = PeerId::new();
+    let node2: SocketAddress = "2.3.4.5:2345".parse().unwrap();
+    let peer2 = PeerId::new();
+
+    let test_error = P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned()));
+    let test_error_ban_score = test_error.ban_score();
+    assert!(test_error_ban_score > 0);
+    let ban_threshold = test_error_ban_score * 2;
+
+    let chain_config = common::chain::config::create_mainnet();
+    let mut crawler = test_crawler(
+        CrawlerConfig {
+            ban_duration: BanDuration::new(BAN_DURATION),
+            ban_threshold: BanThreshold::new(ban_threshold),
+        },
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1, node2].into_iter().collect(),
+    );
+
+    let times_step = Duration::from_secs(100);
+
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[node1, node2]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node1,
+            peer_info: make_peer_info(peer1, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node2,
+            peer_info: make_peer_info(peer2, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer1, peer2]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    crawler.step(
+        CrawlerEvent::Misbehaved {
+            peer_id: peer1,
+            error: test_error.clone(),
+        },
+        &mut rng,
+    );
+
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer1, peer2]);
+    crawler.assert_ban_scores(&[(peer1, test_error_ban_score)]);
+    crawler.assert_banned_addresses(&[]);
+
+    let ban_start_time = crawler.now();
+    let ban_end_time = (ban_start_time + BAN_DURATION).unwrap();
+
+    crawler.step(
+        CrawlerEvent::Misbehaved {
+            peer_id: peer1,
+            error: test_error,
+        },
+        &mut rng,
+    );
+
+    // The peer is banned.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[peer1]);
+    crawler.assert_connected_peers(&[peer1, peer2]);
+    crawler.assert_ban_scores(&[(peer1, test_error_ban_score * 2)]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer1 }, &mut rng);
+
+    // The peer has become disconnected and its ban score was lost. But it's still banned.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    // Wait some (small) time, the peer should still be banned.
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[(peer1, test_error_ban_score * 10)]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    // Sanity check
+    assert!(crawler.now() < ban_end_time);
+
+    // Wait for the remaining ban time.
+    crawler.timer((ban_end_time - crawler.now()).unwrap(), &mut rng);
+
+    // The peer is no longer banned; instead, it is being connected to.
+    crawler.assert_pending_connects(&[node1]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+}
+
+// Connect to three peers, where two of them share the same ip address, and then send
+// CrawlerEvent::Misbehaved for one of those. Make sure that both peers get disconnected and
+// no connect attempts are made until the ban end is reached.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_misbehaved_peers_with_same_address(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
+    let peer1 = PeerId::new();
+    let node2: SocketAddress = "2.3.4.5:2345".parse().unwrap();
+    let peer2 = PeerId::new();
+    let node3: SocketAddress = "1.2.3.4:4321".parse().unwrap();
+    let peer3 = PeerId::new();
+
+    assert_eq!(node3.as_bannable(), node1.as_bannable());
+
+    let test_error = P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned()));
+    let test_error_ban_score = test_error.ban_score();
+    assert!(test_error_ban_score > 0);
+    let ban_threshold = test_error_ban_score;
+
+    let chain_config = common::chain::config::create_mainnet();
+    let mut crawler = test_crawler(
+        CrawlerConfig {
+            ban_duration: BanDuration::new(BAN_DURATION),
+            ban_threshold: BanThreshold::new(ban_threshold),
+        },
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1, node2, node3].into_iter().collect(),
+    );
+
+    let times_step = Duration::from_secs(100);
+
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[node1, node2, node3]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node1,
+            peer_info: make_peer_info(peer1, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node2,
+            peer_info: make_peer_info(peer2, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node3,
+            peer_info: make_peer_info(peer3, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer1, peer2, peer3]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    let ban_start_time = crawler.now();
+    let ban_end_time = (ban_start_time + BAN_DURATION).unwrap();
+
+    crawler.step(
+        CrawlerEvent::Misbehaved {
+            peer_id: peer1,
+            error: test_error.clone(),
+        },
+        &mut rng,
+    );
+
+    // The peer1's address is banned; peer1 and peer3 are being disconnected.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[peer1, peer3]);
+    crawler.assert_connected_peers(&[peer1, peer2, peer3]);
+    crawler.assert_ban_scores(&[(peer1, test_error_ban_score)]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer1 }, &mut rng);
+    crawler.step(CrawlerEvent::Disconnected { peer_id: peer3 }, &mut rng);
+
+    // peer1 and peer3 are now disconnected; the ban score was lost, but the address is still banned.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    // Wait some (small) time, the address should still be banned.
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[(peer1, test_error_ban_score * 10)]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+
+    // Sanity check
+    assert!(crawler.now() < ban_end_time);
+
+    // Wait for the remaining ban time.
+    crawler.timer((ban_end_time - crawler.now()).unwrap(), &mut rng);
+
+    // The address is no longer banned; instead, both peer1 and peer3 are being connected to.
+    crawler.assert_pending_connects(&[node1, node3]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer2]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+}
+
+// Create a crawler with 2 addresses and mark one of them as banned.
+// Make sure it doesn't try to connect to the banned address.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn dont_connect_to_initially_banned_peer(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
+    let node2: SocketAddress = "2.3.4.5:2345".parse().unwrap();
+
+    let ban_end_time = Time::from_duration_since_epoch(BAN_DURATION);
+
+    let mut crawler = test_crawler(
+        make_config(),
+        BTreeSet::new(),
+        [(node1.as_bannable(), ban_end_time)].into_iter().collect(),
+        [node1, node2].into_iter().collect(),
+    );
+
+    crawler.timer(Duration::from_secs(100), &mut rng);
+
+    crawler.assert_pending_connects(&[node2]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[(node1.as_bannable(), ban_end_time)]);
+}
+
+// Check that a peer is banned on CrawlerEvent::ConnectionError.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_on_connection_error(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let node1: SocketAddress = "1.2.3.4:1234".parse().unwrap();
+    let peer1 = PeerId::new();
+    let node2: SocketAddress = "2.3.4.5:2345".parse().unwrap();
+
+    let test_error = P2pError::ProtocolError(ProtocolError::HandshakeExpected);
+    let test_error_ban_score = test_error.ban_score();
+    assert!(test_error_ban_score > 0);
+    let ban_threshold = test_error_ban_score;
+
+    let chain_config = common::chain::config::create_mainnet();
+    let mut crawler = test_crawler(
+        CrawlerConfig {
+            ban_duration: BanDuration::new(BAN_DURATION),
+            ban_threshold: BanThreshold::new(ban_threshold),
+        },
+        BTreeSet::new(),
+        BTreeMap::new(),
+        [node1, node2].into_iter().collect(),
+    );
+
+    let times_step = Duration::from_secs(100);
+
+    crawler.timer(times_step, &mut rng);
+
+    crawler.assert_pending_connects(&[node1, node2]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[]);
+
+    crawler.step(
+        CrawlerEvent::Connected {
+            address: node1,
+            peer_info: make_peer_info(peer1, &chain_config),
+        },
+        &mut rng,
+    );
+
+    crawler.step(
+        CrawlerEvent::ConnectionError {
+            address: node2,
+            error: test_error,
+        },
+        &mut rng,
+    );
+
+    let ban_start_time = crawler.now();
+    let ban_end_time = (ban_start_time + BAN_DURATION).unwrap();
+
+    // The ban score is not recorded, but the peer is banned.
+    crawler.assert_pending_connects(&[]);
+    crawler.assert_pending_disconnects(&[]);
+    crawler.assert_connected_peers(&[peer1]);
+    crawler.assert_ban_scores(&[]);
+    crawler.assert_banned_addresses(&[(node2.as_bannable(), ban_end_time)]);
+}
+
+const BAN_DURATION: Duration = Duration::from_secs(1000);
+const BAN_THRESHOLD: u32 = 100;
+
+fn make_config() -> CrawlerConfig {
+    CrawlerConfig {
+        ban_duration: BanDuration::new(BAN_DURATION),
+        ban_threshold: BanThreshold::new(BAN_THRESHOLD),
+    }
+}
+
+fn make_peer_info(peer_id: PeerId, chain_config: &ChainConfig) -> PeerInfo {
+    PeerInfo {
+        peer_id,
+        protocol_version: TEST_PROTOCOL_VERSION,
+        network: *chain_config.magic_bytes(),
+        software_version: *chain_config.software_version(),
+        user_agent: mintlayer_core_user_agent(),
+        common_services: NodeType::DnsServer.into(),
+    }
 }
