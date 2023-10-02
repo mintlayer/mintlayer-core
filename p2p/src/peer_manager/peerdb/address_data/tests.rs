@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::rngs::mock::StepRng;
-
 use crypto::random::{
     distributions::{Distribution, WeightedIndex},
+    rngs::StepRng,
     Rng,
 };
 use rstest::rstest;
