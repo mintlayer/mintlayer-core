@@ -270,11 +270,15 @@ where
     ) -> crate::Result<()> {
         match msg.categorize() {
             CategorizedMessage::Handshake(_) => {
-                // TODO: this must be reported to the peer manager, so that it can adjust
-                // the peer's ban score. (We may add a separate PeerEvent for this and Backend
-                // can then use the now unused ConnectivityEvent::Misbehaved to forward the error
-                // to the peer manager.)
                 log::error!("Peer {peer_id} sent unexpected handshake message");
+
+                peer_event_tx
+                    .send(PeerEvent::Misbehaved {
+                        error: P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                            "Unexpected handshake message".to_owned(),
+                        )),
+                    })
+                    .await?;
             }
             CategorizedMessage::PeerManagerMessage(msg) => {
                 peer_event_tx.send(PeerEvent::MessageReceived { message: msg }).await?

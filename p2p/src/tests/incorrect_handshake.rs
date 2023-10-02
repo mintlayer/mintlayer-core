@@ -27,7 +27,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, TestNode},
+    tests::helpers::{timeout, PeerManagerNotification, TestNode},
 };
 
 async fn incorrect_handshake_outgoing<TTM>()
@@ -38,7 +38,7 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM>::start(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_address(),
@@ -68,6 +68,10 @@ where
 
     // The connection should be closed.
     msg_stream.recv().await.unwrap_err();
+
+    // This is mainly needed to ensure that the corresponding events, if any, reach
+    // peer manager before we end the test.
+    test_node.expect_no_banning().await;
 
     // Note: no peer ban here, because peers are not banned during "manual outbound" connections.
     let test_node_remnants = test_node.join().await;
@@ -100,7 +104,7 @@ where
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM>::start(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_address(),
@@ -119,6 +123,16 @@ where
 
     // The connection should be closed.
     msg_stream.recv().await.unwrap_err();
+
+    // This is mainly needed to ensure that the corresponding event reaches peer manager before
+    // we end the test.
+    assert_matches!(
+        test_node.expect_peer_mgr_notification().await,
+        PeerManagerNotification::BanScoreAdjustment {
+            address: _,
+            new_score: _
+        }
+    );
 
     // The peer address should be banned.
     let test_node_remnants = test_node.join().await;

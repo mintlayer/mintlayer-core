@@ -173,6 +173,9 @@ where
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
 
     peer_eviction_random_state: peers_eviction::RandomState,
+
+    /// PeerManager's observer for use by tests.
+    observer: Option<Box<dyn Observer + Send>>,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -197,6 +200,26 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
+        Self::new_with_observer(
+            chain_config,
+            p2p_config,
+            handle,
+            peer_mgr_event_rx,
+            time_getter,
+            peerdb_storage,
+            None,
+        )
+    }
+
+    pub fn new_with_observer(
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
+        handle: T::ConnectivityHandle,
+        peer_mgr_event_rx: mpsc::UnboundedReceiver<PeerManagerEvent>,
+        time_getter: TimeGetter,
+        peerdb_storage: S,
+        observer: Option<Box<dyn Observer + Send>>,
+    ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
@@ -218,6 +241,7 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
+            observer,
         })
     }
 
@@ -367,6 +391,10 @@ where
             peer.score
         );
 
+        if let Some(o) = self.observer.as_mut() {
+            o.on_peer_ban_score_adjustment(peer.address, peer.score)
+        }
+
         if peer.score >= *self.p2p_config.ban_threshold {
             let address = peer.address.as_bannable();
             self.ban(address);
@@ -391,6 +419,10 @@ where
             return;
         }
 
+        if let Some(o) = self.observer.as_mut() {
+            o.on_peer_ban_score_adjustment(peer_address, score);
+        }
+
         if score >= *self.p2p_config.ban_threshold {
             let address = peer_address.as_bannable();
             self.ban(address);
@@ -413,6 +445,10 @@ where
         log::info!("Ban {:?}, disconnect peers: {:?}", address, to_disconnect);
 
         self.peerdb.ban(address);
+
+        if let Some(o) = self.observer.as_mut() {
+            o.on_peer_ban(address);
+        }
 
         for peer_id in to_disconnect {
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -1539,9 +1575,19 @@ where
     }
 
     #[cfg(test)]
+    pub fn peers(&self) -> &BTreeMap<PeerId, PeerContext> {
+        &self.peers
+    }
+
+    #[cfg(test)]
     pub fn peerdb(&self) -> &peerdb::PeerDb<S> {
         &self.peerdb
     }
+}
+
+pub trait Observer {
+    fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
+    fn on_peer_ban(&mut self, address: BannableAddress);
 }
 
 #[cfg(test)]

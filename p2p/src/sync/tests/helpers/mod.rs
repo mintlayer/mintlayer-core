@@ -212,7 +212,7 @@ impl TestNode {
 
     /// Receives a message from the sync manager.
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
-        expect_recv!(&mut self.sync_msg_receiver)
+        expect_recv!(self.sync_msg_receiver)
     }
 
     /// Try to receive a message from the sync manager.
