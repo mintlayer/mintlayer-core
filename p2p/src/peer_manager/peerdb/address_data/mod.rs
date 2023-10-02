@@ -34,6 +34,14 @@ const PURGE_REACHABLE_TIME: Duration = Duration::from_secs(3600 * 24 * 7 * 4);
 const PURGE_REACHABLE_FAIL_COUNT: u32 =
     (PURGE_REACHABLE_TIME.as_secs() / MAX_DELAY_REACHABLE.as_secs()) as u32;
 
+/// The maximum value for the random factor by which reconnection delays will be multiplied.
+///
+/// Note that the value was chosen based on bitcoin's implementation of GetExponentialRand
+/// (https://github.com/bitcoin/bitcoin/blob/5bbf735defac20f58133bea95226e13a5d8209bc/src/random.cpp#L689)
+/// which they use to scale delays. In their implementation, the maximum scale factor will be
+/// -ln(0.0000000000000035527136788) which is about 33.
+const MAX_DELAY_FACTOR: u32 = 30;
+
 pub enum AddressState {
     Connected {},
 
@@ -164,20 +172,9 @@ impl AddressData {
     }
 
     fn next_connect_time(now: Time, fail_count: u32, reserved: bool, rng: &mut impl Rng) -> Time {
-        let random_offset = Self::next_connect_delay(fail_count, reserved)
-            .mul_f64(utils::exp_rand::exponential_rand(rng));
-        loop {
-            let res = now + random_offset;
-            match res {
-                Some(r) => return r,
-                None => {
-                    // The random offset is too large, try again
-                    logging::log::debug!(
-                        "next_connect_time: Random_offset too large (now: {now:?}, offset: {random_offset:?}), trying again"
-                    );
-                }
-            }
-        }
+        let factor = utils::exp_rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
+        let offset = Self::next_connect_delay(fail_count, reserved).mul_f64(factor);
+        (now + offset).expect("Unexpected time addition overflow")
     }
 
     pub fn transition_to(

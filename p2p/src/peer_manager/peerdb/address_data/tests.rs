@@ -15,6 +15,7 @@
 
 use crypto::random::{
     distributions::{Distribution, WeightedIndex},
+    rngs::StepRng,
     Rng,
 };
 use rstest::rstest;
@@ -88,4 +89,34 @@ fn reachable_reconnects(#[case] seed: Seed) {
         time_until_removed >= 2 * week && time_until_removed <= 6 * week,
         "invalid time until removed: {time_until_removed:?}"
     );
+}
+
+fn next_connect_time_test_impl(rng: &mut impl Rng) {
+    let limit_reserved = MAX_DELAY_RESERVED * MAX_DELAY_FACTOR;
+    let limit_reachable = MAX_DELAY_REACHABLE * MAX_DELAY_FACTOR;
+
+    let start_time = Time::from_secs_since_epoch(0);
+    let max_time_reserved = (start_time + limit_reserved).unwrap();
+    let max_time_reachable = (start_time + limit_reachable).unwrap();
+
+    let time = AddressData::next_connect_time(start_time, 0, true, rng);
+    assert!(time <= max_time_reserved);
+
+    let time = AddressData::next_connect_time(start_time, 0, false, rng);
+    assert!(time <= max_time_reachable);
+
+    let time = AddressData::next_connect_time(start_time, u32::MAX, true, rng);
+    assert!(time <= max_time_reserved);
+
+    let time = AddressData::next_connect_time(start_time, u32::MAX, false, rng);
+    assert!(time <= max_time_reachable);
+}
+
+#[test]
+fn next_connect_time() {
+    let mut always_zero_rng = StepRng::new(0, 0);
+    next_connect_time_test_impl(&mut always_zero_rng);
+
+    let mut always_max_rng = StepRng::new(u64::MAX, 0);
+    next_connect_time_test_impl(&mut always_max_rng);
 }
