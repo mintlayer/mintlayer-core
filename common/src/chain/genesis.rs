@@ -63,3 +63,9 @@ impl Idable for Genesis {
         Id::new(id::hash_encoded(&self))
     }
 }
+
+impl serde::Serialize for Id<Genesis> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.serde_serialize(s)
+    }
+}

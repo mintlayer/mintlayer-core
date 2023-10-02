@@ -14,12 +14,15 @@
 // limitations under the License.
 
 use crate::{
-    address::{pubkeyhash::PublicKeyHash, traits::Addressable, AddressError},
+    address::{
+        hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
+    },
     chain::{output_value::OutputValue, tokens::TokenData, ChainConfig, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
-use serialization::{hex::HexEncode, Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode};
+use variant_count::VariantCount;
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -28,7 +31,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -44,7 +47,13 @@ pub enum Destination {
 
 impl serde::Serialize for Destination {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&format!("0x{}", self.hex_encode()))
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Destination {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 
@@ -65,6 +74,10 @@ impl Addressable for Destination {
     {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedDestination"
     }
 }
 

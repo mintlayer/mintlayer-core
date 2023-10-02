@@ -23,7 +23,7 @@ pub enum Token {}
 pub type TokenId = Id<Token>;
 pub type NftDataHash = Vec<u8>;
 use crate::{
-    address::{traits::Addressable, AddressError},
+    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
     primitives::{Amount, Id, H256},
 };
 
@@ -54,6 +54,22 @@ impl Addressable for TokenId {
     {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedTokenId"
+    }
+}
+
+impl serde::Serialize for TokenId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TokenId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 

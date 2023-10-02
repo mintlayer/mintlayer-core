@@ -19,7 +19,7 @@ use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
-    address::{traits::Addressable, AddressError},
+    address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
     primitives::{per_thousand::PerThousand, BlockDistance, Id, H256},
     Uint256,
 };
@@ -62,6 +62,18 @@ pub struct PoSChainConfig {
     consensus_version: PoSConsensusVersion,
 }
 
+impl serde::Serialize for PoolId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PoolId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
+    }
+}
+
 impl Addressable for PoolId {
     type Error = AddressError;
 
@@ -79,6 +91,10 @@ impl Addressable for PoolId {
     {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedPoolId"
     }
 }
 
@@ -99,6 +115,22 @@ impl Addressable for DelegationId {
     {
         Self::decode_all(&mut address_bytes.as_ref())
             .map_err(|e| AddressError::DecodingError(e.to_string()))
+    }
+
+    fn json_wrapper_prefix() -> &'static str {
+        "HexifiedDelegationId"
+    }
+}
+
+impl serde::Serialize for DelegationId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        HexifiedAddress::serde_serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DelegationId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
 }
 

@@ -1198,6 +1198,7 @@ dependencies = [
  "parity-scale-codec",
  "proptest",
  "ref-cast",
+ "regex",
  "rstest",
  "script",
  "serde",
@@ -1210,6 +1211,7 @@ dependencies = [
  "thiserror",
  "typename",
  "utils",
+ "variant_count",
 ]
 
 [[package]]
