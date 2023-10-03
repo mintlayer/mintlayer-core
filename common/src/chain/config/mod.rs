@@ -650,14 +650,29 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
 
     let all_upgrades = upgrades.all_upgrades();
 
-    for upgrade in all_upgrades {
+    if all_upgrades.is_empty() {
+        panic!("Invalid chain config. There are no net-upgrades defined, not even for genesis.")
+    }
+
+    if all_upgrades.len() < 2 {
+        panic!("Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.")
+    }
+
+    if all_upgrades[0].0 != 0.into() {
+        panic!("Invalid chain config. The first net-upgrade must be at height 0");
+    }
+
+    if upgrades.consensus_status(0.into()) != RequiredConsensus::IgnoreConsensus {
+        panic!("Invalid chain config. The genesis net-upgrade must be IgnoreConsensus");
+    }
+
+    if upgrades.consensus_status(1.into()) == RequiredConsensus::IgnoreConsensus {
+        panic!("Invalid chain config. The net-upgrade at height 1 must not be IgnoreConsensus");
+    }
+
+    for upgrade in all_upgrades.iter().skip(1) {
         let upgrade_height = &upgrade.0;
         let upgrade_data = &upgrade.1;
-
-        // We skip genesis
-        if *upgrade_height == 0.into() && all_upgrades.len() > 1 {
-            continue;
-        }
 
         let consensus = upgrades.consensus_status(*upgrade_height);
         assert_ne!(
@@ -859,7 +874,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "at height 0 is ignoring consensus in net type mainnet")]
+    #[should_panic(
+        expected = "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis."
+    )]
     fn test_ignore_consensus_outside_regtest_in_no_upgrades() {
         let config =
             Builder::new(ChainType::Mainnet).net_upgrades(NetUpgrades::unit_tests()).build();
@@ -868,7 +885,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "at height 1 is ignoring consensus in net type mainnet")]
+    #[should_panic(expected = "The net-upgrade at height 1 must not be IgnoreConsensus")]
     fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
         let config = Builder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
