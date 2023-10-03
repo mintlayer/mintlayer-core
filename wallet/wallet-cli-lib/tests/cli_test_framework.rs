@@ -31,7 +31,7 @@ use chainstate::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        config::{self, ChainType},
+        config::{self, regtest::GenesisStakingSettings, ChainType},
         create_unittest_pos_config,
         output_value::OutputValue,
         pos_initial_difficulty,
@@ -298,7 +298,22 @@ impl CliTestFramework {
         let manager_task = manager.main_in_task();
 
         let wallet_options = WalletCliArgs {
-            network: Network::Regtest,
+            network: Network::Regtest(Box::new(config::regtest_options::ChainConfigOptions {
+                chain_magic_bytes: None,
+                chain_max_future_block_time_offset: None,
+                software_version: None,
+                chain_target_block_spacing: None,
+                chain_coin_decimals: None,
+                chain_emission_schedule: None,
+                chain_max_block_header_size: None,
+                chain_max_block_size_with_standard_txs: None,
+                chain_max_block_size_with_smart_contracts: None,
+                chain_initial_difficulty: None,
+                chain_pos_netupgrades: None,
+                chain_pos_netupgrades_v0_to_v1: None,
+                chain_genesis_block_timestamp: None,
+                chain_genesis_staking_settings: GenesisStakingSettings::default(),
+            })),
             wallet_file: None,
             wallet_password: None,
             start_staking: false,

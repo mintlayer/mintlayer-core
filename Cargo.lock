@@ -1182,8 +1182,10 @@ checksum = "bf43edc576402991846b093a7ca18a3477e0ef9c588cde84964b5d3e43016642"
 name = "common"
 version = "0.1.2"
 dependencies = [
+ "anyhow",
  "bech32",
  "bitcoin-bech32",
+ "clap",
  "crypto",
  "expect-test",
  "fixed-hash",
@@ -1196,6 +1198,7 @@ dependencies = [
  "num",
  "once_cell",
  "parity-scale-codec",
+ "paste",
  "proptest",
  "ref-cast",
  "regex",

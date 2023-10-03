@@ -26,7 +26,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (ATOMS_PER_COIN, make_tx, reward_input, tx_input)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
@@ -74,19 +74,19 @@ class WalletGetAddressUsage(BitcoinTestFramework):
         # new wallet
         async with WalletCliController(node, self.config, self.log) as wallet:
             mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-            assert "New wallet created successfully" in await wallet.recover_wallet(mnemonic)
+            assert_in("New wallet created successfully", await wallet.recover_wallet(mnemonic))
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()
-            assert best_block_height == '0'
+            assert_equal(best_block_height, '0')
 
             # new address
             for _ in range(4):
                 pub_key_bytes = await wallet.new_public_key()
-                assert len(pub_key_bytes) == 33
+                assert_equal(len(pub_key_bytes), 33)
 
             pub_key_bytes = await wallet.new_public_key()
-            assert len(pub_key_bytes) == 33
+            assert_equal(len(pub_key_bytes), 33)
 
             # 2 more unused addresses
             await wallet.new_address()
@@ -110,7 +110,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 
             # sync the wallet
             output = await wallet.sync()
-            assert "Success" in output
+            assert_in("Success", output)
 
             expected_output = """+-------+----------------------------------------------+--------------------------------+
 | Index | Address                                      | Is used in transaction history |
@@ -131,7 +131,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 +-------+----------------------------------------------+--------------------------------+"""
             output = await wallet.get_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_output.split()):
-                assert line == expected_line
+                assert_equal(line, expected_line)
 
 
 if __name__ == '__main__':

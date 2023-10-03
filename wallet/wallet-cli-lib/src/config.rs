@@ -15,21 +15,22 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
-use common::chain::config::ChainType;
+use clap::{Parser, Subcommand};
+use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum Network {
     Mainnet,
     Testnet,
-    Regtest,
+    Regtest(Box<ChainConfigOptions>),
     Signet,
 }
 
 #[derive(Parser, Debug)]
+#[clap(version)]
 pub struct WalletCliArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Testnet)]
+    #[clap(subcommand)]
     pub network: Network,
 
     /// Optional path to the wallet file
@@ -84,12 +85,12 @@ pub struct WalletCliArgs {
     pub in_top_x_mb: usize,
 }
 
-impl From<Network> for ChainType {
-    fn from(value: Network) -> Self {
+impl From<&Network> for ChainType {
+    fn from(value: &Network) -> Self {
         match value {
             Network::Mainnet => ChainType::Mainnet,
             Network::Testnet => ChainType::Testnet,
-            Network::Regtest => ChainType::Regtest,
+            Network::Regtest(_) => ChainType::Regtest,
             Network::Signet => ChainType::Signet,
         }
     }

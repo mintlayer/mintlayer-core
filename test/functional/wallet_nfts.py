@@ -29,7 +29,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
@@ -78,11 +78,11 @@ class WalletNfts(BitcoinTestFramework):
             await wallet.create_wallet()
 
             # check it is on genesis
-            assert '0' == await wallet.get_best_block_height()
+            assert_equal('0', await wallet.get_best_block_height())
 
             # new address
             pub_key_bytes = await wallet.new_public_key()
-            assert len(pub_key_bytes) == 33
+            assert_equal(len(pub_key_bytes), 33)
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
@@ -102,13 +102,13 @@ class WalletNfts(BitcoinTestFramework):
 
 
             # sync the wallet
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check wallet best block if it is synced
-            assert await wallet.get_best_block_height() == '1'
-            assert await wallet.get_best_block() == block_id
+            assert_equal(await wallet.get_best_block_height(), '1')
+            assert_equal(await wallet.get_best_block(), block_id)
 
-            assert "Coins amount: 1000" in await wallet.get_balance()
+            assert_in("Coins amount: 1000", await wallet.get_balance())
 
             address = await wallet.new_address()
             nft_id = await wallet.issue_new_nft(address,"123456", "Name", "SomeNFT", "XXX")
@@ -116,10 +116,10 @@ class WalletNfts(BitcoinTestFramework):
             self.log.info(f"new nft id: '{nft_id}'")
 
             self.generate_block()
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             self.log.info(await wallet.get_balance())
-            assert f"{nft_id} amount: 1" in await wallet.get_balance()
+            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
 
             # create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -127,13 +127,13 @@ class WalletNfts(BitcoinTestFramework):
             address = await wallet.new_address()
 
             await wallet.select_account(0)
-            assert f"{nft_id} amount: 1" in await wallet.get_balance()
+            assert_in(f"{nft_id} amount: 1", await wallet.get_balance())
             output = await wallet.send_tokens_to_address(nft_id, address, 1)
             self.log.info(output)
-            assert "The transaction was submitted successfully" in output
+            assert_in("The transaction was submitted successfully", output)
 
             self.generate_block()
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check the new balance nft is not present
             assert nft_id not in await wallet.get_balance()

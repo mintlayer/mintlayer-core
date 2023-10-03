@@ -29,7 +29,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
-from test_framework.util import assert_raises_rpc_error
+from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
@@ -78,11 +78,11 @@ class WalletTokens(BitcoinTestFramework):
             await wallet.create_wallet()
 
             # check it is on genesis
-            assert '0' == await wallet.get_best_block_height()
+            assert_equal('0', await wallet.get_best_block_height())
 
             # new address
             pub_key_bytes = await wallet.new_public_key()
-            assert len(pub_key_bytes) == 33
+            assert_equal(len(pub_key_bytes), 33)
 
             # Get chain tip
             tip_id = node.chainstate_best_block_id()
@@ -100,15 +100,14 @@ class WalletTokens(BitcoinTestFramework):
             block_id = self.generate_block() # Block 1
             assert not node.mempool_contains_tx(tx_id)
 
-
             # sync the wallet
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check wallet best block if it is synced
-            assert await wallet.get_best_block_height() == '1'
-            assert await wallet.get_best_block() == block_id
+            assert_equal(await wallet.get_best_block_height(), '1')
+            assert_equal(await wallet.get_best_block(), block_id)
 
-            assert "Coins amount: 101" in await wallet.get_balance()
+            assert_in("Coins amount: 101", await wallet.get_balance())
 
             address = await wallet.new_address()
 
@@ -117,24 +116,24 @@ class WalletTokens(BitcoinTestFramework):
             token_id, err = await wallet.issue_new_token("asdddd", "10000", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
-            assert "Invalid ticker length" in err
+            assert_in("Invalid ticker length", err)
             # non alphanumeric
             token_id, err = await wallet.issue_new_token("asd#", "10000", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
-            assert "Invalid character in token ticker" in err
+            assert_in("Invalid character in token ticker", err)
 
             # invalid url
             token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "123 123", address)
             assert token_id is None
             assert err is not None
-            assert "Incorrect metadata URI" in err
+            assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
             token_id, err = await wallet.issue_new_token("XXX", "10000", 99, "http://uri", address)
             assert token_id is None
             assert err is not None
-            assert "Too many decimals" in err
+            assert_in("Too many decimals", err)
 
             # issue a valid token
             token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
@@ -143,9 +142,9 @@ class WalletTokens(BitcoinTestFramework):
             self.log.info(f"new token id: {token_id}")
 
             self.generate_block()
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
-            assert f"{token_id} amount: 10000" in await wallet.get_balance()
+            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
 
             # create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -154,19 +153,19 @@ class WalletTokens(BitcoinTestFramework):
 
             await wallet.select_account(0)
             output = await wallet.send_tokens_to_address(token_id, address, 10.01)
-            assert "The transaction was submitted successfully" in output
+            assert_in("The transaction was submitted successfully", output)
 
             self.generate_block()
-            assert "Success" in await wallet.sync()
+            assert_in("Success", await wallet.sync())
 
             # check the new balance
-            assert f"{token_id} amount: 9989.99" in await wallet.get_balance()
+            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
 
             # try to issue a new token, should fail with not enough coins
             token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
-            assert "Not enough funds" in err
+            assert_in("Not enough funds", err)
 
 if __name__ == '__main__':
     WalletTokens().main()
