@@ -638,6 +638,57 @@ pub fn create_unit_test_config() -> ChainConfig {
         .build()
 }
 
+/// This function ensure that IgnoreConsensus will never be used in anything other than regtest
+pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
+    match chain_config.chain_type() {
+        ChainType::Regtest => {
+            return;
+        }
+        ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => {}
+    }
+
+    let upgrades = chain_config.net_upgrade();
+
+    let all_upgrades = upgrades.all_upgrades();
+
+    assert!(
+        !all_upgrades.is_empty(),
+        "Invalid chain config. There are no net-upgrades defined, not even for genesis."
+    );
+
+    assert!(all_upgrades.len() >= 2, "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.");
+
+    assert!(
+        all_upgrades[0].0 == 0.into(),
+        "Invalid chain config. The first net-upgrade must be at height 0"
+    );
+
+    assert!(
+        upgrades.consensus_status(0.into()) == RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The genesis net-upgrade must be IgnoreConsensus"
+    );
+
+    assert!(
+        upgrades.consensus_status(1.into()) != RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The net-upgrade at height 1 must not be IgnoreConsensus"
+    );
+
+    for upgrade in all_upgrades.iter().skip(1) {
+        let upgrade_height = &upgrade.0;
+        let upgrade_data = &upgrade.1;
+
+        let consensus = upgrades.consensus_status(*upgrade_height);
+        assert_ne!(
+            RequiredConsensus::IgnoreConsensus,
+            consensus,
+            "Upgrade {:?} at height {} is ignoring consensus in net type {}. This is only allowed in regtest",
+            upgrade_data,
+            upgrade_height,
+            chain_config.chain_type().name()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -816,5 +867,33 @@ mod tests {
             .sealed_epoch_distance_from_tip(seal_to_tip_distance)
             .build();
         assert_eq!(expected_epoch, config.sealed_epoch_index(&block_height));
+    }
+
+    #[test]
+    fn test_ignore_consensus_in_mainnet() {
+        let config = create_mainnet();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis."
+    )]
+    fn test_ignore_consensus_outside_regtest_in_no_upgrades() {
+        let config =
+            Builder::new(ChainType::Mainnet).net_upgrades(NetUpgrades::unit_tests()).build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(expected = "The net-upgrade at height 1 must not be IgnoreConsensus")]
+    fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
+        let config = Builder::new(ChainType::Mainnet)
+            .net_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
+            .build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
     }
 }

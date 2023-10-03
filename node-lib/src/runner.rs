@@ -23,12 +23,11 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use blockprod::rpc::BlockProductionRpcServer;
-use chainstate_launcher::StorageBackendConfig;
+use chainstate_launcher::{ChainConfig, StorageBackendConfig};
+use common::chain::config::{regtest_options::regtest_chain_config, Builder as ChainConfigBuilder};
 
 use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError};
-use common::chain::config::{
-    regtest_options::regtest_chain_config, Builder as ChainConfigBuilder, ChainConfig, ChainType,
-};
+use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
@@ -73,6 +72,8 @@ async fn initialize(
     node_config: NodeConfigFile,
 ) -> Result<(subsystem::Manager, NodeController)> {
     let chain_config = Arc::new(chain_config);
+
+    assert_no_ignore_consensus_in_chain_config(&chain_config);
 
     // INITIALIZE SUBSYSTEMS
 
