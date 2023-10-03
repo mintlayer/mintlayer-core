@@ -1496,6 +1496,90 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn reset_keys_after_failed_transaction(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address,
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let not_enough = (block1_amount + Amount::from_atoms(1)).unwrap();
+
+    let last_issued_address =
+        wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap().last_issued();
+
+    let result = wallet.create_stake_pool_tx(
+        DEFAULT_ACCOUNT_INDEX,
+        None,
+        FeeRate::new(Amount::ZERO),
+        FeeRate::new(Amount::ZERO),
+        StakePoolDataArguments {
+            amount: not_enough,
+            margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
+            cost_per_block: Amount::ZERO,
+        },
+    );
+    // check that result is an error and we last issued address is still the same
+    assert!(result.is_err());
+    assert_eq!(
+        last_issued_address,
+        wallet.get_addresses_usage(DEFAULT_ACCOUNT_INDEX).unwrap().last_issued(),
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn send_to_unknown_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());

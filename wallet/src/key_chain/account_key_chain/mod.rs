@@ -134,8 +134,12 @@ impl AccountKeyChain {
     ) -> KeyChainResult<Self> {
         let pubkey_id = account_info.account_key().clone().into();
 
-        let sub_chains =
-            LeafKeySoftChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
+        let sub_chains = LeafKeySoftChain::load_leaf_keys(
+            chain_config.clone(),
+            account_info.account_key(),
+            db_tx,
+            id,
+        )?;
 
         Ok(AccountKeyChain {
             chain_config,
@@ -180,6 +184,19 @@ impl AccountKeyChain {
         let (_index, key, _address) =
             self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
         Ok(key)
+    }
+
+    /// Reload the sub chain keys from DB to restore the cache
+    /// Should be called after issuing a new key but not using committing it to the DB
+    pub fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> KeyChainResult<()> {
+        self.sub_chains = LeafKeySoftChain::load_leaf_keys(
+            self.chain_config.clone(),
+            &self.account_public_key,
+            db_tx,
+            &self.get_account_id(),
+        )?;
+
+        Ok(())
     }
 
     /// Get the private key that corresponds to the provided public key

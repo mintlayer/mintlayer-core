@@ -97,8 +97,9 @@ class WalletGetAddressUsage(BitcoinTestFramework):
             self.log.debug(f'Tip: {tip_id}')
 
             # Submit a valid transaction
+            stake_pool_amount = 40000
             output = {
-                    'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': (stake_pool_amount + 1) * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -128,6 +129,38 @@ class WalletGetAddressUsage(BitcoinTestFramework):
 | 5     | rmt1q8upmt2mjxel84msaqjj2rkquguvswwzquy6w8sn | No                             |
 +-------+----------------------------------------------+--------------------------------+
 | 6     | rmt1q8lrw5tzgmwjnsc26v8qfu8k2jmddpmhwqz6kwt7 | No                             |
++-------+----------------------------------------------+--------------------------------+"""
+            output = await wallet.get_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert_equal(line, expected_line)
+
+            for _ in range(100):
+                assert_in("Not enough funds", await wallet.create_stake_pool(stake_pool_amount + 1, 0, 0.5))
+
+            output = await wallet.get_addresses_usage()
+            for (line, expected_line) in zip(output.split(), expected_output.split()):
+                assert_equal(line, expected_line)
+
+            assert_in("The transaction was submitted successfully", await wallet.create_stake_pool(stake_pool_amount, 0, 0.5))
+
+            expected_output = """+-------+----------------------------------------------+--------------------------------+
+| Index | Address                                      | Is used in transaction history |
++=======+==============================================+================================+
+| 0     | rmt1qx5p4r2en7c99mpmg2tz9hucxfarf4k6dypq388a | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 1     | rmt1q9jvqp9p8rzp2prmpa8y9vde7yrvlxgz3s54n787 | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 2     | rmt1qx7dwah3rtkh2mv7lyd4qserqx59mqjknc6qdn77 | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 3     | rmt1qxrkx54pykusw7am7zr282t6tzsl3wzkysrh0k2a | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 4     | rmt1qyyra5j3qduhyd43wa50lpn2ddpg9ql0u50ceu68 | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 5     | rmt1q8upmt2mjxel84msaqjj2rkquguvswwzquy6w8sn | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 6     | rmt1q8lrw5tzgmwjnsc26v8qfu8k2jmddpmhwqz6kwt7 | Yes                            |
++-------+----------------------------------------------+--------------------------------+
+| 7     | rmt1q824xhhlcdazxj38yuqr6llqz3wm7whhgvmyvyjz | Yes                            |
 +-------+----------------------------------------------+--------------------------------+"""
             output = await wallet.get_addresses_usage()
             for (line, expected_line) in zip(output.split(), expected_output.split()):

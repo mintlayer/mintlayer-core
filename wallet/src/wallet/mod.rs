@@ -567,10 +567,21 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        let value = f(account, &mut db_tx)?;
-        // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
-        db_tx.commit().expect("RW transaction commit failed unexpectedly");
-        Ok(value)
+        match f(account, &mut db_tx) {
+            Ok(value) => {
+                // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
+                db_tx.commit().expect("RW transaction commit failed unexpectedly");
+                Ok(value)
+            }
+            Err(err) => {
+                db_tx.abort();
+                // In case of an error reload the keys in case the operation issued new ones and
+                // are saved in the cache but not in the DB
+                let db_tx = self.db.transaction_ro()?;
+                account.reload_keys(&db_tx)?;
+                Err(err)
+            }
+        }
     }
 
     fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
