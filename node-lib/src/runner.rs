@@ -32,6 +32,7 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::{
     chain::{
         config::{
+            assert_no_ignore_consensus_in_chain_config,
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
         },
@@ -85,6 +86,8 @@ async fn initialize(
     node_config: NodeConfigFile,
 ) -> Result<(subsystem::Manager, NodeController)> {
     let chain_config = Arc::new(chain_config);
+
+    assert_no_ignore_consensus_in_chain_config(&chain_config);
 
     // INITIALIZE SUBSYSTEMS
 

@@ -42,6 +42,20 @@ impl NetUpgrades<UpgradeVersion> {
         )])
     }
 
+    #[cfg(test)]
+    pub fn deliberate_ignore_consensus_twice() -> Self {
+        Self(vec![
+            (
+                BlockHeight::zero(),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+            ),
+            (
+                BlockHeight::new(1),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+            ),
+        ])
+    }
+
     pub fn regtest_with_pos() -> Self {
         Self(vec![
             (
@@ -56,6 +70,10 @@ impl NetUpgrades<UpgradeVersion> {
                 }),
             ),
         ])
+    }
+
+    pub fn all_upgrades(&self) -> &[(BlockHeight, UpgradeVersion)] {
+        &self.0
     }
 }
 
