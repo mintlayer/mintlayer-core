@@ -650,25 +650,27 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
 
     let all_upgrades = upgrades.all_upgrades();
 
-    if all_upgrades.is_empty() {
-        panic!("Invalid chain config. There are no net-upgrades defined, not even for genesis.")
-    }
+    assert!(
+        !all_upgrades.is_empty(),
+        "Invalid chain config. There are no net-upgrades defined, not even for genesis."
+    );
 
-    if all_upgrades.len() < 2 {
-        panic!("Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.")
-    }
+    assert!(all_upgrades.len() >= 2, "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.");
 
-    if all_upgrades[0].0 != 0.into() {
-        panic!("Invalid chain config. The first net-upgrade must be at height 0");
-    }
+    assert!(
+        all_upgrades[0].0 == 0.into(),
+        "Invalid chain config. The first net-upgrade must be at height 0"
+    );
 
-    if upgrades.consensus_status(0.into()) != RequiredConsensus::IgnoreConsensus {
-        panic!("Invalid chain config. The genesis net-upgrade must be IgnoreConsensus");
-    }
+    assert!(
+        upgrades.consensus_status(0.into()) == RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The genesis net-upgrade must be IgnoreConsensus"
+    );
 
-    if upgrades.consensus_status(1.into()) == RequiredConsensus::IgnoreConsensus {
-        panic!("Invalid chain config. The net-upgrade at height 1 must not be IgnoreConsensus");
-    }
+    assert!(
+        upgrades.consensus_status(1.into()) != RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The net-upgrade at height 1 must not be IgnoreConsensus"
+    );
 
     for upgrade in all_upgrades.iter().skip(1) {
         let upgrade_height = &upgrade.0;
