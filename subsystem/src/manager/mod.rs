@@ -62,7 +62,7 @@ impl ManagerConfig {
         self
     }
 
-    /// Disable the timeout for subystem shutdown.
+    /// Disable the timeout for subsystem shutdown.
     pub fn disable_shutdown_timeout(mut self) -> Self {
         self.shutdown_timeout_per_subsystem = None;
         self

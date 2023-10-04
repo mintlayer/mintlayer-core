@@ -73,7 +73,7 @@ impl SomeSubsystemRpcServer for SomeSubsystemHandle {
 async fn main() -> anyhow::Result<()> {
     logging::init_logging();
 
-    let config = subsystem::ManagerConfig::new("rpc-exmaple").enable_signal_handlers();
+    let config = subsystem::ManagerConfig::new("rpc-example").enable_signal_handlers();
     let mut app = subsystem::Manager::new_with_config(config);
     let some_subsystem = app.add_direct_subsystem("some_subsystem", SomeSubsystem(0));
     let rpc_config = rpc::RpcConfig::default();

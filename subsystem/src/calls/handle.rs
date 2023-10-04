@@ -69,7 +69,7 @@ impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
         self.send_action(Action::Ref(Box::new(func)))
     }
 
-    /// Submit a procedure to be preformed by the susbsystem (mutable).
+    /// Submit a procedure to be preformed by the subsystem (mutable).
     pub fn submit_mut(
         &self,
         func: impl FnOnce(&mut T) + Send + 'static,
@@ -79,7 +79,7 @@ impl<T: ?Sized + Send + Sync + 'static> SubmitOnlyHandle<T> {
         })))
     }
 
-    /// Submit a procedure to be preformed by the susbsystem.
+    /// Submit a procedure to be preformed by the subsystem.
     pub fn submit(&self, func: impl FnOnce(&T) + Send + 'static) -> Result<(), SubmissionError> {
         self.send_action(Action::Ref(Box::new(move |subsys| {
             Box::pin(async { func(subsys) })
@@ -141,7 +141,7 @@ impl<T: ?Sized + Send + Sync + 'static> Handle<T> {
         let result = self.0.submit_async(move |subsys| {
             Box::pin(async move {
                 if rtx.send(func(subsys).await).is_err() {
-                    log::trace!("Subsystem call (mut) result ignored");
+                    log::trace!("Subsystem call result ignored");
                 }
             })
         });

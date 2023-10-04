@@ -28,7 +28,7 @@ fn basic_passive_shutdown() {
             let _substr = app.add_direct_subsystem("substr", Substringer::new("abc".into()));
             let _counter = app.add_direct_subsystem("counter", Counter::new());
 
-            // Task that shuts down the subsysytem
+            // Task that shuts down the subsystem
             let trigger = app.make_shutdown_trigger();
             let shut = tokio::spawn(async { trigger.initiate() });
 
