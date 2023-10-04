@@ -422,7 +422,7 @@ where
             // we should communicate our best block (id/height/header?) from the start, so that
             // the peer just knows that we don't have better blocks and doesn't ask us in the
             // first place.
-            // See the issue #1110.
+            // See the issue: https://github.com/mintlayer/mintlayer-core/issues/1199.
             log::debug!("[peer id = {}] Ignoring headers request because the node is in initial block download", self.id());
             return Ok(());
         }
@@ -655,7 +655,8 @@ where
         {
             // Note: legacy nodes will send singular unconnected headers during block announcement,
             // so we have to handle this behavior here.
-            // TODO: this should be removed in the protocol v2. See the issue #1110.
+            // TODO: this should be removed in the protocol v2.
+            // See the issue: https://github.com/mintlayer/mintlayer-core/issues/1199
             if headers.len() == 1 {
                 self.incoming.singular_unconnected_headers_count += 1;
 
