@@ -16,11 +16,14 @@
 use std::ops::Range;
 
 use crate::chain::config::ChainType;
-use crate::chain::pow::limit;
-use crate::chain::{
-    pos_initial_difficulty, PoSChainConfig, PoSChainConfigBuilder, PoSConsensusVersion,
+use crate::chain::pos::{
+    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
 };
+use crate::chain::pow::limit;
+use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
+use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::{BlockHeight, Compact};
+use crate::Uint256;
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
@@ -57,6 +60,10 @@ impl NetUpgrades<UpgradeVersion> {
     }
 
     pub fn regtest_with_pos() -> Self {
+        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
+        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+            .expect("Target block time cannot be zero as per NonZeroU64");
+
         Self(vec![
             (
                 BlockHeight::zero(),
@@ -66,9 +73,15 @@ impl NetUpgrades<UpgradeVersion> {
                 BlockHeight::new(1),
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                     initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                    config: PoSChainConfigBuilder::new(ChainType::Regtest)
-                        .consensus_version(PoSConsensusVersion::V1)
-                        .build(),
+                    config: PoSChainConfig::new(
+                        target_limit,
+                        target_block_time,
+                        DEFAULT_MATURITY_DISTANCE,
+                        DEFAULT_MATURITY_DISTANCE,
+                        DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                        PerThousand::new(1).expect("must be valid"),
+                        PoSConsensusVersion::V1,
+                    ),
                 }),
             ),
         ])
@@ -259,7 +272,7 @@ impl NetUpgrades<UpgradeVersion> {
 mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
-    use crate::chain::Activate;
+    use crate::chain::{Activate, PoSChainConfigBuilder};
     use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
 

@@ -41,7 +41,7 @@ pub struct PoSChainConfig {
 }
 
 impl PoSChainConfig {
-    pub(super) fn new(
+    pub fn new(
         target_limit: Uint256,
         target_block_time: NonZeroU64,
         decommission_maturity_distance: BlockDistance,

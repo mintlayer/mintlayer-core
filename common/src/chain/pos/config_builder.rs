@@ -16,19 +16,11 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    chain::config::ChainType,
     primitives::{per_thousand::PerThousand, BlockDistance},
     Uint256,
 };
 
 use super::{config::PoSChainConfig, PoSConsensusVersion};
-
-const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
-const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
-const DEFAULT_TARGET_BLOCK_TIME: NonZeroU64 = match NonZeroU64::new(2 * 60) {
-    Some(v) => v,
-    None => panic!("cannot be 0"),
-};
 
 pub struct PoSChainConfigBuilder {
     target_limit: Uint256,
@@ -41,49 +33,13 @@ pub struct PoSChainConfigBuilder {
 }
 
 impl PoSChainConfigBuilder {
-    pub fn new(chain_type: ChainType) -> Self {
-        match chain_type {
-            ChainType::Mainnet => unimplemented!(),
-            ChainType::Testnet => {
-                let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-                let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-                    .expect("Target block time cannot be zero as per NonZeroU64");
-
-                Self {
-                    target_limit,
-                    target_block_time,
-                    decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-                    spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-                    block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                    difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-                    consensus_version: PoSConsensusVersion::V1,
-                }
-            }
-            ChainType::Regtest | ChainType::Signet => {
-                let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-                let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-                    .expect("Target block time cannot be zero as per NonZeroU64");
-
-                Self {
-                    target_limit,
-                    target_block_time,
-                    decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-                    spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-                    block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                    difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-                    consensus_version: PoSConsensusVersion::V1,
-                }
-            }
-        }
-    }
-
     pub fn new_for_unit_test() -> Self {
         Self {
             target_limit: Uint256::MAX,
             target_block_time: NonZeroU64::new(2 * 60).expect("cannot be 0"),
-            decommission_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-            spend_share_maturity_distance: DEFAULT_MATURITY_DISTANCE,
-            block_count_to_average_for_blocktime: DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+            decommission_maturity_distance: super::DEFAULT_MATURITY_DISTANCE,
+            spend_share_maturity_distance: super::DEFAULT_MATURITY_DISTANCE,
+            block_count_to_average_for_blocktime: super::DEFAULT_BLOCK_COUNT_TO_AVERAGE,
             difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
             consensus_version: PoSConsensusVersion::V1,
         }

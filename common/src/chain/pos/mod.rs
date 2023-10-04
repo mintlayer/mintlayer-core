@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
+use std::{num::NonZeroU64, str::FromStr};
 
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    primitives::{Id, H256},
+    primitives::{BlockDistance, Id, H256},
     Uint256,
 };
 
@@ -28,6 +28,13 @@ use super::{config::ChainType, ChainConfig};
 
 pub mod config;
 pub mod config_builder;
+
+pub const DEFAULT_BLOCK_COUNT_TO_AVERAGE: usize = 100;
+pub const DEFAULT_MATURITY_DISTANCE: BlockDistance = BlockDistance::new(2000);
+pub const DEFAULT_TARGET_BLOCK_TIME: NonZeroU64 = match NonZeroU64::new(2 * 60) {
+    Some(v) => v,
+    None => panic!("cannot be 0"),
+};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
