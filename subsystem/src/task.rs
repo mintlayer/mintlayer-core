@@ -24,7 +24,7 @@ use tracing::Instrument;
 use logging::log;
 use utils::{once_destructor::OnceDestructor, sync::Arc};
 
-use crate::{calls::Action, ShutdownTrigger, SubmitOnlyHandle, Subsystem};
+use crate::{calls::Action, SubmitOnlyHandle, Subsystem};
 
 /// Handle a task completion result
 pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::task::JoinError>) {
@@ -35,38 +35,6 @@ pub fn handle_result(full_name: &str, task_type: &str, res: Result<(), tokio::ta
             std::panic::resume_unwind(p);
         }
     }
-}
-
-/// Signal handler task
-///
-/// Listens for the Ctrl-C/termination signal and exits once it is received, signalling all the
-/// other subsystems and the manager to shut down.
-#[cfg(not(loom))]
-pub async fn signal_handler(shutdown_trigger: ShutdownTrigger) {
-    // Gracefully handle SIGTERM on *nix
-    #[cfg(unix)]
-    let term_signal = async move {
-        use tokio::signal::unix;
-        let mut signal =
-            unix::signal(unix::SignalKind::terminate()).expect("Signal handler failed");
-        signal.recv().await;
-    };
-    #[cfg(not(unix))]
-    let term_signal = std::future::pending();
-
-    tokio::select! {
-        ctrl_c_signal = tokio::signal::ctrl_c() => {
-            if let Err(e) = ctrl_c_signal {
-                log::error!("Ctrl-C signal handler failed: {e}");
-            } else {
-                log::info!("Ctrl-C signal received");
-            }
-        }
-        _ = term_signal => {
-            log::info!("Terminate signal received");
-        }
-    }
-    shutdown_trigger.initiate();
 }
 
 /// The subsystem worker task implementation

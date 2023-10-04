@@ -26,6 +26,8 @@ use utils::{const_value::ConstValue, shallow_clone::ShallowClone};
 
 use crate::{task, Handle, ManagerConfig, SubmitOnlyHandle, Subsystem};
 
+use super::shutdown_signal::shutdown_signal;
+
 /// Top-level subsystem manager.
 ///
 /// An application is composed of a number of long-lived subsystems. The [Manager] type starts
@@ -140,15 +142,9 @@ impl Manager {
     /// Run the application main task.
     ///
     /// Completes when all the subsystems are fully shut down.
-    pub async fn main(mut self) {
+    pub async fn main(self) {
         let manager_name = self.config.name;
         log::info!("Manager {manager_name} starting subsystems");
-
-        #[cfg(not(loom))]
-        let signal_handler_task = self.config.enable_signal_handlers.then({
-            let shutdown_trigger = self.make_shutdown_trigger();
-            || tokio::spawn(task::signal_handler(shutdown_trigger))
-        });
 
         // Run all the subsystem tasks.
         let subsystems: Vec<_> = self
@@ -161,23 +157,14 @@ impl Manager {
         drop(self.shutting_down_tx);
 
         // Wait for the shutdown trigger.
-        if self.shutting_down_rx.recv().await.is_none() {
-            log::warn!("Manager {manager_name}: all subsystems already down");
+        match shutdown_signal(self.shutting_down_rx, self.config.enable_signal_handlers).await {
+            Ok(reason) => log::info!("Manager {manager_name} shutting down: {reason}"),
+            Err(err) => log::error!("Manager {manager_name} shutting down: {err}"),
         }
-        log::info!("Manager {manager_name} shutting down");
-
-        // Drop the receiver in order to prevent blocking of subsystems.
-        drop(self.shutting_down_rx);
 
         // Shut down the subsystems in the reverse order of creation.
         for subsys in subsystems.into_iter().rev() {
             subsys.shutdown(self.config.shutdown_timeout_per_subsystem).await;
-        }
-
-        #[cfg(not(loom))]
-        if let Some(hdl) = signal_handler_task {
-            hdl.abort();
-            let _ = hdl.await;
         }
 
         log::info!("Manager {manager_name} terminated");

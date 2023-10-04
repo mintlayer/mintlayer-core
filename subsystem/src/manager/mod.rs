@@ -16,6 +16,7 @@
 //! Subsystem manager
 
 mod manager_impl;
+mod shutdown_signal;
 
 pub use manager_impl::{Manager, ManagerJoinHandle, ShutdownTrigger};
 
