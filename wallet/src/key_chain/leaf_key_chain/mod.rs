@@ -29,7 +29,7 @@ use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{WalletStorageReadLocked, WalletStorageWriteLocked};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
-use wallet_types::{AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId};
+use wallet_types::{AccountDerivationPathId, AccountId, AccountKeyPurposeId};
 
 // TODO: Switch to the hard derivation because it's more secure
 
@@ -123,7 +123,7 @@ impl LeafKeySoftChain {
 
     pub fn load_leaf_keys(
         chain_config: Arc<ChainConfig>,
-        account_info: &AccountInfo,
+        account_pubkey: &ExtendedPublicKey,
         db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> KeyChainResult<WithPurpose<LeafKeySoftChain>> {
@@ -153,8 +153,6 @@ impl LeafKeySoftChain {
             .into_iter()
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();
-
-        let account_pubkey = account_info.account_key();
 
         Ok(WithPurpose::new(
             LeafKeySoftChain::new_from_parts(

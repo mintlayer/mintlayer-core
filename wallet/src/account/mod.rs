@@ -730,6 +730,13 @@ impl Account {
         self.key_chain.get_account_id()
     }
 
+    /// Reload the keys from the DB
+    /// Used to reset the in-memory state after a failed operation
+    pub fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> WalletResult<()> {
+        self.key_chain.reload_keys(db_tx)?;
+        Ok(())
+    }
+
     /// Get a new address that hasn't been used before
     pub fn get_new_address(
         &mut self,
