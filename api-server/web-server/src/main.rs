@@ -17,17 +17,16 @@ mod api;
 mod config;
 mod error;
 
-use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
+use api_server_common::storage::impls::{
+    in_memory::transactional::TransactionalApiServerInMemoryStorage,
+    postgres::TransactionalApiServerPostgresStorage,
+};
 use axum::{response::IntoResponse, routing::get, Json, Router};
 use clap::Parser;
 use common::chain::config::create_unit_test_config;
-use config::ApiServerWebServerConfig;
 use logging::log;
-use serde_json::json;
 use std::sync::Arc;
-use web_server::{
-    error::APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerState,
-};
+use web_server::{api::web_server, config::ApiServerWebServerConfig, APIServerWebServerState};
 
 #[tokio::main]
 async fn main() {
@@ -63,27 +62,7 @@ async fn main() {
         chain_config,
     };
 
-    let routes = Router::new()
-        .route("/", get(server_status))
-        .nest("/api/v1", api::v1::routes())
-        .fallback(bad_request)
-        .with_state(state);
-
-    axum::Server::bind(&args.address.unwrap_or_default())
-        .serve(routes.into_make_service())
+    web_server(args.address.unwrap_or_default().tcp_listener(), state)
         .await
-        .expect("API Server Web Server failed")
-}
-
-#[allow(clippy::unused_async)]
-async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
-    Ok(Json(json!({
-        "versions": [api::v1::API_VERSION]
-        //"network": "testnet",
-    })))
-}
-
-#[allow(clippy::unused_async)]
-pub async fn bad_request() -> Result<(), APIServerWebServerError> {
-    Err(APIServerWebServerClientError::BadRequest)?
+        .expect("API Server Web Server failed");
 }

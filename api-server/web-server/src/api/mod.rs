@@ -14,3 +14,43 @@
 // limitations under the License.
 
 pub mod v1;
+
+use crate::{
+    api,
+    error::{APIServerWebServerClientError, APIServerWebServerError},
+    APIServerWebServerState,
+};
+
+use api_server_common::storage::storage_api::ApiServerStorage;
+use axum::{
+    response::IntoResponse,
+    routing::{get, IntoMakeService},
+    Json, Router, Server,
+};
+use serde_json::json;
+use std::{net::TcpListener, sync::Arc};
+
+pub async fn bad_request() -> Result<(), APIServerWebServerError> {
+    Err(APIServerWebServerClientError::BadRequest)?
+}
+
+pub async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
+    Ok(Json(json!({
+        "versions": [api::v1::API_VERSION]
+        //"network": "testnet",
+    })))
+}
+
+#[allow(dead_code)]
+pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
+    socket: TcpListener,
+    state: APIServerWebServerState<Arc<T>>,
+) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
+    let routes = Router::new()
+        .route("/", get(server_status))
+        .nest("/api/v1", api::v1::routes())
+        .fallback(bad_request)
+        .with_state(state);
+
+    axum::Server::from_tcp(socket).unwrap().serve(routes.into_make_service())
+}
