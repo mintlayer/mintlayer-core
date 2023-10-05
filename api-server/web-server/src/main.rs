@@ -17,11 +17,7 @@ mod api;
 mod config;
 mod error;
 
-use api_server_common::storage::impls::{
-    in_memory::transactional::TransactionalApiServerInMemoryStorage,
-    postgres::TransactionalApiServerPostgresStorage,
-};
-use axum::{response::IntoResponse, routing::get, Json, Router};
+use api_server_common::storage::impls::postgres::TransactionalApiServerPostgresStorage;
 use clap::Parser;
 use common::chain::config::create_unit_test_config;
 use logging::log;

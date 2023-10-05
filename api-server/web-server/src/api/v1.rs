@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::error::{
+    APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerServerError,
+};
 use api_server_common::storage::storage_api::{ApiServerStorage, ApiServerStorageRead};
 use axum::{
     extract::{Path, State},
@@ -27,12 +30,8 @@ use common::{
 use crypto::random::{make_true_rng, Rng};
 use serde_json::json;
 use std::{str::FromStr, sync::Arc};
-use web_server::{
-    error::{
-        APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerServerError,
-    },
-    APIServerWebServerState,
-};
+
+use crate::APIServerWebServerState;
 
 pub const API_VERSION: &str = "1.0.0";
 
@@ -88,7 +87,7 @@ pub async fn block<T: ApiServerStorage>(
     let block = {
         let block_id: Id<Block> = H256::from_str(&block_id)
             .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
             })?
             .into();
 
@@ -123,7 +122,7 @@ pub async fn block<T: ApiServerStorage>(
             })))
         }
         None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
+            APIServerWebServerClientError::BlockNotFound,
         )),
     }
 }
@@ -136,7 +135,7 @@ pub async fn block_header<T: ApiServerStorage>(
     let block = {
         let block_id: Id<Block> = H256::from_str(&block_id)
             .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
             })?
             .into();
 
@@ -165,7 +164,7 @@ pub async fn block_header<T: ApiServerStorage>(
             "merkle_root": block.merkle_root(),
         }))),
         None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
+            APIServerWebServerClientError::BlockNotFound,
         )),
     }
 }
@@ -178,7 +177,7 @@ pub async fn block_reward<T: ApiServerStorage>(
     let block = {
         let block_id: Id<Block> = H256::from_str(&block_id)
             .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
             })?
             .into();
 
@@ -205,7 +204,7 @@ pub async fn block_reward<T: ApiServerStorage>(
             // TODO: expand this with a usable JSON response
         }))),
         None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
+            APIServerWebServerClientError::BlockNotFound,
         )),
     }
 }
@@ -218,7 +217,7 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
     let block = {
         let block_id: Id<Block> = H256::from_str(&block_id)
             .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
             })?
             .into();
 
@@ -253,7 +252,7 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
             })))
         }
         None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
+            APIServerWebServerClientError::BlockNotFound,
         )),
     }
 }
@@ -285,7 +284,7 @@ pub async fn chain_at_height<T: ApiServerStorage>(
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
     let block_height = block_height.parse::<BlockHeight>().map_err(|_| {
-        APIServerWebServerError::ClientError(APIServerWebServerClientError::BadRequest)
+        APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockHeight)
     })?;
 
     let block_id = state
@@ -304,7 +303,7 @@ pub async fn chain_at_height<T: ApiServerStorage>(
     match block_id {
         Some(block_id) => Ok(Json(block_id)),
         None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
+            APIServerWebServerClientError::NoBlockAtHeight,
         )),
     }
 }

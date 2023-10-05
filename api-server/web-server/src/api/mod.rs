@@ -30,11 +30,13 @@ use axum::{
 use serde_json::json;
 use std::{net::TcpListener, sync::Arc};
 
-pub async fn bad_request() -> Result<(), APIServerWebServerError> {
+#[allow(clippy::unused_async)]
+async fn bad_request() -> Result<(), APIServerWebServerError> {
     Err(APIServerWebServerClientError::BadRequest)?
 }
 
-pub async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
+#[allow(clippy::unused_async)]
+async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
     Ok(Json(json!({
         "versions": [api::v1::API_VERSION]
         //"network": "testnet",
