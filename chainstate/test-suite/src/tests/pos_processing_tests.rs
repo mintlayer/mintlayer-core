@@ -40,7 +40,6 @@ use common::{
             ConsensusData,
         },
         config::{create_unit_test_config, Builder as ConfigBuilder, ChainType, EpochIndex},
-        create_unittest_pos_config,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
@@ -49,10 +48,10 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSConsensusVersion, PoolId,
+        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
         RequiredConsensus, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
 };
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
@@ -166,7 +165,7 @@ fn setup_test_chain_with_staked_pool(
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
@@ -213,7 +212,7 @@ fn setup_test_chain_with_2_staked_pools(
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
@@ -597,7 +596,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
@@ -925,7 +924,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
@@ -1001,7 +1000,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
-    let target_block_time = create_unittest_pos_config().target_block_time().get();
+    let target_block_time =
+        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
@@ -1382,7 +1382,8 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (vrf_sk_2, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let target_block_time = create_unittest_pos_config().target_block_time().get();
+    let target_block_time =
+        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools: first will be decommissioned and the second one will be used
@@ -1517,7 +1518,8 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (_, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let target_block_time = create_unittest_pos_config().target_block_time().get();
+    let target_block_time =
+        PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     let upgrades = vec![
         (
@@ -1528,32 +1530,19 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    target_block_time,
-                    50.into(),
-                    50.into(),
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    .decommission_maturity_distance(BlockDistance::new(50))
+                    .build(),
             }),
         ),
         (
             BlockHeight::new(3),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: None,
-                config: PoSChainConfig::new(
-                    Uint256::MAX,
-                    target_block_time,
-                    100.into(), // decommission maturity increased
-                    50.into(),
-                    5,
-                    PerThousand::new(100).unwrap(),
-                    PoSConsensusVersion::V1,
-                )
-                .unwrap(),
+                config: PoSChainConfigBuilder::new_for_unit_test()
+                    // decommission maturity increased
+                    .decommission_maturity_distance(BlockDistance::new(100))
+                    .build(),
             }),
         ),
     ];
@@ -1675,7 +1664,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: create_unittest_pos_config(),
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];

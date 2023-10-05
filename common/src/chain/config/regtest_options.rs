@@ -23,10 +23,14 @@ use crate::{
             regtest::{create_regtest_pos_genesis, create_regtest_pow_genesis},
             Builder, ChainType, EmissionScheduleTabular,
         },
-        create_regtest_pos_config, pos_initial_difficulty, ConsensusUpgrade, Destination,
-        NetUpgrades, PoSConsensusVersion, UpgradeVersion,
+        pos::{
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+        },
+        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
+        PoSConsensusVersion, UpgradeVersion,
     },
-    primitives::{self, semver::SemVer, BlockHeight},
+    primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
+    Uint256,
 };
 
 use super::{regtest::GenesisStakingSettings, ChainConfig};
@@ -170,6 +174,10 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
     }
 
     if let Some(upgrade_height) = chain_pos_netupgrades_v0_to_v1 {
+        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
+        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+            .expect("Target block time cannot be zero as per NonZeroU64");
+
         builder = builder
             .net_upgrades(
                 NetUpgrades::initialize(vec![
@@ -185,14 +193,30 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                                     .map(primitives::Compact)
                                     .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
                             ),
-                            config: create_regtest_pos_config(PoSConsensusVersion::V0),
+                            config: PoSChainConfig::new(
+                                target_limit,
+                                target_block_time,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                PerThousand::new(1).expect("must be valid"),
+                                PoSConsensusVersion::V0,
+                            ),
                         }),
                     ),
                     (
                         (*upgrade_height).into(),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: None,
-                            config: create_regtest_pos_config(PoSConsensusVersion::V1),
+                            config: PoSChainConfig::new(
+                                target_limit,
+                                target_block_time,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                PerThousand::new(1).expect("must be valid"),
+                                PoSConsensusVersion::V1,
+                            ),
                         }),
                     ),
                 ])

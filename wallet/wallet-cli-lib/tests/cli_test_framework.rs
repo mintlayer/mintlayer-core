@@ -32,11 +32,11 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::{self, regtest::GenesisStakingSettings, ChainType},
-        create_unittest_pos_config,
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
+        TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
@@ -141,7 +141,6 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
 
 fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
     let genesis = create_custom_regtest_genesis(rng);
-    let pos_config = create_unittest_pos_config();
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -151,7 +150,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                config: pos_config,
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
