@@ -26,6 +26,7 @@ pub mod distributions {
 }
 
 pub mod rngs {
+    pub use rand::rngs::mock::StepRng;
     pub use rand::rngs::OsRng;
 }
 

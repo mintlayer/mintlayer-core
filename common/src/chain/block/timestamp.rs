@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 
 use serialization::{Decode, Encode};
 
+use crate::primitives::time::Time;
+
 pub type BlockTimestampInternalType = u64;
 
 #[derive(
@@ -52,6 +54,14 @@ impl BlockTimestamp {
 
     pub const fn as_int_seconds(&self) -> BlockTimestampInternalType {
         self.timestamp
+    }
+
+    pub const fn from_time(time: Time) -> Self {
+        Self::from_duration_since_epoch(time.as_duration_since_epoch())
+    }
+
+    pub const fn into_time(self) -> Time {
+        Time::from_duration_since_epoch(self.as_duration_since_epoch())
     }
 
     pub fn add_int_seconds(&self, seconds: BlockTimestampInternalType) -> Option<BlockTimestamp> {

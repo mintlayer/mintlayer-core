@@ -35,7 +35,7 @@ use detail::{
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
 use p2p::P2pHandle;
-use subsystem::subsystem::CallError;
+use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
@@ -43,6 +43,10 @@ pub enum BlockProductionError {
     MempoolChannelClosed,
     #[error("Chainstate channel closed")]
     ChainstateChannelClosed,
+    #[error("Failed to retrieve chainstate info")]
+    ChainstateInfoRetrievalError,
+    #[error("Wait for chainstate to sync before producing blocks")]
+    ChainstateWaitForSync,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
     #[error("Failed to add transaction {0}: {1}")]
@@ -107,6 +111,7 @@ pub fn make_blockproduction(
 pub fn test_blockprod_config() -> BlockProdConfig {
     BlockProdConfig {
         min_peers_to_produce_blocks: 0,
+        skip_ibd_check: false,
     }
 }
 
@@ -123,7 +128,7 @@ mod tests {
         chain::{
             block::timestamp::BlockTimestamp,
             config::{create_unit_test_config, Builder, ChainConfig, ChainType},
-            create_unittest_pos_config, initial_difficulty,
+            create_unittest_pos_config, pos_initial_difficulty,
             stakelock::StakePoolData,
             Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
         },
@@ -141,7 +146,11 @@ mod tests {
     };
     use storage_inmemory::InMemory;
     use subsystem::Manager;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::{
+        mock_time_getter::mocked_time_getter_seconds,
+        random::{make_seedable_rng, Seed},
+    };
+    use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
 
@@ -179,6 +188,7 @@ mod tests {
 
     pub fn setup_blockprod_test(
         chain_config: Option<ChainConfig>,
+        initial_mock_time: Option<Arc<SeqCstAtomicU64>>,
     ) -> (
         Manager,
         Arc<ChainConfig>,
@@ -191,13 +201,24 @@ mod tests {
 
         let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
+        let chainstate_config = {
+            let mut chainstate_config = ChainstateConfig::new();
+            chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
+            chainstate_config
+        };
+
+        let time_getter = match initial_mock_time {
+            Some(mock_time) => mocked_time_getter_seconds(mock_time),
+            None => TimeGetter::default(),
+        };
+
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
-            ChainstateConfig::new(),
+            chainstate_config,
             Store::new_empty().expect("Error initializing empty store"),
             DefaultTransactionVerificationStrategy::new(),
             None,
-            Default::default(),
+            time_getter.clone(),
         )
         .expect("Error initializing chainstate");
 
@@ -206,7 +227,7 @@ mod tests {
         let mempool = mempool::make_mempool(
             Arc::clone(&chain_config),
             subsystem::Handle::clone(&chainstate),
-            Default::default(),
+            time_getter.clone(),
         );
         let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
             move |call, shutdn| mempool.run(call, shutdn)
@@ -220,7 +241,7 @@ mod tests {
             Arc::new(p2p_config),
             chainstate.clone(),
             mempool.clone(),
-            Default::default(),
+            time_getter,
             PeerDbStorageImpl::new(InMemory::new()).unwrap(),
         )
         .expect("P2p initialization was successful");
@@ -265,15 +286,14 @@ mod tests {
             let genesis_block = Genesis::new(
                 "blockprod-testing".into(),
                 BlockTimestamp::from_int_seconds(
-                    TimeGetter::default()
-                        .get_time()
-                        .checked_sub(Duration::new(
+                    (TimeGetter::default().get_time()
+                        - Duration::new(
                             // Genesis must be in the past: now - (1 day..2 weeks)
                             rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
                             0,
                         ))
-                        .expect("No time underflow")
-                        .as_secs(),
+                    .expect("No time underflow")
+                    .as_secs_since_epoch(),
                 ),
                 vec![create_genesis_pool_txoutput.clone()],
             );
@@ -286,7 +306,7 @@ mod tests {
                 (
                     BlockHeight::new(1),
                     UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                        initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
+                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                         config: create_unittest_pos_config(),
                     }),
                 ),
@@ -309,7 +329,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
-        let (mut manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None);
+        let (mut manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, None);
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),

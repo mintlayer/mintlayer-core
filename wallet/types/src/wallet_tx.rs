@@ -27,16 +27,16 @@ use common::primitives::{BlockHeight, Id, Idable};
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]
-    Confirmed(BlockHeight, BlockTimestamp),
+    Confirmed(BlockHeight, BlockTimestamp, u64),
     /// Unconfirmed transaction in the mempool
     #[codec(index = 1)]
-    InMempool,
+    InMempool(u64),
     /// Conflicted transaction with a confirmed block
     #[codec(index = 2)]
     Conflicted(Id<GenBlock>),
     /// Transaction that is not confirmed or conflicted and is not in the mempool.
     #[codec(index = 3)]
-    Inactive,
+    Inactive(u64),
     /// Transaction that is not confirmed or conflicted and is not in the mempool and marked as
     /// abandoned by the user
     #[codec(index = 4)]
@@ -46,30 +46,30 @@ pub enum TxState {
 impl TxState {
     pub fn block_height(&self) -> Option<BlockHeight> {
         match self {
-            TxState::Confirmed(block_height, _timestamp) => Some(*block_height),
-            TxState::InMempool
+            TxState::Confirmed(block_height, _timestamp, _idx) => Some(*block_height),
+            TxState::InMempool(_)
             | TxState::Conflicted(_)
-            | TxState::Inactive
+            | TxState::Inactive(_)
             | TxState::Abandoned => None,
         }
     }
 
     pub fn timestamp(&self) -> Option<BlockTimestamp> {
         match self {
-            TxState::Confirmed(_block_height, timestamp) => Some(*timestamp),
-            TxState::InMempool
+            TxState::Confirmed(_block_height, timestamp, _idx) => Some(*timestamp),
+            TxState::InMempool(_)
             | TxState::Conflicted(_)
-            | TxState::Inactive
+            | TxState::Inactive(_)
             | TxState::Abandoned => None,
         }
     }
 
     pub fn short_name(&self) -> &'static str {
         match self {
-            TxState::Confirmed(_height, _timestamp) => "Confirmed",
+            TxState::Confirmed(_height, _timestamp, _idx) => "Confirmed",
             TxState::Conflicted(_id) => "Conflicted",
-            TxState::InMempool => "InMempool",
-            TxState::Inactive => "Inactive",
+            TxState::InMempool(_) => "InMempool",
+            TxState::Inactive(_) => "Inactive",
             TxState::Abandoned => "Abandoned",
         }
     }
@@ -78,13 +78,13 @@ impl TxState {
 impl Display for TxState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TxState::Confirmed(height, timestamp) => f.write_fmt(format_args!(
+            TxState::Confirmed(height, timestamp, _idx) => f.write_fmt(format_args!(
                 "Confirmed at height {}, on {}",
                 height, timestamp
             )),
             TxState::Conflicted(id) => f.write_fmt(format_args!("Conflicted by {}", id)),
-            TxState::InMempool => f.write_str("InMempool"),
-            TxState::Inactive => f.write_str("Inactive"),
+            TxState::InMempool(_) => f.write_str("InMempool"),
+            TxState::Inactive(_) => f.write_str("Inactive"),
             TxState::Abandoned => f.write_str("Abandoned"),
         }
     }
@@ -141,7 +141,7 @@ impl WalletTx {
 
     pub fn state(&self) -> TxState {
         match self {
-            WalletTx::Block(block) => TxState::Confirmed(block.height(), block.timestamp()),
+            WalletTx::Block(block) => TxState::Confirmed(block.height(), block.timestamp(), 0),
             WalletTx::Tx(tx) => tx.state,
         }
     }

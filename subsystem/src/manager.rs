@@ -14,18 +14,19 @@
 // limitations under the License.
 
 use core::{future::Future, time::Duration};
-use std::panic;
+use std::{panic, sync::Arc};
 
 use futures::future::BoxFuture;
 use tokio::{
-    sync::{mpsc, oneshot},
-    task::{self, JoinHandle},
+    sync::{mpsc, oneshot, RwLock},
+    task::{JoinHandle, JoinSet},
 };
+use tracing::Instrument;
 
 use logging::log;
 use utils::once_destructor::OnceDestructor;
 
-use crate::subsystem::{CallRequest, Handle, ShutdownRequest, Subsystem, SubsystemConfig};
+use crate::subsystem::{Action, CallRequest, Handle, ShutdownRequest, Subsystem, SubsystemConfig};
 
 /// Manager configuration options.
 pub struct ManagerConfig {
@@ -139,7 +140,10 @@ impl Manager {
     ///                 // Shutdown received, break out of the loop.
     ///                 () = shutdown.recv() => { break; }
     ///                 // Handle calls. An object representing the subsystem is passed in.
-    ///                 func = call.recv() => { func(todo!("put an argument here")); }
+    ///                 // Note this does not exploit the distinction between `call` and `call_mut`.
+    ///                 func = call.recv() => {
+    ///                     func.handle_call_mut(todo!("put an argument here"));
+    ///                 }
     ///                 // Handle any other IO events here
     ///             };
     ///         }
@@ -153,7 +157,7 @@ impl Manager {
         subsystem: S,
     ) -> Handle<T>
     where
-        T: 'static + Send + ?Sized,
+        T: 'static + Send + Sync + ?Sized,
         F: 'static + Send + Future<Output = ()>,
         S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     {
@@ -204,16 +208,50 @@ impl Manager {
     pub fn add_subsystem_with_config<S: Subsystem>(
         &mut self,
         config: SubsystemConfig,
-        mut subsys: S,
+        subsys: S,
     ) -> Handle<S> {
-        self.add_raw_subsystem_with_config(config, |mut call_rq, mut shutdown_rq| async move {
+        let manager_name = self.name;
+        let subsys_name = config.subsystem_name;
+
+        self.add_raw_subsystem_with_config(config, move |mut call_rq, mut shutdown_rq| async move {
+            let mut worker_tasks = JoinSet::new();
+            let subsys = Arc::new(RwLock::new(subsys));
+
             loop {
                 tokio::select! {
                     () = shutdown_rq.recv() => { break; }
-                    call = call_rq.recv() => { call(&mut subsys).await; }
+                    call = call_rq.recv() => {
+                        let subsys = Arc::clone(&subsys);
+                        match call {
+                            Action::Mut(call) => {
+                                worker_tasks.spawn(async move {
+                                    let mut subsys = subsys.write().await;
+                                    call(&mut *subsys).await
+                                }.in_current_span());
+                            },
+                            Action::Ref(call) => {
+                                worker_tasks.spawn(async move {
+                                    let subsys = subsys.read().await;
+                                    call(&*subsys).await
+                                }.in_current_span());
+                            },
+                        }
+                    }
+                    Some(task_result) = worker_tasks.join_next() => {
+                        Self::handle_task_result(manager_name, subsys_name, "worker", task_result);
+                    }
                 }
             }
-            subsys.shutdown().await;
+
+            while let Some(task_result) = worker_tasks.join_next().await {
+                Self::handle_task_result(manager_name, subsys_name, "worker", task_result);
+            }
+
+            // All worker tasks have terminated above, we are the last ones holding the subsys Arc
+            let subsys = Arc::try_unwrap(subsys)
+                .map_err(|_| ())
+                .expect("Something else still holds the subsystem reference");
+            RwLock::into_inner(subsys).shutdown().await;
         })
     }
 
@@ -224,7 +262,7 @@ impl Manager {
         subsystem: S,
     ) -> Handle<T>
     where
-        T: 'static + Send + ?Sized,
+        T: 'static + Send + Sync + ?Sized,
         F: 'static + Send + Future<Output = ()>,
         S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     {
@@ -268,7 +306,12 @@ impl Manager {
                         log::info!("Terminate signal received");
                     }
                     () = shutdown_rq.recv() => {},
-                    call = call_rq.recv() => { call(&mut ()); }
+                    call = call_rq.recv() => {
+                        match call {
+                            Action::Ref(call) => call(&()).await,
+                            Action::Mut(call) => call(&mut ()).await,
+                        }
+                    }
                 }
             },
         );
@@ -289,7 +332,13 @@ impl Manager {
         let subsystems: Vec<_> = self
             .subsystems
             .into_iter()
-            .map(|s| (s.name, task::spawn(s.task), s.shutdown_tx))
+            .map(|s| {
+                (
+                    s.name,
+                    logging::spawn_in_current_span(s.task),
+                    s.shutdown_tx,
+                )
+            })
             .collect();
 
         // Signal the manager is shut down so it does not wait for itself
@@ -321,16 +370,25 @@ impl Manager {
         log::info!("Manager {} terminated", self.name);
     }
 
-    async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
-        match handle.await {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Manager {manager_name}: failed to join the {subsystem_name} subsystem task: {e:?}");
-                if let Ok(p) = e.try_into_panic() {
-                    panic::resume_unwind(p);
-                }
+    fn handle_task_result(
+        manager_name: &str,
+        subsys_name: &str,
+        task_type: &str,
+        res: Result<(), tokio::task::JoinError>,
+    ) {
+        log::trace!("Manager {manager_name}: {subsys_name} {task_type} task finished");
+        if let Err(err) = res {
+            log::error!(
+                "Manager {manager_name}: failed to join the {subsys_name} {task_type} task: {err}"
+            );
+            if let Ok(p) = err.try_into_panic() {
+                panic::resume_unwind(p);
             }
         }
+    }
+
+    async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
+        Self::handle_task_result(manager_name, subsystem_name, "top-level", handle.await)
     }
 
     async fn wait_for_subsystem_shutdown(
@@ -370,7 +428,9 @@ impl Manager {
     /// an incorrect usage. The returned handle must be joined to ensure a proper subsystems
     /// shutdown.
     pub fn main_in_task(self) -> ManagerJoinHandle {
-        let handle = Some(tokio::spawn(async move { self.main().await }));
+        let handle = Some(logging::spawn_in_current_span(
+            async move { self.main().await },
+        ));
         ManagerJoinHandle { handle }
     }
 }
@@ -410,7 +470,7 @@ impl Drop for ManagerJoinHandle {
         }
 
         if std::thread::panicking() {
-            log::warn!("Subsystem manager's handle hasn't been joined");
+            log::error!("Subsystem manager's handle hasn't been joined");
         } else {
             panic!("Subsystem manager's handle hasn't been joined")
         }

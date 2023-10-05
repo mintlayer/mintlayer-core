@@ -19,16 +19,21 @@ mod config_files;
 mod mock_time;
 pub mod node_controller;
 mod options;
-pub mod regtest_options;
 pub mod rpc;
 mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use config_files::{NodeConfigFile, NodeTypeConfigFile, StorageBackendConfigFile};
+pub use config_files::{
+    NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
+};
 pub use options::{Command, Options, RunOptions};
 pub use runner::setup;
 
+pub fn default_rpc_config() -> RpcConfigFile {
+    RpcConfigFile::with_run_options(RpcConfigFile::default(), &options::RunOptions::default())
+}
+
 pub fn init_logging(_opts: &Options) {
-    logging::init_logging::<&std::path::Path>(None)
+    logging::init_logging()
 }

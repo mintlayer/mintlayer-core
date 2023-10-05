@@ -18,14 +18,11 @@
 use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
-use common::chain::config::ChainType;
+use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use utils::default_data_dir::default_data_dir_common;
 
-use crate::{
-    config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
-    regtest_options::RegtestOptions,
-};
+use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
 
 const CONFIG_NAME: &str = "config.toml";
 
@@ -51,6 +48,14 @@ pub enum Command {
     Regtest(Box<RegtestOptions>),
 }
 
+#[derive(Args, Clone, Debug)]
+pub struct RegtestOptions {
+    #[clap(flatten)]
+    pub run_options: RunOptions,
+    #[clap(flatten)]
+    pub chain_config: ChainConfigOptions,
+}
+
 #[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// Clean data dir before starting
@@ -60,6 +65,21 @@ pub struct RunOptions {
     /// Minimum number of connected peers to enable block production.
     #[clap(long)]
     pub blockprod_min_peers_to_produce_blocks: Option<usize>,
+
+    /// Skip the initial block download check for block production.
+    ///
+    /// When a node starts, it checks if it has the latest block. If
+    /// not, it downloads the missing blocks from its peers. This is
+    /// called the initial block download (IBD).
+    ///
+    /// If this option is set to true, the node will skip the IBD
+    /// check and start producing blocks immediately. This option
+    /// should only be used once, when the node is starting from
+    /// Genesis. If used on a node that is not starting from Genesis,
+    /// the node may produce blocks from the past, which will lead
+    /// to being banned by the network.
+    #[clap(long)]
+    pub blockprod_skip_ibd_check: Option<bool>,
 
     /// Storage backend to use.
     #[clap(long)]

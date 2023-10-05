@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use crate::primitives::time;
+use crate::primitives::time::{self, Time};
 
 pub trait TimeGetterFn: Send + Sync {
-    fn get_time(&self) -> Duration;
+    fn get_time(&self) -> Time;
 }
 
 /// A function wrapper that contains the function that will be used to get the current time in chainstate
@@ -32,7 +32,7 @@ impl TimeGetter {
         Self { f }
     }
 
-    pub fn get_time(&self) -> Duration {
+    pub fn get_time(&self) -> Time {
         self.f.get_time()
     }
 
@@ -56,7 +56,7 @@ impl DefaultTimeGetterFn {
 }
 
 impl TimeGetterFn for DefaultTimeGetterFn {
-    fn get_time(&self) -> Duration {
+    fn get_time(&self) -> Time {
         time::get_time()
     }
 }

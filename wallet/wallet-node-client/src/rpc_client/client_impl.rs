@@ -18,13 +18,12 @@ use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::{rpc::MempoolRpcClient, FeeRate};
-use mempool::{tx_accumulator::PackingStrategy, TxStatus};
+use mempool::{rpc::MempoolRpcClient, tx_accumulator::PackingStrategy, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
@@ -113,6 +112,16 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
+    async fn get_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        ChainstateRpcClient::delegation_share(&self.http_client, pool_id, delegation_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
@@ -144,7 +153,7 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<TxStatus, Self::Error> {
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
         let status = P2pRpcClient::submit_transaction(&self.http_client, tx.into())
             .await
             .map_err(NodeRpcError::ResponseError)?;

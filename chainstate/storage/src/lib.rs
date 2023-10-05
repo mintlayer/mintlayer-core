@@ -23,23 +23,24 @@ pub mod schema;
 
 use std::collections::BTreeMap;
 
-use common::chain::block::signed_block_header::SignedBlockHeader;
-pub use internal::{ChainstateStorageVersion, Store};
-
 use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
-use common::chain::block::BlockReward;
-use common::chain::config::EpochIndex;
-use common::chain::tokens::{TokenAuxiliaryData, TokenId};
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{
-    AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, SignedTransaction,
+use common::{
+    chain::{
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        config::EpochIndex,
+        tokens::{TokenAuxiliaryData, TokenId},
+        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
+        AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, SignedTransaction,
+    },
+    primitives::{BlockHeight, Id},
 };
-use common::primitives::{BlockHeight, Id};
 use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingStorageWrite,
 };
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
+
+pub use internal::{ChainstateStorageVersion, Store};
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
@@ -84,6 +85,9 @@ pub trait BlockchainStorageRead:
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
     fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+
+    /// Get the height below which reorgs should not be allowed.
+    fn get_min_height_with_allowed_reorg(&self) -> crate::Result<Option<BlockHeight>>;
 
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
@@ -162,6 +166,9 @@ pub trait BlockchainStorageWrite:
 
     /// Change tx indexing state flag
     fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> Result<()>;
+
+    /// Set the height below which reorgs should not be allowed.
+    fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()>;
 
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(

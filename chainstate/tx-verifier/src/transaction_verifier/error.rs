@@ -98,7 +98,7 @@ pub enum ConnectTransactionError {
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
     AttemptToSpendBurnedAmount,
-    #[error("PoS accounting error")]
+    #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),

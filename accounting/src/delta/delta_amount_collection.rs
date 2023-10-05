@@ -266,8 +266,7 @@ pub mod test {
 
     #[test]
     fn test_sub_unsigned_underflow() {
-        let mut collection =
-            DeltaAmountCollection::from_iter([('a', SignedAmount::from_atoms(2))].into_iter());
+        let mut collection = DeltaAmountCollection::from_iter([('a', SignedAmount::from_atoms(2))]);
 
         let res = collection.sub_unsigned('a', Amount::MAX);
         assert_eq!(res, Err(Error::ArithmeticErrorToSignedFailed));
@@ -275,37 +274,28 @@ pub mod test {
 
     #[test]
     fn test_merge_collections() {
-        let mut collection1 = DeltaAmountCollection::from_iter(
-            [
-                ('a', SignedAmount::from_atoms(1)),
-                ('b', SignedAmount::from_atoms(2)),
-                ('c', SignedAmount::from_atoms(2)),
-                ('d', SignedAmount::from_atoms(2)),
-            ]
-            .into_iter(),
-        );
+        let mut collection1 = DeltaAmountCollection::from_iter([
+            ('a', SignedAmount::from_atoms(1)),
+            ('b', SignedAmount::from_atoms(2)),
+            ('c', SignedAmount::from_atoms(2)),
+            ('d', SignedAmount::from_atoms(2)),
+        ]);
         let collection1_origin = collection1.clone();
 
-        let collection2 = DeltaAmountCollection::from_iter(
-            [
-                ('a', SignedAmount::from_atoms(-1)),
-                ('b', SignedAmount::from_atoms(2)),
-                ('c', SignedAmount::from_atoms(-3)),
-                ('e', SignedAmount::from_atoms(2)),
-            ]
-            .into_iter(),
-        );
+        let collection2 = DeltaAmountCollection::from_iter([
+            ('a', SignedAmount::from_atoms(-1)),
+            ('b', SignedAmount::from_atoms(2)),
+            ('c', SignedAmount::from_atoms(-3)),
+            ('e', SignedAmount::from_atoms(2)),
+        ]);
         let collection2_clone = collection2.clone();
 
-        let expected_data = BTreeMap::from_iter(
-            [
-                ('b', SignedAmount::from_atoms(4)),
-                ('c', SignedAmount::from_atoms(-1)),
-                ('d', SignedAmount::from_atoms(2)),
-                ('e', SignedAmount::from_atoms(2)),
-            ]
-            .into_iter(),
-        );
+        let expected_data = BTreeMap::from_iter([
+            ('b', SignedAmount::from_atoms(4)),
+            ('c', SignedAmount::from_atoms(-1)),
+            ('d', SignedAmount::from_atoms(2)),
+            ('e', SignedAmount::from_atoms(2)),
+        ]);
 
         collection1.merge_delta_amounts(collection2).unwrap();
         assert_eq!(collection1.data, expected_data);

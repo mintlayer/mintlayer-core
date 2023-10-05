@@ -73,11 +73,11 @@ class MempoolTxEvictionTest(BitcoinTestFramework):
         # Reset the mempool size to fit all transactions. Submit the missing transactions again
         # in the opposite order, check they both make their way in.
         node.mempool_set_max_size(300_000_000)
-        node.mempool_submit_transaction(tx3)
+        assert_raises_rpc_error(None, "Orphans not supported", node.mempool_submit_transaction, tx3)
         node.mempool_submit_transaction(tx2)
         assert node.mempool_contains_tx(tx1_id)
         assert node.mempool_contains_tx(tx2_id)
-        assert node.mempool_contains_tx(tx3_id)
+        assert not node.mempool_contains_tx(tx3_id)
 
         # Evict all transactions and reset the size afterwards
         node.mempool_set_max_size(20)

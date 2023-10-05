@@ -27,7 +27,7 @@ impl Stopwatch {
         loop {
             tokio::select! {
                 () = shutdown_rq.recv() => break,
-                call = call_rq.recv() => call(&mut stopwatch).await,
+                call = call_rq.recv() => call.handle_call_mut(&mut stopwatch).await,
                 _ = interval.tick() => stopwatch.report("Running"),
             }
         }
@@ -49,7 +49,7 @@ impl Stopwatch {
 
 #[tokio::main]
 async fn main() {
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
 
     let mut app = subsystem::Manager::new("toplevel");
     app.install_signal_handlers();

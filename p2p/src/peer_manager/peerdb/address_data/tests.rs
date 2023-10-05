@@ -15,6 +15,7 @@
 
 use crypto::random::{
     distributions::{Distribution, WeightedIndex},
+    rngs::StepRng,
     Rng,
 };
 use rstest::rstest;
@@ -22,12 +23,13 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use super::*;
 
+#[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Duration::ZERO;
+    let started_at = Time::from_duration_since_epoch(Duration::ZERO);
 
     let weights = [100, 100, 100, 10, 10];
     assert_eq!(weights.len(), ALL_TRANSITIONS.len());
@@ -57,12 +59,13 @@ fn randomized(#[case] seed: Seed) {
     }
 }
 
+#[tracing::instrument(skip(seed))]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn reachable_reconnects(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Duration::from_secs(1600000000);
+    let started_at = Time::from_secs_since_epoch(1600000000);
     let mut now = started_at;
     let mut address = AddressData::new(true, false, started_at);
     let mut connection_attempts = 0;
@@ -75,15 +78,45 @@ fn reachable_reconnects(#[case] seed: Seed) {
             address.transition_to(AddressStateTransitionTo::ConnectionFailed, now, &mut rng);
             connection_attempts += 1;
         }
-        now += Duration::from_secs(60);
+        now = (now + Duration::from_secs(60)).unwrap();
     }
 
     // Reachable addresses should be tried for reconnect for a long time
-    let time_until_removed = now - started_at;
+    let time_until_removed = (now - started_at).unwrap();
     assert_eq!(connection_attempts, PURGE_REACHABLE_FAIL_COUNT);
     let week = Duration::from_secs(3600 * 24 * 7);
     assert!(
         time_until_removed >= 2 * week && time_until_removed <= 6 * week,
         "invalid time until removed: {time_until_removed:?}"
     );
+}
+
+fn next_connect_time_test_impl(rng: &mut impl Rng) {
+    let limit_reserved = MAX_DELAY_RESERVED * MAX_DELAY_FACTOR;
+    let limit_reachable = MAX_DELAY_REACHABLE * MAX_DELAY_FACTOR;
+
+    let start_time = Time::from_secs_since_epoch(0);
+    let max_time_reserved = (start_time + limit_reserved).unwrap();
+    let max_time_reachable = (start_time + limit_reachable).unwrap();
+
+    let time = AddressData::next_connect_time(start_time, 0, true, rng);
+    assert!(time <= max_time_reserved);
+
+    let time = AddressData::next_connect_time(start_time, 0, false, rng);
+    assert!(time <= max_time_reachable);
+
+    let time = AddressData::next_connect_time(start_time, u32::MAX, true, rng);
+    assert!(time <= max_time_reserved);
+
+    let time = AddressData::next_connect_time(start_time, u32::MAX, false, rng);
+    assert!(time <= max_time_reachable);
+}
+
+#[test]
+fn next_connect_time() {
+    let mut always_zero_rng = StepRng::new(0, 0);
+    next_connect_time_test_impl(&mut always_zero_rng);
+
+    let mut always_max_rng = StepRng::new(u64::MAX, 0);
+    next_connect_time_test_impl(&mut always_max_rng);
 }

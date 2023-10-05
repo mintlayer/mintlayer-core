@@ -19,6 +19,7 @@ futures = { workspace = true, default-features = false, features = ["alloc"]}
 oneshot.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["macros", "rt", "rt-multi-thread", "signal", "sync"]}
+tracing.workspace = true
 
 [dev-dependencies]
 static_assertions.workspace = true

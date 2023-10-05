@@ -88,6 +88,7 @@ def init_mintlayer_types():
             },
 
             "PoolId": "H256",
+            "DelegationId": "H256",
 
             "StakePoolData": {
                 "type": "struct",
@@ -388,16 +389,19 @@ def init_mintlayer_types():
                 ]
             },
 
-            "Announcement": {
-                "type": "enum",
-                "type_mapping": [
-                    ["block", "BlockHeader"],
-                ]
-            },
-
             "Id": "[u8; 32]",
 
             "HeaderListRequest": "Vec<Id>",
+
+            "HeaderList": "Vec<SignedBlockHeader>",
+
+            "TransactionResponse": {
+                "type": "enum",
+                "type_mapping": [
+                    ["not_found", "Id"],
+                    ["found", "SignedTransaction"],
+                ],
+            },
 
             "Message": {
                 "type": "enum",
@@ -405,8 +409,16 @@ def init_mintlayer_types():
                     ["handshake", "HandshakeMessage"],
                     ["ping_request", "PingMessage"],
                     ["ping_response", "PingMessage"],
-                    ["announcement", "Announcement"],
+                    ["new_transaction", "Id"],
                     ["header_list_request", "HeaderListRequest"],
+                    ["header_list", "HeaderList"],
+                    ["block_list_request", "Vec<Id>"], # TODO
+                    ["block_response", "()"], # TODO
+                    ["announce_addr_request", "PeerAddress"], # TODO
+                    ["addr_list_request", "()"], # TODO
+                    ["addr_list_response", "Vec<PeerAddress>"], # TODO
+                    ["transaction_request", "Id"],
+                    ["transaction_response", "TransactionResponse"],
                 ]
             },
 

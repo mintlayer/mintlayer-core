@@ -13,24 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    time::Duration,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
+use common::primitives::time::Time;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 
-use crate::error::P2pError;
-
-use super::storage::{
-    PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
+use crate::{
+    error::P2pError,
+    peer_manager::peerdb_common::{TransactionRo, TransactionRw},
 };
+
+use super::storage::{PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite};
 
 const STORAGE_VERSION: u32 = 1;
 
 pub struct LoadedStorage {
     pub known_addresses: BTreeSet<SocketAddress>,
-    pub banned_addresses: BTreeMap<BannableAddress, Duration>,
+    pub banned_addresses: BTreeMap<BannableAddress, Time>,
+    pub anchor_addresses: BTreeSet<SocketAddress>,
 }
 
 impl LoadedStorage {
@@ -55,6 +55,7 @@ impl LoadedStorage {
         Ok(LoadedStorage {
             known_addresses: BTreeSet::new(),
             banned_addresses: BTreeMap::new(),
+            anchor_addresses: BTreeSet::new(),
         })
     }
 
@@ -88,9 +89,22 @@ impl LoadedStorage {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
+        let anchor_addresses = tx
+            .get_anchor_addresses()?
+            .iter()
+            .map(|addr| {
+                addr.parse::<SocketAddress>().map_err(|_err| {
+                    P2pError::InvalidStorageState(format!(
+                        "Invalid address in PeerDb storage: {addr}"
+                    ))
+                })
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+
         Ok(LoadedStorage {
             known_addresses,
             banned_addresses,
+            anchor_addresses,
         })
     }
 }

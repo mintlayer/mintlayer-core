@@ -17,7 +17,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -51,6 +51,11 @@ pub trait NodeInterface {
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
     async fn get_stake_pool_pledge(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+    async fn get_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
     async fn generate_block(
         &self,
@@ -60,10 +65,7 @@ pub trait NodeInterface {
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
-    async fn submit_transaction(
-        &self,
-        tx: SignedTransaction,
-    ) -> Result<mempool::TxStatus, Self::Error>;
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;

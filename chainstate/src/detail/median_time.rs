@@ -126,7 +126,6 @@ mod test {
                     .unwrap()
                     .get_best_block_index()
                     .unwrap()
-                    .unwrap()
                     .block_height()
                     .into();
                 assert_eq!(current_height, block_count as u64);
@@ -209,7 +208,6 @@ mod test {
                     .query()
                     .unwrap()
                     .get_best_block_index()
-                    .unwrap()
                     .unwrap()
                     .block_height()
                     .into();

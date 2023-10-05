@@ -26,14 +26,8 @@ pub mod testing_utils;
 pub mod utils;
 
 mod peer_manager_event;
-
-pub use p2p_types as types;
-use types::socket_address::SocketAddress;
-
-pub use crate::{
-    peer_manager_event::PeerManagerEvent,
-    types::p2p_event::{P2pEvent, P2pEventHandler},
-};
+#[cfg(test)]
+mod tests;
 
 use std::{
     marker::PhantomData,
@@ -46,13 +40,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-use interface::p2p_interface::P2pInterface;
-use net::default_backend::transport::{
-    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
-};
-use peer_manager::peerdb::storage::PeerDbStorage;
-use subsystem::{CallRequest, ShutdownRequest};
-
 use ::utils::atomics::SeqCstAtomicBool;
 use ::utils::ensure;
 use chainstate::chainstate_interface;
@@ -60,8 +47,15 @@ use common::{
     chain::{config::ChainType, ChainConfig},
     time_getter::TimeGetter,
 };
+use interface::p2p_interface::P2pInterface;
 use logging::log;
 use mempool::MempoolHandle;
+use net::default_backend::transport::{
+    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
+};
+use peer_manager::peerdb::storage::PeerDbStorage;
+use subsystem::{CallRequest, ShutdownRequest};
+use types::socket_address::SocketAddress;
 
 use crate::{
     config::P2pConfig,
@@ -75,12 +69,19 @@ use crate::{
     },
 };
 
+pub use p2p_types as types;
+
+pub use crate::{
+    peer_manager_event::PeerManagerEvent,
+    types::p2p_event::{P2pEvent, P2pEventHandler},
+};
+
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
+    tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent>,
     mempool_handle: MempoolHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
@@ -123,7 +124,7 @@ where
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
+        let (conn, messaging_handle, syncing_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -154,7 +155,7 @@ where
             peerdb_storage,
         )?;
         let shutdown_ = Arc::clone(&shutdown);
-        let peer_manager_task = tokio::spawn(async move {
+        let peer_manager_task = logging::spawn_in_current_span(async move {
             match peer_manager.run().await {
                 Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.
@@ -172,14 +173,14 @@ where
             chain_config,
             p2p_config,
             messaging_handle,
-            sync_event_receiver,
+            syncing_event_receiver,
             chainstate_handle,
             mempool_handle.clone(),
             tx_peer_manager.clone(),
             time_getter,
         );
         let shutdown_ = Arc::clone(&shutdown);
-        let sync_manager_task = tokio::spawn(async move {
+        let sync_manager_task = logging::spawn_in_current_span(async move {
             match sync_manager.run().await {
                 Ok(never) => match never {},
                 // The channel can be closed during the shutdown process.
@@ -214,7 +215,7 @@ where
                     self.shutdown().await;
                     break;
                 },
-                call = call.recv() => call(&mut self).await,
+                call = call.recv() => call.handle_call_mut(&mut self).await,
             }
         }
     }

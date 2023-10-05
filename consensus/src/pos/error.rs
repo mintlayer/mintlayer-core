@@ -22,7 +22,7 @@ use common::{
     UintConversionError,
 };
 
-use super::block_sig::BlockSignatureError;
+use super::{block_sig::BlockSignatureError, EffectivePoolBalanceError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
@@ -66,6 +66,8 @@ pub enum ConsensusPoSError {
     TimestampOverflow,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
+    #[error("Timespan cannot be empty when calculating average block time")]
+    EmptyTimespan,
     #[error("No input data was provided for PoS block generation")]
     NoInputDataProvided,
     #[error("PoW input data was provided for PoS block generation")]
@@ -87,4 +89,12 @@ pub enum ConsensusPoSError {
     FailedToSignKernel,
     #[error("Proof of stake block time ordering error in block: `{0}`")]
     PoSBlockTimeStrictOrderInvalid(Id<Block>),
+    #[error("Finite total supply is required")]
+    FiniteTotalSupplyIsRequired,
+    #[error("Unsupported PoS consensus version")]
+    UnsupportedConsensusVersion,
+    #[error("Error while calculating pool's effective balance: `{0}`")]
+    EffectivePoolBalanceError(#[from] EffectivePoolBalanceError),
+    #[error("Failed to calculate capped balance")]
+    FailedToCalculateCappedBalance,
 }

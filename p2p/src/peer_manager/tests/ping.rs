@@ -16,33 +16,38 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter};
+use test_utils::{assert_matches, assert_matches_return_val};
 
 use crate::{
     config::{NodeType, P2pConfig},
-    expect_recv,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{
-            transport::TcpTransportSocket,
-            types::{Command, Message},
-            ConnectivityHandle, DefaultNetworkingService,
+            transport::TcpTransportSocket, types::Command, ConnectivityHandle,
+            DefaultNetworkingService,
         },
         types::{ConnectivityEvent, PeerInfo},
     },
-    peer_manager::{tests::send_and_sync, PeerManager},
-    protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::peerdb_inmemory_store,
+    peer_manager::{
+        tests::{send_and_sync, utils::cmd_to_peer_man_msg},
+        PeerManager,
+    },
+    testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     types::peer_id::PeerId,
     PeerManagerEvent,
 };
 
+#[tracing::instrument]
 #[tokio::test]
 async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
+        ping_check_period: Duration::from_secs(1).into(),
+        ping_timeout: Duration::from_secs(5).into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -52,8 +57,6 @@ async fn ping_timeout() {
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        ping_check_period: Duration::from_secs(1).into(),
-        ping_timeout: Duration::from_secs(5).into(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
@@ -63,8 +66,9 @@ async fn ping_timeout() {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
@@ -86,7 +90,7 @@ async fn ping_timeout() {
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         let _ = peer_manager.run().await;
     });
 
@@ -96,17 +100,17 @@ async fn ping_timeout() {
             address: "123.123.123.123:12345".parse().unwrap(),
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
-                protocol: NETWORK_PROTOCOL_CURRENT,
+                protocol_version: TEST_PROTOCOL_VERSION,
                 network: *chain_config.magic_bytes(),
-                version: *chain_config.version(),
+                software_version: *chain_config.software_version(),
                 user_agent: p2p_config.user_agent.clone(),
-                services: NodeType::Full.into(),
+                common_services: NodeType::Full.into(),
             },
             receiver_address: None,
         })
         .unwrap();
 
-    let event = expect_recv!(&mut cmd_rx);
+    let event = expect_recv!(cmd_rx);
     match event {
         Command::Accept { peer_id: _ } => {}
         _ => panic!("unexpected event: {event:?}"),
@@ -116,39 +120,35 @@ async fn ping_timeout() {
     for _ in 0..5 {
         time_getter.advance_time(ping_check_period);
 
-        let event = expect_recv!(&mut cmd_rx);
-        match event {
-            Command::SendMessage {
-                peer,
-                message: Message::PingRequest(PingRequest { nonce }),
-            } => {
-                send_and_sync(
-                    peer,
-                    PeerManagerMessage::PingResponse(PingResponse { nonce }),
-                    &conn_tx,
-                    &mut cmd_rx,
-                )
-                .await;
-            }
-            _ => panic!("unexpected event: {event:?}"),
-        }
+        let cmd = expect_recv!(cmd_rx);
+        let (peer_id, peer_msg) = cmd_to_peer_man_msg(cmd);
+        let nonce = assert_matches_return_val!(
+            peer_msg,
+            PeerManagerMessage::PingRequest(PingRequest { nonce },),
+            nonce
+        );
+        send_and_sync(
+            peer_id,
+            PeerManagerMessage::PingResponse(PingResponse { nonce }),
+            &conn_tx,
+            &mut cmd_rx,
+        )
+        .await;
     }
 
     // Receive one more ping request but do not send a ping response
     time_getter.advance_time(ping_check_period);
-    let event = expect_recv!(&mut cmd_rx);
-    match event {
-        Command::SendMessage {
-            peer: _,
-            message: Message::PingRequest(PingRequest { nonce: _ }),
-        } => {}
-        _ => panic!("unexpected event: {event:?}"),
-    }
+    let cmd = expect_recv!(cmd_rx);
+    let (_, peer_msg) = cmd_to_peer_man_msg(cmd);
+    assert_matches!(
+        peer_msg,
+        PeerManagerMessage::PingRequest(PingRequest { nonce: _ })
+    );
 
     time_getter.advance_time(ping_timeout);
 
     // PeerManager should ask backend to close connection
-    let event = expect_recv!(&mut cmd_rx);
+    let event = expect_recv!(cmd_rx);
     match event {
         Command::Disconnect { peer_id } => {
             conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();

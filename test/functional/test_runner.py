@@ -99,6 +99,7 @@ TEST_FRAMEWORK_MODULES = [
 EXTENDED_SCRIPTS = [
     # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel
+    'blockprod_pos_pledge_incentives.py',
 ]
 
 BASE_SCRIPTS = [
@@ -117,6 +118,8 @@ BASE_SCRIPTS = [
     'blockprod_generate_pos_blocks_rand_genesis_keys.py',
     'blockprod_generate_pos_genesis_blocks.py',
     'blockprod_generate_pow_blocks.py',
+    'blockprod_ibd.py',
+    'blockprod_ibd_genesis.py',
     'example_test.py',
     'p2p_ping.py',
     'p2p_submit_orphan.py',
@@ -124,11 +127,19 @@ BASE_SCRIPTS = [
     'p2p_relay_transactions.py',
     'feature_db_reinit.py',
     'feature_lmdb_backend_test.py',
+    'wallet_submit_tx.py',
+    'wallet_select_utxos.py',
+    'wallet_recover_accounts.py',
+    'wallet_get_address_usage.py',
+    'wallet_tokens.py',
+    'wallet_nfts.py',
+    'wallet_delegations.py',
+    'wallet_high_fee.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',
     'mempool_orphan_peer_disconnected.py',
-    'mempool_submit_orphan.py',
+    'mempool_local_orphan_rejected.py',
     'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
 

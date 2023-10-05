@@ -28,8 +28,9 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    keys::RootKeys, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletCreatedTxId, AccountWalletTxId, KeychainUsageState, WalletTx,
+    chain_info::ChainInfo, keys::RootKeys, seed_phrase::SerializableSeedPhrase,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -51,6 +52,8 @@ pub enum Error {
     WalletSanityErrorInvalidRootKeyCount(usize),
     #[error("Cannot decode address from DB {0}")]
     CannotDecodeAddress(#[from] AddressError),
+    #[error("Wallet DB is not in a consistent state")]
+    WalletDbInconsistentState,
 }
 
 /// Possibly failing result of wallet storage query
@@ -60,12 +63,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait WalletStorageReadLocked {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
+    fn get_chain_info(&self) -> Result<ChainInfo>;
     fn get_transaction(&self, id: &AccountWalletTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(
         &self,
         account_id: &AccountId,
     ) -> Result<Vec<(AccountWalletTxId, WalletTx)>>;
     fn get_user_transactions(&self) -> Result<Vec<SignedTransaction>>;
+    fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -92,6 +97,7 @@ pub trait WalletStorageReadLocked {
 /// Queries on persistent wallet data with access to encrypted data
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
     fn get_root_key(&self) -> Result<Option<RootKeys>>;
+    fn get_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -104,8 +110,11 @@ pub trait WalletStorageEncryptionRead {
 pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_chain_info(&mut self, chain_info: &ChainInfo) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
+    fn clear_transactions(&mut self) -> Result<()>;
+    fn set_account_unconfirmed_tx_counter(&mut self, id: &AccountId, counter: u64) -> Result<()>;
     fn set_user_transaction(
         &mut self,
         id: &AccountWalletCreatedTxId,
@@ -139,6 +148,8 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
+    fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> Result<()>;
+    fn del_seed_phrase(&mut self) -> Result<Option<SerializableSeedPhrase>>;
 }
 
 /// Modifying operations on persistent wallet data for encryption
@@ -146,6 +157,7 @@ pub trait WalletStorageEncryptionWrite {
     fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
     fn del_encryption_kdf_challenge(&mut self) -> Result<()>;
     fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
+    fn encrypt_seed_phrase(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

@@ -22,12 +22,15 @@ use serde::{Deserialize, Serialize};
 pub struct BlockProdConfigFile {
     /// Minimum number of connected peers to enable block production.
     pub min_peers_to_produce_blocks: Option<usize>,
+    /// Skip initial block download check for block production.
+    pub skip_ibd_check: Option<bool>,
 }
 
 impl From<BlockProdConfigFile> for BlockProdConfig {
     fn from(config: BlockProdConfigFile) -> Self {
         Self {
             min_peers_to_produce_blocks: config.min_peers_to_produce_blocks.unwrap_or_default(),
+            skip_ibd_check: config.skip_ibd_check.unwrap_or_default(),
         }
     }
 }

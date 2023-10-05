@@ -65,7 +65,7 @@ impl<'f> PoSBlockBuilder<'f> {
     pub fn new(framework: &'f mut TestFramework, rng: &mut (impl Rng + CryptoRng)) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
-        let timestamp = BlockTimestamp::from_duration_since_epoch(framework.time_getter.get_time());
+        let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
 
         let (staker_vrf_sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
         let (staker_sk, _) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -274,18 +274,19 @@ impl<'f> PoSBlockBuilder<'f> {
         );
 
         let new_block_height = parent_block_index.block_height().next_height();
-        let current_difficulty = match self
+        let pos_status = match self
             .framework
             .chainstate
             .get_chain_config()
             .net_upgrade()
             .consensus_status(new_block_height)
         {
-            RequiredConsensus::PoS(status) => status.get_chain_config().target_limit(),
+            RequiredConsensus::PoS(status) => status,
             RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
                 panic!("Invalid consensus")
             }
         };
+        let current_difficulty = pos_status.get_chain_config().target_limit();
         let chain_config = self.framework.chainstate.get_chain_config().as_ref();
         let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
 
@@ -297,18 +298,17 @@ impl<'f> PoSBlockBuilder<'f> {
                 None => PoSRandomness::new(chain_config.initial_randomness()),
             }
         });
-        let pool_balance = self.stake_pool_balance.unwrap_or_else(|| {
-            self.framework.chainstate.get_stake_pool_balance(staking_pool).unwrap().unwrap()
-        });
 
         pos_mine(
-            BlockTimestamp::from_duration_since_epoch(self.framework.current_time()),
+            &self.framework.storage,
+            pos_status.get_chain_config(),
+            BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
             &self.staker_vrf_sk,
             randomness,
             staking_pool,
-            pool_balance,
+            chain_config.final_supply().unwrap(),
             epoch_index,
             current_difficulty.into(),
         )

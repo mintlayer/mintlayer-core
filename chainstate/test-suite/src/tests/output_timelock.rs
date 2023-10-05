@@ -55,7 +55,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         let (input_witness, locked_input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-            BlockTimestamp::from_duration_since_epoch(current_time),
+            BlockTimestamp::from_time(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -218,7 +218,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         let (input_witness, input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(current_time),
+            BlockTimestamp::from_time(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -708,7 +708,7 @@ fn output_lock_for_seconds_attempted_overflow(#[case] seed: Seed) {
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForSeconds(u64::MAX),
-            BlockTimestamp::from_duration_since_epoch(current_time),
+            BlockTimestamp::from_time(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output

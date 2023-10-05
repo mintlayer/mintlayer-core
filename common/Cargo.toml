@@ -16,7 +16,9 @@ serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
 utils = {path = '../utils'}
 
+anyhow.workspace = true
 bech32.workspace = true
+clap = { workspace = true, features = ["derive"] }
 fixed-hash.workspace = true
 generic-array.workspace = true
 hex.workspace = true
@@ -25,9 +27,14 @@ lazy_static.workspace = true
 num.workspace = true
 once_cell.workspace = true
 parity-scale-codec.workspace = true
+ref-cast.workspace = true
 serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 thiserror.workspace = true
+variant_count.workspace = true
+paste.workspace = true
+
+regex = "1.9"
 
 [dev-dependencies]
 test-utils = {path = '../test-utils'}
@@ -39,3 +46,6 @@ rstest.workspace = true
 serde_json.workspace = true
 serde_test.workspace = true
 serial_test.workspace = true
+
+[features]
+expensive-verification = []

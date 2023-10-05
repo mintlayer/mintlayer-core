@@ -17,10 +17,11 @@ mod builder;
 mod checkpoints;
 pub mod emission_schedule;
 pub mod regtest;
+pub mod regtest_options;
 pub use builder::Builder;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use emission_schedule::Mlt;
+use emission_schedule::CoinUnit;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
@@ -80,6 +81,15 @@ impl ChainType {
             ChainType::Testnet => "testnet",
             ChainType::Regtest => "regtest",
             ChainType::Signet => "signet",
+        }
+    }
+
+    const fn coin_ticker(&self) -> &'static str {
+        match self {
+            ChainType::Mainnet => "ML",
+            ChainType::Testnet => "TML",
+            ChainType::Regtest => "RML",
+            ChainType::Signet => "SML",
         }
     }
 
@@ -152,11 +162,12 @@ pub struct ChainConfig {
     p2p_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
-    version: SemVer,
+    software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     coin_ticker: &'static str,
     emission_schedule: EmissionSchedule,
+    final_supply: Option<CoinUnit>, // `None` if the supply increases indefinitely
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
@@ -246,10 +257,10 @@ impl ChainConfig {
         self.p2p_port
     }
 
-    /// The current version of the protocol that this chain is running
+    /// The current version of this software.
     #[must_use]
-    pub fn version(&self) -> &SemVer {
-        &self.version
+    pub fn software_version(&self) -> &SemVer {
+        &self.software_version
     }
 
     /// The chain of this config (mainnet, testnet, regtest, etc...)
@@ -425,12 +436,6 @@ impl ChainConfig {
         self.max_depth_for_reorg
     }
 
-    #[must_use]
-    pub fn min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
-        let result = current_tip_height - self.max_depth_for_reorg;
-        result.unwrap_or(BlockHeight::new(0))
-    }
-
     /// The maximum length of a name of a token
     #[must_use]
     pub fn token_max_name_len(&self) -> usize {
@@ -497,6 +502,10 @@ impl ChainConfig {
     pub fn min_stake_pool_pledge(&self) -> Amount {
         self.min_stake_pool_pledge
     }
+
+    pub fn final_supply(&self) -> Option<CoinUnit> {
+        self.final_supply
+    }
 }
 
 impl AsRef<ChainConfig> for ChainConfig {
@@ -509,7 +518,7 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 1_048_576;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 1_048_576;
 const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
-const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(100 * CoinUnit::ATOMS_PER_COIN);
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
 const TOKEN_MIN_HASH_LEN: usize = 4;
@@ -518,7 +527,7 @@ const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
-const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * Mlt::ATOMS_PER_MLT);
+const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * CoinUnit::ATOMS_PER_COIN);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
@@ -550,8 +559,8 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // We add 3_600_000_000 MLT to the genesis mint account since it's just for testing. Nothing else changes.
-    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * Mlt::ATOMS_PER_MLT);
+    // We add 3_600_000_000 coins to the genesis mint account since it's just for testing. Nothing else changes.
+    let extra_testnet_mint = Amount::from_atoms(3_600_000_000 * CoinUnit::ATOMS_PER_COIN);
     let total_amount = (extra_testnet_mint + DEFAULT_INITIAL_MINT).expect("Cannot fail");
     let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
@@ -629,6 +638,57 @@ pub fn create_unit_test_config() -> ChainConfig {
         .build()
 }
 
+/// This function ensure that IgnoreConsensus will never be used in anything other than regtest
+pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
+    match chain_config.chain_type() {
+        ChainType::Regtest => {
+            return;
+        }
+        ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => {}
+    }
+
+    let upgrades = chain_config.net_upgrade();
+
+    let all_upgrades = upgrades.all_upgrades();
+
+    assert!(
+        !all_upgrades.is_empty(),
+        "Invalid chain config. There are no net-upgrades defined, not even for genesis."
+    );
+
+    assert!(all_upgrades.len() >= 2, "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis.");
+
+    assert!(
+        all_upgrades[0].0 == 0.into(),
+        "Invalid chain config. The first net-upgrade must be at height 0"
+    );
+
+    assert!(
+        upgrades.consensus_status(0.into()) == RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The genesis net-upgrade must be IgnoreConsensus"
+    );
+
+    assert!(
+        upgrades.consensus_status(1.into()) != RequiredConsensus::IgnoreConsensus,
+        "Invalid chain config. The net-upgrade at height 1 must not be IgnoreConsensus"
+    );
+
+    for upgrade in all_upgrades.iter().skip(1) {
+        let upgrade_height = &upgrade.0;
+        let upgrade_data = &upgrade.1;
+
+        let consensus = upgrades.consensus_status(*upgrade_height);
+        assert_ne!(
+            RequiredConsensus::IgnoreConsensus,
+            consensus,
+            "Upgrade {:?} at height {} is ignoring consensus in net type {}. This is only allowed in regtest",
+            upgrade_data,
+            upgrade_height,
+            chain_config.chain_type().name()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,7 +698,6 @@ mod tests {
     fn mainnet_creation() {
         let config = create_mainnet();
 
-        assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
     }
@@ -647,8 +706,7 @@ mod tests {
     fn testnet_creation() {
         let config = create_testnet();
 
-        assert!(!config.net_upgrades.is_empty());
-        assert_eq!(2, config.net_upgrades.len());
+        assert_eq!(3, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
@@ -809,5 +867,33 @@ mod tests {
             .sealed_epoch_distance_from_tip(seal_to_tip_distance)
             .build();
         assert_eq!(expected_epoch, config.sealed_epoch_index(&block_height));
+    }
+
+    #[test]
+    fn test_ignore_consensus_in_mainnet() {
+        let config = create_mainnet();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis."
+    )]
+    fn test_ignore_consensus_outside_regtest_in_no_upgrades() {
+        let config =
+            Builder::new(ChainType::Mainnet).net_upgrades(NetUpgrades::unit_tests()).build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
+    }
+
+    #[test]
+    #[should_panic(expected = "The net-upgrade at height 1 must not be IgnoreConsensus")]
+    fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
+        let config = Builder::new(ChainType::Mainnet)
+            .net_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
+            .build();
+
+        assert_no_ignore_consensus_in_chain_config(&config);
     }
 }

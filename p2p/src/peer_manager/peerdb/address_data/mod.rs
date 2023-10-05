@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::primitives::time::Time;
 use crypto::random::Rng;
 
 /// Maximum delay between reconnection attempts to reserved nodes
@@ -33,6 +34,14 @@ const PURGE_REACHABLE_TIME: Duration = Duration::from_secs(3600 * 24 * 7 * 4);
 const PURGE_REACHABLE_FAIL_COUNT: u32 =
     (PURGE_REACHABLE_TIME.as_secs() / MAX_DELAY_REACHABLE.as_secs()) as u32;
 
+/// The maximum value for the random factor by which reconnection delays will be multiplied.
+///
+/// Note that the value was chosen based on bitcoin's implementation of GetExponentialRand
+/// (https://github.com/bitcoin/bitcoin/blob/5bbf735defac20f58133bea95226e13a5d8209bc/src/random.cpp#L689)
+/// which they use to scale delays. In their implementation, the maximum scale factor will be
+/// -ln(0.0000000000000035527136788) which is about 33.
+const MAX_DELAY_FACTOR: u32 = 30;
+
 pub enum AddressState {
     Connected {},
 
@@ -46,12 +55,12 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Next time connect to the peer
-        next_connect_after: Duration,
+        next_connect_after: Time,
     },
 
     Unreachable {
         /// At which time the address would be removed from memory
-        erase_after: Duration,
+        erase_after: Time,
     },
 }
 
@@ -81,7 +90,7 @@ pub struct AddressData {
 }
 
 impl AddressData {
-    pub fn new(was_reachable: bool, reserved: bool, now: Duration) -> Self {
+    pub fn new(was_reachable: bool, reserved: bool, now: Time) -> Self {
         AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
@@ -97,7 +106,7 @@ impl AddressData {
     }
 
     /// Returns true when it is time to attempt a new outbound connection
-    pub fn connect_now(&self, now: Duration) -> bool {
+    pub fn connect_now(&self, now: Time) -> bool {
         match self.state {
             AddressState::Connected {} => false,
 
@@ -115,7 +124,7 @@ impl AddressData {
     }
 
     /// Returns true if the address should be kept in memory
-    pub fn retain(&self, now: Duration) -> bool {
+    pub fn retain(&self, now: Time) -> bool {
         match self.state {
             AddressState::Connected {} => true,
             AddressState::Disconnected {
@@ -162,20 +171,16 @@ impl AddressData {
         )
     }
 
-    fn next_connect_time(
-        now: Duration,
-        fail_count: u32,
-        reserved: bool,
-        rng: &mut impl Rng,
-    ) -> Duration {
-        now + Self::next_connect_delay(fail_count, reserved)
-            .mul_f64(utils::exp_rand::exponential_rand(rng))
+    fn next_connect_time(now: Time, fail_count: u32, reserved: bool, rng: &mut impl Rng) -> Time {
+        let factor = utils::exp_rand::exponential_rand(rng).clamp(0.0, MAX_DELAY_FACTOR as f64);
+        let offset = Self::next_connect_delay(fail_count, reserved).mul_f64(factor);
+        (now + offset).expect("Unexpected time addition overflow")
     }
 
     pub fn transition_to(
         &mut self,
         transition: AddressStateTransitionTo,
-        now: Duration,
+        now: Time,
         rng: &mut impl Rng,
     ) {
         self.state = match transition {
@@ -226,7 +231,8 @@ impl AddressData {
                         }
                     } else if !was_reachable {
                         AddressState::Unreachable {
-                            erase_after: now + PURGE_UNREACHABLE_TIME,
+                            erase_after: (now + PURGE_UNREACHABLE_TIME)
+                                .expect("Overflow in PURGE_UNREACHABLE_TIME"),
                         }
                     } else if fail_count + 1 >= PURGE_REACHABLE_FAIL_COUNT {
                         AddressState::Unreachable { erase_after: now }

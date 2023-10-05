@@ -86,7 +86,7 @@ fn invalid_target(#[case] seed: Seed) {
     let transcript = construct_transcript(
         0,
         &tf.chainstate.get_chain_config().initial_randomness(),
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_time(tf.current_time()),
     );
     let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
     let best_block_outputs = tf.outputs_from_genblock(tf.best_block_id());

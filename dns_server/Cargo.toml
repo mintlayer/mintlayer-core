@@ -8,6 +8,7 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chainstate = { path = "../chainstate" }
 common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
@@ -17,16 +18,15 @@ storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
 utils = { path = '../utils' }
 
-futures = { workspace = true }
-tokio = { workspace = true, default-features = false }
-
-trust-dns-client.workspace = true
-trust-dns-server.workspace = true
-thiserror.workspace = true
 async-trait.workspace = true
-parity-scale-codec.workspace = true
 clap = { workspace = true, features = ["derive"] }
 directories.workspace = true
+futures = { workspace = true }
+parity-scale-codec.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false }
+trust-dns-client.workspace = true
+trust-dns-server.workspace = true
 
 [dev-dependencies]
 p2p-test-utils = { path = "../p2p/p2p-test-utils" }

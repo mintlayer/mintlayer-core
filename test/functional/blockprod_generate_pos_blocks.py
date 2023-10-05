@@ -15,13 +15,13 @@
 #  limitations under the License.
 
 from hashlib import blake2b
-from scalecodec.base import ScaleBytes, RuntimeConfiguration, ScaleDecoder
+from scalecodec.base import ScaleBytes, ScaleDecoder
 from test_framework.authproxy import JSONRPCException
 from test_framework.mintlayer import (
     base_tx_obj,
     block_input_data_obj,
     mintlayer_hash,
-    MLT_COIN,
+    ATOMS_PER_COIN,
     outpoint_obj,
     signed_tx_obj,
 )
@@ -67,10 +67,6 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         tip = self.nodes[0].chainstate_best_block_id()
         block = self.nodes[0].chainstate_get_block(tip)
         assert_equal(block, expected_block)
-
-    def block_height(self, n):
-        tip = self.nodes[n].chainstate_best_block_id()
-        return self.nodes[n].chainstate_block_height_in_main_chain(tip)
 
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
@@ -207,7 +203,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             self.genesis_pool_id(),
                             {
-                                "value": 40_000*MLT_COIN,
+                                "value": 40_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": self.stake_public_key(GENESIS_STAKE_PUBLIC_KEY),
                                 },
@@ -242,7 +238,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                     {
                         "Transfer": [
                             {
-                                "Coin": 100_000*MLT_COIN,
+                                "Coin": 100_000*ATOMS_PER_COIN,
                             },
                             "AnyoneCanSpend",
                         ],
@@ -315,7 +311,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
                         "CreateStakePool": [
                             new_pool_id,
                             {
-                                "value": 100_000*MLT_COIN,
+                                "value": 100_000*ATOMS_PER_COIN,
                                 "staker": {
                                     "PublicKey": new_stake_public_key,
                                 },
@@ -353,7 +349,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             "CreateStakePool": [
                 new_pool_id,
                 {
-                    "value": 100_000*MLT_COIN,
+                    "value": 100_000*ATOMS_PER_COIN,
                     "staker": {
                         "PublicKey": new_stake_public_key,
                     },

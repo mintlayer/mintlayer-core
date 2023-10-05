@@ -16,7 +16,7 @@
 use clap::Parser;
 use wallet_cli_lib::{
     config::WalletCliArgs,
-    console::{ConsoleOutput, StdioConsole},
+    console::{ConsoleOutput, StdioInputConsole, StdioOutputConsole},
 };
 
 #[tokio::main]
@@ -28,9 +28,10 @@ async fn main() {
     }
 
     let args = WalletCliArgs::parse();
-    let mut console = StdioConsole;
-    wallet_cli_lib::run(console.clone(), args, None).await.unwrap_or_else(|err| {
-        console.print_error(err);
-        std::process::exit(1);
-    })
+    wallet_cli_lib::run(StdioInputConsole, StdioOutputConsole, args, None)
+        .await
+        .unwrap_or_else(|err| {
+            StdioOutputConsole.print_error(err);
+            std::process::exit(1);
+        })
 }

@@ -42,6 +42,7 @@ pub struct BackendControls {
     pub initialized_node: InitializedNode,
     pub backend_sender: BackendSender,
     pub backend_receiver: UnboundedReceiver<BackendEvent>,
+    pub low_priority_backend_receiver: UnboundedReceiver<BackendEvent>,
 }
 
 /// `UnboundedSender` wrapper, used to make sure there is only one instance and it doesn't get cloned
@@ -83,7 +84,7 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
     }
 
     let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
     let node = node_lib::setup(opts).await?;
@@ -94,6 +95,7 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
 
     let (request_tx, request_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
+    let (low_priority_event_tx, low_priority_event_rx) = unbounded_channel();
     let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
     // Subscribe to chainstate before getting the current chain_info!
@@ -115,11 +117,13 @@ pub async fn node_initialize(_time_getter: TimeGetter) -> anyhow::Result<Backend
         initialized_node,
         backend_sender: BackendSender::new(request_tx),
         backend_receiver: event_rx,
+        low_priority_backend_receiver: low_priority_event_rx,
     };
 
     let backend = backend_impl::Backend::new(
         chain_config,
         event_tx,
+        low_priority_event_tx,
         wallet_updated_tx,
         controller,
         manager_join_handle,

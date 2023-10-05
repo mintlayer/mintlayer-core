@@ -144,6 +144,7 @@ mod tests {
     use super::*;
     use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -167,6 +168,7 @@ mod tests {
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 
+    #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
     #[trace]
     #[case(Seed::from_entropy())]

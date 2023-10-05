@@ -104,6 +104,7 @@ impl MempoolBanScore for ChainstateError {
             ChainstateError::FailedToInitializeChainstate(_) => 0,
             ChainstateError::FailedToReadProperty(_) => 0,
             ChainstateError::BootstrapError(_) => 0,
+            ChainstateError::BlockInvalidatorError(_) => 0,
         }
     }
 }

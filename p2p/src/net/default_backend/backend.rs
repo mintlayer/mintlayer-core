@@ -19,12 +19,13 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
 use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
+use tokio_stream::{wrappers::ReceiverStream, StreamExt, StreamMap};
 
 use common::{
     chain::ChainConfig,
@@ -43,30 +44,40 @@ use crate::{
         default_backend::{
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{Command, Event, Message, PeerEvent},
+            types::{BackendEvent, Command, PeerEvent},
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
     },
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pEvent, P2pEventHandler,
 };
 
 use super::{
-    peer::PeerRole,
-    types::{HandshakeNonce, P2pTimestamp},
+    peer::ConnectionInfo,
+    types::{HandshakeNonce, Message, P2pTimestamp},
 };
 
-/// Buffer size of the channel to the SyncManager peer task.
-/// How many unprocessed messages can be sent before the peer's event loop is blocked.
-// TODO: Decide what the optimal value is (for example, by comparing the initial block download time)
-const SYNC_CHAN_BUF_SIZE: usize = 20;
+/// Buffer sizes for the channels used by Peer to send peer messages to other parts of p2p.
+///
+/// If the number of unprocessed messages exceeds this limit, the peer's event loop will be
+/// blocked; this is needed to prevent DoS attacks where a peer would overload the node with
+/// requests, which may lead to memory exhaustion.
+/// Note: the values were chosen pretty much arbitrarily; the sync messages channel has a lower
+/// limit because it's used to send blocks, so its messages can be up to 1Mb in size; peer events,
+/// on the other hand, are small.
+/// Also note that basic tests of initial block download time showed that there is no real
+/// difference between 20 and 10000 for both of the limits here. These results, of course, depend
+/// on the hardware and internet connection, so we've chosen larger limits.
+const SYNC_MSG_CHAN_BUF_SIZE: usize = 100;
+const PEER_EVENT_CHAN_BUF_SIZE: usize = 1000;
 
 /// Active peer data
 struct PeerContext {
     handle: tokio::task::JoinHandle<()>,
 
-    /// Channel used to send messages to the peer's event loop.
-    tx: mpsc::UnboundedSender<Event>,
+    /// Channel sender for sending messages to the peer's event loop.
+    backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
 
     /// True if the peer was accepted by PeerManager and SyncManager was notified
     was_accepted: SetFlag,
@@ -75,11 +86,16 @@ struct PeerContext {
 
     inbound: bool,
 
+    protocol_version: SupportedProtocolVersion,
+
     user_agent: UserAgent,
 
-    version: SemVer,
+    software_version: SemVer,
 
-    services: Services,
+    /// Intersection of requested (set by us) and available (set by the peer) services.
+    /// All services that will be enabled for this peer if it's accepted.
+    /// The Peer Manager can disconnect the peer if some required services are missing.
+    common_services: Services,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -88,9 +104,9 @@ struct PendingPeerContext {
 
     address: SocketAddress,
 
-    peer_role: PeerRole,
+    connection_info: ConnectionInfo,
 
-    tx: mpsc::UnboundedSender<Event>,
+    backend_event_tx: mpsc::UnboundedSender<BackendEvent>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -108,7 +124,7 @@ pub struct Backend<T: TransportSocket> {
 
     time_getter: TimeGetter,
 
-    /// RX channel for receiving commands from the frontend
+    /// Channel receiver for receiving commands from the frontend
     cmd_rx: mpsc::UnboundedReceiver<Command>,
 
     /// Active peers
@@ -117,21 +133,17 @@ pub struct Backend<T: TransportSocket> {
     /// Pending connections
     pending: HashMap<PeerId, PendingPeerContext>,
 
-    /// RX channel for receiving events from peers
-    #[allow(clippy::type_complexity)]
-    peer_chan: (
-        mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
-    ),
+    /// Map of streams for receiving events from peers.
+    peer_event_stream_map: StreamMap<PeerId, ReceiverStream<PeerEvent>>,
 
-    /// TX channel for sending events to the frontend
-    conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
+    /// Channel sender for sending connectivity events to the frontend
+    conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
 
-    /// TX channel for sending syncing events
-    sync_tx: mpsc::UnboundedSender<SyncingEvent>,
+    /// Channel sender for sending syncing events
+    syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
 
     /// List of incoming commands to the backend; we put them in a queue
-    /// to make receiving commands can run concurrently with other backend operations
+    /// to make sure receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
     shutdown: Arc<SeqCstAtomicBool>,
@@ -139,6 +151,11 @@ pub struct Backend<T: TransportSocket> {
 
     events_controller: EventsController<P2pEvent>,
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+
+    /// The protocol version that this node is running. Normally this will be
+    /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
+    /// overridden for testing purposes.
+    node_protocol_version: ProtocolVersion,
 }
 
 impl<T> Backend<T>
@@ -153,29 +170,31 @@ where
         p2p_config: Arc<P2pConfig>,
         time_getter: TimeGetter,
         cmd_rx: mpsc::UnboundedReceiver<Command>,
-        conn_tx: mpsc::UnboundedSender<ConnectivityEvent>,
-        sync_tx: mpsc::UnboundedSender<SyncingEvent>,
+        conn_event_tx: mpsc::UnboundedSender<ConnectivityEvent>,
+        syncing_event_tx: mpsc::UnboundedSender<SyncingEvent>,
         shutdown: Arc<SeqCstAtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
+        node_protocol_version: ProtocolVersion,
     ) -> Self {
         Self {
             transport,
             socket,
             cmd_rx,
-            conn_tx,
+            conn_event_tx,
             chain_config,
             p2p_config,
             time_getter,
-            sync_tx,
+            syncing_event_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
-            peer_chan: mpsc::unbounded_channel(),
+            peer_event_stream_map: StreamMap::new(),
             command_queue: FuturesUnordered::new(),
             shutdown,
             shutdown_receiver,
             events_controller: EventsController::new(),
             subscribers_receiver,
+            node_protocol_version,
         }
     }
 
@@ -183,6 +202,7 @@ where
     fn handle_connect_res(
         &mut self,
         address: SocketAddress,
+        local_services_override: Option<Services>,
         connection_res: crate::Result<T::Stream>,
     ) -> crate::Result<()> {
         match connection_res {
@@ -192,7 +212,10 @@ where
                 self.create_pending_peer(
                     socket,
                     PeerId::new(),
-                    PeerRole::Outbound { handshake_nonce },
+                    ConnectionInfo::Outbound {
+                        handshake_nonce,
+                        local_services_override,
+                    },
                     address,
                 )
             }
@@ -200,7 +223,7 @@ where
                 // This happens often (for example, if the remote node is behind NAT), so use `info!` here
                 log::info!("Failed to establish connection to {address:?}: {err}");
 
-                Ok(self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                Ok(self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
                     address,
                     error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                 })?)
@@ -215,28 +238,29 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (sync_tx, sync_rx) = mpsc::channel(SYNC_CHAN_BUF_SIZE);
-        peer.tx.send(Event::Accepted { sync_tx })?;
+        let (sync_msg_tx, sync_msg_rx) = mpsc::channel(SYNC_MSG_CHAN_BUF_SIZE);
+        peer.backend_event_tx.send(BackendEvent::Accepted { sync_msg_tx })?;
 
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
 
-        Self::send_sync_event(
-            &self.sync_tx,
+        Self::send_syncing_event(
+            &self.syncing_event_tx,
             SyncingEvent::Connected {
                 peer_id,
-                services: peer.services,
-                sync_rx,
+                common_services: peer.common_services,
+                protocol_version: peer.protocol_version,
+                sync_msg_rx,
             },
             &self.shutdown,
         );
         self.events_controller.broadcast(P2pEvent::PeerConnected {
             id: peer_id,
-            services: peer.services,
+            services: peer.common_services,
             address: peer.address.to_string(),
             inbound: peer.inbound,
             user_agent: peer.user_agent.clone(),
-            version: peer.version,
+            software_version: peer.software_version,
         });
 
         Ok(())
@@ -251,13 +275,13 @@ where
         self.destroy_peer(peer_id)
     }
 
-    /// Sends a message the remote peer. Might fail if the peer is already disconnected.
+    /// Sends a message to the remote peer. Might fail if the peer is already disconnected.
     fn send_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
         let peer = self
             .peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        Ok(peer.tx.send(Event::SendMessage(Box::new(message)))?)
+        Ok(peer.backend_event_tx.send(BackendEvent::SendMessage(Box::new(message)))?)
     }
 
     /// Runs the backend events loop.
@@ -272,13 +296,12 @@ where
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
-                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
+                Some(callback) = self.command_queue.next() => {
                     callback(&mut self)?;
                 },
                 // Handle peer events.
-                event = self.peer_chan.1.recv() => {
-                    let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_peer_event(peer, event)?;
+                Some((peer_id, event)) = self.peer_event_stream_map.next() => {
+                    self.handle_peer_event(peer_id, event)?;
                 },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
@@ -287,7 +310,7 @@ where
                             self.create_pending_peer(
                                 stream,
                                 PeerId::new(),
-                                PeerRole::Inbound,
+                                ConnectionInfo::Inbound,
                                 address,
                             )?;
                         },
@@ -316,10 +339,12 @@ where
         &mut self,
         socket: T::Stream,
         remote_peer_id: PeerId,
-        peer_role: PeerRole,
+        connection_info: ConnectionInfo,
         address: SocketAddress,
     ) -> crate::Result<()> {
-        let (peer_tx, peer_rx) = mpsc::unbounded_channel();
+        let (backend_event_tx, backend_event_rx) = mpsc::unbounded_channel();
+
+        log::debug!("Assigning peer id {remote_peer_id} to peer at address {address:?}");
 
         // Sending the remote socket address makes no sense and can leak private information when using a proxy
         let receiver_address = if self.p2p_config.socks5_proxy.is_some() {
@@ -328,21 +353,25 @@ where
             Some(address.as_peer_address())
         };
 
-        let backend_tx = self.peer_chan.0.clone();
+        let (peer_event_tx, peer_event_rx) = mpsc::channel(PEER_EVENT_CHAN_BUF_SIZE);
+        let peer_event_stream = ReceiverStream::new(peer_event_rx);
+
+        self.peer_event_stream_map.insert(remote_peer_id, peer_event_stream);
 
         let peer = peer::Peer::<T>::new(
             remote_peer_id,
-            peer_role,
+            connection_info,
             Arc::clone(&self.chain_config),
             Arc::clone(&self.p2p_config),
             socket,
             receiver_address,
-            backend_tx,
-            peer_rx,
+            peer_event_tx,
+            backend_event_rx,
+            self.node_protocol_version,
         );
         let shutdown = Arc::clone(&self.shutdown);
-        let local_time = P2pTimestamp::from_duration_since_epoch(self.time_getter.get_time());
-        let handle = tokio::spawn(async move {
+        let local_time = P2pTimestamp::from_time(self.time_getter.get_time());
+        let handle = logging::spawn_in_current_span(async move {
             match peer.run(local_time).await {
                 Ok(()) => {}
                 Err(P2pError::ChannelClosed) if shutdown.load() => {}
@@ -355,8 +384,8 @@ where
             PendingPeerContext {
                 handle,
                 address,
-                peer_role,
-                tx: peer_tx,
+                connection_info,
+                backend_event_tx,
             },
         );
 
@@ -376,33 +405,37 @@ where
         let PendingPeerContext {
             handle,
             address,
-            peer_role,
-            tx,
+            connection_info,
+            backend_event_tx,
         } = match self.pending.remove(&peer_id) {
             Some(pending) => pending,
             // Could be removed if self-connection was detected earlier
             None => return Ok(()),
         };
 
-        if self.is_connection_from_self(peer_role, handshake_nonce)? {
+        if self.is_connection_from_self(connection_info, handshake_nonce)? {
             return Ok(());
         }
 
-        let services = peer_info.services;
-        let inbound = peer_role == PeerRole::Inbound;
+        let common_services = peer_info.common_services;
+        let protocol_version = peer_info.protocol_version;
+        let inbound = connection_info == ConnectionInfo::Inbound;
         let user_agent = peer_info.user_agent.clone();
-        let version = peer_info.version;
+        let software_version = peer_info.software_version;
 
-        match peer_role {
-            PeerRole::Outbound { handshake_nonce: _ } => {
-                self.conn_tx.send(ConnectivityEvent::OutboundAccepted {
+        match connection_info {
+            ConnectionInfo::Outbound {
+                handshake_nonce: _,
+                local_services_override: _,
+            } => {
+                self.conn_event_tx.send(ConnectivityEvent::OutboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
                 })?;
             }
-            PeerRole::Inbound => {
-                self.conn_tx.send(ConnectivityEvent::InboundAccepted {
+            ConnectionInfo::Inbound => {
+                self.conn_event_tx.send(ConnectivityEvent::InboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
@@ -416,10 +449,11 @@ where
                 handle,
                 address,
                 inbound,
+                protocol_version,
                 user_agent,
-                version,
-                services,
-                tx,
+                software_version,
+                common_services,
+                backend_event_tx,
                 was_accepted: SetFlag::new(),
             },
         );
@@ -438,8 +472,8 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         if peer.was_accepted.test() {
-            Self::send_sync_event(
-                &self.sync_tx,
+            Self::send_syncing_event(
+                &self.syncing_event_tx,
                 SyncingEvent::Disconnected { peer_id },
                 &self.shutdown,
             );
@@ -451,24 +485,25 @@ where
         // (for example, trying to send something big over a slow network connection)
         peer.handle.abort();
 
-        Ok(self.conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id })?)
+        Ok(self.conn_event_tx.send(ConnectivityEvent::ConnectionClosed { peer_id })?)
     }
 
     fn is_connection_from_self(
         &mut self,
-        peer_role: PeerRole,
+        connection_info: ConnectionInfo,
         incoming_nonce: HandshakeNonce,
     ) -> crate::Result<bool> {
-        if peer_role == PeerRole::Inbound {
+        if connection_info == ConnectionInfo::Inbound {
             // Look for own outbound connection with same nonce
             let outbound_peer_id = self
                 .pending
                 .iter()
-                .find(|(_peer_id, pending)| {
-                    pending.peer_role
-                        == PeerRole::Outbound {
-                            handshake_nonce: incoming_nonce,
-                        }
+                .find(|(_peer_id, pending)| match pending.connection_info {
+                    ConnectionInfo::Inbound => false,
+                    ConnectionInfo::Outbound {
+                        handshake_nonce,
+                        local_services_override: _,
+                    } => handshake_nonce == incoming_nonce,
                 })
                 .map(|(peer_id, _pending)| *peer_id);
 
@@ -482,7 +517,7 @@ where
                 );
 
                 // Report outbound connection failure
-                self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
                     address: outbound_pending.address,
                     error: P2pError::DialError(DialError::AttemptToDialSelf),
                 })?;
@@ -498,11 +533,11 @@ where
     fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
-                protocol,
+                protocol_version,
                 network,
-                services,
+                common_services,
                 user_agent,
-                version,
+                software_version,
                 receiver_address,
                 handshake_nonce,
             } => self.create_peer(
@@ -510,28 +545,46 @@ where
                 handshake_nonce,
                 PeerInfo {
                     peer_id,
-                    protocol,
+                    protocol_version,
                     network,
-                    version,
+                    software_version,
                     user_agent,
-                    services,
+                    common_services,
                 },
                 receiver_address,
             ),
 
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 
+            PeerEvent::HandshakeFailed { error } => {
+                if let Some(pending_peer) = self.pending.get(&peer_id) {
+                    log::debug!("Sending ConnectivityEvent::HandshakeFailed for peer {peer_id}");
+
+                    self.conn_event_tx.send(ConnectivityEvent::HandshakeFailed {
+                        address: pending_peer.address,
+                        error,
+                    })?;
+                } else {
+                    log::error!("Cannot find pending peer for peer id {peer_id}");
+                }
+
+                Ok(())
+            }
+
             PeerEvent::ConnectionClosed => {
                 if let Some(pending_peer) = self.pending.remove(&peer_id) {
-                    match pending_peer.peer_role {
-                        PeerRole::Inbound => {
+                    match pending_peer.connection_info {
+                        ConnectionInfo::Inbound => {
                             // Just log the error
                             log::warn!("inbound pending connection closed unexpectedly");
                         }
-                        PeerRole::Outbound { handshake_nonce: _ } => {
+                        ConnectionInfo::Outbound {
+                            handshake_nonce: _,
+                            local_services_override: _,
+                        } => {
                             log::warn!("outbound pending connection closed unexpectedly");
 
-                            self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                            self.conn_event_tx.send(ConnectivityEvent::ConnectionError {
                                 address: pending_peer.address,
                                 error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                             })?;
@@ -547,18 +600,28 @@ where
 
                 Ok(())
             }
+
+            PeerEvent::Misbehaved { error } => {
+                self.conn_event_tx.send(ConnectivityEvent::Misbehaved { peer_id, error })?;
+
+                Ok(())
+            }
         }
     }
 
-    fn handle_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
+    fn handle_message(
+        &mut self,
+        peer_id: PeerId,
+        message: PeerManagerMessage,
+    ) -> crate::Result<()> {
         // Do not process remaining messages if the peer has been forcibly disconnected (for example, after being banned).
         // Without this check, the backend might send messages to the sync and peer managers after sending the disconnect notification.
-        if !self.peers.contains_key(&peer) {
-            log::info!("ignore received messaged from a disconnected peer {peer}");
+        if !self.peers.contains_key(&peer_id) {
+            log::info!("ignore received messaged from a disconnected peer {peer_id}");
             return Ok(());
         }
 
-        self.conn_tx.send(ConnectivityEvent::Message { peer, message })?;
+        self.conn_event_tx.send(ConnectivityEvent::Message { peer_id, message })?;
 
         Ok(())
     }
@@ -570,7 +633,10 @@ where
         // Because the second part depends on result of the first part boxed closures are used.
 
         match command {
-            Command::Connect { address } => {
+            Command::Connect {
+                address,
+                local_services_override,
+            } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
                     self.transport.connect(address),
@@ -581,7 +647,9 @@ where
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
-                    boxed_cb(move |this| this.handle_connect_res(address, connection_res))
+                    boxed_cb(move |this| {
+                        this.handle_connect_res(address, local_services_override, connection_res)
+                    })
                 }
                 .boxed();
 
@@ -599,26 +667,26 @@ where
                     log::debug!("Failed to disconnect peer {peer_id}: {e}");
                 }
             }
-            Command::SendMessage { peer, message } => {
-                let res = self.send_message(peer, message);
+            Command::SendMessage { peer_id, message } => {
+                let res = self.send_message(peer_id, message);
                 if let Err(e) = res {
-                    log::debug!("Failed to send request to peer {peer}: {e}")
+                    log::debug!("Failed to send request to peer {peer_id}: {e}")
                 }
             }
         };
     }
 
-    fn send_sync_event(
-        sync_tx: &mpsc::UnboundedSender<SyncingEvent>,
+    fn send_syncing_event(
+        event_tx: &mpsc::UnboundedSender<SyncingEvent>,
         event: SyncingEvent,
         shutdown: &Arc<SeqCstAtomicBool>,
     ) {
         // SyncManager should always be active and so sending to a closed `conn_tx` is not a backend's problem, just log the error.
         // NOTE: `sync_tx` is not connected in some PeerManager tests.
-        match sync_tx.send(event) {
+        match event_tx.send(event) {
             Ok(()) => {}
             Err(_) if shutdown.load() => {}
-            Err(_) => log::error!("sending sync event from the backend failed unexpectedly"),
+            Err(_) => log::error!("sending syncing event from the backend failed unexpectedly"),
         }
     }
 }

@@ -23,6 +23,8 @@ use std::{
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
 use crypto::random::{make_pseudo_rng, Rng};
+use futures::Future;
+use logging::log;
 use p2p_types::socket_address::SocketAddress;
 use tokio::time::timeout;
 
@@ -31,12 +33,19 @@ use crate::{
     net::{
         default_backend::transport::{
             MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+            TransportListener, TransportSocket,
         },
         types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
     },
     peer_manager::peerdb::storage_impl::PeerDbStorageImpl,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
 };
+
+/// A protocol version for use in tests that just need some valid value for it.
+// TODO: ideally, tests that use this constant should call for_each_protocol_version instead
+// and thus check all available versions.
+pub const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
 
 /// An interface for creating transports and addresses used in tests.
 ///
@@ -65,7 +74,7 @@ impl TestTransportMaker for TestTransportTcp {
     }
 
     fn make_address() -> SocketAddress {
-        "[::1]:0".parse().unwrap()
+        "127.0.0.1:0".parse().unwrap()
     }
 }
 
@@ -130,7 +139,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0]).expect("dial to succeed");
+    conn1.connect(addr[0], None).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -216,17 +225,6 @@ pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory>
     PeerDbStorageImpl::new(storage).unwrap()
 }
 
-/// Receive a message from the tokio channel.
-/// Panics if the channel is closed or no message received in 10 seconds.
-#[macro_export]
-macro_rules! expect_recv {
-    // Implemented as a macro until #[track_caller] works correctly with async functions
-    // (needed to print the caller location if unwraps fail)
-    ($x:expr) => {
-        tokio::time::timeout(Duration::from_secs(10), $x.recv()).await.unwrap().unwrap()
-    };
-}
-
 pub fn test_p2p_config() -> P2pConfig {
     P2pConfig {
         bind_addresses: Default::default(),
@@ -249,7 +247,33 @@ pub fn test_p2p_config() -> P2pConfig {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
+    }
+}
+
+pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
+where
+    A: TestTransportMaker<Transport = T>,
+    T: TransportSocket,
+{
+    let transport = A::make_transport();
+    let addr = A::make_address();
+    let mut server = transport.bind(vec![addr]).await.unwrap();
+    let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
+}
+
+pub async fn for_each_protocol_version<Func, Res>(func: Func)
+where
+    Func: Fn(ProtocolVersion) -> Res,
+    Res: Future<Output = ()>,
+{
+    for version in enum_iterator::all::<SupportedProtocolVersion>() {
+        log::info!("---------- Testing protocol version {version:?} ----------");
+        func(version.into()).await;
     }
 }

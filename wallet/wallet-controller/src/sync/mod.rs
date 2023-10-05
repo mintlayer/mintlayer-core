@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{cmp::Reverse, collections::BTreeMap, iter};
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
@@ -22,29 +22,39 @@ use common::{
 use crypto::key::hdkd::u31::U31;
 use logging::log;
 use node_comm::node_traits::NodeInterface;
-use wallet::{wallet_events::WalletEvents, DefaultWallet, WalletResult};
+use utils::{once_destructor::OnceDestructor, set_flag::SetFlag};
+use wallet::{
+    wallet::WalletSyncingState, wallet_events::WalletEvents, DefaultWallet, WalletResult,
+};
 
 use crate::ControllerError;
 
 const MAX_FETCH_BLOCK_COUNT: usize = 100;
 
 pub trait SyncingWallet {
-    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)>;
+    fn syncing_state(&self) -> WalletSyncingState;
 
     fn scan_blocks(
         &mut self,
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()>;
+
+    fn scan_blocks_for_unused_account(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()>;
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
-    fn best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
-        self.get_best_block()
+    fn syncing_state(&self) -> WalletSyncingState {
+        self.get_syncing_state()
     }
 
     fn scan_blocks(
@@ -52,9 +62,18 @@ impl SyncingWallet for DefaultWallet {
         account: U31,
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
-        wallet_events: &mut impl WalletEvents,
+        wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_blocks(account, common_block_height, blocks, wallet_events)
+    }
+
+    fn scan_blocks_for_unused_account(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+        wallet_events: &impl WalletEvents,
+    ) -> WalletResult<()> {
+        self.scan_new_blocks_unused_account(common_block_height, blocks, wallet_events)
     }
 
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()> {
@@ -62,6 +81,7 @@ impl SyncingWallet for DefaultWallet {
     }
 }
 
+#[derive(Debug)]
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
     common_block_height: BlockHeight,
@@ -82,22 +102,35 @@ enum FetchBlockError<T: NodeInterface> {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum AccountType {
+    Account(U31),
+    UnusedAccount,
+}
+
 pub async fn sync_once<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,
     wallet: &mut impl SyncingWallet,
-    wallet_events: &mut impl WalletEvents,
+    wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
+    let mut print_flag = SetFlag::new();
+    let mut _log_on_exit = None;
+
     loop {
         let chain_info =
             rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
 
-        let best_blocks = wallet.best_block();
-
-        if best_blocks
-            .iter()
-            .all(|(_account, wallet_best_block)| chain_info.best_block_id == wallet_best_block.0)
+        let WalletSyncingState {
+            account_best_blocks,
+            unused_account_best_block,
+        } = wallet.syncing_state();
+        if account_best_blocks
+            .values()
+            .chain(iter::once(&unused_account_best_block))
+            .all(|wallet_best_block| chain_info.best_block_id == wallet_best_block.0)
         {
+            // if all accounts are on the latest tip nothing to sync
             return Ok(());
         }
 
@@ -106,79 +139,221 @@ pub async fn sync_once<T: NodeInterface>(
             .map_err(ControllerError::WalletError)?;
 
         // Group accounts in the same state
-        let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<U31>> = BTreeMap::new();
-        for (account, best_block) in best_blocks.iter() {
-            accounts_grouped.entry(*best_block).or_default().push(*account);
+        let mut accounts_grouped = group_accounts_by_mainchain_blocks(
+            chain_config,
+            rpc_client,
+            chain_info.best_block_id,
+            chain_info.best_block_height,
+            account_best_blocks,
+            unused_account_best_block,
+        )
+        .await?;
+
+        // Print the log message informing about the syncing process only once
+        if !print_flag.test_and_set() {
+            _log_on_exit = Some(OnceDestructor::new(move || {
+                log::info!(
+                    "Wallet syncing done to height {}",
+                    chain_info.best_block_height
+                )
+            }));
+
+            let lowest_acc_height =
+                accounts_grouped.first().expect("empty accounts").0.common_block_height;
+            log::info!(
+                "Syncing wallet from height {} to {}",
+                lowest_acc_height,
+                chain_info.best_block_height
+            );
         }
 
-        for ((wallet_block_id, wallet_block_height), accounts) in accounts_grouped
-            .iter()
-            .filter(|(best_block, _accounts)| chain_info.best_block_id != best_block.0)
-        {
-            fetch_and_sync(
-                chain_info.clone(),
-                *wallet_block_id,
-                *wallet_block_height,
-                chain_config,
+        // Sync all account groups together from last to first,
+        // where the last has the lowest block height.
+        // Once a group is synced with the next one, merge them,
+        // and continue with the other groups until there's only one group left containing all the accounts
+        let mut current = accounts_grouped.pop().expect("empty accounts");
+        while let Some(next) = accounts_grouped.pop() {
+            // fetch blocks up to the next account group and merge the two groups
+            current = fetch_and_sync_to_next_group(
+                &mut current,
+                next.0,
+                next.1,
                 rpc_client,
-                &mut |common_block_height: BlockHeight, blocks: Vec<Block>| {
-                    let block_id =
-                        blocks.last().expect("blocks must not be empty").header().block_id();
-                    let new_height = common_block_height.into_int() + blocks.len() as u64;
-
-                    for account in accounts.iter() {
-                        log::debug!(
-                            "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
-                            account,
-                            new_height,
-                            block_id
-                        );
-                            wallet
-                            .scan_blocks(
-                                *account,
-                                common_block_height,
-                                blocks.clone(),
-                                wallet_events,
-                            )
-                            .map_err(ControllerError::WalletError)?;
-                    }
-
-                    Ok(())
-                },
+                wallet,
+                wallet_events,
             )
             .await?;
         }
+
+        // At this point, all accounts have the same best block,
+        // and we sync them all together to the global best block
+        fetch_and_sync(
+            &current,
+            MAX_FETCH_BLOCK_COUNT,
+            rpc_client,
+            wallet,
+            wallet_events,
+        )
+        .await?;
     }
 }
 
-async fn fetch_and_sync<T: NodeInterface>(
-    chain_info: chainstate::ChainInfo,
-    wallet_block_id: Id<GenBlock>,
-    wallet_block_height: BlockHeight,
-    chain_config: &ChainConfig,
+async fn fetch_and_sync_to_next_group<T: NodeInterface>(
+    current: &mut (NextBlockInfo, Vec<AccountType>),
+    next_group_block_info: NextBlockInfo,
+    mut next_group_accounts: Vec<AccountType>,
     rpc_client: &T,
-    wallet_sync: &mut impl FnMut(BlockHeight, Vec<Block>) -> Result<(), ControllerError<T>>,
+    wallet: &mut impl SyncingWallet,
+    wallet_events: &impl WalletEvents,
+) -> Result<(NextBlockInfo, Vec<AccountType>), ControllerError<T>> {
+    let block_to_fetch = (next_group_block_info.common_block_height - current.0.common_block_height)
+        .expect("already sorted")
+        .to_int() as usize;
+    fetch_and_sync(&*current, block_to_fetch, rpc_client, wallet, wallet_events).await?;
+
+    // once the current group accounts are synced up to the next group join them
+    next_group_accounts.append(&mut current.1);
+    Ok((next_group_block_info, next_group_accounts))
+}
+
+async fn fetch_and_sync<T: NodeInterface>(
+    accounts: &(NextBlockInfo, Vec<AccountType>),
+    block_to_fetch: usize,
+    rpc_client: &T,
+    wallet: &mut impl SyncingWallet,
+    wallet_events: &impl WalletEvents,
 ) -> Result<(), ControllerError<T>> {
-    // TODO: use chain trust instead of height
-    utils::ensure!(
-        chain_info.best_block_height >= wallet_block_height,
-        ControllerError::NotEnoughBlockHeight(wallet_block_height, chain_info.best_block_height,)
-    );
     let FetchedBlocks {
         blocks,
         common_block_height,
-    } = fetch_new_blocks(
-        chain_config,
-        rpc_client,
-        chain_info.best_block_id,
-        chain_info.best_block_height,
-        wallet_block_id,
-        wallet_block_height,
-    )
-    .await
-    .map_err(|e| ControllerError::SyncError(e.to_string()))?;
+    } = fetch_next_blocks(&accounts.0, block_to_fetch, rpc_client)
+        .await
+        .map_err(|e| ControllerError::SyncError(e.to_string()))?;
+    let block_id = blocks.last().expect("blocks must not be empty").header().block_id();
+    let new_height = common_block_height.into_int() + blocks.len() as u64;
+    for account in accounts.1.iter() {
+        scan_new_blocks(
+            account,
+            new_height,
+            block_id,
+            wallet,
+            common_block_height,
+            blocks.clone(),
+            wallet_events,
+        )?;
+    }
 
-    wallet_sync(common_block_height, blocks)
+    Ok(())
+}
+
+fn scan_new_blocks<T: NodeInterface>(
+    acc: &AccountType,
+    new_height: u64,
+    block_id: Id<Block>,
+    wallet: &mut impl SyncingWallet,
+    common_block_height: BlockHeight,
+    blocks: Vec<Block>,
+    wallet_events: &impl WalletEvents,
+) -> Result<(), ControllerError<T>> {
+    match acc {
+        AccountType::Account(account) => {
+            log::debug!(
+                "Node chainstate updated, account: {}, block height: {}, tip block id: {}",
+                account,
+                new_height,
+                block_id
+            );
+            wallet
+                .scan_blocks(*account, common_block_height, blocks, wallet_events)
+                .map_err(ControllerError::WalletError)?;
+        }
+        AccountType::UnusedAccount => {
+            log::debug!(
+                "Node chainstate updated, unused account, block height: {}, tip block id: {}",
+                new_height,
+                block_id
+            );
+
+            wallet
+                .scan_blocks_for_unused_account(common_block_height, blocks, wallet_events)
+                .map_err(ControllerError::WalletError)?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn fetch_next_blocks<T: NodeInterface>(
+    current: &NextBlockInfo,
+    block_to_fetch: usize,
+    rpc_client: &T,
+) -> Result<FetchedBlocks, FetchBlockError<T>> {
+    let blocks = rpc_client
+        .get_mainchain_blocks(current.common_block_height.next_height(), block_to_fetch)
+        .await
+        .map_err(FetchBlockError::UnexpectedRpcError)?;
+    match blocks.first() {
+        Some(block) => utils::ensure!(
+            *block.header().prev_block_id() == current.common_block_id,
+            FetchBlockError::InvalidPrevBlockId(
+                *block.header().prev_block_id(),
+                current.common_block_id
+            )
+        ),
+        None => return Err(FetchBlockError::NoNewBlocksFound),
+    }
+
+    Ok(FetchedBlocks {
+        blocks,
+        common_block_height: current.common_block_height,
+    })
+}
+
+/// Group the accounts by the latest fork block from the mainchain.
+/// Meaning: If the account's best block is now not in the mainchain,
+/// this function will return the latest ancestor that's in the mainchain.
+/// and sort them in descending order from highest to lowest
+async fn group_accounts_by_mainchain_blocks<T: NodeInterface>(
+    chain_config: &ChainConfig,
+    rpc_client: &T,
+    node_block_id: Id<GenBlock>,
+    node_block_height: BlockHeight,
+    account_best_blocks: BTreeMap<U31, (Id<GenBlock>, BlockHeight)>,
+    unused_account_best_block: (Id<GenBlock>, BlockHeight),
+) -> Result<Vec<(NextBlockInfo, Vec<AccountType>)>, ControllerError<T>> {
+    let mut accounts_grouped: BTreeMap<(Id<GenBlock>, BlockHeight), Vec<AccountType>> =
+        BTreeMap::new();
+    for (account, best_block) in account_best_blocks.iter() {
+        accounts_grouped
+            .entry(*best_block)
+            .or_default()
+            .push(AccountType::Account(*account));
+    }
+    accounts_grouped
+        .entry(unused_account_best_block)
+        .or_default()
+        .push(AccountType::UnusedAccount);
+
+    let mut accounts_by_common_block = Vec::new();
+    for ((acc_block_id, acc_block_height), acc) in accounts_grouped {
+        let common_block = get_common_block_info(
+            chain_config,
+            rpc_client,
+            node_block_id,
+            node_block_height,
+            acc_block_id,
+            acc_block_height,
+        )
+        .await
+        .map_err(|e| ControllerError::SyncError(e.to_string()))?;
+
+        accounts_by_common_block.push((common_block, acc));
+    }
+
+    // sort by height
+    accounts_by_common_block.sort_by_key(|(info, _acc)| Reverse(info.common_block_height));
+
+    Ok(accounts_by_common_block)
 }
 
 // TODO: For security reasons, the wallet should probably keep track of latest blocks
@@ -211,46 +386,6 @@ async fn get_common_block_info<T: NodeInterface>(
 
     Ok(NextBlockInfo {
         common_block_id,
-        common_block_height,
-    })
-}
-
-// `node_block_height` can't be less than `wallet_block_height` and `node_block_height` can't be equal to `wallet_block_id`
-async fn fetch_new_blocks<T: NodeInterface>(
-    chain_config: &ChainConfig,
-    rpc_client: &T,
-    node_block_id: Id<GenBlock>,
-    node_block_height: BlockHeight,
-    wallet_block_id: Id<GenBlock>,
-    wallet_block_height: BlockHeight,
-) -> Result<FetchedBlocks, FetchBlockError<T>> {
-    let NextBlockInfo {
-        common_block_id,
-        common_block_height,
-    } = get_common_block_info(
-        chain_config,
-        rpc_client,
-        node_block_id,
-        node_block_height,
-        wallet_block_id,
-        wallet_block_height,
-    )
-    .await?;
-
-    let blocks = rpc_client
-        .get_mainchain_blocks(common_block_height.next_height(), MAX_FETCH_BLOCK_COUNT)
-        .await
-        .map_err(FetchBlockError::UnexpectedRpcError)?;
-    match blocks.first() {
-        Some(block) => utils::ensure!(
-            *block.header().prev_block_id() == common_block_id,
-            FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
-        ),
-        None => return Err(FetchBlockError::NoNewBlocksFound),
-    }
-
-    Ok(FetchedBlocks {
-        blocks,
         common_block_height,
     })
 }

@@ -17,29 +17,40 @@ use std::time::Duration;
 
 use common::{
     chain::Transaction,
-    primitives::{semver::SemVer, user_agent::UserAgent, Id},
+    primitives::{semver::SemVer, time::Time, user_agent::UserAgent, Id},
 };
 use p2p_types::socket_address::SocketAddress;
 use serialization::{Decode, Encode};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
+    error::P2pError,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
         HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
         TransactionResponse,
     },
     net::types::services::Services,
-    protocol::NetworkProtocol,
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 #[derive(Debug)]
 pub enum Command {
-    Connect { address: SocketAddress },
-    Accept { peer_id: PeerId },
-    Disconnect { peer_id: PeerId },
-    SendMessage { peer: PeerId, message: Message },
+    Connect {
+        address: SocketAddress,
+        local_services_override: Option<Services>,
+    },
+    Accept {
+        peer_id: PeerId,
+    },
+    Disconnect {
+        peer_id: PeerId,
+    },
+    SendMessage {
+        peer_id: PeerId,
+        message: Message,
+    },
 }
 
 /// Random nonce sent in outbound handshake.
@@ -62,17 +73,22 @@ impl P2pTimestamp {
     pub fn as_duration_since_epoch(&self) -> Duration {
         Duration::from_secs(self.0)
     }
+
+    pub fn from_time(time: Time) -> Self {
+        Self::from_duration_since_epoch(time.as_duration_since_epoch())
+    }
 }
 
+/// Events sent by Peer to Backend
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        protocol: NetworkProtocol,
+        protocol_version: SupportedProtocolVersion,
         network: [u8; 4],
-        services: Services,
+        common_services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
         receiver_address: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
@@ -83,25 +99,32 @@ pub enum PeerEvent {
     /// Connection closed to remote
     ConnectionClosed,
 
+    /// Handshake failed
+    HandshakeFailed { error: P2pError },
+
     /// Message received from remote
     MessageReceived { message: PeerManagerMessage },
+
+    /// Protocol violation
+    Misbehaved { error: P2pError },
 }
 
-/// Events sent by the default_backend backend to peers
+/// Events sent by Backend to Peer
 #[derive(Debug)]
-pub enum Event {
-    Accepted { sync_tx: Sender<SyncMessage> },
+pub enum BackendEvent {
+    Accepted { sync_msg_tx: Sender<SyncMessage> },
     SendMessage(Box<Message>),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
+    #[codec(index = 0)]
     Hello {
-        protocol: NetworkProtocol,
+        protocol_version: ProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -111,12 +134,13 @@ pub enum HandshakeMessage {
         /// Random nonce that is only used to detect and drop self-connects
         handshake_nonce: HandshakeNonce,
     },
+    #[codec(index = 1)]
     HelloAck {
-        protocol: NetworkProtocol,
+        protocol_version: ProtocolVersion,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
-        version: SemVer,
+        software_version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -180,6 +204,61 @@ impl From<SyncMessage> for Message {
             SyncMessage::NewTransaction(id) => Message::NewTransaction(id),
             SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
             SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
+        }
+    }
+}
+
+/// The main purpose of this message type is to simplify conversion from `Message`
+/// to `HandshakeMessage`/`PeerManagerMessage`/`SyncMessage`.
+#[derive(Debug)]
+pub enum CategorizedMessage {
+    Handshake(HandshakeMessage),
+    PeerManagerMessage(PeerManagerMessage),
+    SyncMessage(SyncMessage),
+}
+
+impl Message {
+    pub fn categorize(self) -> CategorizedMessage {
+        match self {
+            Message::Handshake(msg) => CategorizedMessage::Handshake(msg),
+
+            Message::PingRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::PingRequest(msg))
+            }
+            Message::PingResponse(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::PingResponse(msg))
+            }
+            Message::AnnounceAddrRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AnnounceAddrRequest(msg))
+            }
+            Message::AddrListRequest(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListRequest(msg))
+            }
+            Message::AddrListResponse(msg) => {
+                CategorizedMessage::PeerManagerMessage(PeerManagerMessage::AddrListResponse(msg))
+            }
+
+            Message::NewTransaction(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::NewTransaction(msg))
+            }
+            Message::HeaderListRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::HeaderListRequest(msg))
+            }
+            Message::HeaderList(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::HeaderList(msg))
+            }
+            Message::BlockListRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::BlockListRequest(msg))
+            }
+            Message::BlockResponse(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::BlockResponse(msg))
+            }
+            Message::TransactionRequest(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::TransactionRequest(msg))
+            }
+            Message::TransactionResponse(msg) => {
+                CategorizedMessage::SyncMessage(SyncMessage::TransactionResponse(msg))
+            }
         }
     }
 }

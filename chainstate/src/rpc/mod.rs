@@ -17,14 +17,19 @@
 
 mod types;
 
-use std::io::{Read, Write};
+use std::{
+    convert::Infallible,
+    io::{Read, Write},
+    sync::Arc,
+};
 
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
+    address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        PoolId, SignedTransaction, Transaction,
+        ChainConfig, DelegationId, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -76,6 +81,14 @@ trait ChainstateRpc {
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
 
+    /// Invalidate the specified block and its descendants.
+    #[method(name = "invalidate_block")]
+    async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()>;
+
+    /// Reset failure flags for the specified block and its descendants.
+    #[method(name = "reset_block_failure_flags")]
+    async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()>;
+
     /// Get block height in main chain
     #[method(name = "block_height_in_main_chain")]
     async fn block_height_in_main_chain(
@@ -101,6 +114,13 @@ trait ChainstateRpc {
 
     #[method(name = "stake_pool_pledge")]
     async fn stake_pool_pledge(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
+
+    #[method(name = "delegation_share")]
+    async fn delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> RpcResult<Option<Amount>>;
 
     /// Get token information
     #[method(name = "token_info")]
@@ -153,7 +173,19 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await,
         )?;
         let rpc_blk = both.map(|(block, block_index)| RpcBlock::new(block, block_index));
-        Ok(rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string()))
+        let result = rpc_blk.map(JsonEncoded::new).map(|blk| blk.to_string());
+
+        let chain_config: Arc<ChainConfig> = rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = Arc::clone(this.get_chain_config());
+                Ok::<_, Infallible>(chain_config)
+            })
+            .await,
+        )?;
+
+        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
+
+        Ok(result)
     }
 
     async fn get_transaction(
@@ -169,7 +201,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let tx: Option<SignedTransaction> =
             rpc::handle_result(self.call(move |this| this.get_transaction(&id)).await)?;
         let rpc_tx = tx.map(RpcSignedTransaction::new);
-        Ok(rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string()))
+
+        let chain_config: Arc<ChainConfig> = rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = Arc::clone(this.get_chain_config());
+                Ok::<_, Infallible>(chain_config)
+            })
+            .await,
+        )?;
+
+        let result = rpc_tx.map(JsonEncoded::new).map(|tx| tx.to_string());
+
+        let result: Option<String> = result.map(|res| dehexify_all_addresses(&chain_config, &res));
+
+        Ok(result)
     }
 
     async fn get_mainchain_blocks(
@@ -190,6 +235,14 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
         rpc::handle_result(res)
+    }
+
+    async fn invalidate_block(&self, id: Id<Block>) -> RpcResult<()> {
+        rpc::handle_result(self.call_mut(move |this| this.invalidate_block(&id)).await)
+    }
+
+    async fn reset_block_failure_flags(&self, id: Id<Block>) -> RpcResult<()> {
+        rpc::handle_result(self.call_mut(move |this| this.reset_block_failure_flags(&id)).await)
     }
 
     async fn block_height_in_main_chain(
@@ -227,6 +280,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                     .map(|opt| opt.map(|data| data.pledge_amount()))
             })
             .await,
+        )
+    }
+
+    async fn delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> RpcResult<Option<Amount>> {
+        rpc::handle_result(
+            self.call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+                .await,
         )
     }
 

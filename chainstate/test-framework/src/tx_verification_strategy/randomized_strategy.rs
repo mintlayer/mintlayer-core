@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cell::RefCell, collections::VecDeque};
+use std::collections::VecDeque;
 
 use chainstate::{
     tx_verification_strategy_utils::{
@@ -55,13 +55,13 @@ use utxo::UtxosView;
 /// ```
 ///
 pub struct RandomizedTransactionVerificationStrategy {
-    rng: RefCell<Box<dyn RngCore + Send>>,
+    rng: std::sync::Mutex<Box<dyn RngCore + Send>>,
 }
 
 impl RandomizedTransactionVerificationStrategy {
     pub fn new(seed: Seed) -> Self {
         Self {
-            rng: RefCell::new(Box::new(make_seedable_rng(seed))),
+            rng: std::sync::Mutex::new(Box::new(make_seedable_rng(seed))),
         }
     }
 }
@@ -159,7 +159,7 @@ impl RandomizedTransactionVerificationStrategy {
         let mut total_fees = Amount::ZERO;
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
-            if self.rng.borrow_mut().gen::<bool>() {
+            if self.rng.lock().unwrap().gen::<bool>() {
                 // derive a new cache
                 let (consumed_cache, fee, new_tx_index) = self.connect_with_derived(
                     &tx_verifier,
@@ -227,7 +227,7 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fees = Amount::ZERO;
         while tx_num < block.transactions().len() {
-            if self.rng.borrow_mut().gen::<bool>() {
+            if self.rng.lock().unwrap().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
                 break;
             } else {
@@ -270,7 +270,7 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
-            if self.rng.borrow_mut().gen::<bool>() {
+            if self.rng.lock().unwrap().gen::<bool>() {
                 // derive a new cache
                 let (consumed_cache, new_tx_index) =
                     self.disconnect_with_derived(&tx_verifier, block, tx_num)?;
@@ -310,7 +310,7 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         while tx_num >= 0 {
-            if self.rng.borrow_mut().gen::<bool>() {
+            if self.rng.lock().unwrap().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
                 break;
             } else {

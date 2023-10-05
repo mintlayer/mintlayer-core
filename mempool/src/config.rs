@@ -17,8 +17,6 @@ use std::time::Duration;
 
 use common::primitives::BlockDistance;
 
-pub type Time = Duration;
-
 /// Mempool size configuration
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub struct MempoolMaxSize(usize);
@@ -50,7 +48,7 @@ pub const ENABLE_RBF: bool = false;
 // Number of times we try to add transaction if the tip moves during validation
 pub const MAX_TX_ADDITION_ATTEMPTS: usize = 3;
 
-pub const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
+pub const ROLLING_FEE_BASE_HALFLIFE: Duration = Duration::new(60 * 60 * 12, 1);
 
 pub const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
 
@@ -61,16 +59,16 @@ pub const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
 
 pub const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
 
-pub const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
+pub const ROLLING_FEE_DECAY_INTERVAL: Duration = Duration::new(10, 0);
 
 pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 
-pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Time = Duration::from_secs(5 * 10);
+pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Duration = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
 
 pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;
 
-pub const FUTURE_TIMELOCK_TOLERANCE_SECS: Time = Duration::from_secs(5 * 60);
+pub const FUTURE_TIMELOCK_TOLERANCE: Duration = Duration::from_secs(5 * 60);
 
 pub const FUTURE_TIMELOCK_TOLERANCE_BLOCKS: BlockDistance = BlockDistance::new(5);

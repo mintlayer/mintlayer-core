@@ -15,7 +15,7 @@
 
 pub async fn run() -> anyhow::Result<()> {
     let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
+    logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
     let node = node_lib::setup(opts).await?;
     node.main().await;
@@ -25,6 +25,10 @@ pub async fn run() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() {
     utils::rust_backtrace::enable();
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
 
     run().await.unwrap_or_else(|err| {
         eprintln!("Mintlayer node launch failed: {err:?}");

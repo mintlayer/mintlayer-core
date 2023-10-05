@@ -54,10 +54,10 @@ pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {
     match output {
-        TxState::Confirmed(_, _) => UtxoState::Confirmed,
+        TxState::Confirmed(_, _, _) => UtxoState::Confirmed,
         TxState::Conflicted(_) => UtxoState::Conflicted,
-        TxState::InMempool => UtxoState::InMempool,
-        TxState::Inactive => UtxoState::Inactive,
+        TxState::InMempool(_) => UtxoState::InMempool,
+        TxState::Inactive(_) => UtxoState::Inactive,
         TxState::Abandoned => UtxoState::Abandoned,
     }
 }

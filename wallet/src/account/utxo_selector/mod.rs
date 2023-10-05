@@ -23,6 +23,7 @@ use common::{
     primitives::{signed_amount::SignedAmount, Amount},
 };
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
+use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;
 
@@ -152,7 +153,9 @@ impl SelectionResult {
 pub enum UtxoSelectorError {
     #[error("No solution found")]
     NoSolutionFound,
-    #[error("Not enough funds")]
+    #[error("No available UTXOs")]
+    NoUtxos,
+    #[error("Not enough funds got: {0:?}, requested: {1:?}")]
     NotEnoughFunds(Amount, Amount),
     #[error("The inputs size exceeds the maximum weight.")]
     MaxWeightExceeded,
@@ -634,18 +637,35 @@ fn select_coins_bnb(
     Ok(result)
 }
 
-pub fn select_coins(
-    mut utxo_pool: Vec<OutputGroup>,
+fn select_all_coins(
+    utxo_pool: Vec<OutputGroup>,
     selection_target: Amount,
     pay_fees: PayFee,
     cost_of_change: Amount,
 ) -> Result<SelectionResult, UtxoSelectorError> {
-    // TODO: set some max weight
-    let max_weight = 999;
-    let mut rng = make_pseudo_rng();
+    let mut result = SelectionResult::new(selection_target);
+    for utxo in utxo_pool {
+        result.add_input(&utxo, pay_fees)?;
+    }
+    result.compute_and_set_waste(cost_of_change, cost_of_change, cost_of_change, pay_fees)?;
 
-    let mut results = vec![];
-    let mut errors = vec![];
+    Ok(result)
+}
+
+#[derive(Clone, Copy)]
+pub enum CoinSelectionAlgo {
+    UsePreselected,
+    Randomize,
+}
+
+pub fn select_coins(
+    utxo_pool: Vec<OutputGroup>,
+    selection_target: Amount,
+    pay_fees: PayFee,
+    cost_of_change: Amount,
+    coin_selection_algo: CoinSelectionAlgo,
+) -> Result<SelectionResult, UtxoSelectorError> {
+    ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
 
     let total_available_value = utxo_pool
         .iter()
@@ -653,12 +673,33 @@ pub fn select_coins(
         .sum::<Option<Amount>>()
         .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
-    if total_available_value < selection_target {
-        return Err(UtxoSelectorError::NotEnoughFunds(
-            total_available_value,
-            selection_target,
-        ));
+    ensure!(
+        total_available_value >= selection_target,
+        UtxoSelectorError::NotEnoughFunds(total_available_value, selection_target,)
+    );
+
+    match coin_selection_algo {
+        CoinSelectionAlgo::UsePreselected => {
+            select_all_coins(utxo_pool, selection_target, pay_fees, cost_of_change)
+        }
+        CoinSelectionAlgo::Randomize => {
+            select_random_coins(utxo_pool, selection_target, cost_of_change, pay_fees)
+        }
     }
+}
+
+fn select_random_coins(
+    mut utxo_pool: Vec<OutputGroup>,
+    selection_target: Amount,
+    cost_of_change: Amount,
+    pay_fees: PayFee,
+) -> Result<SelectionResult, UtxoSelectorError> {
+    // TODO: set some max weight
+    let max_weight = 999;
+    let mut rng = make_pseudo_rng();
+
+    let mut results = vec![];
+    let mut errors = vec![];
 
     match select_coins_srd(
         &utxo_pool,

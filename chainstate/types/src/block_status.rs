@@ -65,7 +65,7 @@ impl BlockStatus {
 
     /// Return true, if the block hasn't been marked as invalid *yet*.
     pub fn is_ok(&self) -> bool {
-        !(self.validation_failed() || self.has_invalid_parent())
+        self.get_bits(Self::bit_range_of_range(FAIL_BITS_RANGE)) == 0
     }
 
     /// Return true, if the block is actually valid.
@@ -89,6 +89,20 @@ impl BlockStatus {
         self.get_field(BlockStatusBitArea::InvalidParentBit) != 0
     }
 
+    pub fn set_explicitly_invalidated(&mut self) {
+        self.set_field(BlockStatusBitArea::ExplicitlyInvalidatedBit, 1)
+    }
+
+    pub fn is_explicitly_invalidated(&self) -> bool {
+        self.get_field(BlockStatusBitArea::ExplicitlyInvalidatedBit) != 0
+    }
+
+    pub fn with_cleared_fail_bits(&self) -> BlockStatus {
+        let mut result = *self;
+        result.set_bits(Self::bit_range_of_range(FAIL_BITS_RANGE), 0);
+        result
+    }
+
     #[cfg(test)]
     fn reserved_bits(&self) -> u64 {
         self.get_field(BlockStatusBitArea::ReservedArea)
@@ -98,32 +112,46 @@ impl BlockStatus {
         bits as usize..bits.next().expect("Can't determine field's end") as usize
     }
 
-    fn get_field(&self, bits: BlockStatusBitArea) -> u64 {
-        let range = Self::bit_range_of(bits);
-        let lsb_mask = (1 << range.len()) - 1;
+    fn bit_range_of_range(range: Range<BlockStatusBitArea>) -> Range<usize> {
+        range.start as usize..range.end as usize
+    }
 
-        (self.0 >> range.start) & lsb_mask
+    fn get_field(&self, bits: BlockStatusBitArea) -> u64 {
+        self.get_bits(Self::bit_range_of(bits))
     }
 
     fn set_field(&mut self, bits: BlockStatusBitArea, val: u64) {
-        let range = Self::bit_range_of(bits);
-        let lsb_mask = (1 << range.len()) - 1;
-        let mask = lsb_mask << range.start;
+        self.set_bits(Self::bit_range_of(bits), val);
+    }
 
-        assert!(val <= lsb_mask);
-        self.0 = (self.0 & !mask) | (val << range.start);
+    fn get_bits(&self, bit_range: Range<usize>) -> u64 {
+        assert!(!bit_range.is_empty() && bit_range.end <= 64);
+
+        if bit_range.len() == 64 {
+            self.0
+        } else {
+            let lsb_mask = (1 << bit_range.len()) - 1;
+            (self.0 >> bit_range.start) & lsb_mask
+        }
+    }
+
+    fn set_bits(&mut self, bit_range: Range<usize>, val: u64) {
+        assert!(!bit_range.is_empty() && bit_range.end <= 64);
+
+        self.0 = if bit_range.len() == 64 {
+            val
+        } else {
+            let lsb_mask = (1 << bit_range.len()) - 1;
+            let mask = lsb_mask << bit_range.start;
+            assert!(val <= lsb_mask);
+            (self.0 & !mask) | (val << bit_range.start)
+        };
     }
 }
 
 impl std::fmt::Display for BlockStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "BlockStatus(last_valid_stage: {}, validation_failed: {}, has_invalid_parent: {})",
-            self.last_valid_stage(),
-            self.validation_failed(),
-            self.has_invalid_parent()
-        )
+        write!(f, "BlockStatus({:#b}", self.0)
     }
 }
 
@@ -135,14 +163,20 @@ enum BlockStatusBitArea {
     ValidationStage = 0,
     ValidationFailedBit = 8,
     InvalidParentBit,
+    ExplicitlyInvalidatedBit,
     ReservedArea,
     End = 64,
 }
 
+const FAIL_BITS_RANGE: Range<BlockStatusBitArea> = Range::<BlockStatusBitArea> {
+    start: BlockStatusBitArea::ValidationFailedBit,
+    end: BlockStatusBitArea::ReservedArea,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::panic::catch_unwind;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
 
     #[test]
     fn test_bit_range_of() {
@@ -159,11 +193,100 @@ mod tests {
             9..10
         );
         assert_eq!(
+            BlockStatus::bit_range_of(BlockStatusBitArea::ExplicitlyInvalidatedBit),
+            10..11
+        );
+        assert_eq!(
             BlockStatus::bit_range_of(BlockStatusBitArea::ReservedArea),
-            10..64
+            11..64
         );
 
         assert!(catch_unwind(|| BlockStatus::bit_range_of(BlockStatusBitArea::End)).is_err());
+    }
+
+    #[test]
+    fn test_bit_range_of_range() {
+        let small_range = Range::<BlockStatusBitArea> {
+            start: BlockStatusBitArea::ValidationFailedBit,
+            end: BlockStatusBitArea::ReservedArea,
+        };
+
+        assert_eq!(BlockStatus::bit_range_of_range(small_range), 8..11);
+
+        let full_range = Range::<BlockStatusBitArea> {
+            start: BlockStatusBitArea::ValidationStage,
+            end: BlockStatusBitArea::End,
+        };
+
+        assert_eq!(BlockStatus::bit_range_of_range(full_range), 0..64);
+    }
+
+    #[allow(clippy::unusual_byte_groupings)]
+    #[test]
+    fn test_get_set_bits() {
+        let mut status =
+            BlockStatus(0b11110000_11001100_10101010_11100111_00011000_01010101_00110011_00001111);
+        assert_eq!(
+            status.get_bits(0..64),
+            0b11110000_11001100_10101010_11100111_00011000_01010101_00110011_00001111
+        );
+
+        assert_eq!(
+            status.get_bits(0..33),
+            0b1_00011000_01010101_00110011_00001111
+        );
+
+        assert_eq!(
+            status.get_bits(31..64),
+            0b11110000_11001100_10101010_11100111_0
+        );
+
+        assert_eq!(
+            status.get_bits(0..64),
+            0b11110000_11001100_10101010_11100111_00011000_01010101_00110011_00001111
+        );
+
+        // Get empty range
+        assert!(catch_unwind(|| status.get_bits(31..31)).is_err());
+
+        // Get invalid range
+        assert!(catch_unwind(|| status.get_bits(31..65)).is_err());
+
+        status.set_bits(0..25, 0b1_11111111_11111111_11111111);
+        assert_eq!(
+            status.0,
+            0b11110000_11001100_10101010_11100111_00011001_11111111_11111111_11111111
+        );
+
+        status.set_bits(20..32, 0b10101010_1010);
+        assert_eq!(
+            status.0,
+            0b11110000_11001100_10101010_11100111_10101010_10101111_11111111_11111111
+        );
+
+        // Set empty range
+        assert!(catch_unwind(AssertUnwindSafe(|| status.set_bits(31..31, 0))).is_err());
+        assert_eq!(
+            status.0,
+            0b11110000_11001100_10101010_11100111_10101010_10101111_11111111_11111111
+        );
+
+        // Set invalid range
+        assert!(catch_unwind(AssertUnwindSafe(|| status.set_bits(31..65, 0))).is_err());
+        assert_eq!(
+            status.0,
+            0b11110000_11001100_10101010_11100111_10101010_10101111_11111111_11111111
+        );
+
+        // Set a value that is too big for the range.
+        assert!(catch_unwind(AssertUnwindSafe(
+            || status.set_bits(0..25, 0b11_11111111_11111111_11111111)
+        ))
+        .is_err());
+        assert_eq!(
+            status.0,
+            0b11110000_11001100_10101010_11100111_10101010_10101111_11111111_11111111
+        );
     }
 
     #[allow(clippy::unusual_byte_groupings)]
@@ -179,8 +302,12 @@ mod tests {
         assert_eq!(status.get_field(BlockStatusBitArea::ValidationFailedBit), 0);
         assert_eq!(status.get_field(BlockStatusBitArea::InvalidParentBit), 1);
         assert_eq!(
+            status.get_field(BlockStatusBitArea::ExplicitlyInvalidatedBit),
+            0
+        );
+        assert_eq!(
             status.get_field(BlockStatusBitArea::ReservedArea),
-            0b11110000_101010
+            0b11110000_10101
         );
 
         let status = BlockStatus(pattern << 1);
@@ -192,8 +319,12 @@ mod tests {
         assert_eq!(status.get_field(BlockStatusBitArea::ValidationFailedBit), 1);
         assert_eq!(status.get_field(BlockStatusBitArea::InvalidParentBit), 0);
         assert_eq!(
+            status.get_field(BlockStatusBitArea::ExplicitlyInvalidatedBit),
+            1
+        );
+        assert_eq!(
             status.get_field(BlockStatusBitArea::ReservedArea),
-            0b11110000_1010101
+            0b11110000_101010
         );
     }
 
@@ -212,13 +343,16 @@ mod tests {
         status.set_field(BlockStatusBitArea::InvalidParentBit, 1);
         assert_eq!(status.0, 0b11_11001100);
 
+        status.set_field(BlockStatusBitArea::ExplicitlyInvalidatedBit, 1);
+        assert_eq!(status.0, 0b111_11001100);
+
         status.set_field(
             BlockStatusBitArea::ReservedArea,
-            0b10101010_10101010_10101010_10101010_10101010_10101010_101010,
+            0b10101010_10101010_10101010_10101010_10101010_10101010_10101,
         );
         assert_eq!(
             status.0,
-            0b10101010_10101010_10101010_10101010_10101010_10101010_101010_11_11001100
+            0b10101010_10101010_10101010_10101010_10101010_10101010_10101_111_11001100
         );
     }
 
@@ -245,10 +379,16 @@ mod tests {
 
         assert!(catch_unwind(|| {
             let mut status = BlockStatus(0);
+            status.set_field(BlockStatusBitArea::ExplicitlyInvalidatedBit, 2);
+        })
+        .is_err());
+
+        assert!(catch_unwind(|| {
+            let mut status = BlockStatus(0);
             status.set_field(
                 BlockStatusBitArea::ReservedArea,
                 // This is the value from test_set_field but with an additional 1 an the end.
-                0b10101010_10101010_10101010_10101010_10101010_10101010_1010101,
+                0b10101010_10101010_10101010_10101010_10101010_10101010_101011,
             );
         })
         .is_err());
@@ -262,6 +402,7 @@ mod tests {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
     }
 
@@ -276,6 +417,7 @@ mod tests {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
     }
 
@@ -292,6 +434,7 @@ mod tests {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
 
         status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
@@ -303,6 +446,7 @@ mod tests {
         assert!(status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
     }
 
@@ -318,6 +462,7 @@ mod tests {
         assert!(!status.is_fully_valid());
         assert!(status.validation_failed());
         assert!(!status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
     }
 
@@ -333,6 +478,60 @@ mod tests {
         assert!(!status.is_fully_valid());
         assert!(!status.validation_failed());
         assert!(status.has_invalid_parent());
+        assert!(!status.is_explicitly_invalidated());
         assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_set_explicitly_invalidated() {
+        let mut status = BlockStatus::new_fully_checked();
+        status.set_explicitly_invalidated();
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(!status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(!status.validation_failed());
+        assert!(!status.has_invalid_parent());
+        assert!(status.is_explicitly_invalidated());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_all_fail_bits() {
+        let mut status = BlockStatus::new_fully_checked();
+        status.set_validation_failed();
+        status.set_has_invalid_parent();
+        status.set_explicitly_invalidated();
+        assert_eq!(
+            status.last_valid_stage(),
+            BlockValidationStage::FullyChecked
+        );
+        assert!(!status.is_ok());
+        assert!(!status.is_fully_valid());
+        assert!(status.validation_failed());
+        assert!(status.has_invalid_parent());
+        assert!(status.is_explicitly_invalidated());
+        assert_eq!(status.reserved_bits(), 0);
+    }
+
+    #[test]
+    fn test_with_cleared_fail_bits() {
+        let mut status = BlockStatus::new_fully_checked();
+        status.set_validation_failed();
+        status.set_has_invalid_parent();
+        status.set_explicitly_invalidated();
+
+        assert!(!status.is_ok());
+        assert!(status.validation_failed());
+        assert!(status.has_invalid_parent());
+        assert!(status.is_explicitly_invalidated());
+
+        let new_status = status.with_cleared_fail_bits();
+        assert!(new_status.is_ok());
+        assert!(!new_status.validation_failed());
+        assert!(!new_status.has_invalid_parent());
+        assert!(!new_status.is_explicitly_invalidated());
     }
 }

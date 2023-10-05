@@ -23,7 +23,7 @@ use crate::{
 use super::{merkle_tools::MerkleHasher, BlockBody};
 
 fn tx_hasher(tx: &SignedTransaction) -> H256 {
-    tx.transaction().get_id().get()
+    tx.transaction().get_id().to_hash()
 }
 
 fn tx_witness_hasher(tx: &SignedTransaction) -> H256 {

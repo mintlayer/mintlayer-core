@@ -141,6 +141,14 @@ impl Amount {
             atoms_str.parse::<UnsignedIntType>().ok().map(|v| Amount { val: v })
         }
     }
+
+    pub fn abs_diff(self, other: Amount) -> Amount {
+        if self > other {
+            (self - other).expect("cannot be negative")
+        } else {
+            (other - self).expect("cannot be negative")
+        }
+    }
 }
 
 impl std::ops::Add for Amount {
@@ -285,6 +293,10 @@ mod tests {
     use crate::primitives::signed_amount::SignedIntType;
 
     use super::*;
+
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[test]
     fn creation() {
@@ -435,6 +447,30 @@ mod tests {
         assert_eq!(y >> 2, Some(Amount { val: 32 }));
         assert_eq!(y >> 4, Some(Amount { val: 8 }));
         assert_eq!(y >> 6, Some(Amount { val: 2 }));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn abs_diff_never_fails(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let a = Amount::from_atoms(rng.gen());
+        let b = Amount::from_atoms(rng.gen());
+        let _ = a.abs_diff(b);
+    }
+
+    #[rstest]
+    #[case(2, 0, 2)]
+    #[case(0, 2, 2)]
+    #[case(221, 117, 104)]
+    #[case(117, 221, 104)]
+    #[case(u128::MAX, 1, u128::MAX-1)]
+    #[case(1, u128::MAX, u128::MAX-1)]
+    fn abs_diff_check(#[case] a: u128, #[case] b: u128, #[case] result: u128) {
+        assert_eq!(
+            Amount::from_atoms(a).abs_diff(Amount::from_atoms(b)),
+            Amount::from_atoms(result)
+        );
     }
 
     #[test]

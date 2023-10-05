@@ -19,13 +19,12 @@ use crate::{
     chain::{
         config::{
             create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
-            emission_schedule, ChainConfig, ChainType, EmissionSchedule, EmissionScheduleFn,
-            EmissionScheduleTabular,
+            emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        pos::get_initial_randomness,
+        create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
-        UpgradeVersion,
+        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        PoSConsensusVersion, PoWChainConfig, UpgradeVersion,
     },
     primitives::{
         id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, Id, Idable, H256,
@@ -62,7 +61,6 @@ impl ChainType {
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
-                let pos_config = crate::chain::create_testnet_pos_config();
                 let upgrades = vec![
                     (
                         BlockHeight::new(0),
@@ -71,11 +69,18 @@ impl ChainType {
                     (
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: crate::chain::pos::initial_difficulty(
-                                ChainType::Testnet,
-                            )
-                            .into(),
-                            config: pos_config,
+                            initial_difficulty: Some(
+                                pos_initial_difficulty(ChainType::Testnet).into(),
+                            ),
+                            config: create_testnet_pos_config(PoSConsensusVersion::V0),
+                        }),
+                    ),
+                    (
+                        // TODO: decide on proper height
+                        BlockHeight::new(9999999999),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: None,
+                            config: create_testnet_pos_config(PoSConsensusVersion::V1),
                         }),
                     ),
                 ];
@@ -92,7 +97,6 @@ impl ChainType {
 enum EmissionScheduleInit {
     Mainnet,
     Table(EmissionScheduleTabular),
-    Fn(Arc<EmissionScheduleFn>),
 }
 
 #[derive(Clone)]
@@ -117,7 +121,7 @@ pub struct Builder {
     magic_bytes: [u8; 4],
     p2p_port: u16,
     max_future_block_time_offset: Duration,
-    version: SemVer,
+    software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     coin_ticker: &'static str,
@@ -151,11 +155,11 @@ impl Builder {
         Self {
             chain_type,
             bip44_coin_type: chain_type.default_bip44_coin_type(),
-            coin_decimals: Mlt::DECIMALS,
-            coin_ticker: Mlt::TICKER,
+            coin_decimals: CoinUnit::DECIMALS,
+            coin_ticker: chain_type.coin_ticker(),
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
-            version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
+            software_version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
                 .expect("invalid CARGO_PKG_VERSION value"),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
@@ -200,7 +204,7 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
-            version,
+            software_version,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -227,13 +231,14 @@ impl Builder {
             min_stake_pool_pledge,
         } = self;
 
-        let emission_schedule = match emission_schedule {
-            EmissionScheduleInit::Fn(f) => EmissionSchedule::from_arc_fn(f),
-            EmissionScheduleInit::Table(t) => t.schedule(),
+        let emission_table = match emission_schedule {
+            EmissionScheduleInit::Table(t) => t,
             EmissionScheduleInit::Mainnet => {
-                emission_schedule::mainnet_schedule_table(target_block_spacing).schedule()
+                emission_schedule::mainnet_schedule_table(target_block_spacing)
             }
         };
+        let final_supply = emission_table.final_supply();
+        let emission_schedule = emission_table.schedule();
 
         let genesis_block = match genesis_block {
             GenesisBlockInit::Mainnet => create_mainnet_genesis(),
@@ -278,7 +283,7 @@ impl Builder {
             coin_ticker,
             magic_bytes,
             p2p_port,
-            version,
+            software_version,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -293,6 +298,7 @@ impl Builder {
             genesis_block,
             height_checkpoint_data,
             emission_schedule,
+            final_supply,
             net_upgrades,
             token_min_issuance_fee,
             token_max_uri_len,
@@ -326,7 +332,7 @@ impl Builder {
     builder_method!(magic_bytes: [u8; 4]);
     builder_method!(p2p_port: u16);
     builder_method!(max_future_block_time_offset: Duration);
-    builder_method!(version: SemVer);
+    builder_method!(software_version: SemVer);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
     builder_method!(max_block_header_size: usize);
@@ -373,12 +379,6 @@ impl Builder {
     /// Initialize an emission schedule using a table
     pub fn emission_schedule_tabular(mut self, es: EmissionScheduleTabular) -> Self {
         self.emission_schedule = EmissionScheduleInit::Table(es);
-        self
-    }
-
-    /// Initialize an emission schedule using a function
-    pub fn emission_schedule_fn(mut self, f: Box<EmissionScheduleFn>) -> Self {
-        self.emission_schedule = EmissionScheduleInit::Fn(f.into());
         self
     }
 }

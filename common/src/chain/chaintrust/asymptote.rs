@@ -96,7 +96,9 @@ pub fn calculate_block_proof(timestamp_diff: u64) -> Uint256 {
     let block_weight = Uint256::from(get_weight_for_block());
     let empty_time_slots_weight = Uint256::from(empty_time_slots_weight);
 
-    block_weight - empty_time_slots_weight
+    block_weight
+        .checked_sub(&empty_time_slots_weight)
+        .expect("Checked above; cannot fail")
 }
 
 #[cfg(test)]
@@ -171,7 +173,7 @@ mod tests {
         // Given that the maximum block weight is 1*SCALING_FACTOR,
         // and it only goes down when there are empty time-slots in between,
         // the maximum chain trust is the following:
-        let max_chain_trust = max_block_height * single_block_weight;
+        let max_chain_trust = (max_block_height * single_block_weight).unwrap();
 
         // There should not be any overflow to ensure that the chain trust is always less than the maximum possible value.
         assert!(max_block_height < max_chain_trust);

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use common::chain::SignedTransaction;
-use mempool::TxStatus;
 use p2p_types::{
     bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress,
     socket_address::SocketAddress,
@@ -68,7 +67,7 @@ trait P2pRpc {
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus>;
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -123,7 +122,7 @@ impl P2pRpcServer for super::P2pHandle {
         rpc::handle_result(res)
     }
 
-    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<TxStatus> {
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.submit_transaction(tx.take())).await;
         rpc::handle_result(res)
     }

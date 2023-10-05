@@ -18,22 +18,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
+use p2p_test_utils::P2pBasicTestTimeGetter;
+use p2p_types::{ip_or_socket_address::IpOrSocketAddress, socket_address::SocketAddress};
+
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
-    net::types::{services::Service, Role},
+    net::types::{services::Service, PeerRole},
     peer_manager::tests::{get_connected_peers, run_peer_manager},
-    protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -71,7 +71,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.try_connect(remote_addr).unwrap();
+    peer_manager.try_connect(remote_addr, None).unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -82,6 +82,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_peer_manager_connect_tcp() {
     let transport = TestTransportTcp::make_transport();
@@ -96,6 +97,7 @@ async fn test_peer_manager_connect_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_peer_manager_connect_tcp_noise() {
     let transport = TestTransportNoise::make_transport();
@@ -129,7 +131,7 @@ where
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0];
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         loop {
             assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
@@ -137,7 +139,7 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
-    pm1.heartbeat().await;
+    pm1.heartbeat();
 
     assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(
@@ -146,17 +148,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_tcp() {
     test_auto_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_channels() {
     test_auto_connect::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn test_auto_connect_noise() {
     test_auto_connect::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -184,11 +189,13 @@ where
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_tcp() {
     connect_outbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_channels() {
     connect_outbound_same_network::<
@@ -198,6 +205,7 @@ async fn connect_outbound_same_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_same_network_noise() {
     connect_outbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -230,6 +238,7 @@ where
     assert_ne!(peer_info.network, *config.magic_bytes());
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_tcp() {
     connect_outbound_different_network::<
@@ -239,6 +248,7 @@ async fn connect_outbound_different_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_channels() {
     connect_outbound_different_network::<
@@ -248,6 +258,7 @@ async fn connect_outbound_different_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_outbound_different_network_noise() {
     connect_outbound_different_network::<
@@ -277,9 +288,10 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    pm2.try_accept_connection(address, Role::Inbound, peer_info, None).unwrap();
+    pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None).unwrap();
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_tcp() {
     connect_inbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
@@ -287,6 +299,7 @@ async fn connect_inbound_same_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_channel() {
     connect_inbound_same_network::<
@@ -296,6 +309,7 @@ async fn connect_inbound_same_network_channel() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_same_network_noise() {
     connect_inbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
@@ -330,7 +344,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.try_accept_connection(address, Role::Inbound, peer_info, None),
+        pm2.try_accept_connection(address, PeerRole::Inbound, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -338,6 +352,7 @@ where
     );
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_tcp() {
     connect_inbound_different_network::<
@@ -347,6 +362,7 @@ async fn connect_inbound_different_network_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_channels() {
     connect_inbound_different_network::<
@@ -356,6 +372,7 @@ async fn connect_inbound_different_network_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connect_inbound_different_network_noise() {
     connect_inbound_different_network::<
@@ -403,17 +420,20 @@ where
     ));
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_tcp() {
     remote_closes_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_channels() {
     remote_closes_connection::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn remote_closes_connection_noise() {
     remote_closes_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
@@ -436,7 +456,7 @@ where
         make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.try_accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
+        pm1.try_accept_connection(peer.0, PeerRole::Inbound, peer.1, None).unwrap();
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
@@ -448,7 +468,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    logging::spawn_in_current_span(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -458,6 +478,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_tcp() {
     let config = Arc::new(config::create_mainnet());
@@ -467,11 +488,11 @@ async fn inbound_connection_too_many_peers_tcp() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
-                    version: *config.version(),
+                    software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -484,6 +505,7 @@ async fn inbound_connection_too_many_peers_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_channels() {
     let config = Arc::new(config::create_mainnet());
@@ -493,11 +515,11 @@ async fn inbound_connection_too_many_peers_channels() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
-                    version: *config.version(),
+                    software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -510,6 +532,7 @@ async fn inbound_connection_too_many_peers_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn inbound_connection_too_many_peers_noise() {
     let config = Arc::new(config::create_mainnet());
@@ -519,11 +542,11 @@ async fn inbound_connection_too_many_peers_noise() {
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
-                    protocol: NETWORK_PROTOCOL_CURRENT,
+                    protocol_version: TEST_PROTOCOL_VERSION,
                     network: *config.magic_bytes(),
-                    version: *config.version(),
+                    software_version: *config.software_version(),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    common_services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -561,7 +584,7 @@ where
     .unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
-    conn.connect(addr2).expect("dial to succeed");
+    conn.connect(addr2, None).expect("dial to succeed");
 
     match timeout(Duration::from_secs(1), conn.poll_next()).await {
         Ok(res) => assert!(std::matches!(
@@ -575,6 +598,7 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_tcp() {
     connection_timeout::<DefaultNetworkingService<TcpTransportSocket>>(
@@ -585,6 +609,7 @@ async fn connection_timeout_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_channels() {
     connection_timeout::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -595,6 +620,7 @@ async fn connection_timeout_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_noise() {
     connection_timeout::<DefaultNetworkingService<NoiseTcpTransport>>(
@@ -637,8 +663,9 @@ async fn connection_timeout_rpc_notified<T>(
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -668,7 +695,7 @@ async fn connection_timeout_rpc_notified<T>(
     )
     .unwrap();
 
-    tokio::spawn(async move {
+    logging::spawn_in_current_span(async move {
         peer_manager.run().await.unwrap();
     });
 
@@ -688,6 +715,7 @@ async fn connection_timeout_rpc_notified<T>(
 // Address is reserved for "TEST-NET-2" documentation and examples. See: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
@@ -698,6 +726,7 @@ async fn connection_timeout_rpc_notified_tcp() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
@@ -708,6 +737,7 @@ async fn connection_timeout_rpc_notified_channels() {
     .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
@@ -750,8 +780,9 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -774,11 +805,12 @@ where
 
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes,
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -794,8 +826,9 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        enable_block_relay_peers: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -825,18 +858,21 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_tcp() {
     connection_reserved_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_noise() {
     connection_reserved_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
         .await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn connection_reserved_node_channel() {
     connection_reserved_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
@@ -857,6 +893,9 @@ where
 
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
+        allow_discover_private_ips: true.into(),
+        enable_block_relay_peers: false.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
@@ -870,14 +909,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -902,11 +940,14 @@ where
 
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+        enable_block_relay_peers: false.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -915,14 +956,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -941,11 +981,14 @@ where
 
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
+        reserved_nodes,
+        allow_discover_private_ips: true.into(),
+        enable_block_relay_peers: false.into(),
+
         bind_addresses: Default::default(),
         socks5_proxy: None,
         disable_noise: Default::default(),
         boot_nodes: Default::default(),
-        reserved_nodes,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -954,14 +997,13 @@ where
         ping_timeout: Default::default(),
         max_clock_diff: Default::default(),
         node_type: Default::default(),
-        allow_discover_private_ips: true.into(),
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
-        max_unconnected_headers: Default::default(),
+        max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
@@ -1004,16 +1046,19 @@ where
     }
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_tcp() {
     discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_noise() {
     discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
+#[tracing::instrument]
 #[tokio::test]
 async fn discovered_node_channel() {
     discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;

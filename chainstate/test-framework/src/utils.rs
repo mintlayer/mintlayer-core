@@ -17,6 +17,7 @@ use std::num::NonZeroU64;
 
 use crate::{framework::BlockOutputs, TestChainstate, TestFramework};
 use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
     chain::{
@@ -30,9 +31,9 @@ use common::{
         },
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
-        Block, ChainConfig, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        OutPointSourceId, PoolId, RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
-        UtxoOutPoint,
+        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, RequiredConsensus, TxInput,
+        TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -42,6 +43,7 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
+use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -323,7 +325,7 @@ pub fn create_chain_config_with_default_staking_pool(
     vrf_pk: VRFPublicKey,
 ) -> (ConfigBuilder, PoolId) {
     let stake_amount = create_unit_test_config().min_stake_pool_pledge();
-    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::CoinUnit::ATOMS_PER_COIN);
 
     let genesis_pool_id = PoolId::new(H256::random_using(rng));
     let genesis_stake_pool_data = StakePoolData::new(
@@ -357,7 +359,7 @@ pub fn create_chain_config_with_staking_pool(
         (
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: Some(Uint256::MAX.into()),
                 config: create_unittest_pos_config(),
             }),
         ),
@@ -371,7 +373,7 @@ pub fn create_chain_config_with_staking_pool(
     let genesis_time = common::time_getter::TimeGetter::default().get_time();
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_duration_since_epoch(genesis_time),
+        BlockTimestamp::from_time(genesis_time),
         vec![mint_output, pool],
     );
 
@@ -408,20 +410,27 @@ pub fn produce_kernel_signature(
     .unwrap()
 }
 
+// TODO: consider replacing this function with consensus::pos::stake
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
+    storage: &impl BlockchainStorageRead,
+    pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: UtxoOutPoint,
     kernel_witness: InputWitness,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
-    pool_balance: Amount,
+    final_supply: CoinUnit,
     epoch_index: EpochIndex,
     target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {
-    let mut timestamp = initial_timestamp;
+    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
 
+    let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
+    let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().pledge_amount();
+
+    let mut timestamp = initial_timestamp;
     for _ in 0..1000 {
         let transcript = chainstate_types::vrf_tools::construct_transcript(
             epoch_index,
@@ -440,12 +449,15 @@ pub fn pos_mine(
 
         let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
         if consensus::check_pos_hash(
+            pos_config.consensus_version(),
             epoch_index,
             &sealed_epoch_randomness,
             &pos_data,
             &vrf_pk,
             timestamp,
+            pledge_amount,
             pool_balance,
+            final_supply.to_amount_atoms(),
         )
         .is_ok()
         {

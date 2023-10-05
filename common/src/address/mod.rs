@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+pub mod dehexify;
+pub mod hexified;
+pub mod pubkeyhash;
+pub mod traits;
 
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error};
-pub mod pubkeyhash;
-pub mod traits;
+use std::fmt::Display;
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 use self::traits::Addressable;
@@ -78,6 +80,17 @@ impl<T: Addressable> Address<T> {
         if data.hrp() != T::address_prefix(&result, cfg) {
             return Err(AddressError::InvalidPrefix(data.hrp().to_owned()));
         }
+        Ok(result)
+    }
+
+    /// Decode an address without verifying the hrp
+    /// This is used only for the case of json deserialization, which is done as a compromise as the alternative
+    /// would be to not serialize at all. This is because chain config cannot be passed to the json serializer/deserializer.
+    fn from_str_no_hrp_verify(address: impl AsRef<str>) -> Result<T, AddressError> {
+        let data = encoding::decode(address)?;
+        let raw_data = data.data();
+        let result = T::decode_from_bytes_from_address(raw_data)
+            .map_err(|e| AddressError::DecodingError(e.to_string()))?;
         Ok(result)
     }
 

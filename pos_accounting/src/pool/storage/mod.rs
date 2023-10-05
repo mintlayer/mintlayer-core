@@ -173,7 +173,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
                 Ok((id, balance_undo))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        Ok(DeltaAmountCollection::from_iter(undo.into_iter()))
+        Ok(DeltaAmountCollection::from_iter(undo))
     }
 
     fn merge_data_generic<K: Ord + Copy, V: Clone + Eq, Getter, Setter, Deleter>(

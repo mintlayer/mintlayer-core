@@ -74,6 +74,9 @@ from test_framework.util import (
     p2p_port,
     wait_until_helper,
 )
+from test_framework.mintlayer import (
+    calc_tx_id,
+)
 
 logger = logging.getLogger("TestFramework.p2p")
 
@@ -662,54 +665,60 @@ class P2PDataStore(P2PInterface):
 
     def __init__(self):
         super().__init__()
-        # store of blocks. key is block hash, value is a CBlock object
+        # store of blocks. key is block hash, value is a block
         self.block_store = {}
         self.last_block_hash = ''
+
         # store of txs. key is txid, value is a CTransaction object
         self.tx_store = {}
         self.getdata_requests = []
 
-    def on_getdata(self, message):
-        """Check for the tx/block in our stores and if found, reply with an inv message."""
-        for inv in message.inv:
-            self.getdata_requests.append(inv.hash)
-            if (inv.type & MSG_TYPE_MASK) == MSG_TX and inv.hash in self.tx_store.keys():
-                self.send_message(msg_tx(self.tx_store[inv.hash]))
-            elif (inv.type & MSG_TYPE_MASK) == MSG_BLOCK and inv.hash in self.block_store.keys():
-                self.send_message(msg_block(self.block_store[inv.hash]))
-            else:
-                logger.debug('getdata message type {} received.'.format(hex(inv.type)))
+    def submit_tx(self, tx):
+        self._store_txs([tx])
+        return self._send_tx_announcement(calc_tx_id(tx))
 
-    def on_getheaders(self, message):
+    def _store_txs(self, txs):
+        with p2p_lock:
+            for tx in txs:
+                self.tx_store[calc_tx_id(tx)] = tx
+
+    def _send_tx_announcement(self, tx_id):
+        return self.send_message({ 'new_transaction': "0x" + tx_id })
+
+    def on_transaction_request(self, request):
+        tx_id = request['transaction_request'][2:]
+        tx = self.tx_store.get(tx_id)
+
+        if tx: response = {'found': tx}
+        else: response = {'not_found': tx_id}
+
+        self.send_message({'transaction_response': response})
+
+    def on_header_list_request(self, message):
         """Search back through our block store for the locator, and reply with a headers message if found."""
 
-        locator, hash_stop = message.locator, message.hashstop
-
-        # Assume that the most recent block added is the tip
-        if not self.block_store:
+        if not self.last_block_hash:
+            self.send_message({'header_list': []})
             return
 
+        locator = message['header_list_request']
+
         headers_list = [self.block_store[self.last_block_hash]]
-        while headers_list[-1].sha256 not in locator.vHave:
+        while calc_block_id(headers_list[-1]) not in locator:
             # Walk back through the block store, adding headers to headers_list
             # as we go.
-            prev_block_hash = headers_list[-1].hashPrevBlock
+            prev_block_hash = headers_list[-1]['prev_block_id']
             if prev_block_hash in self.block_store:
-                prev_block_header = CBlockHeader(self.block_store[prev_block_hash])
+                prev_block_header = self.block_store[prev_block_hash]
                 headers_list.append(prev_block_header)
-                if prev_block_header.sha256 == hash_stop:
-                    # if this is the hashstop header, stop here
-                    break
             else:
                 logger.debug('block hash {} not found in block store'.format(hex(prev_block_hash)))
                 break
 
         # Truncate the list if there are too many headers
         headers_list = headers_list[:-MAX_HEADERS_RESULTS - 1:-1]
-        response = msg_headers(headers_list)
 
-        if response is not None:
-            self.send_message(response)
+        self.send_message({'header_list': ["0x" + hdr_hash for hdr_hash in headers_list]})
 
     def send_blocks_and_test(self, blocks, node, *, success=True, force_send=False, reject_reason=None, expect_disconnect=False, timeout=60):
         """Send blocks to test node and test whether the tip advances.
@@ -722,6 +731,8 @@ class P2PDataStore(P2PInterface):
          - if success is True: assert that the node's tip advances to the most recent block
          - if success is False: assert that the node's tip doesn't advance
          - if reject_reason is set: assert that the correct reject message is logged"""
+
+        assert False, "Not yet ported to Mintlayer"
 
         with p2p_lock:
             for block in blocks:
@@ -760,14 +771,14 @@ class P2PDataStore(P2PInterface):
          - if expect_disconnect is True: Skip the sync with ping
          - if reject_reason is set: assert that the correct reject message is logged."""
 
-        with p2p_lock:
-            for tx in txs:
-                self.tx_store[tx.sha256] = tx
+        assert False, "Not yet ported to Mintlayer"
+
+        self._store_txs(txs)
 
         reject_reason = [reject_reason] if reject_reason else []
         with node.assert_debug_log(expected_msgs=reject_reason):
             for tx in txs:
-                self.send_message(msg_tx(tx))
+                self.send_message({ 'new_transaction': "0x" + calc_tx_id(tx) })
 
             if expect_disconnect:
                 self.wait_for_disconnect()

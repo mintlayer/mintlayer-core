@@ -15,26 +15,31 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
-use common::chain::config::ChainType;
+use clap::{Parser, Subcommand};
+use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum Network {
     Mainnet,
     Testnet,
-    Regtest,
+    Regtest(Box<ChainConfigOptions>),
     Signet,
 }
 
 #[derive(Parser, Debug)]
+#[clap(version)]
 pub struct WalletCliArgs {
     /// Network
-    #[arg(long, value_enum, default_value_t = Network::Testnet)]
+    #[clap(subcommand)]
     pub network: Network,
 
     /// Optional path to the wallet file
     #[clap(long)]
     pub wallet_file: Option<PathBuf>,
+
+    /// Optional password for a locked wallet
+    #[clap(long)]
+    pub wallet_password: Option<String>,
 
     /// Start staking after the start
     #[clap(long)]
@@ -72,14 +77,20 @@ pub struct WalletCliArgs {
     /// vi input mode
     #[clap(long)]
     pub vi_mode: bool,
+
+    /// In which top N MB should we aim for our transactions to be in the mempool
+    /// e.g. for 5, we aim to be in the top 5 MB of transactions based on paid fees
+    /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
+    #[arg(long, default_value_t = 5)]
+    pub in_top_x_mb: usize,
 }
 
-impl From<Network> for ChainType {
-    fn from(value: Network) -> Self {
+impl From<&Network> for ChainType {
+    fn from(value: &Network) -> Self {
         match value {
             Network::Mainnet => ChainType::Mainnet,
             Network::Testnet => ChainType::Testnet,
-            Network::Regtest => ChainType::Regtest,
+            Network::Regtest(_) => ChainType::Regtest,
             Network::Signet => ChainType::Signet,
         }
     }

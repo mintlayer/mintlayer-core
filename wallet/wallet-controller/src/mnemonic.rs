@@ -16,12 +16,13 @@
 pub use bip39::{Error, Language, Mnemonic};
 
 use crypto::random::Rng;
+use wallet_types::seed_phrase::MNEMONIC_24_WORDS_ENTROPY_SIZE;
 use zeroize::Zeroize;
 
 /// Generate a new 24-word mnemonic string using [crypto::random::make_true_rng]
 pub fn generate_new_mnemonic(language: Language) -> Mnemonic {
     let mut rng = crypto::random::make_true_rng();
-    let mut data = [0u8; 32];
+    let mut data = [0u8; MNEMONIC_24_WORDS_ENTROPY_SIZE];
     rng.fill(&mut data);
     let res = bip39::Mnemonic::from_entropy_in(language, &data).expect("should not fail");
     data.zeroize();

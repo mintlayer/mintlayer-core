@@ -37,6 +37,7 @@ use utils::atomics::SeqCstAtomicBool;
 tests![peer_events,];
 
 #[allow(clippy::extra_unused_type_parameters)]
+#[tracing::instrument]
 async fn peer_events<T, N>()
 where
     T: TestTransportMaker<Transport = N::Transport>,
@@ -95,7 +96,7 @@ where
             address: _,
             inbound: _,
             user_agent: _,
-            version: _,
+            software_version: _,
         }) => {
             assert_eq!(id, info.peer_id);
             assert_eq!(

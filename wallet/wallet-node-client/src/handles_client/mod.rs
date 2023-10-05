@@ -18,7 +18,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -53,7 +53,7 @@ impl std::fmt::Debug for WalletHandlesClient {
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum WalletHandlesClientError {
     #[error("Call error: {0}")]
-    CallError(#[from] subsystem::subsystem::CallError),
+    CallError(#[from] subsystem::error::CallError),
     #[error("Chainstate error: {0}")]
     Chainstate(#[from] ChainstateError),
     #[error("P2p error: {0}")]
@@ -165,6 +165,18 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn get_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_delegation_share(pool_id, delegation_id))
+            .await??;
+        Ok(result)
+    }
+
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let result = self
             .chainstate
@@ -197,10 +209,7 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
-    async fn submit_transaction(
-        &self,
-        tx: SignedTransaction,
-    ) -> Result<mempool::TxStatus, Self::Error> {
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
         Ok(self.p2p.call_async_mut(move |this| this.submit_transaction(tx)).await??)
     }
 

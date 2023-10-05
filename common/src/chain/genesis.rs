@@ -40,6 +40,10 @@ impl Genesis {
         }
     }
 
+    pub fn fun_message(&self) -> &str {
+        &self.fun_message
+    }
+
     pub fn utxos(&self) -> &[TxOutput] {
         &self.utxos
     }
@@ -57,5 +61,11 @@ impl Idable for Genesis {
     type Tag = Genesis;
     fn get_id(&self) -> Id<Self::Tag> {
         Id::new(id::hash_encoded(&self))
+    }
+}
+
+impl serde::Serialize for Id<Genesis> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.serde_serialize(s)
     }
 }

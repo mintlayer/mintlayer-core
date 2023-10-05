@@ -29,9 +29,11 @@ use crypto::vrf::ExtendedVRFPrivateKey;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
-use wallet_storage::{StoreTxRo, WalletStorageReadUnlocked, WalletStorageWriteLocked};
+use wallet_storage::{
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+};
 use wallet_types::keys::KeyPurpose;
-use wallet_types::{AccountId, AccountInfo};
+use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::MasterKeyChain;
 
@@ -124,16 +126,20 @@ impl AccountKeyChain {
     }
 
     /// Load the key chain from the database
-    pub fn load_from_database<B: storage::Backend>(
+    pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &StoreTxRo<B>,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
         account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {
         let pubkey_id = account_info.account_key().clone().into();
 
-        let sub_chains =
-            LeafKeySoftChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
+        let sub_chains = LeafKeySoftChain::load_leaf_keys(
+            chain_config.clone(),
+            account_info.account_key(),
+            db_tx,
+            id,
+        )?;
 
         Ok(AccountKeyChain {
             chain_config,
@@ -178,6 +184,19 @@ impl AccountKeyChain {
         let (_index, key, _address) =
             self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
         Ok(key)
+    }
+
+    /// Reload the sub chain keys from DB to restore the cache
+    /// Should be called after issuing a new key but not using committing it to the DB
+    pub fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> KeyChainResult<()> {
+        self.sub_chains = LeafKeySoftChain::load_leaf_keys(
+            self.chain_config.clone(),
+            &self.account_public_key,
+            db_tx,
+            &self.get_account_id(),
+        )?;
+
+        Ok(())
     }
 
     /// Get the private key that corresponds to the provided public key
@@ -316,6 +335,10 @@ impl AccountKeyChain {
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
+    }
+
+    pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
+        self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
     }
 }
 

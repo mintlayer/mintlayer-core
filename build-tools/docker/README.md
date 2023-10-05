@@ -27,8 +27,8 @@ docker run -d -p 3030:3030 -p 13031:13031 --network=mintlayer-net --name mintlay
 ```
 
 The `-v` option is used to mount a local directory (in this case `~/.mintlayer`) as a volume in the Docker container.
-The `--user` option is used to specify the user that will write to the `~/.mintlayer` directory. 
-NOTE: this won't work on windows hosts. 
+The `--user` option is used to specify the user that will write to the `~/.mintlayer` directory.
+NOTE: this won't work on windows hosts.
 
 If you want to display logs you can pass the `-e RUST_LOG=info` argument, such as:
 

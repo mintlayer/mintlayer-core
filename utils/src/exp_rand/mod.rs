@@ -17,8 +17,15 @@ use crypto::random::Rng;
 
 /// Returns a value sampled from an exponential distribution with a mean of 1.0
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
+    let mut random_f64 = rng.gen::<f64>();
+    // The generated number will be in the range [0, 1). Turn it into (0, 1) to avoid
+    // infinity when taking the logarithm.
+    if random_f64 == 0.0 {
+        random_f64 = f64::MIN_POSITIVE;
+    }
+
     #[allow(clippy::float_arithmetic)]
-    -rng.gen::<f64>().ln()
+    -random_f64.ln()
 }
 
 #[cfg(test)]

@@ -46,6 +46,10 @@ impl<Sch> DbMapId<Sch> {
     pub fn as_usize(&self) -> usize {
         self.idx.as_usize()
     }
+
+    pub fn idx(&self) -> storage_core::DbMapId {
+        self.idx
+    }
 }
 
 impl<Sch: Schema> DbMapId<Sch> {
@@ -105,7 +109,7 @@ impl<Sch> Eq for DbMapId<Sch> {}
 
 impl<Sch> Clone for DbMapId<Sch> {
     fn clone(&self) -> Self {
-        Self::from_idx_unchecked(self.idx)
+        *self
     }
 }
 

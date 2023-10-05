@@ -26,7 +26,6 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use mempool::TxStatus;
 use p2p::P2pEvent;
 use wallet::account::{transaction_list::TransactionList, Currency};
 
@@ -101,7 +100,6 @@ pub struct StakeRequest {
 #[derive(Debug, Clone)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    pub transaction_status: TxStatus,
 }
 
 #[derive(Debug)]
@@ -126,7 +124,7 @@ pub enum BackendRequest {
     },
     // This will remove the old file if it already exists.
     // The frontend should check if this is what the user really wants.
-    CreateWallet {
+    RecoverWallet {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
     },

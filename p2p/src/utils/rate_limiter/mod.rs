@@ -15,7 +15,7 @@
 
 #![allow(clippy::float_arithmetic)]
 
-use std::time::Duration;
+use common::primitives::time::Time;
 
 /// Token bucket based rate limiter
 ///
@@ -25,7 +25,7 @@ pub struct RateLimiter {
     rate: f64,
     tokens: f64,
     bucket: u32,
-    last_time: Duration,
+    last_time: Time,
 }
 
 impl RateLimiter {
@@ -36,7 +36,7 @@ impl RateLimiter {
     /// `rate` - Tokens per second
     /// `initial_tokens` - Token count after the start
     /// `bucket` - Bucket size
-    pub fn new(now: Duration, rate: f64, initial_tokens: u32, bucket: u32) -> Self {
+    pub fn new(now: Time, rate: f64, initial_tokens: u32, bucket: u32) -> Self {
         assert!(rate >= 0.0);
         assert!(initial_tokens <= bucket);
         assert!(bucket >= 1);
@@ -52,8 +52,8 @@ impl RateLimiter {
     ///
     /// # Arguments
     /// `now` - Current time
-    pub fn accept(&mut self, now: Duration) -> bool {
-        let seconds = now.checked_sub(self.last_time).unwrap_or_default().as_secs_f64();
+    pub fn accept(&mut self, now: Time) -> bool {
+        let seconds = (now - self.last_time).unwrap_or_default().as_secs_f64();
         self.last_time = now;
         self.tokens = f64::min(self.tokens + self.rate * seconds, self.bucket.into());
         // Use a value slightly less than 1.0 to account for f64 rounding errors (makes unit testing easier)

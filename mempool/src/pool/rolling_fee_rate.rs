@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::Amount;
+use std::time::Duration;
+
+use common::primitives::{time::Time, Amount};
 use logging::log;
 
 use super::feerate::FeeRate;
-use crate::config::Time;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RollingFeeRate {
@@ -36,7 +37,7 @@ impl RollingFeeRate {
     }
 
     #[allow(clippy::float_arithmetic)]
-    pub fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
+    pub fn decay_fee(mut self, halflife: Duration, current_time: Time) -> Self {
         log::debug!(
             "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
             self.rolling_minimum_fee_rate,
@@ -45,9 +46,9 @@ impl RollingFeeRate {
             halflife,
         );
 
-        let divisor = ((current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
-            / (halflife.as_secs() as f64))
-            .exp2();
+        let time_diff = (current_time - self.last_rolling_fee_update)
+            .expect("Mempool rolling feerate time invariant broken (future before past)");
+        let divisor = (time_diff.as_secs() as f64 / (halflife.as_secs() as f64)).exp2();
         self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
             (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
         ));

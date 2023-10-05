@@ -38,17 +38,20 @@ use utxo::Utxo;
 use chainstate::chainstate_interface::ChainstateInterface;
 
 mockall::mock! {
-    pub ChainstateInterfaceMock {}
+    pub ChainstateInterface {}
 
-    impl ChainstateInterface for ChainstateInterfaceMock {
+    impl ChainstateInterface for ChainstateInterface {
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
         fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
+        fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
+        fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
         fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
         fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
         fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError>;
         fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
+        fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;
         fn get_block_height_in_main_chain(
             &self,
             block_id: &Id<GenBlock>,
@@ -66,15 +69,20 @@ mockall::mock! {
         fn get_block_header(&self, block_id: Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
         fn get_locator(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
-        fn get_headers(
+        fn get_mainchain_headers_by_locator(
             &self,
-            locator: Locator,
+            locator: &Locator,
             header_count_limit: usize,
         ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
-        fn filter_already_existing_blocks(
+        fn get_mainchain_headers_since_latest_fork_point(
+            &self,
+            block_ids: &[Id<GenBlock>],
+            header_count_limit: usize,
+        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+        fn split_off_leading_known_headers(
             &self,
             headers: Vec<SignedBlockHeader>,
-        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
+        ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
         fn get_block_index(
             &self,
             id: &Id<Block>
@@ -174,4 +182,4 @@ mockall::mock! {
     }
 }
 
-impl subsystem::Subsystem for MockChainstateInterfaceMock {}
+impl subsystem::Subsystem for MockChainstateInterface {}
