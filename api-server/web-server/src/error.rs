@@ -35,6 +35,14 @@ pub enum APIServerWebServerError {
 pub enum APIServerWebServerClientError {
     #[error("Bad request")]
     BadRequest,
+    #[error("Block not found")]
+    BlockNotFound,
+    #[error("Invalid block height")]
+    InvalidBlockHeight,
+    #[error("Invalid block Id")]
+    InvalidBlockId,
+    #[error("No block found at supplied height")]
+    NoBlockAtHeight,
 }
 
 #[allow(dead_code)]
