@@ -60,7 +60,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
             .collect();
         peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -104,7 +104,7 @@ async fn unordered_headers(#[case] seed: Seed) {
 
         peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -146,7 +146,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
 
         peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -185,7 +185,7 @@ async fn valid_headers(#[case] seed: Seed) {
         let headers = blocks.iter().map(|b| b.header().clone()).collect();
         peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
@@ -239,7 +239,7 @@ async fn disconnect() {
         let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         tokio::time::sleep(Duration::from_millis(300)).await;
-        node.assert_disconnect_peer_event(peer.get_id()).await;
+        node.receive_disconnect_peer_event(peer.get_id()).await;
 
         node.join_subsystem_manager().await;
     })

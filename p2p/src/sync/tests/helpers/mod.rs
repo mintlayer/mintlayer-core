@@ -192,7 +192,7 @@ impl TestNode {
     ) -> TestPeer {
         let peer = self.try_connect_peer(peer_id, protocol_version);
 
-        let (sent_to, message) = self.message().await;
+        let (sent_to, message) = self.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
         peer
@@ -203,22 +203,13 @@ impl TestNode {
         self.syncing_event_sender.send(SyncingEvent::Disconnected { peer_id }).unwrap();
     }
 
-    // FIXME: naming of methods in this struct should be reconsidered.
-    // E.g. message, try_message, adjust_peer_score_event should at least get a prefix like
-    // "get", "receive" etc.
-    // Secondly, send_message and send_headers should be named more specifically, e.g.
-    // "send_message_as_if_from" to indicate that they "send" a message to the current node
-    // and not from it.
-    // Also, methods dealing with SyncMessage's should probably have "sync" in their name.
-
-    /// Receives a message from the sync manager.
-    // FIXME: this is also unclear
-    pub async fn message(&mut self) -> (PeerId, SyncMessage) {
+    /// Get a message that was sent from the node's sync manager by reading it from
+    /// the channel
+    pub async fn get_sent_message(&mut self) -> (PeerId, SyncMessage) {
         expect_recv!(self.sync_msg_receiver)
     }
 
-    /// Try to receive a message from the sync manager.
-    pub fn try_message(&mut self) -> Option<(PeerId, SyncMessage)> {
+    pub fn try_get_sent_message(&mut self) -> Option<(PeerId, SyncMessage)> {
         match self.sync_msg_receiver.try_recv() {
             Ok(message) => Some(message),
             Err(mpsc::error::TryRecvError::Empty) => None,
@@ -232,7 +223,7 @@ impl TestNode {
     }
 
     /// Receives the `AdjustPeerScore` event from the peer manager.
-    pub async fn adjust_peer_score_event(&mut self) -> (PeerId, u32) {
+    pub async fn receive_adjust_peer_score_event(&mut self) -> (PeerId, u32) {
         match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
                 sender.send(Ok(()));
@@ -242,7 +233,7 @@ impl TestNode {
         }
     }
 
-    pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
+    pub async fn receive_disconnect_peer_event(&mut self, id: PeerId) {
         match self.peer_manager_event_receiver.recv().await.unwrap() {
             PeerManagerEvent::Disconnect(peer_id, _peerdb_action, sender) => {
                 assert_eq!(id, peer_id);
@@ -308,7 +299,7 @@ impl TestNode {
         expected_peer: PeerId,
         expected_score: u32,
     ) {
-        let (adjusted_peer, score) = self.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = self.receive_adjust_peer_score_event().await;
         assert_eq!(adjusted_peer, expected_peer);
         assert_eq!(score, expected_score);
     }

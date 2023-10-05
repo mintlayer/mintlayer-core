@@ -67,7 +67,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
         peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(blocks)))
             .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -114,7 +114,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
         )))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(score, expected_score);
         node.assert_no_event().await;
@@ -157,7 +157,7 @@ async fn valid_request(#[case] seed: Seed) {
             .await;
 
         for block in blocks {
-            let (sent_to, message) = node.message().await;
+            let (sent_to, message) = node.get_sent_message().await;
             assert_eq!(peer.get_id(), sent_to);
             assert_eq!(
                 message,
@@ -205,7 +205,7 @@ async fn request_same_block_twice(#[case] seed: Seed) {
         ])))
         .await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
@@ -221,7 +221,7 @@ async fn request_same_block_twice(#[case] seed: Seed) {
         ])))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,

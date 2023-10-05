@@ -138,7 +138,7 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
         ])))
         .await;
 
-        let (adjusted_peer_id, ban_score_delta) = node.adjust_peer_score_event().await;
+        let (adjusted_peer_id, ban_score_delta) = node.receive_adjust_peer_score_event().await;
         assert_eq!(adjusted_peer_id, peer.get_id());
         assert_eq!(ban_score_delta, 100);
 

@@ -64,7 +64,7 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         )))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -110,7 +110,7 @@ async fn valid_request(#[case] seed: Seed) {
         )))
         .await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         let headers = match message {
             SyncMessage::HeaderList(l) => l.into_headers(),
@@ -201,7 +201,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
 
     // The node should send the header list.
     assert_eq!(
-        node.message().await.1,
+        node.get_sent_message().await.1,
         SyncMessage::HeaderList(HeaderList::new(headers)),
     );
 
@@ -221,7 +221,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
 
         // The node should send the block.
         assert_eq!(
-            node.message().await.1,
+            node.get_sent_message().await.1,
             SyncMessage::BlockResponse(BlockResponse::new(block)),
         );
     }
@@ -293,7 +293,7 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
 
     // The node should send an empty header list.
     assert_eq!(
-        node.message().await.1,
+        node.get_sent_message().await.1,
         SyncMessage::HeaderList(HeaderList::new(Vec::new())),
     );
 

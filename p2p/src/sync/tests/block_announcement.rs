@@ -106,7 +106,7 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
     // that the event is caught even if it's late; the first one just allows the test to fail
     // faster if the event is not late.
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
+    let (sent_to, message) = node.get_sent_message().await;
     assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
@@ -191,7 +191,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
     peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
+    let (sent_to, message) = node.get_sent_message().await;
     assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
@@ -200,7 +200,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
     peer.send_headers(vec![block_11.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
+    let (sent_to, message) = node.get_sent_message().await;
     assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::BlockListRequest(_)));
     node.assert_no_peer_manager_event().await;
@@ -211,7 +211,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
     peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
+    let (sent_to, message) = node.get_sent_message().await;
     assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
@@ -287,7 +287,7 @@ async fn invalid_timestamp() {
             .clone()])))
             .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -337,7 +337,7 @@ async fn invalid_consensus_data() {
             .clone()])))
             .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -429,7 +429,7 @@ async fn valid_block(#[case] seed: Seed) {
             .clone()])))
             .await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(sent_to, peer.get_id());
         assert_eq!(
             message,
@@ -484,7 +484,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting initial header response");
-            let (sent_to, message) = node.message().await;
+            let (sent_to, message) = node.get_sent_message().await;
             assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
@@ -506,7 +506,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting first announcement");
-            let (sent_to, message) = node.message().await;
+            let (sent_to, message) = node.get_sent_message().await;
             assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
@@ -534,7 +534,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting second announcement");
-            let (sent_to, message) = node.message().await;
+            let (sent_to, message) = node.get_sent_message().await;
             assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
@@ -558,7 +558,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting third announcement");
-            let (sent_to, message) = node.message().await;
+            let (sent_to, message) = node.get_sent_message().await;
             assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,

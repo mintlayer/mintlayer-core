@@ -71,7 +71,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
         let tx = SignedTransaction::new(tx, vec![]).unwrap();
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
@@ -83,7 +83,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
         ))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -176,7 +176,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
         let tx = transaction(chain_config.genesis_block_id());
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -243,7 +243,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         let tx = transaction(chain_config.genesis_block_id());
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -286,7 +286,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         let tx = transaction(chain_config.genesis_block_id());
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
@@ -295,7 +295,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
         assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
@@ -340,7 +340,7 @@ async fn valid_transaction(#[case] seed: Seed) {
         let tx = transaction(chain_config.genesis_block_id());
         peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
+        let (sent_to, message) = node.get_sent_message().await;
         assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
@@ -421,7 +421,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // The transaction should be held up in the orphan pool for now, so we don't expect it to be
         // propagated at this point
-        assert_eq!(node.try_message(), None);
+        assert_eq!(node.try_get_sent_message(), None);
 
         let res = node
             .mempool()
@@ -436,7 +436,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // Now the orphan has been resolved, both transactions should be announced.
         for _ in 0..2 {
-            let (_peer, msg) = node.message().await;
+            let (_peer, msg) = node.get_sent_message().await;
             logging::log::error!("Msg new: {msg:?}");
             let tx_id = match msg {
                 SyncMessage::NewTransaction(tx_id) => tx_id,
