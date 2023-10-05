@@ -11,55 +11,57 @@ edition = "2021"
 
 [workspace]
 members = [
-  "accounting",                   # Accounting and balances abstractions.
-  "api-server/api-server-common", # API server, for light-wallets and block explorers: common between web-server and scanner.
-  "api-server/storage-test-suite",# Test suite for the abstract storage layer of the API server to ensure consistent behavior.
-  "api-server/scanner-daemon",    # API server, for light-wallets and block explorers: blockchain scanner daemon.
-  "api-server/scanner-lib",       # API server, for light-wallets and block explorers: blockchain scanner library.
-  "api-server/web-server",        # API server, for light-wallets and block explorers: web-server.
-  "blockprod",                    # Block production with whatever consensus algorithm.
-  "chainstate",                   # Code on chainstate of blocks and transactions.
-  "chainstate/test-suite",        # Tests for the chainstate, separated to make use of the chainstate test framework.
-  "common",                       # Everything else, until it's moved to another crate.
-  "consensus",                    # Consensus related logic.
-  "crypto",                       # Cryptographic primitives and their interfaces.
-  "dns_server",                   # DNS-server.
-  "logging",                      # Logging engine and its interfaces.
-  "mempool",                      # Mempool interface and implementation.
-  "mempool/types",                # Common mempool types.
-  "merkletree",                   # Merkle tree implementation with merkle proofs.
-  "mocks",                        # Mock implementations of our traits (used for testing)
-  "node-daemon",                  # Node terminal binary.
-  "node-gui",                     # Node GUI binary.
-  "node-lib",                     # Node lib; the common library between daemon, tui and gui node executables.
-  "p2p",                          # P2p communication interfaces and protocols.
-  "p2p/backend-test-suite",       # P2p backend agnostic tests.
-  "p2p/types",                    # P2p support types with minimal dependencies.
-  "pos_accounting",               # PoS accounting and balances abstractions.
-  "rpc",                          # Rpc abstraction and implementation.
-  "script",                       # Bitcoin script and its interfaces.
-  "serialization",                # Full featured serialization interfaces and implementations.
-  "serialization/core",           # Serialization core tools.
-  "serialization/tagged",         # Serialization for direct/tagged encoding style.
-  "serialization/tagged/derive",  # direct/tagged encoding style derive macros.
-  "storage",                      # storage abstraction layer and its implementation.
-  "storage/backend-test-suite",   # Tests for validating storage backend implementations.
-  "storage/core",                 # Core backend-agnostic storage abstraction.
-  "storage/inmemory",             # In-memory storage backend implementation.
-  "storage/lmdb",                 # LMDB-based persistent storage backend implementation.
-  "storage/sqlite",               # SQLite-based persistent storage backend implementation.
-  "subsystem",                    # Utilities for working with concurrent subsystems.
-  "test",                         # Integration tests.
-  "test-rpc-functions",           # RPC functions specifically for tests.
-  "test-utils",                   # Various utilities for tests.
-  "utils",                        # Various utilities.
-  "utxo",                         # Utxo and related utilities (cache, undo, etc.).
-  "wallet",                       # Wallet primitives.
-  "wallet/wallet-cli",            # Wallet CLI/REPL binary.
-  "wallet/wallet-cli-lib",        # Wallet CLI/REPL lib.
-  "wallet/wallet-controller",     # Common code for wallet UI applications.
-  "wallet/wallet-node-client",    # Wallet-to-node communication tools.
-  "wasm-crypto",                  # WASM bindings for the crypto crate.
+  "accounting",                         # Accounting and balances abstractions.
+  "api-server/api-server-common",       # API server, for light-wallets and block explorers: common between web-server and scanner.
+  "api-server/storage-test-suite",      # Test suite for the abstract storage layer of the API server to ensure consistent behavior.
+  "api-server/scanner-daemon",          # API server, for light-wallets and block explorers: blockchain scanner daemon.
+  "api-server/scanner-lib",             # API server, for light-wallets and block explorers: blockchain scanner library.
+  "api-server/web-server",              # API server, for light-wallets and block explorers: web-server.
+  "blockprod",                          # Block production with whatever consensus algorithm.
+  "chainstate",                         # Code on chainstate of blocks and transactions.
+  "chainstate/test-suite",              # Tests for the chainstate, separated to make use of the chainstate test framework.
+  "common",                             # Everything else, until it's moved to another crate.
+  "consensus",                          # Consensus related logic.
+  "crypto",                             # Cryptographic primitives and their interfaces.
+  "dns_server",                         # DNS-server.
+  "logging",                            # Logging engine and its interfaces.
+  "mempool",                            # Mempool interface and implementation.
+  "mempool/types",                      # Common mempool types.
+  "merkletree",                         # Merkle tree implementation with merkle proofs.
+  "mocks",                              # Mock implementations of our traits (used for testing)
+  "node-daemon",                        # Node terminal binary.
+  "node-gui",                           # Node GUI binary.
+  "node-lib",                           # Node lib; the common library between daemon, tui and gui node executables.
+  "p2p",                                # P2p communication interfaces and protocols.
+  "p2p/backend-test-suite",             # P2p backend agnostic tests.
+  "p2p/types",                          # P2p support types with minimal dependencies.
+  "pos_accounting",                     # PoS accounting and balances abstractions.
+  "rpc",                                # Rpc abstraction and implementation.
+  "script",                             # Bitcoin script and its interfaces.
+  "serialization",                      # Full featured serialization interfaces and implementations.
+  "serialization/core",                 # Serialization core tools.
+  "serialization/tagged",               # Serialization for direct/tagged encoding style.
+  "serialization/tagged/derive",        # direct/tagged encoding style derive macros.
+  "storage",                            # storage abstraction layer and its implementation.
+  "storage/backend-test-suite",         # Tests for validating storage backend implementations.
+  "storage/core",                       # Core backend-agnostic storage abstraction.
+  "storage/inmemory",                   # In-memory storage backend implementation.
+  "storage/lmdb",                       # LMDB-based persistent storage backend implementation.
+  "storage/sqlite",                     # SQLite-based persistent storage backend implementation.
+  "subsystem",                          # Utilities for working with concurrent subsystems.
+  "test",                               # Integration tests.
+  "test-rpc-functions",                 # RPC functions specifically for tests.
+  "test-utils",                         # Various utilities for tests.
+  "utils",                              # Various utilities.
+  "utxo",                               # Utxo and related utilities (cache, undo, etc.).
+  "wallet",                             # Wallet primitives.
+  "wallet/wallet-cli",                  # Wallet CLI/REPL binary.
+  "wallet/wallet-cli-lib",              # Wallet CLI/REPL lib.
+  "wallet/wallet-controller",           # Common code for wallet UI applications.
+  "wallet/wallet-node-client",          # Wallet-to-node communication tools.
+  "wallet/wallet-address-generator",    # Wallet address generator binary.
+  "wallet/wallet-address-generator-lib",# Wallet address generator lib.
+  "wasm-crypto",                        # WASM bindings for the crypto crate.
 ]
 
 default-members = [
@@ -83,6 +85,7 @@ default-members = [
   "utxo",
   "wallet",
   "wallet/wallet-cli",
+  "wallet/wallet-address-generator",
 ]
 
 [dependencies]
