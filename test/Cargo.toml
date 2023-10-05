@@ -10,6 +10,7 @@ homepage = "https://github.com/mintlayer/mintlayer-core/issues"
 utils = { path = "../utils" }
 node-lib = { path = "../node-lib" }
 wallet-cli-lib = { path = "../wallet/wallet-cli-lib" }
+wallet-address-generator-lib = { path = "../wallet/wallet-address-generator-lib" }
 
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ['full'] }
