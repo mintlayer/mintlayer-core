@@ -97,12 +97,10 @@ impl TransactionalApiServerInMemoryStorage {
     async fn tx_rw(&mut self) -> RwLockWriteGuard<'_, ApiServerInMemoryStorage> {
         self.storage.write().await
     }
-}
 
-impl Clone for TransactionalApiServerInMemoryStorage {
-    fn clone(&self) -> Self {
+    pub async fn clone_storage(&self) -> Self {
         Self {
-            storage: self.storage.blocking_read().clone().into(),
+            storage: self.storage.read().await.clone().into(),
         }
     }
 }

@@ -30,18 +30,16 @@ pub enum BlockchainStateError {
 }
 
 pub struct BlockchainState<S: ApiServerStorage> {
-    storage: Option<S>,
+    storage: S,
 }
 
 impl<S: ApiServerStorage> BlockchainState<S> {
     pub fn new(storage: S) -> Self {
-        Self {
-            storage: Some(storage),
-        }
+        Self { storage }
     }
 
-    pub fn storage(&mut self) -> S {
-        self.storage.take().expect("Storage is available")
+    pub fn storage(&self) -> &S {
+        &self.storage
     }
 }
 
@@ -50,18 +48,9 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
     type Error = BlockchainStateError;
 
     async fn best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), Self::Error> {
-        match &self.storage {
-            Some(storage) => {
-                let db_tx = storage.transaction_ro().await?;
-                let best_block = db_tx.get_best_block().await?;
-                Ok(best_block)
-            }
-            None => Err(BlockchainStateError::StorageError(
-                ApiServerStorageError::AcquiringConnectionFailed(
-                    "Storage is not available".to_string(),
-                ),
-            )),
-        }
+        let db_tx = self.storage.transaction_ro().await?;
+        let best_block = db_tx.get_best_block().await?;
+        Ok(best_block)
     }
 
     async fn scan_blocks(
@@ -69,46 +58,36 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> Result<(), Self::Error> {
-        match &mut self.storage {
-            Some(storage) => {
-                let mut db_tx = storage.transaction_rw().await?;
+        let mut db_tx = self.storage.transaction_rw().await?;
 
-                // Disconnect blocks from main-chain
-                while db_tx.get_best_block().await?.0 > common_block_height {
-                    let current_best = db_tx.get_best_block().await?;
-                    logging::log::info!("Disconnecting block: {:?}", current_best);
-                    db_tx.del_main_chain_block_id(current_best.0).await?;
-                }
-
-                // Connect the new blocks in the new chain
-                for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
-                    let block_height =
-                        BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
-
-                    db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
-                    logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
-
-                    for tx in block.transactions() {
-                        db_tx
-                            .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
-                            .await?;
-                    }
-
-                    db_tx.set_block(block.get_id(), &block).await?;
-                    db_tx.set_best_block(block_height, block.get_id().into()).await?;
-                }
-
-                db_tx.commit().await?;
-
-                logging::log::info!("Database commit completed successfully");
-
-                Ok(())
-            }
-            None => Err(BlockchainStateError::StorageError(
-                ApiServerStorageError::AcquiringConnectionFailed(
-                    "Storage is not available".to_string(),
-                ),
-            )),
+        // Disconnect blocks from main-chain
+        while db_tx.get_best_block().await?.0 > common_block_height {
+            let current_best = db_tx.get_best_block().await?;
+            logging::log::info!("Disconnecting block: {:?}", current_best);
+            db_tx.del_main_chain_block_id(current_best.0).await?;
         }
+
+        // Connect the new blocks in the new chain
+        for (index, block) in blocks.into_iter().map(WithId::new).enumerate() {
+            let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+
+            db_tx.set_main_chain_block_id(block_height, block.get_id()).await?;
+            logging::log::info!("Connected block: ({}, {})", block_height, block.get_id());
+
+            for tx in block.transactions() {
+                db_tx
+                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), tx)
+                    .await?;
+            }
+
+            db_tx.set_block(block.get_id(), &block).await?;
+            db_tx.set_best_block(block_height, block.get_id().into()).await?;
+        }
+
+        db_tx.commit().await?;
+
+        logging::log::info!("Database commit completed successfully");
+
+        Ok(())
     }
 }

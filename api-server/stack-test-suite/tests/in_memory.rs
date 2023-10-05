@@ -227,7 +227,7 @@ mod v1_block {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
@@ -404,7 +404,7 @@ mod v1_block_header {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
@@ -576,7 +576,7 @@ mod v1_block_reward {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
@@ -743,7 +743,7 @@ mod v1_block_transaction_ids {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
@@ -992,7 +992,7 @@ mod v1_chain_at_height {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
@@ -1129,7 +1129,7 @@ mod v1_chain_tip {
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
                     APIServerWebServerState {
-                        db: Arc::new(local_node.storage()),
+                        db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
                 };
