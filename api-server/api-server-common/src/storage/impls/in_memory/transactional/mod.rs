@@ -99,6 +99,14 @@ impl TransactionalApiServerInMemoryStorage {
     }
 }
 
+impl Clone for TransactionalApiServerInMemoryStorage {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.blocking_read().clone().into(),
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<'tx> Transactional<'tx> for TransactionalApiServerInMemoryStorage {
     type TransactionRo = ApiServerInMemoryStorageTransactionalRo<'tx>;
