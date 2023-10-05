@@ -13,15 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-pub mod key_chain;
-pub mod send_request;
-pub mod version;
-pub mod wallet;
-pub mod wallet_events;
+use clap::Parser;
+use wallet_address_generator_lib::CliArgs;
 
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
+fn main() {
+    utils::rust_backtrace::enable();
 
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+
+    let args = CliArgs::parse();
+    wallet_address_generator_lib::run(args).unwrap_or_else(|err| {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    })
+}
