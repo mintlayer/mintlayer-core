@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, panic, sync::Arc};
+use std::{panic, sync::Arc};
 
 use async_trait::async_trait;
 use crypto::random::Rng;
@@ -82,7 +82,6 @@ pub struct TestNode {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     _new_tip_receiver: UnboundedReceiver<Id<Block>>,
-    connected_peers: BTreeMap<PeerId, Sender<SyncMessage>>,
     protocol_version: ProtocolVersion,
 }
 
@@ -109,7 +108,6 @@ impl TestNode {
         protocol_version: ProtocolVersion,
     ) -> Self {
         let (peer_manager_event_sender, peer_manager_event_receiver) = mpsc::unbounded_channel();
-        let connected_peers = Default::default();
 
         let (sync_msg_sender, sync_msg_receiver) = mpsc::unbounded_channel();
         let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
@@ -129,7 +127,7 @@ impl TestNode {
             time_getter,
         );
 
-        let sync_manager_chanstate_handle = sync_manager.chainstate().clone();
+        let sync_manager_chainstate_handle = sync_manager.chainstate().clone();
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
         let sync_manager_handle = logging::spawn_in_current_span(async move {
@@ -137,7 +135,7 @@ impl TestNode {
             let _ = error_sender.send(e);
         });
 
-        let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chanstate_handle).await.unwrap();
+        let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chainstate_handle).await.unwrap();
 
         Self {
             peer_id: PeerId::new(),
@@ -152,7 +150,6 @@ impl TestNode {
             chainstate_handle,
             mempool_handle,
             _new_tip_receiver: new_tip_receiver,
-            connected_peers,
             protocol_version,
         }
     }
@@ -166,7 +163,12 @@ impl TestNode {
     }
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
-    pub fn try_connect_peer(&mut self, peer_id: PeerId, protocol_version: ProtocolVersion) {
+    #[must_use]
+    pub fn try_connect_peer(
+        &mut self,
+        peer_id: PeerId,
+        protocol_version: ProtocolVersion,
+    ) -> TestPeer {
         let (sync_msg_tx, sync_msg_rx) = mpsc::channel(20);
         let common_protocol_version =
             choose_common_protocol_version(self.protocol_version, protocol_version).unwrap();
@@ -178,25 +180,30 @@ impl TestNode {
                 sync_msg_rx,
             })
             .unwrap();
-        self.connected_peers.insert(peer_id, sync_msg_tx);
+        TestPeer::new(peer_id, sync_msg_tx)
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
-    pub async fn connect_peer(&mut self, peer: PeerId, protocol_version: ProtocolVersion) {
-        self.try_connect_peer(peer, protocol_version);
+    #[must_use]
+    pub async fn connect_peer(
+        &mut self,
+        peer_id: PeerId,
+        protocol_version: ProtocolVersion,
+    ) -> TestPeer {
+        let peer = self.try_connect_peer(peer_id, protocol_version);
 
         let (sent_to, message) = self.message().await;
-        assert_eq!(peer, sent_to);
+        assert_eq!(peer.get_id(), sent_to);
         assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+        peer
     }
 
     /// Sends the `SyncControlEvent::Disconnected` event.
     pub fn disconnect_peer(&mut self, peer_id: PeerId) {
         self.syncing_event_sender.send(SyncingEvent::Disconnected { peer_id }).unwrap();
-        self.connected_peers.remove(&peer_id);
     }
 
-    // TODO: naming of methods in this struct should be reconsidered.
+    // FIXME: naming of methods in this struct should be reconsidered.
     // E.g. message, try_message, adjust_peer_score_event should at least get a prefix like
     // "get", "receive" etc.
     // Secondly, send_message and send_headers should be named more specifically, e.g.
@@ -204,13 +211,8 @@ impl TestNode {
     // and not from it.
     // Also, methods dealing with SyncMessage's should probably have "sync" in their name.
 
-    /// Sends an announcement to the sync manager.
-    pub async fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
-        let sync_tx = self.connected_peers.get(&peer).unwrap().clone();
-        sync_tx.send(message).await.unwrap();
-    }
-
     /// Receives a message from the sync manager.
+    // FIXME: this is also unclear
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
         expect_recv!(self.sync_msg_receiver)
     }
@@ -222,11 +224,6 @@ impl TestNode {
             Err(mpsc::error::TryRecvError::Empty) => None,
             Err(mpsc::error::TryRecvError::Disconnected) => panic!("Failed to receive event"),
         }
-    }
-
-    /// Send the specified headers.
-    pub async fn send_headers(&mut self, peer: PeerId, headers: Vec<SignedBlockHeader>) {
-        self.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
     }
 
     /// Panics if the sync manager returns an error.
@@ -345,6 +342,33 @@ impl TestNode {
             .await
             .unwrap()
             .unwrap()
+    }
+}
+
+// Represents a peer that can send messages to a node it is connected to
+pub struct TestPeer {
+    peer_id: PeerId,
+    sync_msg_tx: Sender<SyncMessage>,
+}
+
+impl TestPeer {
+    pub fn new(peer_id: PeerId, sync_msg_tx: Sender<SyncMessage>) -> Self {
+        Self {
+            peer_id,
+            sync_msg_tx,
+        }
+    }
+
+    pub fn get_id(&self) -> PeerId {
+        self.peer_id
+    }
+
+    pub async fn send_message(&self, message: SyncMessage) {
+        self.sync_msg_tx.send(message).await.unwrap();
+    }
+
+    pub async fn send_headers(&self, headers: Vec<SignedBlockHeader>) {
+        self.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
     }
 }
 

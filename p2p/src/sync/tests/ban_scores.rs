@@ -131,17 +131,15 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer_id = PeerId::new();
-        node.connect_peer(peer_id, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_message(
-            peer_id,
-            SyncMessage::HeaderList(HeaderList::new(vec![valid_child_block.header().clone()])),
-        )
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![
+            valid_child_block.header().clone(),
+        ])))
         .await;
 
         let (adjusted_peer_id, ban_score_delta) = node.adjust_peer_score_event().await;
-        assert_eq!(adjusted_peer_id, peer_id);
+        assert_eq!(adjusted_peer_id, peer.get_id());
         assert_eq!(ban_score_delta, 100);
 
         node.join_subsystem_manager().await;

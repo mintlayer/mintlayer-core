@@ -53,16 +53,15 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = iter::repeat(block.header().clone())
             .take(*p2p_config.msg_header_count_limit + 1)
             .collect();
-        node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
         let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
@@ -101,13 +100,12 @@ async fn unordered_headers(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
         let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
@@ -144,13 +142,12 @@ async fn disconnected_headers(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
         let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
@@ -183,14 +180,13 @@ async fn valid_headers(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = blocks.iter().map(|b| b.header().clone()).collect();
-        node.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers))).await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(headers))).await;
 
         let (sent_to, message) = node.message().await;
-        assert_eq!(peer, sent_to);
+        assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
             SyncMessage::BlockListRequest(BlockListRequest::new(
@@ -240,11 +236,10 @@ async fn disconnect() {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         tokio::time::sleep(Duration::from_millis(300)).await;
-        node.assert_disconnect_peer_event(peer).await;
+        node.assert_disconnect_peer_event(peer.get_id()).await;
 
         node.join_subsystem_manager().await;
     })
