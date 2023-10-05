@@ -31,7 +31,7 @@ use common::{
     },
     primitives::{Id, Idable, H256},
 };
-use std::sync::Arc;
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 mod accumulator;
 mod expiry;
