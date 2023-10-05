@@ -41,10 +41,10 @@ pub fn collect_txs<M>(
 
     if tx_accumulator.expected_tip() != mempool_tip {
         log::debug!(
-                "Mempool rejected transaction accumulator due to different tip: expected tip {:?} (current tip {:?})",
-                tx_accumulator.expected_tip(),
-                mempool.best_block_id(),
-            );
+            "Tx accumulator rejected due to tip mismatch: expected tip {:?} (current tip {:?})",
+            tx_accumulator.expected_tip(),
+            mempool.best_block_id(),
+        );
         return None;
     }
 
@@ -150,9 +150,9 @@ pub fn collect_txs<M>(
 
         if let Err(err) = verification_result {
             log::error!(
-                    "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}. Error: {err}",
-                    next_tx.tx_id()
-                );
+                "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}: {err}",
+                next_tx.tx_id()
+            );
             continue;
         }
 
