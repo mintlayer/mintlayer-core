@@ -15,7 +15,10 @@
 
 use api_server_common::PostgresConfig;
 use clap::Parser;
-use std::{net::SocketAddr, ops::Deref};
+use std::{
+    net::{SocketAddr, TcpListener},
+    ops::Deref,
+};
 
 const LISTEN_ADDRESS: &str = "127.0.0.1:3000";
 
@@ -36,13 +39,20 @@ pub struct ApiServerWebServerConfig {
 
 #[derive(Clone, Debug, Parser)]
 pub struct ListenAddress {
-    address: SocketAddr,
+    socket: SocketAddr,
+}
+
+impl ListenAddress {
+    #[allow(dead_code)]
+    pub fn tcp_listener(&self) -> std::net::TcpListener {
+        TcpListener::bind(self.socket).expect("Valid listening address")
+    }
 }
 
 impl Default for ListenAddress {
     fn default() -> Self {
         Self {
-            address: LISTEN_ADDRESS.to_string().parse().expect("Valid listening address"),
+            socket: LISTEN_ADDRESS.to_string().parse().expect("Valid listening address"),
         }
     }
 }
@@ -51,14 +61,14 @@ impl Deref for ListenAddress {
     type Target = SocketAddr;
 
     fn deref(&self) -> &Self::Target {
-        &self.address
+        &self.socket
     }
 }
 
 impl From<String> for ListenAddress {
     fn from(address: String) -> Self {
         Self {
-            address: address.parse().expect("Valid listening address"),
+            socket: address.parse().expect("Valid listening address"),
         }
     }
 }
