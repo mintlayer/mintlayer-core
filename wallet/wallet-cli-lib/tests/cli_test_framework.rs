@@ -46,7 +46,7 @@ use rpc::{rpc_creds::RpcCreds, RpcConfig};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
-    config::{Network, WalletCliArgs},
+    config::{Network, RegtestOptions, WalletCliArgs},
     console::{ConsoleInput, ConsoleOutput},
     errors::WalletCliError,
 };
@@ -293,34 +293,38 @@ impl CliTestFramework {
         let manager_task = manager.main_in_task();
 
         let wallet_options = WalletCliArgs {
-            network: Network::Regtest(Box::new(config::regtest_options::ChainConfigOptions {
-                chain_magic_bytes: None,
-                chain_max_future_block_time_offset: None,
-                software_version: None,
-                chain_target_block_spacing: None,
-                chain_coin_decimals: None,
-                chain_emission_schedule: None,
-                chain_max_block_header_size: None,
-                chain_max_block_size_with_standard_txs: None,
-                chain_max_block_size_with_smart_contracts: None,
-                chain_initial_difficulty: None,
-                chain_pos_netupgrades: None,
-                chain_pos_netupgrades_v0_to_v1: None,
-                chain_genesis_block_timestamp: None,
-                chain_genesis_staking_settings: GenesisStakingSettings::default(),
+            network: Network::Regtest(Box::new(RegtestOptions {
+                chain_config: config::regtest_options::ChainConfigOptions {
+                    chain_magic_bytes: None,
+                    chain_max_future_block_time_offset: None,
+                    software_version: None,
+                    chain_target_block_spacing: None,
+                    chain_coin_decimals: None,
+                    chain_emission_schedule: None,
+                    chain_max_block_header_size: None,
+                    chain_max_block_size_with_standard_txs: None,
+                    chain_max_block_size_with_smart_contracts: None,
+                    chain_initial_difficulty: None,
+                    chain_pos_netupgrades: None,
+                    chain_pos_netupgrades_v0_to_v1: None,
+                    chain_genesis_block_timestamp: None,
+                    chain_genesis_staking_settings: GenesisStakingSettings::default(),
+                },
+                run_options: wallet_cli_lib::config::CliArgs {
+                    wallet_file: None,
+                    wallet_password: None,
+                    start_staking: false,
+                    rpc_address: Some(rpc_address.to_string()),
+                    rpc_cookie_file: None,
+                    rpc_username: Some(RPC_USERNAME.to_owned()),
+                    rpc_password: Some(RPC_PASSWORD.to_owned()),
+                    commands_file: None,
+                    history_file: None,
+                    exit_on_error: None,
+                    vi_mode: false,
+                    in_top_x_mb: 5,
+                },
             })),
-            wallet_file: None,
-            wallet_password: None,
-            start_staking: false,
-            rpc_address: Some(rpc_address.to_string()),
-            rpc_cookie_file: None,
-            rpc_username: Some(RPC_USERNAME.to_owned()),
-            rpc_password: Some(RPC_PASSWORD.to_owned()),
-            commands_file: None,
-            history_file: None,
-            exit_on_error: None,
-            vi_mode: false,
-            in_top_x_mb: 5,
         };
 
         let (output_tx, output_rx) = std::sync::mpsc::channel();

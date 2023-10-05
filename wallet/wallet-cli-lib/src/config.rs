@@ -15,15 +15,23 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
-    Mainnet,
-    Testnet,
-    Regtest(Box<ChainConfigOptions>),
-    Signet,
+    Mainnet(CliArgs),
+    Testnet(CliArgs),
+    Regtest(Box<RegtestOptions>),
+    Signet(CliArgs),
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct RegtestOptions {
+    #[clap(flatten)]
+    pub run_options: CliArgs,
+    #[clap(flatten)]
+    pub chain_config: ChainConfigOptions,
 }
 
 #[derive(Parser, Debug)]
@@ -32,7 +40,19 @@ pub struct WalletCliArgs {
     /// Network
     #[clap(subcommand)]
     pub network: Network,
+}
 
+impl WalletCliArgs {
+    pub fn cli_args(self) -> CliArgs {
+        match self.network {
+            Network::Mainnet(args) | Network::Signet(args) | Network::Testnet(args) => args,
+            Network::Regtest(args) => args.run_options,
+        }
+    }
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct CliArgs {
     /// Optional path to the wallet file
     #[clap(long)]
     pub wallet_file: Option<PathBuf>,
@@ -88,10 +108,10 @@ pub struct WalletCliArgs {
 impl From<&Network> for ChainType {
     fn from(value: &Network) -> Self {
         match value {
-            Network::Mainnet => ChainType::Mainnet,
-            Network::Testnet => ChainType::Testnet,
+            Network::Mainnet(_) => ChainType::Mainnet,
+            Network::Testnet(_) => ChainType::Testnet,
             Network::Regtest(_) => ChainType::Regtest,
-            Network::Signet => ChainType::Signet,
+            Network::Signet(_) => ChainType::Signet,
         }
     }
 }
