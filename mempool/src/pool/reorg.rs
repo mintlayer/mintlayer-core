@@ -47,7 +47,7 @@ pub enum ReorgError {
 }
 
 /// Collect blocks between the given two points
-fn collect_blocks<C: ChainstateInterface>(
+fn collect_blocks<C: ChainstateInterface + ?Sized>(
     chainstate: &C,
     mut curr_id: Id<GenBlock>,
     stop_id: Id<GenBlock>,
@@ -77,7 +77,7 @@ struct ReorgData {
 
 impl ReorgData {
     /// Extract blocks that have been disconnected and connected from the chainstate.
-    fn from_chainstate<C: ChainstateInterface>(
+    fn from_chainstate<C: ChainstateInterface + ?Sized>(
         chainstate: &C,
         old_tip_id: Id<GenBlock>,
         new_tip_id: Id<GenBlock>,

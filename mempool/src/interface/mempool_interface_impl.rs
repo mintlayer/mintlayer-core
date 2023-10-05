@@ -19,9 +19,8 @@ use crate::{
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::TransactionAccumulator,
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
+    FeeRate, MempoolInterface, MempoolMaxSize, TxStatus,
 };
-use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::Id,
@@ -29,8 +28,6 @@ use common::{
 };
 use logging::log;
 use std::sync::Arc;
-use subsystem::{CallRequest, ShutdownRequest};
-use tokio::sync::mpsc;
 use utils::tap_error_log::LogError;
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
@@ -38,16 +35,16 @@ type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 /// Mempool initializer
 ///
 /// Contains all the information required to spin up the mempool subsystem
-struct MempoolInit {
+pub struct MempoolInit {
     chain_config: Arc<ChainConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 }
 
 impl MempoolInit {
     fn new(
         chain_config: Arc<ChainConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate_handle: chainstate::ChainstateHandle,
         time_getter: TimeGetter,
     ) -> Self {
         Self {
@@ -57,29 +54,10 @@ impl MempoolInit {
         }
     }
 
-    pub async fn subscribe_to_chainstate_events(
-        chainstate: &subsystem::Handle<Box<dyn ChainstateInterface>>,
-    ) -> crate::Result<mpsc::UnboundedReceiver<chainstate::ChainstateEvent>> {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let subscribe_func = Arc::new(move |chainstate_event: chainstate::ChainstateEvent| {
-            let _ = tx.send(chainstate_event).log_err_pfx("Mempool event handler closed");
-        });
-
-        chainstate
-            .call_mut(|this| this.subscribe_to_events(subscribe_func))
-            .await
-            .map_err(|e| Error::Validity(e.into()))?;
-        Ok(rx)
-    }
-}
-
-#[async_trait::async_trait]
-impl MempoolSubsystemInterface for MempoolInit {
-    async fn run(
+    pub async fn init(
         self,
-        mut call_rq: CallRequest<dyn MempoolInterface>,
-        mut shut_rq: ShutdownRequest,
-    ) {
+        this: subsystem::SubmitOnlyHandle<dyn MempoolInterface>,
+    ) -> Result<MempoolImpl, subsystem::error::CallError> {
         log::info!("Starting mempool");
         let mempool = Mempool::new(
             self.chain_config,
@@ -87,41 +65,25 @@ impl MempoolSubsystemInterface for MempoolInit {
             self.time_getter,
             StoreMemoryUsageEstimator,
         );
-        let mut mempool = MempoolImpl::new(mempool);
+        let mempool = MempoolImpl::new(mempool);
 
         log::trace!("Subscribing to chainstate events");
-        let mut chainstate_events_rx =
-            Self::subscribe_to_chainstate_events(mempool.mempool.chainstate_handle())
-                .await
-                .log_err()
-                .expect("chainstate event subscription");
+        let subscribe_func = Arc::new(move |event: chainstate::ChainstateEvent| {
+            let _ = this
+                .submit_mut(|this| this.notify_chainstate_event(event))
+                .log_warn_pfx("Mempool cannot handle a chainstate event");
+        });
 
-        log::trace!("Entering mempool main loop");
-        loop {
-            let work_signal = mempool.work_signal();
+        mempool
+            .chainstate_handle()
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await?;
 
-            tokio::select! {
-                // We use biased mode to prioritize events coming from particular sources. Most
-                // notably, the orphan processing should only happen if there's nothing else to do.
-                biased;
-
-                // No point of doing anything else when shutting down anyway, handle it first.
-                () = shut_rq.recv() => break,
-
-                // Handle chainstate event next so we have up-to-date tip as soon as possible.
-                Some(evt) = chainstate_events_rx.recv() => mempool.process_chainstate_event(evt),
-
-                // Calls from other subsystems or RPC go next.
-                call = call_rq.recv() => call.handle_call_mut(&mut mempool).await,
-
-                // Finally, if there's nothing else to do, handle orphan tx processing.
-                () = work_signal => mempool.perform_work_unit(),
-            }
-        }
+        Ok(mempool)
     }
 }
 
-struct MempoolImpl {
+pub struct MempoolImpl {
     mempool: Mempool,
     work_queue: crate::pool::WorkQueue,
 }
@@ -136,6 +98,11 @@ impl MempoolImpl {
         }
     }
 
+    /// Get chainstate handle
+    fn chainstate_handle(&self) -> &chainstate::ChainstateHandle {
+        self.mempool.chainstate_handle()
+    }
+
     /// Handle chainstate events such as new tip
     fn process_chainstate_event(&mut self, evt: chainstate::ChainstateEvent) {
         let _ = self
@@ -147,16 +114,6 @@ impl MempoolImpl {
     /// Has orphan processing work to do
     fn has_work(&self) -> bool {
         !self.work_queue.is_empty()
-    }
-
-    /// A future that resolves instantly if there's orphan work to do and is pending if there's not.
-    ///
-    /// CAUTION: This is a one-off check and does not continually check whether some more work has
-    /// arrived. Has to be `await`-ed again to check again. For use in event loop `select!` only.
-    async fn work_signal(&self) {
-        if !self.has_work() {
-            std::future::pending().await
-        }
     }
 
     /// Perform one unit of work. To be called when there are no other events.
@@ -241,13 +198,37 @@ impl MempoolInterface for MempoolImpl {
         self.mempool.on_peer_disconnected(peer_id);
         self.work_queue.remove_peer(peer_id);
     }
+
+    fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent) {
+        self.process_chainstate_event(event);
+    }
+}
+
+impl subsystem::Subsystem for MempoolImpl {
+    type Interface = dyn MempoolInterface;
+
+    fn interface_ref(&self) -> &Self::Interface {
+        self
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self
+    }
+
+    fn perform_background_work_unit(&mut self) {
+        self.perform_work_unit()
+    }
+
+    fn has_background_work(&self) -> bool {
+        self.has_work()
+    }
 }
 
 /// Mempool constructor
 pub fn make_mempool(
     chain_config: Arc<ChainConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
-) -> impl MempoolSubsystemInterface {
+) -> MempoolInit {
     MempoolInit::new(chain_config, chainstate_handle, time_getter)
 }

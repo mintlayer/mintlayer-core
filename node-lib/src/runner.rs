@@ -30,7 +30,7 @@ use chainstate::{rpc::ChainstateRpcServer, ChainstateError, InitializationError}
 use common::chain::config::{assert_no_ignore_consensus_in_chain_config, ChainType};
 use logging::log;
 
-use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
+use mempool::rpc::MempoolRpcServer;
 
 use test_rpc_functions::{empty::make_empty_rpc_test_functions, rpc::RpcTestFunctionsRpcServer};
 
@@ -77,8 +77,8 @@ async fn initialize(
 
     // INITIALIZE SUBSYSTEMS
 
-    let mut manager = subsystem::Manager::new("mintlayer");
-    manager.install_signal_handlers();
+    let manager_config = subsystem::ManagerConfig::new("mintlayer").enable_signal_handlers();
+    let mut manager = subsystem::Manager::new_with_config(manager_config);
 
     // Chainstate subsystem
     let chainstate = chainstate_launcher::make_chainstate(
@@ -94,9 +94,7 @@ async fn initialize(
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
-        move |call, shutdn| mempool.run(call, shutdn)
-    });
+    let mempool = manager.add_custom_subsystem("mempool", |handle| mempool.init(handle));
 
     // P2P subsystem
     // TODO: Replace Lmdb with Sqlite backend when it's ready
@@ -113,10 +111,8 @@ async fn initialize(
         subsystem::Handle::clone(&mempool),
         Default::default(),
         peerdb_storage,
-    )?;
-    let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
-        move |call, shutdown| p2p.run(call, shutdown)
-    });
+    )?
+    .add_to_manager("p2p", &mut manager);
 
     // Block production
     let block_prod = manager.add_subsystem(
@@ -134,13 +130,13 @@ async fn initialize(
     // RPC Functions for tests
     let rpc_test_functions = if chain_config.chain_type() == &ChainType::Regtest {
         // We add the test rpc functions only if we are in regtest mode
-        manager.add_subsystem(
+        manager.add_direct_subsystem(
             "rpc_test_functions",
             make_rpc_test_functions(Arc::clone(&chain_config)),
         )
     } else {
         // Otherwise we add empty rpc functions
-        manager.add_subsystem("rpc_test_functions", make_empty_rpc_test_functions())
+        manager.add_direct_subsystem("rpc_test_functions", make_empty_rpc_test_functions())
     };
 
     // RPC subsystem

@@ -25,7 +25,6 @@ use common::{
     primitives::Id,
 };
 use std::sync::Arc;
-use subsystem::{CallRequest, ShutdownRequest};
 
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction from remote peer to mempool
@@ -85,9 +84,7 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Notify mempool given peer has disconnected
     fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);
-}
 
-#[async_trait::async_trait]
-pub trait MempoolSubsystemInterface: 'static {
-    async fn run(self, call_rq: CallRequest<dyn MempoolInterface>, shut_rq: ShutdownRequest);
+    /// Notify mempool about given chainstate event
+    fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent);
 }

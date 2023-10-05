@@ -26,7 +26,7 @@ use storage_lmdb::resize_callback::MapResizeCallback;
 // Some useful reexports
 pub use chainstate::{
     chainstate_interface::ChainstateInterface, ChainstateConfig, ChainstateError as Error,
-    DefaultTransactionVerificationStrategy,
+    ChainstateSubsystem, DefaultTransactionVerificationStrategy,
 };
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
@@ -38,7 +38,7 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     storage_backend: B,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
-) -> Result<Box<dyn ChainstateInterface>, Error> {
+) -> Result<ChainstateSubsystem, Error> {
     let storage = chainstate_storage::Store::new(storage_backend, &chain_config)
         .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
 
@@ -61,7 +61,7 @@ pub fn make_chainstate(
     datadir: &std::path::Path,
     chain_config: Arc<ChainConfig>,
     config: ChainstateLauncherConfig,
-) -> Result<Box<dyn ChainstateInterface>, Error> {
+) -> Result<ChainstateSubsystem, Error> {
     let ChainstateLauncherConfig {
         storage_backend,
         chainstate_config,

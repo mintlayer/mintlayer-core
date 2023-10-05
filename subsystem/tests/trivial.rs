@@ -13,12 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-type NoRequest = subsystem::CallRequest<()>;
-
 mod helpers;
 
 struct Trivial;
-impl subsystem::Subsystem for Trivial {}
 
 // Test an empty app startup/shutdown
 #[test]
@@ -35,9 +32,10 @@ fn empty() {
 fn shortlived() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
-        let mut app = subsystem::Manager::new("shortlived");
-        app.add_subsystem_with_custom_eventloop("nop", |_: NoRequest, _| async {});
-        app.main().await;
+        let app = subsystem::Manager::new("shortlived");
+        let shutdown = app.make_shutdown_trigger();
+        let shutdowner = tokio::spawn(async move { shutdown.initiate() });
+        let _ = tokio::join!(app.main(), shutdowner);
     });
 }
 
@@ -47,9 +45,10 @@ fn trivial() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let mut app = subsystem::Manager::new("trivial");
-        app.add_subsystem("trivial", Trivial);
-        app.add_subsystem_with_custom_eventloop("nop", |_: NoRequest, _| async {});
-        app.main().await;
+        app.add_direct_subsystem("trivial", Trivial);
+        let shutdown = app.make_shutdown_trigger();
+        let shutdowner = tokio::spawn(async move { shutdown.initiate() });
+        let _ = tokio::join!(app.main(), shutdowner);
     });
 }
 
@@ -60,10 +59,9 @@ fn panic() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let mut app = subsystem::Manager::new("panic");
-        app.add_subsystem_with_custom_eventloop("panic", |_: NoRequest, _| async {
-            panic!("boom")
-        });
-        app.add_subsystem("trivial", Trivial);
+        let panic_subsys = app.add_direct_subsystem("panic", Trivial);
+        app.add_direct_subsystem("trivial", Trivial);
+        panic_subsys.as_submit_only().submit(|_| panic!("boom")).unwrap();
         app.main().await;
     });
 }

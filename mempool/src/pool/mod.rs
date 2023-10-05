@@ -91,7 +91,7 @@ pub struct Mempool<M> {
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: MempoolMaxSize,
     max_tx_age: Duration,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    chainstate_handle: chainstate::ChainstateHandle,
     clock: TimeGetter,
     memory_usage_estimator: M,
     events_controller: EventsController<MempoolEvent>,
@@ -108,7 +108,7 @@ impl<M> std::fmt::Debug for Mempool<M> {
 impl<M> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
@@ -134,13 +134,13 @@ impl<M> Mempool<M> {
         }
     }
 
-    pub fn chainstate_handle(&self) -> &subsystem::Handle<Box<dyn ChainstateInterface>> {
+    pub fn chainstate_handle(&self) -> &chainstate::ChainstateHandle {
         &self.chainstate_handle
     }
 
     pub fn blocking_chainstate_handle(
         &self,
-    ) -> subsystem::blocking::BlockingHandle<Box<dyn ChainstateInterface>> {
+    ) -> subsystem::blocking::BlockingHandle<dyn ChainstateInterface> {
         subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone())
     }
 

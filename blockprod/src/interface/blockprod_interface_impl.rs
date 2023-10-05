@@ -51,3 +51,15 @@ impl BlockProductionInterface for BlockProduction {
         Ok(block)
     }
 }
+
+impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {
+    type Interface = dyn BlockProductionInterface;
+
+    fn interface_ref(&self) -> &Self::Interface {
+        self.as_ref()
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self.as_mut()
+    }
+}

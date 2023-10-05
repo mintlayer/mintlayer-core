@@ -17,19 +17,18 @@
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
 use chainstate::chainstate_interface::ChainstateInterface;
-use subsystem::Handle;
 use utils::{atomics::AcqRelAtomicBool, sync::Arc};
 
 #[derive(Clone)]
 pub struct ChainstateHandle {
-    handle: Handle<Box<dyn ChainstateInterface>>,
+    handle: chainstate::ChainstateHandle,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
     is_initial_block_download: Arc<AcqRelAtomicBool>,
 }
 
 impl ChainstateHandle {
-    pub fn new(handle: Handle<Box<dyn ChainstateInterface>>) -> ChainstateHandle {
+    pub fn new(handle: chainstate::ChainstateHandle) -> ChainstateHandle {
         ChainstateHandle {
             handle,
             is_initial_block_download: Arc::new(true.into()),

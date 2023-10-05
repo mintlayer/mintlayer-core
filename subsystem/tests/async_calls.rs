@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use subsystem::{error::CallError, subsystem::CallRequest};
+use subsystem::error::CallError;
 
 mod helpers;
 
@@ -22,11 +22,9 @@ pub struct Logger {
     prefix: String,
 }
 
-impl subsystem::Subsystem for Logger {}
-
 impl Logger {
     fn new(prefix: String) -> Self {
-        Logger { prefix }
+        Self { prefix }
     }
 
     fn write(&self, message: &str) {
@@ -39,8 +37,6 @@ pub struct Counter {
     count: u64,
     logger: subsystem::Handle<Logger>,
 }
-
-impl subsystem::Subsystem for Counter {}
 
 impl Counter {
     fn new(logger: subsystem::Handle<Logger>) -> Self {
@@ -64,25 +60,25 @@ fn async_calls() {
     utils::concurrency::model(move || {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
-            let logger = app.add_subsystem("logger", Logger::new("logging".to_string()));
-            let counter = app.add_subsystem("counter", Counter::new(logger.clone()));
+            let logger = app.add_direct_subsystem("logger", Logger::new("logging".to_string()));
+            let counter = app.add_direct_subsystem("counter", Counter::new(logger.clone()));
+            let shutdown = app.make_shutdown_trigger();
 
-            app.add_subsystem_with_custom_eventloop(
-                "test",
-                |_call_rq: CallRequest<()>, _shut_rq| async move {
-                    logger.call(|l| l.write("starting")).await.unwrap();
+            let tester = tokio::spawn(async move {
+                logger.call(|l| l.write("starting")).await.unwrap();
 
-                    // Bump the counter twice
-                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                    assert_eq!(res, Ok(Ok(1)));
-                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                    assert_eq!(res, Ok(Ok(2)));
+                // Bump the counter twice
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(1)));
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(2)));
 
-                    logger.call(|l| l.write("done")).await.unwrap();
-                },
-            );
+                logger.call(|l| l.write("done")).await.unwrap();
 
-            app.main().await
+                shutdown.initiate();
+            });
+
+            let _ = tokio::join!(app.main(), tester);
         })
     })
 }

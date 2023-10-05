@@ -48,8 +48,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
-use mempool::{MempoolHandle, MempoolSubsystemInterface};
-use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use mempool::MempoolHandle;
+use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
@@ -428,9 +428,7 @@ impl TestNodeBuilder {
             chainstate.clone(),
             time_getter.clone(),
         );
-        let mempool = manager.add_subsystem_with_custom_eventloop("p2p-sync-test-mempool", {
-            move |call, shutdn| mempool.run(call, shutdn)
-        });
+        let mempool = manager.add_custom_subsystem("p2p-sync-test-mempool", |h| mempool.init(h));
 
         let manager_handle = manager.main_in_task();
 

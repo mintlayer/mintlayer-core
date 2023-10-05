@@ -26,9 +26,8 @@ use mempool::{
     event::MempoolEvent,
     tx_accumulator::TransactionAccumulator,
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
-    FeeRate, MempoolInterface, MempoolMaxSize, MempoolSubsystemInterface, TxStatus,
+    FeeRate, MempoolInterface, MempoolMaxSize, TxStatus,
 };
-use subsystem::{CallRequest, ShutdownRequest};
 
 mockall::mock! {
     pub MempoolInterface {}
@@ -63,22 +62,20 @@ mockall::mock! {
         fn get_max_size(&self) -> MempoolMaxSize;
         fn set_max_size(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;
         fn get_fee_rate(&self, in_top_x_mb: usize) -> Result<FeeRate, Error>;
+
         fn notify_peer_disconnected(&mut self, peer_id: p2p_types::PeerId);
+        fn notify_chainstate_event(&mut self, event: chainstate::ChainstateEvent);
     }
 }
 
-#[async_trait::async_trait]
-impl MempoolSubsystemInterface for MockMempoolInterface {
-    async fn run(
-        mut self,
-        mut call_rq: CallRequest<dyn MempoolInterface>,
-        mut shut_rq: ShutdownRequest,
-    ) {
-        loop {
-            tokio::select! {
-                call = call_rq.recv() => call.handle_call_mut(&mut self).await,
-                () = shut_rq.recv() => return,
-            }
-        }
+impl subsystem::Subsystem for MockMempoolInterface {
+    type Interface = dyn MempoolInterface;
+
+    fn interface_ref(&self) -> &Self::Interface {
+        self
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self
     }
 }

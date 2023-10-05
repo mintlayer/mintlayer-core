@@ -19,7 +19,7 @@ use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
 use rpc::Result as RpcResult;
-use subsystem::manager::ShutdownTrigger;
+use subsystem::ShutdownTrigger;
 
 #[rpc::rpc(server, client, namespace = "node")]
 pub trait NodeRpc {

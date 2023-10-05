@@ -14,32 +14,33 @@
 // limitations under the License.
 
 use logging::log;
-use std::time::{Duration, Instant};
+use std::{
+    convert::Infallible,
+    time::{Duration, Instant},
+};
 
-use subsystem::subsystem::{CallRequest, ShutdownRequest};
-
-struct Stopwatch(Instant);
+struct Stopwatch {
+    start: Instant,
+    tick_task: tokio::task::JoinHandle<()>,
+}
 
 impl Stopwatch {
-    async fn start(mut call_rq: CallRequest<Self>, mut shutdown_rq: ShutdownRequest) {
-        let mut stopwatch = Self::new(Instant::now());
-        let mut interval = tokio::time::interval(Duration::from_millis(500));
-        loop {
-            tokio::select! {
-                () = shutdown_rq.recv() => break,
-                call = call_rq.recv() => call.handle_call_mut(&mut stopwatch).await,
-                _ = interval.tick() => stopwatch.report("Running"),
+    #[allow(clippy::unused_async)]
+    async fn init(handle: subsystem::SubmitOnlyHandle<Self>) -> Result<Self, Infallible> {
+        let start = Instant::now();
+        let tick_task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_millis(500));
+            loop {
+                interval.tick().await;
+                let _ = handle.submit(|this| this.report("Running"));
             }
-        }
-        stopwatch.report("Elapsed");
-    }
+        });
 
-    fn new(start: Instant) -> Self {
-        Self(start)
+        Ok(Self { start, tick_task })
     }
 
     fn elapsed(&self) -> Duration {
-        Instant::now().duration_since(self.0)
+        Instant::now().duration_since(self.start)
     }
 
     fn report(&self, msg: &str) {
@@ -47,12 +48,31 @@ impl Stopwatch {
     }
 }
 
+#[async_trait::async_trait]
+impl subsystem::Subsystem for Stopwatch {
+    type Interface = Self;
+
+    fn interface_ref(&self) -> &Self {
+        self
+    }
+
+    fn interface_mut(&mut self) -> &mut Self {
+        self
+    }
+
+    async fn shutdown(self) {
+        self.report("Elapsed");
+        self.tick_task.abort();
+        let _ = self.tick_task.await;
+    }
+}
+
 #[tokio::main]
 async fn main() {
     logging::init_logging();
 
-    let mut app = subsystem::Manager::new("toplevel");
-    app.install_signal_handlers();
-    app.add_subsystem_with_custom_eventloop("watch", Stopwatch::start);
+    let config = subsystem::ManagerConfig::new("toplevel").enable_signal_handlers();
+    let mut app = subsystem::Manager::new_with_config(config);
+    app.add_custom_subsystem("stopwatch", Stopwatch::init);
     app.main().await
 }

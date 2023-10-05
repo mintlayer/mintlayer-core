@@ -40,10 +40,10 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
-use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
+use mempool::rpc::MempoolRpcServer;
 use p2p::rpc::P2pRpcServer;
 use rpc::{rpc_creds::RpcCreds, RpcConfig};
-use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
     config::{Network, WalletCliArgs},
@@ -224,9 +224,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         chainstate.clone(),
         Default::default(),
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
-        move |call, shutdn| mempool.run(call, shutdn)
-    });
+    let mempool = manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl| mempool.init(hdl));
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
@@ -237,10 +235,8 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         Default::default(),
         peerdb_storage,
     )
-    .unwrap();
-    let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
-        move |call, shutdown| p2p.run(call, shutdown)
-    });
+    .unwrap()
+    .add_to_manager("p2p", &mut manager);
 
     // Block production
     let block_prod = manager.add_subsystem(

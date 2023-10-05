@@ -15,11 +15,7 @@
 
 use std::fmt::Debug;
 
-use blockprod::interface::blockprod_interface::BlockProductionInterface;
-use chainstate_launcher::ChainstateInterface;
-use mempool::MempoolInterface;
-use p2p::interface::p2p_interface::P2pInterface;
-use subsystem::{manager::ShutdownTrigger, Handle};
+use subsystem::ShutdownTrigger;
 
 /// Controller for the node subsystems.
 /// It contains handles to the subsystems to be used by components
@@ -27,10 +23,10 @@ use subsystem::{manager::ShutdownTrigger, Handle};
 #[derive(Clone)]
 pub struct NodeController {
     pub shutdown_trigger: ShutdownTrigger,
-    pub chainstate: Handle<Box<dyn ChainstateInterface>>,
-    pub mempool: Handle<dyn MempoolInterface>,
-    pub block_prod: Handle<Box<dyn BlockProductionInterface>>,
-    pub p2p: Handle<dyn P2pInterface>,
+    pub chainstate: chainstate::ChainstateHandle,
+    pub mempool: mempool::MempoolHandle,
+    pub block_prod: blockprod::BlockProductionHandle,
+    pub p2p: p2p::P2pHandle,
 }
 
 impl Debug for NodeController {
