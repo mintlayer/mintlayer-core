@@ -63,20 +63,16 @@ fn tester_worker_thread(
     counter: BlockingHandle<Counter>,
     shutdown: subsystem::ShutdownTrigger,
 ) {
-    eprintln!("res0");
     let res0 = substringer.call_mut(|this| this.append_get("xyz"));
     assert_eq!(res0, Ok("abcxyz".to_string()));
     assert_eq!(substringer.call(Substringer::size), Ok(6));
 
-    eprintln!("res1");
     let res1 = substringer.call(|this| this.substr(2, 5));
     assert_eq!(res1, Ok("cxy".to_string()));
 
-    eprintln!("res2");
     let res2 = counter.call(Counter::get);
     assert_eq!(res2, Ok(13));
 
-    eprintln!("res3");
     let res3 = counter.call_mut(|this| this.add_and_get(3));
     assert_eq!(res3, Ok(16));
 

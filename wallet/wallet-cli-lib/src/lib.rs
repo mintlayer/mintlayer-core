@@ -57,17 +57,11 @@ pub async fn run(
     let chain_config = match chain_config {
         Some(chain_config) => chain_config,
         None => match &args.network {
-            Some(Network::Regtest(regtest_options)) => {
-                eprintln!("\n\nRegtest config {}", chain_type.name());
-                Arc::new(
-                    regtest_chain_config(&regtest_options.chain_config)
-                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
-                )
-            }
-            _ => {
-                eprintln!("\n\nNot regtest {}", chain_type.name());
-                Arc::new(common::chain::config::Builder::new(chain_type).build())
-            }
+            Some(Network::Regtest(regtest_options)) => Arc::new(
+                regtest_chain_config(&regtest_options.chain_config)
+                    .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
+            ),
+            _ => Arc::new(common::chain::config::Builder::new(chain_type).build()),
         },
     };
 
