@@ -53,11 +53,11 @@ pub async fn run(
     args: config::WalletCliArgs,
     chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
-    let chain_type: ChainType = (&args.network).into();
+    let chain_type = args.network.as_ref().map_or(ChainType::Testnet, |network| network.into());
     let chain_config = match chain_config {
         Some(chain_config) => chain_config,
         None => match &args.network {
-            Network::Regtest(regtest_options) => {
+            Some(Network::Regtest(regtest_options)) => {
                 eprintln!("\n\nRegtest config {}", chain_type.name());
                 Arc::new(
                     regtest_chain_config(&regtest_options.chain_config)

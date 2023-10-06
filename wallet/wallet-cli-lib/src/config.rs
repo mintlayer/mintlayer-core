@@ -36,18 +36,22 @@ pub struct RegtestOptions {
 
 #[derive(Parser, Debug)]
 #[clap(version)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct WalletCliArgs {
     /// Network
     #[clap(subcommand)]
-    pub network: Network,
+    pub network: Option<Network>,
+
+    #[clap(flatten)]
+    pub run_options: CliArgs,
 }
 
 impl WalletCliArgs {
     pub fn cli_args(self) -> CliArgs {
-        match self.network {
+        self.network.map_or(self.run_options, |network| match network {
             Network::Mainnet(args) | Network::Signet(args) | Network::Testnet(args) => args,
             Network::Regtest(args) => args.run_options,
-        }
+        })
     }
 }
 
