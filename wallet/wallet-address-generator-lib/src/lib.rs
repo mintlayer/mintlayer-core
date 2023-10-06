@@ -88,16 +88,23 @@ pub fn run(args: CliArgs) -> Result<(), CliError> {
 
     let addresses = generate_addresses(args.address_count, receive_funds_pkey, chain_config)?;
 
+    println!("\n");
     if let Some(mnemonic) = args.mnemonic {
-        println!("Using your seed phrase: \"{}\"", mnemonic);
+        println!("Using the seed phrase you provided to generate address(es): {mnemonic}");
     } else {
-        println!("Your new generated seed phrase is: \"{}\"", seed_phrase);
+        println!("No seed phrase provided. Generating a new one.");
+        println!("WARNING: MAKE SURE TO WRITE DOWN YOUR SEED PHRASE AND KEEP IT SAFE!");
+        println!("============================Seed phrase=============================");
+        println!("{seed_phrase}");
+        println!("====================================================================")
     }
 
-    println!("And your new addresses are:");
+    println!("\n");
+    println!("Your address(es) are:");
     for addr in addresses {
-        println!("{}", addr)
+        println!("- {}", addr)
     }
+    println!("\n");
 
     Ok(())
 }
