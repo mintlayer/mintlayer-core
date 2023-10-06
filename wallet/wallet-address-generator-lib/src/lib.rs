@@ -30,7 +30,7 @@ use wallet::{
 };
 use wallet_types::KeyPurpose;
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum Network {
     Mainnet,
     Testnet,
@@ -45,6 +45,17 @@ impl From<Network> for ChainType {
             Network::Testnet => ChainType::Testnet,
             Network::Regtest => ChainType::Regtest,
             Network::Signet => ChainType::Signet,
+        }
+    }
+}
+
+impl std::fmt::Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Network::Mainnet => write!(f, "Mainnet"),
+            Network::Testnet => write!(f, "Testnet"),
+            Network::Regtest => write!(f, "Regtest"),
+            Network::Signet => write!(f, "Signet"),
         }
     }
 }
@@ -90,6 +101,11 @@ pub fn run(args: CliArgs) -> Result<(), CliError> {
     let addresses = generate_addresses(args.address_count, receive_funds_pkey, chain_config)?;
 
     println!("\n");
+    println!(
+        "Generating addresses for network: {}",
+        args.network.to_string().to_uppercase()
+    );
+
     if let Some(mnemonic) = args.mnemonic {
         println!("Using the seed phrase you provided to generate address(es): {mnemonic}");
     } else {
