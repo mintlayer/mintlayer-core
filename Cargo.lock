@@ -3665,6 +3665,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "wallet-address-generator-lib",
  "wallet-cli-lib",
 ]
 
@@ -7162,6 +7163,35 @@ dependencies = [
  "wallet-storage",
  "wallet-types",
  "zeroize",
+]
+
+[[package]]
+name = "wallet-address-generator"
+version = "0.1.2"
+dependencies = [
+ "clap",
+ "common",
+ "crypto",
+ "thiserror",
+ "utils",
+ "wallet",
+ "wallet-address-generator-lib",
+ "wallet-controller",
+ "wallet-types",
+]
+
+[[package]]
+name = "wallet-address-generator-lib"
+version = "0.1.2"
+dependencies = [
+ "clap",
+ "common",
+ "crypto",
+ "thiserror",
+ "utils",
+ "wallet",
+ "wallet-controller",
+ "wallet-types",
 ]
 
 [[package]]
