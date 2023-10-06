@@ -7475,7 +7475,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "clap",
  "common",
@@ -7490,7 +7490,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator-lib"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "clap",
  "common",
