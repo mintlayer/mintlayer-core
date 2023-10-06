@@ -22,6 +22,7 @@ use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::u31::U31;
 use crypto::key::hdkd::{child_number::ChildNumber, derivable::Derivable};
 use utils::ensure;
+use wallet::key_chain::LOOKAHEAD_SIZE;
 use wallet::WalletError;
 use wallet::{
     key_chain::{make_account_path, KeyChainError, MasterKeyChain},
@@ -76,7 +77,7 @@ pub enum CliError {
 
 pub fn run(args: CliArgs) -> Result<(), CliError> {
     ensure!(
-        args.address_count <= 20,
+        args.address_count as u32 <= LOOKAHEAD_SIZE,
         CliError::InvalidInput("Cannot generate more than 20 addresses".into())
     );
 
