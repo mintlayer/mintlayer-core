@@ -51,13 +51,13 @@ impl From<Network> for ChainType {
 #[derive(Parser, Debug)]
 #[clap(version)]
 pub struct CliArgs {
-    /// Which network to generate the addresses for
+    /// The network, for which addresses will be generated
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
     /// Number of addresses to generate and display
-    #[clap(long, default_value_t = 20)]
-    pub number_addresses: u8,
+    #[clap(long, default_value_t = 1)]
+    pub address_count: u8,
 
     /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
     #[clap(long)]
@@ -76,7 +76,7 @@ pub enum CliError {
 
 pub fn run(args: CliArgs) -> Result<(), CliError> {
     ensure!(
-        args.number_addresses <= 20,
+        args.address_count <= 20,
         CliError::InvalidInput("Cannot generate more than 20 addresses".into())
     );
 
@@ -86,7 +86,7 @@ pub fn run(args: CliArgs) -> Result<(), CliError> {
 
     let receive_funds_pkey = to_receiving_pub_key(&chain_config, root_key)?;
 
-    let addresses = generate_addresses(args.number_addresses, receive_funds_pkey, chain_config)?;
+    let addresses = generate_addresses(args.address_count, receive_funds_pkey, chain_config)?;
 
     if let Some(mnemonic) = args.mnemonic {
         println!("Using your seed phrase: \"{}\"", mnemonic);
