@@ -89,7 +89,10 @@ pub enum CliError {
 pub fn run(args: CliArgs) -> Result<(), CliError> {
     ensure!(
         args.address_count as u32 <= LOOKAHEAD_SIZE,
-        CliError::InvalidInput("Cannot generate more than 20 addresses".into())
+        CliError::InvalidInput(format!(
+            "Cannot generate more than {} addresses",
+            LOOKAHEAD_SIZE
+        ))
     );
 
     let (root_key, seed_phrase) = root_key_and_mnemonic(&args.mnemonic)?;

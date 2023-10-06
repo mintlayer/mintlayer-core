@@ -75,12 +75,16 @@ class WalletAddressGenerator(BitcoinTestFramework):
         output = result.stdout.decode()
         self.log.info(output)
 
-        seed_phrase = re.search(r'"(.*?)"', output)
-        if not seed_phrase:
+        lines = output.splitlines()
+        if lines[3].startswith("Using the seed phrase you provided to generate address"):
+            seed_phrase = lines[3][lines[3].find(':')+2:]
+            addresses = [addr[2:] for addr in output.splitlines()[7:-2]]
+        elif lines[3].startswith("No seed phrase provided"):
+            seed_phrase = lines[6]
+            addresses = [addr[2:] for addr in output.splitlines()[11:-2]]
+        else:
             return None, None
-        seed_phrase = seed_phrase.group(1)
 
-        addresses = output.splitlines()[2:]
 
         return seed_phrase, addresses
 
@@ -136,10 +140,11 @@ class WalletAddressGenerator(BitcoinTestFramework):
             assert_in("Coins amount: 100", await wallet.get_balance())
 
             # use the new CLI tool to create a new seed_phrase and some addresses
-            seed_phrase, addresses = self.run_generate_addresses()
+            seed_phrase, addresses = self.run_generate_addresses(["--address-count", "20"])
             assert seed_phrase is not None
             assert addresses is not None
 
+            self.log.info(f"addresses '{addresses}'")
             assert_equal(len(addresses), 20)
 
             # send some a coin to each one of the addresses to confirm all of them are valid
@@ -154,7 +159,7 @@ class WalletAddressGenerator(BitcoinTestFramework):
             assert_in(f"Coins amount: {len(addresses)}", await wallet.get_balance())
 
             # check that if we specify the same seed phrase it will generate the same addresses
-            new_seed_phrase, new_addresses = self.run_generate_addresses(["--mnemonic", seed_phrase])
+            new_seed_phrase, new_addresses = self.run_generate_addresses(["--address-count", "20", "--mnemonic", seed_phrase])
             assert_equal(seed_phrase, new_seed_phrase)
             assert_equal(addresses, new_addresses)
 
