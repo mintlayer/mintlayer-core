@@ -38,6 +38,7 @@ pub fn collect_txs<M>(
     packing_strategy: PackingStrategy,
 ) -> Option<Box<dyn TransactionAccumulator>> {
     let mempool_tip = mempool.best_block_id();
+    let block_timestamp = tx_accumulator.block_timestamp();
 
     if tx_accumulator.expected_tip() != mempool_tip {
         log::debug!(
@@ -74,26 +75,25 @@ pub fn collect_txs<M>(
         tx_accumulator.transactions().iter().map(|tx| tx.transaction().get_id()),
     );
 
-    let mut ordered_txids =
-        Vec::from_iter(transaction_ids.iter().filter(|&tx_id| unique_txids.insert(*tx_id)));
+    // Transaction IDs specified by the user
+    let given_txids = transaction_ids.iter();
 
-    if packing_strategy == PackingStrategy::FillSpaceFromMempool {
-        ordered_txids.extend(
-            mempool
-                .store
-                .txs_by_ancestor_score
-                .iter()
-                .map(|(_, id)| id)
-                .rev()
-                .filter(|&tx_id| unique_txids.insert(*tx_id)),
-        );
-    }
+    // Get transactions from mempool by score
+    let mempool_txids = mempool.store.txs_by_ancestor_score.iter().map(|x| &x.1).rev();
+    // Take the appropriate amount of them as determined by the packing strategy
+    let mempool_txids = mempool_txids.take(match packing_strategy {
+        PackingStrategy::FillSpaceFromMempool => usize::MAX,
+        PackingStrategy::LeaveEmptySpace => 0,
+    });
 
-    let block_timestamp = tx_accumulator.block_timestamp();
+    // Put all the transaction IDs together
+    let txids = given_txids.chain(mempool_txids).filter(|&tx_id| unique_txids.insert(*tx_id));
 
-    let mut tx_iter = ordered_txids
-        .iter()
+    let mut tx_iter = txids
         .filter_map(|tx_id| {
+            // TODO(PR) The whole procedure should probably fail if the transaction was added by
+            // the user and is subsequently rejected by this due to not being present in mempool or
+            // time lock fail.
             let tx = mempool.store.txs_by_id.get(tx_id)?.deref();
             chainstate::tx_verifier::timelock_check::check_timelocks(
                 &chainstate,
