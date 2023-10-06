@@ -30,7 +30,7 @@ use common::chain::{
     config::{regtest_options::regtest_chain_config, ChainType},
     ChainConfig,
 };
-use config::{Network, WalletCliArgs};
+use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
 use rpc::RpcAuthData;
@@ -53,8 +53,25 @@ pub async fn run(
     args: config::WalletCliArgs,
     chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
-    let WalletCliArgs {
-        network,
+    let chain_type = args.network.as_ref().map_or(ChainType::Testnet, |network| network.into());
+    let chain_config = match chain_config {
+        Some(chain_config) => chain_config,
+        None => match &args.network {
+            Some(Network::Regtest(regtest_options)) => {
+                eprintln!("\n\nRegtest config {}", chain_type.name());
+                Arc::new(
+                    regtest_chain_config(&regtest_options.chain_config)
+                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
+                )
+            }
+            _ => {
+                eprintln!("\n\nNot regtest {}", chain_type.name());
+                Arc::new(common::chain::config::Builder::new(chain_type).build())
+            }
+        },
+    };
+
+    let CliArgs {
         wallet_file,
         wallet_password,
         start_staking,
@@ -67,7 +84,7 @@ pub async fn run(
         exit_on_error,
         vi_mode,
         in_top_x_mb,
-    } = args;
+    } = args.cli_args();
 
     let mode = if let Some(file_path) = commands_file {
         repl::non_interactive::log::init();
@@ -79,24 +96,6 @@ pub async fn run(
     } else {
         repl::non_interactive::log::init();
         Mode::NonInteractive
-    };
-
-    let chain_type: ChainType = (&network).into();
-    let chain_config = match chain_config {
-        Some(chain_config) => chain_config,
-        None => match network {
-            Network::Regtest(regtest_options) => {
-                eprintln!("\n\nRegtest config {}", chain_type.name());
-                Arc::new(
-                    regtest_chain_config(&regtest_options)
-                        .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?,
-                )
-            }
-            _ => {
-                eprintln!("\n\nNot regtest {}", chain_type.name());
-                Arc::new(common::chain::config::Builder::new(chain_type).build())
-            }
-        },
     };
 
     // TODO: Use the constant with the node
