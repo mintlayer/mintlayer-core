@@ -25,9 +25,9 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER_COIN)
-from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
+from test_framework.mintlayer import (make_tx, reward_input, tx_input)
+from test_framework.util import assert_equal
+from test_framework.mintlayer import mintlayer_hash, block_input_data_obj, MLT_COIN
 from test_framework.wallet_cli_controller import WalletCliController
 
 import asyncio
@@ -36,6 +36,9 @@ import subprocess
 import os
 import re
 
+def assert_in(thing1, thing2):
+    if thing1 not in thing2:
+        raise AssertionError(f"{thing1} is not found in {thing2}")
 
 class WalletAddressGenerator(BitcoinTestFramework):
 
@@ -115,7 +118,7 @@ class WalletAddressGenerator(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 100 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 100 * MLT_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
