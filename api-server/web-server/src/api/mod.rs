@@ -54,5 +54,7 @@ pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
         .fallback(bad_request)
         .with_state(state);
 
-    axum::Server::from_tcp(socket).unwrap().serve(routes.into_make_service())
+    axum::Server::from_tcp(socket)
+        .expect("API Server Web Server failed to attach to socket")
+        .serve(routes.into_make_service())
 }
