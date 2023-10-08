@@ -341,7 +341,7 @@ impl MemoryUsage for TxOutput {
             TxOutput::ProduceBlockFromStake(_, _) => 0,
             TxOutput::CreateDelegationId(_, _) => 0,
             TxOutput::DelegateStaking(_, _) => 0,
-            TxOutput::Tokens(token_output) => token_output.indirect_memory_usage(),
+            TxOutput::TokensOp(token_output) => token_output.indirect_memory_usage(),
         }
     }
 }

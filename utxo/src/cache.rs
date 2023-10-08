@@ -498,7 +498,7 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
             false
         }
-        TxOutput::Tokens(v) => match v {
+        TxOutput::TokensOp(v) => match v {
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::RedeemTokens(_, _)
             | TokenOutput::LockCirculatingSupply(_) => false,

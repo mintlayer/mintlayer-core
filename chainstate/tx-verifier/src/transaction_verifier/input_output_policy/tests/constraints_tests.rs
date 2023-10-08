@@ -372,7 +372,7 @@ fn burn_constraints_on_tokens_redemption(#[case] seed: Seed) {
             .collect::<Vec<_>>();
 
         let outputs = {
-            let mut outputs = std::iter::once(TxOutput::Tokens(TokenOutput::RedeemTokens(
+            let mut outputs = std::iter::once(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                 token_id,
                 Amount::from_atoms(atoms_to_redeem),
             )))
@@ -417,7 +417,7 @@ fn burn_constraints_on_tokens_redemption(#[case] seed: Seed) {
             .collect::<Vec<_>>();
 
         let outputs = {
-            let mut outputs = std::iter::once(TxOutput::Tokens(TokenOutput::RedeemTokens(
+            let mut outputs = std::iter::once(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                 token_id,
                 Amount::from_atoms(atoms_to_redeem),
             )))

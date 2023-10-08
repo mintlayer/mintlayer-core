@@ -39,7 +39,7 @@ fn update_tests_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::ProduceBlockFromStake(_, _) => unimplemented!(),
         TxOutput::CreateDelegationId(_, _) => unimplemented!(),
         TxOutput::DelegateStaking(_, _) => unimplemented!(),
-        TxOutput::Tokens(token) => match token {
+        TxOutput::TokensOp(token) => match token {
             TokenOutput::IssueFungibleToken(_) => unimplemented!(),
             TokenOutput::IssueNft(_, _, _) => unimplemented!(),
             TokenOutput::MintTokens(_, _, _) => unimplemented!(),

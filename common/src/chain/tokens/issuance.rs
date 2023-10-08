@@ -29,13 +29,17 @@ impl TokenIssuanceVersion {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenTotalSupply {
+    #[codec(index = 0)]
     Fixed(Amount), // fixed to a certain amount
-    Lockable,      // not known in advance but can be locked once at some point in time
-    Unlimited,     // limited only by the Amount data type
+    #[codec(index = 1)]
+    Lockable, // not known in advance but can be locked once at some point in time
+    #[codec(index = 2)]
+    Unlimited, // limited only by the Amount data type
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenIssuance {
+    #[codec(index = 0)]
     V1(TokenIssuanceV1),
 }
 

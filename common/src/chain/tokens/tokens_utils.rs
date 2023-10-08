@@ -44,7 +44,7 @@ pub fn get_tokens_issuance_v0_count(outputs: &[TxOutput]) -> usize {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::Tokens(_) => false,
+            | TxOutput::TokensOp(_) => false,
         })
         .count()
 }
@@ -73,7 +73,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
                 OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
             }
         }
-        TxOutput::Tokens(v) => match v {
+        TxOutput::TokensOp(v) => match v {
             TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => true,
             TokenOutput::MintTokens(_, _, _)
             | TokenOutput::RedeemTokens(_, _)

@@ -69,9 +69,9 @@ fn issue_token_from_block(
             OutputValue::Coin((token_min_issuance_fee * 10).unwrap()),
             Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-            issuance.clone(),
-        ))))
+        .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+            Box::new(issuance.clone()),
+        )))
         .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
         .build();
     let token_id = make_token_id(tx.transaction().inputs()).unwrap();
@@ -127,7 +127,7 @@ fn mint_tokens_in_block(
                     InputWitness::NoSignature(None),
                 )
                 .add_input(utxo_to_pay_fee.into(), InputWitness::NoSignature(None))
-                .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+                .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                     token_id,
                     amount_to_mint,
                     Destination::AnyoneCanSpend,
@@ -164,9 +164,9 @@ fn token_issue_test(#[case] seed: Seed) {
                     TxInput::from_utxo(outpoint_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-                    issuance,
-                ))))
+                .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                    Box::new(issuance),
+                )))
                 .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build();
             let tx_id = tx.transaction().get_id();
@@ -342,9 +342,9 @@ fn token_issue_test(#[case] seed: Seed) {
                 TxInput::from_utxo(outpoint_source_id, 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-                issuance.clone(),
-            ))))
+            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                Box::new(issuance.clone()),
+            )))
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
@@ -386,9 +386,9 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-                        issuance.clone(),
-                    ))))
+                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                        Box::new(issuance.clone()),
+                    )))
                     .add_output(TxOutput::Burn(OutputValue::Coin(
                         (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
                     )))
@@ -427,9 +427,9 @@ fn token_issue_cannot_be_spent(#[case] seed: Seed) {
                 TxInput::from_utxo(tf.genesis().get_id().into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-                issuance.clone(),
-            ))))
+            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                Box::new(issuance.clone()),
+            )))
             .add_output(TxOutput::Burn(OutputValue::Coin(
                 tf.chainstate.get_chain_config().token_min_issuance_fee(),
             )))
@@ -445,9 +445,9 @@ fn token_issue_cannot_be_spent(#[case] seed: Seed) {
                         TxInput::from_utxo(tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
-                        issuance.clone(),
-                    ))))
+                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                        Box::new(issuance.clone()),
+                    )))
                     .build(),
             )
             .build_and_process();
@@ -502,7 +502,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                         utxo_with_change.clone().into(),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                         token_id,
                         amount_to_mint_over_limit,
                         Destination::AnyoneCanSpend,
@@ -544,7 +544,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                 token_id,
                 amount_to_mint,
                 Destination::AnyoneCanSpend,
@@ -578,7 +578,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(mint_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                         token_id,
                         amount_to_redeem_over_limit,
                     )))
@@ -621,7 +621,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(mint_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                         token_id,
                         amount_to_redeem,
                     )))
@@ -680,7 +680,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_issuance_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                 token_id,
                 amount_to_mint,
                 Destination::AnyoneCanSpend,
@@ -732,7 +732,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                 OutputValue::Coin((token_min_supply_change_fee * 5).unwrap()),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                 token_id,
                 amount_to_mint,
                 Destination::AnyoneCanSpend,
@@ -770,7 +770,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+            .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                 token_id,
             )))
             .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -808,7 +808,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(lock_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                         token_id,
                         amount_to_mint,
                         Destination::AnyoneCanSpend,
@@ -845,7 +845,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(lock_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                         token_id,
                         amount_to_redeem,
                     )))
@@ -898,7 +898,7 @@ fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSu
                         InputWitness::NoSignature(None),
                     )
                     .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
-                    .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+                    .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                         token_id,
                     )))
                     .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -945,7 +945,7 @@ fn try_lock_twice(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+            .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                 token_id,
             )))
             .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -979,7 +979,7 @@ fn try_lock_twice(#[case] seed: Seed) {
                         TxInput::from_utxo(lock_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+                    .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                         token_id,
                     )))
                     .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -1032,7 +1032,7 @@ fn supply_change_fees(#[case] seed: Seed) {
                         utxo_with_change.clone().into(),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                         token_id,
                         some_amount,
                         Destination::AnyoneCanSpend,
@@ -1067,7 +1067,7 @@ fn supply_change_fees(#[case] seed: Seed) {
                         utxo_with_change.clone().into(),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::Tokens(TokenOutput::RedeemTokens(
+                    .add_output(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                         token_id,
                         some_amount,
                     )))
@@ -1099,7 +1099,7 @@ fn supply_change_fees(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
-                    .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+                    .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                         token_id,
                     )))
                     .add_output(TxOutput::Burn(OutputValue::Coin(low_fee)))
@@ -1153,7 +1153,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
                 OutputValue::Coin((token_min_supply_change_fee * 5).unwrap()),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                 token_id,
                 amount_to_mint,
                 Destination::AnyoneCanSpend,
@@ -1188,7 +1188,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
                 OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::Tokens(TokenOutput::RedeemTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::RedeemTokens(
                 token_id,
                 amount_to_redeem,
             )))
@@ -1214,7 +1214,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
                 TxInput::from_utxo(redeem_tx_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Tokens(TokenOutput::LockCirculatingSupply(
+            .add_output(TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(
                 token_id,
             )))
             .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -1310,7 +1310,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
                 utxo_with_change.clone().into(),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::Tokens(TokenOutput::MintTokens(
+            .add_output(TxOutput::TokensOp(TokenOutput::MintTokens(
                 token_id,
                 amount_to_mint,
                 Destination::AnyoneCanSpend,

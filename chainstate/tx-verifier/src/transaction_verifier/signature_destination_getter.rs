@@ -128,7 +128,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                                     .decommission_destination()
                                     .clone())
                             }
-                            TxOutput::Tokens(v) => match v {
+                            TxOutput::TokensOp(v) => match v {
                                 TokenOutput::MintTokens(_, _, d) => Ok(d.clone()),
                                 TokenOutput::IssueNft(_, _, d) => Ok(d.clone()),
                                 TokenOutput::IssueFungibleToken(_)
@@ -193,7 +193,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
-                            | TxOutput::Tokens(_) => {
+                            | TxOutput::TokensOp(_) => {
                                 Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                             }
 
