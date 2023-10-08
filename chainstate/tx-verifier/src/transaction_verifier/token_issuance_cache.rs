@@ -21,7 +21,7 @@ use common::{
             get_tokens_issuance_v0_count, make_token_id, TokenAuxiliaryData, TokenId,
             TokenIssuanceVersion,
         },
-        Block, ChainConfig, RequiredConsensus, Transaction,
+        Block, ChainConfig, Transaction,
     },
     primitives::{Id, Idable, H256},
 };
@@ -87,32 +87,24 @@ impl TokenIssuanceCache {
 
         if was_token_issued {
             // Check if v0 tokens are allowed to be issued at this height
-            let consensus_status =
-                chain_config.net_upgrade().consensus_status(tx_source.expected_block_height());
-            let latest_token_version = match consensus_status {
-                RequiredConsensus::IgnoreConsensus => None,
-                RequiredConsensus::PoW(_) => {
-                    Some(chain_config.get_proof_of_work_config().token_issuance_version())
-                }
-                RequiredConsensus::PoS(pos_status) => {
-                    Some(pos_status.get_chain_config().token_issuance_version())
-                }
-            };
+            let latest_token_version = chain_config
+                .chainstate_upgrades()
+                .version_at_height(tx_source.expected_block_height())
+                .1
+                .token_issuance_version();
 
-            if let Some(latest_token_version) = latest_token_version {
-                match latest_token_version {
-                    TokenIssuanceVersion::V0 => { /* ok */ }
-                    TokenIssuanceVersion::V1 => {
-                        return Err(ConnectTransactionError::TokensError(
-                            TokensError::DeprecatedTokenIssuanceVersion(
-                                tx.get_id(),
-                                TokenIssuanceVersion::V0,
-                            ),
-                        ));
-                    }
-                    _ => unreachable!(),
-                };
-            }
+            match latest_token_version {
+                TokenIssuanceVersion::V0 => { /* ok */ }
+                TokenIssuanceVersion::V1 => {
+                    return Err(ConnectTransactionError::TokensError(
+                        TokensError::DeprecatedTokenIssuanceVersion(
+                            tx.get_id(),
+                            TokenIssuanceVersion::V0,
+                        ),
+                    ));
+                }
+                _ => unreachable!(),
+            };
 
             self.precache_token_issuance(token_data_getter, tx)?;
 

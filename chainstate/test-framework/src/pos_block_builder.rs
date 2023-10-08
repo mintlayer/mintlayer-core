@@ -280,7 +280,7 @@ impl<'f> PoSBlockBuilder<'f> {
             .framework
             .chainstate
             .get_chain_config()
-            .net_upgrade()
+            .consensus_upgrades()
             .consensus_status(new_block_height)
         {
             RequiredConsensus::PoS(status) => status,

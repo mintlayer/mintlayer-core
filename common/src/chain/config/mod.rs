@@ -29,9 +29,9 @@ use hex::FromHex;
 use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
+use crate::chain::PoWChainConfig;
 use crate::chain::TxOutput;
 use crate::chain::{GenBlock, Genesis};
-use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
@@ -45,6 +45,7 @@ use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
+use super::{ChainstateUpgrade, ConsensusUpgrade};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -166,7 +167,8 @@ pub struct ChainConfig {
     chain_type: ChainType,
     bip44_coin_type: ChildNumber,
     height_checkpoint_data: Checkpoints,
-    net_upgrades: NetUpgrades<UpgradeVersion>,
+    consensus_upgrades: NetUpgrades<ConsensusUpgrade>,
+    chainstate_upgrades: NetUpgrades<ChainstateUpgrade>,
     magic_bytes: [u8; 4],
     p2p_port: u16,
     default_rpc_port: u16,
@@ -288,8 +290,14 @@ impl ChainConfig {
 
     /// The mechanism by which we define changes in the chain, including consensus and other upgrades/forks
     #[must_use]
-    pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
-        &self.net_upgrades
+    pub fn consensus_upgrades(&self) -> &NetUpgrades<ConsensusUpgrade> {
+        &self.consensus_upgrades
+    }
+
+    /// The mechanism by which we define changes in the chain, including consensus and other upgrades/forks
+    #[must_use]
+    pub fn chainstate_upgrades(&self) -> &NetUpgrades<ChainstateUpgrade> {
+        &self.chainstate_upgrades
     }
 
     /// Checkpoints enforced by the chain, as in, a block id vs height that must be satisfied
@@ -491,7 +499,7 @@ impl ChainConfig {
     /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
     #[must_use]
     pub fn decommission_pool_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
-        match self.net_upgrades.consensus_status(block_height) {
+        match self.consensus_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
                 self.empty_consensus_reward_maturity_distance
             }
@@ -504,7 +512,7 @@ impl ChainConfig {
     /// The number of blocks required to pass before a delegation share can be spent after taking it out of the delegation account
     #[must_use]
     pub fn spend_share_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
-        match self.net_upgrades.consensus_status(block_height) {
+        match self.consensus_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
                 self.empty_consensus_reward_maturity_distance
             }
@@ -656,7 +664,7 @@ pub fn create_regtest() -> ChainConfig {
 
 pub fn create_unit_test_config() -> ChainConfig {
     Builder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::unit_tests())
+        .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(Destination::AnyoneCanSpend)
         .build()
 }
@@ -670,7 +678,7 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
         ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => {}
     }
 
-    let upgrades = chain_config.net_upgrade();
+    let upgrades = chain_config.consensus_upgrades();
 
     let all_upgrades = upgrades.all_upgrades();
 
@@ -721,7 +729,7 @@ mod tests {
     fn mainnet_creation() {
         let config = create_mainnet();
 
-        assert_eq!(2, config.net_upgrades.len());
+        assert_eq!(2, config.consensus_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
     }
 
@@ -729,7 +737,7 @@ mod tests {
     fn testnet_creation() {
         let config = create_testnet();
 
-        assert_eq!(3, config.net_upgrades.len());
+        assert_eq!(3, config.consensus_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
@@ -904,8 +912,9 @@ mod tests {
         expected = "Invalid chain config. There must be at least 2 net-upgrades defined, one for genesis and one for the first block after genesis."
     )]
     fn test_ignore_consensus_outside_regtest_in_no_upgrades() {
-        let config =
-            Builder::new(ChainType::Mainnet).net_upgrades(NetUpgrades::unit_tests()).build();
+        let config = Builder::new(ChainType::Mainnet)
+            .consensus_upgrades(NetUpgrades::unit_tests())
+            .build();
 
         assert_no_ignore_consensus_in_chain_config(&config);
     }
@@ -914,7 +923,7 @@ mod tests {
     #[should_panic(expected = "The net-upgrade at height 1 must not be IgnoreConsensus")]
     fn test_ignore_consensus_outside_regtest_with_deliberate_bad_upgrades() {
         let config = Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
+            .consensus_upgrades(NetUpgrades::deliberate_ignore_consensus_twice())
             .build();
 
         assert_no_ignore_consensus_in_chain_config(&config);

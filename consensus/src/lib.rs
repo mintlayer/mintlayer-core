@@ -112,7 +112,7 @@ pub fn generate_consensus_data_and_reward<G>(
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
-    match chain_config.net_upgrade().consensus_status(block_height) {
+    match chain_config.consensus_upgrades().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => {
             let consensus_data = ConsensusData::None;
 
@@ -183,7 +183,7 @@ pub fn finalize_consensus_data(
     stop_flag: Arc<RelaxedAtomicBool>,
     finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
-    match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
+    match chain_config.consensus_upgrades().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
         RequiredConsensus::PoS(pos_status) => match block_header.consensus_data() {
             ConsensusData::None => Err(ConsensusCreationError::StakingError(

@@ -131,7 +131,7 @@ mod tests {
             pos_initial_difficulty,
             stakelock::StakePoolData,
             Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-            TxOutput, UpgradeVersion,
+            TxOutput,
         },
         primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
         time_getter::TimeGetter,
@@ -324,23 +324,20 @@ mod tests {
             );
 
             let net_upgrades = NetUpgrades::initialize(vec![
-                (
-                    BlockHeight::new(0),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-                ),
+                (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
                 (
                     BlockHeight::new(1),
-                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    ConsensusUpgrade::PoS {
                         initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
                         config: PoSChainConfigBuilder::new_for_unit_test().build(),
-                    }),
+                    },
                 ),
             ])
             .expect("Net upgrades are valid");
 
             Builder::new(ChainType::Regtest)
                 .genesis_custom(genesis_block)
-                .net_upgrades(net_upgrades)
+                .consensus_upgrades(net_upgrades)
                 .build()
         };
 

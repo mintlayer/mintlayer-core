@@ -57,7 +57,7 @@ where
         .block_height();
 
     let block_height = prev_block_height.next_height();
-    let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
+    let consensus_status = chain_config.consensus_upgrades().consensus_status(block_height);
     match consensus_status {
         RequiredConsensus::PoW(pow_status) => validate_pow_consensus(
             chain_config,
