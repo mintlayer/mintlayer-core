@@ -26,10 +26,8 @@ use crate::{
         pos::{
             DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
         },
-        pos_initial_difficulty,
-        tokens::TokenIssuanceVersion,
-        ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig, PoSConsensusVersion,
-        UpgradeVersion,
+        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
+        PoSConsensusVersion,
     },
     primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
     Uint256,
@@ -161,7 +159,7 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
+        builder = builder.consensus_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
             create_regtest_pos_genesis(
                 chain_genesis_staking_settings.clone(),
                 *chain_genesis_block_timestamp,
@@ -181,15 +179,12 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
             .expect("Target block time cannot be zero as per NonZeroU64");
 
         builder = builder
-            .net_upgrades(
+            .consensus_upgrades(
                 NetUpgrades::initialize(vec![
-                    (
-                        BlockHeight::zero(),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-                    ),
+                    (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
                     (
                         BlockHeight::new(1),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                        ConsensusUpgrade::PoS {
                             initial_difficulty: Some(
                                 chain_initial_difficulty
                                     .map(primitives::Compact)
@@ -203,13 +198,12 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V0,
-                                TokenIssuanceVersion::V0,
                             ),
-                        }),
+                        },
                     ),
                     (
                         (*upgrade_height).into(),
-                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                        ConsensusUpgrade::PoS {
                             initial_difficulty: None,
                             config: PoSChainConfig::new(
                                 target_limit,
@@ -219,9 +213,8 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
                                 DEFAULT_BLOCK_COUNT_TO_AVERAGE,
                                 PerThousand::new(1).expect("must be valid"),
                                 PoSConsensusVersion::V1,
-                                TokenIssuanceVersion::V1,
                             ),
-                        }),
+                        },
                     ),
                 ])
                 .expect("NetUpgrades init cannot fail"),

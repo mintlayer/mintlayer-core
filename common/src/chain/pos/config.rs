@@ -16,7 +16,6 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    chain::tokens::TokenIssuanceVersion,
     primitives::{per_thousand::PerThousand, BlockDistance},
     Uint256,
 };
@@ -39,7 +38,6 @@ pub struct PoSChainConfig {
     difficulty_change_limit: PerThousand,
     /// Version of the consensus protocol
     consensus_version: PoSConsensusVersion,
-    token_issuance_version: TokenIssuanceVersion,
 }
 
 impl PoSChainConfig {
@@ -52,7 +50,6 @@ impl PoSChainConfig {
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
         consensus_version: PoSConsensusVersion,
-        token_issuance_version: TokenIssuanceVersion,
     ) -> Self {
         assert!(block_count_to_average_for_blocktime >= 2);
 
@@ -64,7 +61,6 @@ impl PoSChainConfig {
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
             consensus_version,
-            token_issuance_version,
         }
     }
 
@@ -94,9 +90,5 @@ impl PoSChainConfig {
 
     pub fn consensus_version(&self) -> PoSConsensusVersion {
         self.consensus_version
-    }
-
-    pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
-        self.token_issuance_version
     }
 }

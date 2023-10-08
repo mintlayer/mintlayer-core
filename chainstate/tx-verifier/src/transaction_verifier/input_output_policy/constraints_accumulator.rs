@@ -251,7 +251,7 @@ mod tests {
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
             timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade,
             DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
-            PoolId, TxOutput, UpgradeVersion, UtxoOutPoint,
+            PoolId, TxOutput, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
     };
@@ -284,7 +284,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
@@ -338,7 +338,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.spend_share_maturity_distance(BlockHeight::new(1));
@@ -388,7 +388,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
@@ -466,17 +466,17 @@ mod tests {
         let required_spend_share_maturity = 200;
         let upgrades = vec![(
             BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
                     .decommission_maturity_distance(required_decommission_maturity.into())
                     .spend_share_maturity_distance(required_spend_share_maturity.into())
                     .build(),
-            }),
+            },
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .build();
 
         let pool_id = PoolId::new(H256::zero());

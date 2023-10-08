@@ -18,8 +18,6 @@ use crate::primitives::BlockDistance;
 use crate::Uint256;
 use std::time::Duration;
 
-use super::tokens::TokenIssuanceVersion;
-
 /// Chain Parameters for Proof of Work.
 ///
 /// See in Bitcoin's [chainparams.cpp](https://github.com/bitcoin/bitcoin/blob/eca694a4e78d54ce4e29b388b3e81b06e55c2293/src/chainparams.cpp)
@@ -32,7 +30,6 @@ pub struct PoWChainConfig {
     limit: Uint256,
     /// The distance required to pass to allow spending the block reward
     reward_maturity_distance: BlockDistance,
-    token_issuance_version: TokenIssuanceVersion,
 }
 
 impl PoWChainConfig {
@@ -71,10 +68,6 @@ impl PoWChainConfig {
     /// See Bitcoin's [Target](https://en.bitcoin.it/wiki/Target) article.
     pub const fn max_retarget_factor(&self) -> u64 {
         4
-    }
-
-    pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
-        self.token_issuance_version
     }
 }
 
@@ -117,7 +110,6 @@ impl PoWChainConfigBuilder {
             reward_maturity_distance: self
                 .reward_maturity_distance
                 .unwrap_or_else(|| BlockDistance::new(500)),
-            token_issuance_version: TokenIssuanceVersion::V1,
         }
     }
 }

@@ -180,7 +180,10 @@ where
     F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     // check if prev block is a net upgrade threshold
-    match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
+    match chain_config
+        .consensus_upgrades()
+        .consensus_status(prev_block_index.block_height())
+    {
         RequiredConsensus::PoS(status) => match status {
             PoSStatus::Threshold {
                 initial_difficulty,
@@ -229,7 +232,6 @@ mod tests {
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::Builder as ConfigBuilder,
             Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoSChainConfigBuilder, PoolId,
-            UpgradeVersion,
         },
         primitives::{per_thousand::PerThousand, Idable, H256},
     };
@@ -477,14 +479,14 @@ mod tests {
             .build();
         let upgrades = vec![(
             BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
-            }),
+            },
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),
@@ -546,14 +548,14 @@ mod tests {
             .build();
         let upgrades = vec![(
             BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
-            }),
+            },
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),
@@ -588,14 +590,14 @@ mod tests {
             .build();
         let upgrades = vec![(
             BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: pos_config.clone(),
-            }),
+            },
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),
@@ -626,7 +628,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
         let net_upgrades = NetUpgrades::regtest_with_pos();
-        let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+        let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
 
         let block_index_handle = TestBlockIndexHandle::new(&chain_config);
         let timestamp = BlockTimestamp::from_int_seconds(100);
@@ -656,7 +658,7 @@ mod tests {
     }
 
     fn get_pos_status(chain_config: &ChainConfig, height: BlockHeight) -> PoSStatus {
-        match chain_config.net_upgrade().consensus_status(height) {
+        match chain_config.consensus_upgrades().consensus_status(height) {
             RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
                 panic!("invalid consensus")
             }
@@ -684,22 +686,22 @@ mod tests {
         let upgrades = vec![
             (
                 BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                ConsensusUpgrade::PoS {
                     initial_difficulty: Some(Compact::from(target_limit_1)),
                     config: pos_config_1,
-                }),
+                },
             ),
             (
                 BlockHeight::new(3),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                ConsensusUpgrade::PoS {
                     initial_difficulty: Some(Compact::from(target_limit_2)),
                     config: pos_config_2,
-                }),
+                },
             ),
         ];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),
@@ -790,7 +792,7 @@ mod tests {
         let pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
         let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(50),
@@ -830,22 +832,22 @@ mod tests {
         let upgrades = vec![
             (
                 BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                ConsensusUpgrade::PoS {
                     initial_difficulty: Some(Compact::from(target_limit)),
                     config: pos_config.clone(),
-                }),
+                },
             ),
             (
                 BlockHeight::new(3),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                ConsensusUpgrade::PoS {
                     initial_difficulty: None,
                     config: pos_config,
-                }),
+                },
             ),
         ];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),
@@ -886,7 +888,7 @@ mod tests {
 
         let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain()
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .genesis_custom(Genesis::new(
                 "msg".to_owned(),
                 BlockTimestamp::from_int_seconds(0),

@@ -23,7 +23,7 @@ use common::{
         stakelock::StakePoolData,
         transaction::TxInput,
         ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput, UpgradeVersion,
+        RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -946,16 +946,16 @@ mod produce_block {
         let override_chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![(
                 BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                ConsensusUpgrade::PoW {
                     // Make difficulty impossible so the cancel from
                     // the mock job manager is always seen before
                     // solving the block
                     initial_difficulty: Uint256::ZERO.into(),
-                }),
+                },
             )])
             .expect("Net upgrade is valid");
 
-            Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
+            Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -1071,13 +1071,13 @@ mod produce_block {
         let override_chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![(
                 BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                ConsensusUpgrade::PoW {
                     initial_difficulty: Uint256::MAX.into(),
-                }),
+                },
             )])
             .expect("Net upgrade is valid");
 
-            Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
+            Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -1251,10 +1251,8 @@ mod produce_block {
                 },
             ];
 
-            let mut randomized_net_upgrades = vec![(
-                BlockHeight::new(0),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            )];
+            let mut randomized_net_upgrades =
+                vec![(BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus)];
 
             let mut next_height_consensus_change = 1;
 
@@ -1263,7 +1261,7 @@ mod produce_block {
 
                 randomized_net_upgrades.push((
                     BlockHeight::new(next_height_consensus_change),
-                    UpgradeVersion::ConsensusUpgrade(consensus_types[next_consensus_type].clone()),
+                    consensus_types[next_consensus_type].clone(),
                 ));
 
                 next_height_consensus_change += rng.gen_range(1..50);
@@ -1274,7 +1272,7 @@ mod produce_block {
 
             Builder::new(ChainType::Regtest)
                 .genesis_custom(genesis_block)
-                .net_upgrades(net_upgrades)
+                .consensus_upgrades(net_upgrades)
                 .build()
         };
 
@@ -1323,7 +1321,7 @@ mod produce_block {
                     ));
 
                     match chain_config
-                        .net_upgrade()
+                        .consensus_upgrades()
                         .consensus_status(BlockHeight::new(block_height))
                     {
                         RequiredConsensus::IgnoreConsensus => {
