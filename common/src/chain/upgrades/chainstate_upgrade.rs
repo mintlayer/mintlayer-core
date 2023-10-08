@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,14 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod chainstate_upgrade;
-mod consensus_upgrade;
-mod netupgrade;
+use crate::chain::tokens::TokenIssuanceVersion;
 
-pub use chainstate_upgrade::ChainstateUpgrade;
-pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
-pub use netupgrade::{Activate, NetUpgrades};
+use super::Activate;
 
-pub enum NetUpgradeError {
-    GenerateConfigFailed,
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub struct ChainstateUpgrade {
+    token_issuance_version: TokenIssuanceVersion,
 }
+
+impl ChainstateUpgrade {
+    pub fn new(token_issuance_version: TokenIssuanceVersion) -> Self {
+        Self {
+            token_issuance_version,
+        }
+    }
+
+    pub fn token_issuance_version(&self) -> TokenIssuanceVersion {
+        self.token_issuance_version
+    }
+}
+
+impl Activate for ChainstateUpgrade {}

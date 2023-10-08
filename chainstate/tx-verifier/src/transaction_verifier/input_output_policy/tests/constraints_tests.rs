@@ -92,7 +92,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::regtest_with_pos())
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
         chain_config.decommission_pool_maturity_distance(BlockHeight::new(1)).to_int() as u64;
@@ -230,7 +230,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::regtest_with_pos())
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
         chain_config.spend_share_maturity_distance(BlockHeight::new(1)).to_int() as u64;

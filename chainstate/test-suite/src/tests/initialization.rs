@@ -77,13 +77,13 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
     use chainstate::ChainstateConfig;
     use chainstate_storage::{BlockchainStorageRead, Transactional};
     let conf0 = ChainConfigBuilder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::unit_tests())
+        .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
             [0x00; 32].into(),
         )))
         .build();
     let conf1 = ChainConfigBuilder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::unit_tests())
+        .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
             [0x01; 32].into(),
         )))
