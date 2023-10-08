@@ -94,7 +94,7 @@ impl ConstrainedValueAccumulator {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
                                 .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TxOutput::CreateDelegationId(..) | TxOutput::Tokens(_) => { /* do nothing */
+                        TxOutput::CreateDelegationId(..) | TxOutput::TokensOp(_) => { /* do nothing */
                         }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
@@ -215,7 +215,7 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
-                TxOutput::Tokens(token_output) => match token_output {
+                TxOutput::TokensOp(token_output) => match token_output {
                     TokenOutput::IssueFungibleToken(_)
                     | TokenOutput::IssueNft(_, _, _)
                     | TokenOutput::MintTokens(_, _, _)

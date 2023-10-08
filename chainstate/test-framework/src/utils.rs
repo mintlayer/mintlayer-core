@@ -65,7 +65,7 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::Tokens(_) => None,
+        | TxOutput::TokensOp(_) => None,
     }
 }
 

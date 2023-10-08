@@ -48,7 +48,9 @@ fn get_staking_kernel_destination(
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::Tokens(_) => return Err(BlockSignatureError::WrongOutputType(header.get_id())),
+        | TxOutput::TokensOp(_) => {
+            return Err(BlockSignatureError::WrongOutputType(header.get_id()))
+        }
         TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker(),
         TxOutput::ProduceBlockFromStake(dest, _) => dest,
     };

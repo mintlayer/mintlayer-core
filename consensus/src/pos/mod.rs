@@ -153,7 +153,7 @@ where
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::Tokens(_) => {
+        | TxOutput::TokensOp(_) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
