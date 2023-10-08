@@ -509,7 +509,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::Tokens(_) => None,
+            | TxOutput::TokensOp(_) => None,
         });
         let mut balances = BTreeMap::new();
         for pool_id in pool_ids {

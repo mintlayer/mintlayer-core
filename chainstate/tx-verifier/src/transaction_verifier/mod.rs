@@ -265,7 +265,7 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::Tokens(_) => None,
+                    | TxOutput::TokensOp(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -293,7 +293,7 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::Tokens(_) => None,
+                    | TxOutput::TokensOp(_) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -324,7 +324,7 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::Tokens(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::TokensOp(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -348,7 +348,7 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::Tokens(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::TokensOp(_) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -507,7 +507,7 @@ where
             | TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::Tokens(_) => Ok(None),
+            | TxOutput::TokensOp(_) => Ok(None),
         }
     }
 
@@ -619,7 +619,7 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::Tokens(_) => None,
+                | TxOutput::TokensOp(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -746,7 +746,7 @@ where
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => None,
-                TxOutput::Tokens(token_output) => match token_output {
+                TxOutput::TokensOp(token_output) => match token_output {
                     TokenOutput::IssueFungibleToken(issuance_data) => {
                         let result = make_token_id(tx.inputs())
                             .ok_or(ConnectTransactionError::TokensError(

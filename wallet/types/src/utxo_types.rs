@@ -53,7 +53,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         TxOutput::ProduceBlockFromStake(_, _) => Some(UtxoType::ProduceBlockFromStake),
         TxOutput::CreateDelegationId(_, _) => Some(UtxoType::CreateDelegationId),
         TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
-        TxOutput::Tokens(tokens_output) => match tokens_output {
+        TxOutput::TokensOp(tokens_output) => match tokens_output {
             TokenOutput::MintTokens(_, _, _) => Some(UtxoType::MintTokens),
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::IssueNft(_, _, _)

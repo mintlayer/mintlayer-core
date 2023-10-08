@@ -105,7 +105,7 @@ pub enum TxOutput {
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
     #[codec(index = 7)]
-    Tokens(TokenOutput),
+    TokensOp(TokenOutput),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
@@ -137,7 +137,7 @@ impl TxOutput {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::Tokens(_) => None,
+            | TxOutput::TokensOp(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }

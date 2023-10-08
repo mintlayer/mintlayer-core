@@ -636,7 +636,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::Tokens(_) => Err(
+                        | TxOutput::TokensOp(_) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -650,7 +650,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
                             | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::Tokens(_) => Err(
+                            | TxOutput::TokensOp(_) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -771,16 +771,18 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         }
                         Ok(())
                     }
-                    TxOutput::Tokens(token_output) => match token_output {
-                        TokenOutput::IssueFungibleToken(issuance) => check_tokens_issuance(
-                            self.chain_config,
-                            issuance.as_ref(),
-                        )
-                        .map_err(|e| {
-                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
-                        }),
+                    TxOutput::TokensOp(token_output) => match token_output {
+                        TokenOutput::IssueFungibleToken(issuance) => {
+                            check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
+                                TokensError::IssueError(
+                                    e,
+                                    tx.transaction().get_id(),
+                                    block.get_id(),
+                                )
+                            })
+                        }
                         TokenOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                            NftIssuance::V1(data) => {
+                            NftIssuance::V0(data) => {
                                 check_nft_issuance_data(self.chain_config, data).map_err(|e| {
                                     TokensError::IssueError(
                                         e,

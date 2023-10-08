@@ -74,7 +74,7 @@ pub fn make_issue_token_outputs(
     chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
 
     let issuance_output =
-        TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(token_issuance)));
+        TxOutput::TokensOp(TokenOutput::IssueFungibleToken(Box::new(token_issuance)));
 
     let token_issuance_fee =
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));

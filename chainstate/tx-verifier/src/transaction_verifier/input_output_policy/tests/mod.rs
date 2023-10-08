@@ -87,7 +87,7 @@ fn delegate_staking() -> TxOutput {
 }
 
 fn issue_tokens() -> TxOutput {
-    TxOutput::Tokens(TokenOutput::IssueFungibleToken(Box::new(
+    TxOutput::TokensOp(TokenOutput::IssueFungibleToken(Box::new(
         TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: Vec::new(),
             number_of_decimals: 0,
@@ -99,9 +99,9 @@ fn issue_tokens() -> TxOutput {
 }
 
 fn issue_nft() -> TxOutput {
-    TxOutput::Tokens(TokenOutput::IssueNft(
+    TxOutput::TokensOp(TokenOutput::IssueNft(
         TokenId::new(H256::zero()),
-        Box::new(NftIssuance::V1(NftIssuanceV0 {
+        Box::new(NftIssuance::V0(NftIssuanceV0 {
             metadata: Metadata {
                 creator: None,
                 name: Vec::new(),
@@ -118,7 +118,7 @@ fn issue_nft() -> TxOutput {
 }
 
 fn mint_tokens() -> TxOutput {
-    TxOutput::Tokens(TokenOutput::MintTokens(
+    TxOutput::TokensOp(TokenOutput::MintTokens(
         TokenId::new(H256::zero()),
         Amount::ZERO,
         Destination::AnyoneCanSpend,
@@ -126,14 +126,14 @@ fn mint_tokens() -> TxOutput {
 }
 
 fn redeem_tokens() -> TxOutput {
-    TxOutput::Tokens(TokenOutput::RedeemTokens(
+    TxOutput::TokensOp(TokenOutput::RedeemTokens(
         TokenId::new(H256::zero()),
         Amount::ZERO,
     ))
 }
 
 fn lock_tokens_supply() -> TxOutput {
-    TxOutput::Tokens(TokenOutput::LockCirculatingSupply(TokenId::new(
+    TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(TokenId::new(
         H256::zero(),
     )))
 }

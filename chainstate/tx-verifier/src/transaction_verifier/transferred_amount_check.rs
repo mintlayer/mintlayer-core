@@ -118,7 +118,7 @@ fn get_output_value<P: PoSAccountingView>(
         }
         TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
         TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
-        TxOutput::Tokens(v) => match v {
+        TxOutput::TokensOp(v) => match v {
             TokenOutput::IssueFungibleToken(_)
             | TokenOutput::LockCirculatingSupply(_)
             | TokenOutput::RedeemTokens(_, _)
@@ -167,7 +167,7 @@ where
                         inputs_source.clone(),
                     ))
                 }
-                TxOutput::Tokens(v) => match v {
+                TxOutput::TokensOp(v) => match v {
                     TokenOutput::MintTokens(token_id, amount, _) => {
                         OutputValue::TokenV1(*token_id, *amount)
                     }

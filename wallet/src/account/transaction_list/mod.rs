@@ -118,7 +118,7 @@ fn own_output(key_chain: &AccountKeyChain, output: &TxOutput) -> bool {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::Tokens(_) => false,
+        | TxOutput::TokensOp(_) => false,
     }
 }
 

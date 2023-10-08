@@ -18,7 +18,8 @@ use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
 pub enum NftIssuance {
-    V1(NftIssuanceV0),
+    #[codec(index = 0)]
+    V0(NftIssuanceV0),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
