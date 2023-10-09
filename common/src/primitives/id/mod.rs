@@ -46,7 +46,15 @@ impl H256 {
     /// are viewed as a byte-array (as is the case with H256), then serializing the type will result in whatever that
     /// byte-array is with no regard to endianness, which is done as big-endian in H256 if seen as a number.
     pub fn as_bitcoin_uint256_hex(&self) -> String {
-        self.as_bytes().iter().rev().map(|b| format!("{:02x}", b)).collect()
+        let hex_length = self.0.len() * 2;
+        self.as_bytes()
+            .iter()
+            .rev()
+            .fold(String::with_capacity(hex_length), |mut current, b| {
+                use std::fmt::Write;
+                let _ = write!(current, "{b:02x}");
+                current
+            })
     }
 
     pub fn into_arith_uint256(self) -> Uint256 {
@@ -132,7 +140,7 @@ impl<T: Eq> Ord for Id<T> {
 // We implement PartialOrd manually to avoid it getting inherited to T through PhantomData, because Id having PartialOrd doesn't mean T requiring Ord
 impl<T: Eq> PartialOrd for Id<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.hash.partial_cmp(&other.hash)
+        Some(self.cmp(other))
     }
 }
 
