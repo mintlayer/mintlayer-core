@@ -133,7 +133,7 @@ async fn basic(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
+async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
