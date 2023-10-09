@@ -115,7 +115,7 @@ impl P2pBasicTestTimeGetter {
 }
 
 /// A timeout for blocking calls.
-pub const LONG_TIMEOUT: Duration = Duration::from_secs(60);
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(120);
 /// A short timeout for events that shouldn't occur.
 pub const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 

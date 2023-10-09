@@ -140,7 +140,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
         let time_getter = P2pBasicTestTimeGetter::new();
 
         let mut blocks = Vec::new();
-        for _ in 0..500 {
+        for _ in 0..1000 {
             let block = make_new_block(
                 &chain_config,
                 blocks.last(),
