@@ -95,7 +95,7 @@ impl<Sch> Ord for DbMapId<Sch> {
 
 impl<Sch> PartialOrd for DbMapId<Sch> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.idx.partial_cmp(&other.idx)
+        Some(self.cmp(other))
     }
 }
 

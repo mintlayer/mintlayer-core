@@ -99,7 +99,7 @@ pub struct ValuedOutPoint {
 
 impl PartialOrd for ValuedOutPoint {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        other.value.partial_cmp(&self.value)
+        Some(self.cmp(other))
     }
 }
 
