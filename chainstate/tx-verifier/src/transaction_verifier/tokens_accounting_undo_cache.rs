@@ -41,6 +41,11 @@ impl TokensAccountingBlockUndoCache {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_for_test(data: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>) -> Self {
+        Self { data }
+    }
+
     pub fn data(&self) -> &BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry> {
         &self.data
     }

@@ -21,8 +21,9 @@ use super::*;
 use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
-        TxMainChainPosition,
+        config::Builder as ConfigBuilder,
+        tokens::{TokenAuxiliaryData, TokenTotalSupply},
+        TxMainChainIndex, TxMainChainPosition,
     },
     primitives::H256,
 };
@@ -30,6 +31,7 @@ use mockall::predicate::eq;
 use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView};
 use rstest::rstest;
 use test_utils::random::Seed;
+use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
 use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosTxUndoWithSources};
 
 // Create the following hierarchy:
@@ -296,7 +298,7 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn hierarchy_test_tokens(#[case] seed: Seed) {
+fn hierarchy_test_tokens_v0(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = ConfigBuilder::test_chain().build();
@@ -715,4 +717,214 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
         verifier2.get_account_nonce_count(account2).unwrap(),
         Some(nonce2)
     );
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// token2/supply2/undo    token1/supply1/undo    token0/supply0/undo
+//
+// Check that data can be accessed through derived entities
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let input0 = TxInput::Utxo(create_utxo(&mut rng, 100).0);
+    let input1 = TxInput::Utxo(create_utxo(&mut rng, 1000).0);
+    let input2 = TxInput::Utxo(create_utxo(&mut rng, 200).0);
+
+    let supply0 = Amount::from_atoms(100);
+    let supply1 = Amount::from_atoms(200);
+    let supply2 = Amount::from_atoms(300);
+
+    let token_data0 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
+        "tkn0".into(),
+        0,
+        Vec::new(),
+        TokenTotalSupply::Unlimited,
+        false,
+        Destination::AnyoneCanSpend,
+    ));
+    let token_data1 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
+        "tkn1".into(),
+        0,
+        Vec::new(),
+        TokenTotalSupply::Unlimited,
+        false,
+        Destination::AnyoneCanSpend,
+    ));
+    let token_data2 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
+        "tkn2".into(),
+        0,
+        Vec::new(),
+        TokenTotalSupply::Unlimited,
+        false,
+        Destination::AnyoneCanSpend,
+    ));
+
+    let token_id_0 = make_token_id(&[input0]).unwrap();
+    let token_id_1 = make_token_id(&[input1]).unwrap();
+    let token_id_2 = make_token_id(&[input2]).unwrap();
+
+    let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store
+        .expect_get_circulating_supply()
+        .with(eq(token_id_0))
+        .times(2)
+        .return_const(Ok(Some(supply0)));
+    store
+        .expect_get_circulating_supply()
+        .with(eq(token_id_1))
+        .times(4)
+        .return_const(Ok(None));
+    store
+        .expect_get_circulating_supply()
+        .with(eq(token_id_2))
+        .times(4)
+        .return_const(Ok(None));
+
+    store
+        .expect_get_token_data()
+        .with(eq(token_id_0))
+        .times(2)
+        .return_const(Ok(Some(token_data0.clone())));
+    store
+        .expect_get_token_data()
+        .with(eq(token_id_1))
+        .times(1)
+        .return_const(Ok(None));
+    store
+        .expect_get_token_data()
+        .with(eq(token_id_2))
+        .times(2)
+        .return_const(Ok(None));
+
+    store
+        .expect_get_tokens_accounting_undo()
+        .with(eq(block_undo_id_0))
+        .times(2)
+        .return_const(Ok(None));
+    store
+        .expect_get_tokens_accounting_undo()
+        .with(eq(block_undo_id_2))
+        .times(1)
+        .return_const(Ok(None));
+
+    let verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let undo_issue = verifier
+            .tokens_accounting_cache
+            .issue_token(token_id_1, token_data1.clone())
+            .unwrap();
+        let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_1, supply1).unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+        )]));
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                TokensAccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        let undo_issue = verifier
+            .tokens_accounting_cache
+            .issue_token(token_id_2, token_data2.clone())
+            .unwrap();
+        let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_2, supply2).unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+        )]));
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                TokensAccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
+        verifier
+    };
+
+    // fetch pool balances
+    assert_eq!(
+        verifier1.get_circulating_supply(&token_id_0).unwrap().as_ref(),
+        Some(&supply0)
+    );
+    assert_eq!(
+        verifier1.get_circulating_supply(&token_id_1).unwrap().as_ref(),
+        Some(&supply1)
+    );
+    assert_eq!(
+        verifier1.get_circulating_supply(&token_id_2).unwrap().as_ref(),
+        None
+    );
+
+    assert_eq!(
+        verifier2.get_circulating_supply(&token_id_0).unwrap().as_ref(),
+        Some(&supply0)
+    );
+    assert_eq!(
+        verifier2.get_circulating_supply(&token_id_1).unwrap().as_ref(),
+        Some(&supply1)
+    );
+    assert_eq!(
+        verifier2.get_circulating_supply(&token_id_2).unwrap().as_ref(),
+        Some(&supply2)
+    );
+
+    // fetch pool data
+    assert_eq!(
+        verifier1.get_token_data(&token_id_0).unwrap(),
+        Some(token_data0.clone())
+    );
+    assert_eq!(
+        verifier1.get_token_data(&token_id_1).unwrap(),
+        Some(token_data1.clone())
+    );
+    assert_eq!(verifier1.get_token_data(&token_id_2).unwrap(), None);
+
+    assert_eq!(
+        verifier2.get_token_data(&token_id_0).unwrap(),
+        Some(token_data0.clone())
+    );
+    assert_eq!(
+        verifier2.get_token_data(&token_id_1).unwrap(),
+        Some(token_data1.clone())
+    );
+    assert_eq!(
+        verifier2.get_token_data(&token_id_2).unwrap(),
+        Some(token_data2.clone())
+    );
+
+    // fetch undo
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_0).unwrap().is_none());
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_1).unwrap().is_some());
+    assert!(verifier1.get_tokens_accounting_undo(block_undo_id_2).unwrap().is_none());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_0).unwrap().is_none());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_1).unwrap().is_some());
+    assert!(verifier2.get_tokens_accounting_undo(block_undo_id_2).unwrap().is_some());
 }

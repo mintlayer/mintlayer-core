@@ -20,14 +20,15 @@ use crate::transaction_verifier::{
 
 use super::*;
 use common::chain::{
-    config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
-    TxMainChainPosition,
+    config::Builder as ConfigBuilder,
+    tokens::{TokenAuxiliaryData, TokenTotalSupply},
+    TxMainChainIndex, TxMainChainPosition,
 };
 use mockall::predicate::eq;
 use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, DeltaMergeUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
-use tokens_accounting::TokensAccountingDeltaUndoData;
+use tokens_accounting::{FungibleTokenData, TokensAccountingDeltaUndoData};
 use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
@@ -1160,6 +1161,198 @@ fn nonce_del_hierarchy(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.account_nonce = BTreeMap::from([(account0, CachedOperation::Erase)]);
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let input1 = TxInput::Utxo(create_utxo(&mut rng, 100).0);
+    let input2 = TxInput::Utxo(create_utxo(&mut rng, 1000).0);
+
+    let supply1 = Amount::from_atoms(100);
+    let supply2 = Amount::from_atoms(200);
+
+    let token_data1 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
+        "tkn1".into(),
+        0,
+        Vec::new(),
+        TokenTotalSupply::Unlimited,
+        false,
+        Destination::AnyoneCanSpend,
+    ));
+    let token_data2 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
+        "tkn2".into(),
+        0,
+        Vec::new(),
+        TokenTotalSupply::Unlimited,
+        false,
+        Destination::AnyoneCanSpend,
+    ));
+
+    let token_id_1 = make_token_id(&[input1]).unwrap();
+    let token_id_2 = make_token_id(&[input2]).unwrap();
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+
+    store.expect_get_circulating_supply().return_const(Ok(None));
+    store.expect_get_token_data().return_const(Ok(None));
+
+    store
+        .expect_set_tokens_accounting_undo_data()
+        .withf(move |id, undo| *id == TransactionSource::Chain(block_undo_id_1) && !undo.is_empty())
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_set_tokens_accounting_undo_data()
+        .withf(move |id, undo| *id == TransactionSource::Chain(block_undo_id_2) && !undo.is_empty())
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let undo_issue = verifier
+            .tokens_accounting_cache
+            .issue_token(token_id_1, token_data1.clone())
+            .unwrap();
+        let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_1, supply1).unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+        )]));
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                TokensAccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        let undo_issue = verifier
+            .tokens_accounting_cache
+            .issue_token(token_id_2, token_data2.clone())
+            .unwrap();
+        let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_2, supply2).unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = tokens_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+        )]));
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                TokensAccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_tokens_data()
+        .times(1)
+        .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+
+    store.expect_get_circulating_supply().return_const(Ok(None));
+    store.expect_get_token_data().return_const(Ok(None));
+
+    store
+        .expect_del_tokens_accounting_undo_data()
+        .with(eq(TransactionSource::Chain(block_undo_id_1)))
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_del_tokens_accounting_undo_data()
+        .with(eq(TransactionSource::Chain(block_undo_id_2)))
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                TokensAccountingBlockUndoEntry {
+                    undo: Default::default(),
+                    is_fresh: false,
+                },
+            )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+
+        verifier.tokens_accounting_block_undo =
+            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                TokensAccountingBlockUndoEntry {
+                    undo: Default::default(),
+                    is_fresh: false,
+                },
+            )]));
         verifier
     };
 
