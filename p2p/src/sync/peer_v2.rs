@@ -356,6 +356,7 @@ where
             // Note: msg_max_locator_count is not supposed to be configurable outside of tests,
             // so we should never get here in production code. Moreover, currently it's not
             // modified even in tests. TODO: make it a constant.
+            // See https://github.com/mintlayer/mintlayer-core/issues/1201
             log::warn!(
                 "[peer id = {}] Sending locator of the length {}, which exceeds the maximum length {:?}",
                 self.id(),
@@ -405,16 +406,9 @@ where
         }
 
         if self.chainstate_handle.is_initial_block_download().await? {
-            // TODO: in the protocol v2 we might want to allow peers to ask for headers even if
-            // the node is in IBD (e.g. based on some kind of system of permissions). ATM it's
-            // not clear whether it's a good idea, so it makes sense to first check whether bitcoin
-            // does something like that.
-            // TODO: in the protocol v2 we should not silently ignore header requests; instead,
-            // we should communicate our best block (id/height/header?) from the start, so that
-            // the peer just knows that we don't have better blocks and doesn't ask us in the
-            // first place.
-            // See the issue #1110.
             log::debug!("[peer id = {}] Ignoring headers request because the node is in initial block download", self.id());
+            // Respond with an empty list to avoid being marked as stalled
+            self.send_headers(HeaderList::new(Vec::new()))?;
             return Ok(());
         }
 
@@ -468,10 +462,6 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-
-        // A peer is allowed to ignore header requests if it's in IBD.
-        // Assume this is the case if it asks us for blocks.
-        self.peer_activity.set_expecting_headers_since(None);
 
         if self.chainstate_handle.is_initial_block_download().await? {
             // Note: currently this is not a normal situation, because a node in IBD wouldn't
@@ -584,9 +574,6 @@ where
             return Ok(());
         }
 
-        let last_header = headers.last().expect("Headers shouldn't be empty");
-        self.wait_for_clock_diff(last_header.timestamp()).await;
-
         if headers.len() > *self.p2p_config.msg_header_count_limit {
             return Err(P2pError::ProtocolError(
                 ProtocolError::HeadersLimitExceeded(
@@ -604,6 +591,9 @@ where
         {
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
+
+        let last_header = headers.last().expect("Headers shouldn't be empty");
+        self.wait_for_clock_diff(last_header.timestamp()).await;
 
         // The first header must be connected to a known block (it can be in
         // the chainstate, pending_headers or requested_blocks).
