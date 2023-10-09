@@ -83,6 +83,24 @@ pub struct FungibleTokenData {
 }
 
 impl FungibleTokenData {
+    pub fn new(
+        token_ticker: Vec<u8>,
+        number_of_decimals: u8,
+        metadata_uri: Vec<u8>,
+        total_supply: TokenTotalSupply,
+        locked: bool,
+        reissuance_controller: Destination,
+    ) -> Self {
+        Self {
+            token_ticker,
+            number_of_decimals,
+            metadata_uri,
+            total_supply,
+            locked,
+            reissuance_controller,
+        }
+    }
+
     pub fn token_ticker(&self) -> &[u8] {
         self.token_ticker.as_ref()
     }
