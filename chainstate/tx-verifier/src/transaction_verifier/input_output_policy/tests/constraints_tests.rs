@@ -30,6 +30,7 @@ use crypto::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
+use super::outputs_utils::*;
 use super::*;
 
 fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {

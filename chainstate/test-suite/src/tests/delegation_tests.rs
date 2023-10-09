@@ -15,7 +15,7 @@
 
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
@@ -260,15 +260,13 @@ fn create_delegation_twice(#[case] seed: Seed) {
                 pool_id,
             ))
             .build();
-        let tx_id = tx.transaction().get_id();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::MultipleDelegationCreated,
-                    tx_id.into()
+                ConnectTransactionError::PoSAccountingError(
+                    pos_accounting::Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
                 )
             ))
         );

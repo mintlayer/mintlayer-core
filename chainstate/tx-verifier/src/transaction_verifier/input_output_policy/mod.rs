@@ -37,10 +37,6 @@ pub enum IOPolicyError {
     InvalidOutputTypeInReward,
     #[error("Attempted to use a invalid input type in a tx")]
     InvalidInputTypeInTx,
-    #[error("Attempted to create multiple stake pools in a single tx")]
-    MultiplePoolCreated,
-    #[error("Attempted to create multiple delegations in a single tx")]
-    MultipleDelegationCreated,
     #[error("Attempted to produce block in a tx")]
     ProduceBlockInTx,
     #[error("Amount overflow")]
