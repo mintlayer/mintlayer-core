@@ -56,18 +56,16 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let headers = iter::repeat(block.get_id().into()).take(102).collect();
-        node.send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(headers))),
-        )
+        peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+            Locator::new(headers),
+        )))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
@@ -105,17 +103,15 @@ async fn valid_request(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_message(
-            peer,
-            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-        )
+        peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+            locator,
+        )))
         .await;
 
-        let (sent_to, message) = node.message().await;
-        assert_eq!(peer, sent_to);
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(peer.get_id(), sent_to);
         let headers = match message {
             SyncMessage::HeaderList(l) => l.into_headers(),
             m => panic!("Unexpected message: {m:?}"),
@@ -194,30 +190,27 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
         .build()
         .await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
     // Simulate the peer sending HeaderListRequest too.
     let locator = node.get_locator_from_height(0.into()).await;
-    node.send_message(
-        peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-    )
+    peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        locator,
+    )))
     .await;
 
     // The node should send the header list.
     assert_eq!(
-        node.message().await.1,
+        node.get_sent_message().await.1,
         SyncMessage::HeaderList(HeaderList::new(headers)),
     );
 
     // Now send each block after a delay.
     for block in blocks.into_iter() {
         time_getter.advance_time(DELAY);
-        node.send_message(
-            peer,
-            SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
-        )
+        peer.send_message(SyncMessage::BlockListRequest(BlockListRequest::new(vec![
+            block.get_id(),
+        ])))
         .await;
 
         // Eventually, the total time passed will become bigger than the timeout. Still, the peer
@@ -228,7 +221,7 @@ async fn allow_peer_to_ignore_header_requests_when_asking_for_blocks(
 
         // The node should send the block.
         assert_eq!(
-            node.message().await.1,
+            node.get_sent_message().await.1,
             SyncMessage::BlockResponse(BlockResponse::new(block)),
         );
     }
@@ -289,20 +282,18 @@ async fn respond_with_empty_header_list_when_in_ibd(#[case] protocol_version: Pr
         .await
         .unwrap());
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
     // Simulate the peer sending HeaderListRequest.
     let locator = node.get_locator_from_height(0.into()).await;
-    node.send_message(
-        peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-    )
+    peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+        locator,
+    )))
     .await;
 
     // The node should send an empty header list.
     assert_eq!(
-        node.message().await.1,
+        node.get_sent_message().await.1,
         SyncMessage::HeaderList(HeaderList::new(Vec::new())),
     );
 

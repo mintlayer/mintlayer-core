@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{chain::GenBlock, primitives::Id};
 use crypto::random::Rng;
 use futures::{future::select_all, FutureExt};
@@ -26,11 +28,12 @@ use crate::{
     PeerManagerEvent,
 };
 
-use super::{get_random_hash, TestNode};
+use super::{get_random_hash, TestNode, TestPeer};
 
 struct NodeDataItem {
     node: TestNode,
     delay_sync_messages_from: bool,
+    connected_peers: BTreeMap<PeerId, TestPeer>,
 }
 
 /// A struct that represents a group of test nodes.
@@ -49,6 +52,7 @@ impl TestNodeGroup {
             .map(|h| NodeDataItem {
                 node: h,
                 delay_sync_messages_from: false,
+                connected_peers: Default::default(),
             })
             .collect();
         let mut this = Self {
@@ -65,7 +69,10 @@ impl TestNodeGroup {
                 if i != j {
                     let dest_peer_id = self.data[j].node.peer_id;
                     let dest_peer_protocol_version = self.data[j].node.protocol_version;
-                    self.data[i].node.try_connect_peer(dest_peer_id, dest_peer_protocol_version);
+                    let peer = self.data[i]
+                        .node
+                        .try_connect_peer(dest_peer_id, dest_peer_protocol_version);
+                    self.data[i].connected_peers.insert(dest_peer_id, peer);
                 }
             }
         }
@@ -222,7 +229,9 @@ impl TestNodeGroup {
                     })
                     .unwrap();
 
-                self.data[i].node.send_message(tx_sender_peer_id, sentinel_msg.clone()).await;
+                self.data[i].connected_peers[&tx_sender_peer_id]
+                    .send_message(sentinel_msg.clone())
+                    .await;
             }
 
             loop {
@@ -241,12 +250,9 @@ impl TestNodeGroup {
                     }
                     message => {
                         let dest_peer_idx = self.node_idx_by_peer_id(dest_peer_id);
-                        let event_sender = self.data[dest_peer_idx]
-                            .node
-                            .connected_peers
-                            .get(&cur_peer_id)
-                            .unwrap();
-                        event_sender.send(message.clone()).await.unwrap();
+                        let event_sender =
+                            self.data[dest_peer_idx].connected_peers.get(&cur_peer_id).unwrap();
+                        event_sender.send_message(message.clone()).await;
                     }
                 }
 
@@ -270,12 +276,12 @@ impl TestNodeGroup {
     }
 
     pub async fn send_sync_message(&mut self, msg: SyncMessageWithNodeIdx) {
-        let receiver_handle = &self.data[msg.receiver_node_idx].node;
+        let receiver_handle = &self.data[msg.receiver_node_idx];
         let sender_handle = &self.data[msg.sender_node_idx].node;
         let receiving_peer_msg_sender =
             receiver_handle.connected_peers.get(&sender_handle.peer_id).unwrap();
 
-        receiving_peer_msg_sender.send(msg.message).await.unwrap();
+        receiving_peer_msg_sender.send_message(msg.message).await;
     }
 
     pub async fn send_sync_messages<Msg>(&mut self, msg: Msg)

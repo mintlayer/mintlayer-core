@@ -97,26 +97,25 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
         .build()
         .await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
     // The first attempt to send an unconnected header should trigger HeaderListRequest.
-    node.send_headers(peer, vec![block_2.header().clone()]).await;
+    peer.send_headers(vec![block_2.header().clone()]).await;
 
     // Note: we call assert_no_peer_manager_event twice; the last call is needed to make sure
     // that the event is caught even if it's late; the first one just allows the test to fail
     // faster if the event is not late.
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
-    assert_eq!(sent_to, peer);
+    let (sent_to, message) = node.get_sent_message().await;
+    assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
 
     // The second attempt to send an unconnected header should increase the ban score.
-    node.send_headers(peer, vec![block_2.header().clone()]).await;
+    peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_peer_score_adjustment(
-        peer,
+        peer.get_id(),
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
     )
     .await;
@@ -186,35 +185,34 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
         .build()
         .await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
     // The first attempt to send an unconnected header should trigger HeaderListRequest.
-    node.send_headers(peer, vec![block_2.header().clone()]).await;
+    peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
-    assert_eq!(sent_to, peer);
+    let (sent_to, message) = node.get_sent_message().await;
+    assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
 
     // Send a header with a known parent, the node should ask for blocks
-    node.send_headers(peer, vec![block_11.header().clone()]).await;
+    peer.send_headers(vec![block_11.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
-    assert_eq!(sent_to, peer);
+    let (sent_to, message) = node.get_sent_message().await;
+    assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::BlockListRequest(_)));
     node.assert_no_peer_manager_event().await;
 
     // The second attempt to send an unconnected header should again trigger HeaderListRequest,
     // because a correct header list message was received between the attempts and the counter
     // for the unconnected headers has been reset.
-    node.send_headers(peer, vec![block_2.header().clone()]).await;
+    peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_no_peer_manager_event().await;
-    let (sent_to, message) = node.message().await;
-    assert_eq!(sent_to, peer);
+    let (sent_to, message) = node.get_sent_message().await;
+    assert_eq!(sent_to, peer.get_id());
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     node.assert_no_peer_manager_event().await;
 
@@ -248,14 +246,13 @@ async fn single_header_with_unknown_prev_block_v2(#[case] seed: Seed) {
         .build()
         .await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
     // Sending even 1 unconnected header should lead to ban score increase.
-    node.send_headers(peer, vec![block_2.header().clone()]).await;
+    peer.send_headers(vec![block_2.header().clone()]).await;
 
     node.assert_peer_score_adjustment(
-        peer,
+        peer.get_id(),
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
     )
     .await;
@@ -275,8 +272,7 @@ async fn invalid_timestamp() {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let block = Block::new(
             Vec::new(),
@@ -286,14 +282,13 @@ async fn invalid_timestamp() {
             BlockReward::new(Vec::new()),
         )
         .unwrap();
-        node.send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![block
+            .header()
+            .clone()])))
+            .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ChainstateError(ChainstateError::ProcessBlockError(
@@ -327,8 +322,7 @@ async fn invalid_consensus_data() {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let block = Block::new(
             Vec::new(),
@@ -338,14 +332,13 @@ async fn invalid_consensus_data() {
             BlockReward::new(Vec::new()),
         )
         .unwrap();
-        node.send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![block
+            .header()
+            .clone()])))
+            .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ChainstateError(ChainstateError::ProcessBlockError(
@@ -388,17 +381,16 @@ async fn multiple_headers_with_unknown_prev_block(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_headers(
-            peer,
-            vec![orphan_block1.header().clone(), orphan_block2.header().clone()],
-        )
+        peer.send_headers(vec![
+            orphan_block1.header().clone(),
+            orphan_block2.header().clone(),
+        ])
         .await;
 
         node.assert_peer_score_adjustment(
-            peer,
+            peer.get_id(),
             P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score(),
         )
         .await;
@@ -430,17 +422,15 @@ async fn valid_block(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
-        node.send_message(
-            peer,
-            SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
-        )
-        .await;
+        peer.send_message(SyncMessage::HeaderList(HeaderList::new(vec![block
+            .header()
+            .clone()])))
+            .await;
 
-        let (sent_to, message) = node.message().await;
-        assert_eq!(sent_to, peer);
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(sent_to, peer.get_id());
         assert_eq!(
             message,
             SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
@@ -479,8 +469,7 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         // Simulate the initial header exchange; make the peer send the node a locator containing
         // the node's tip, so that it responds with an empty header list.
@@ -489,15 +478,14 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
         {
             let locator = node.get_locator_from_height(1.into()).await;
 
-            node.send_message(
-                peer,
-                SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-            )
+            peer.send_message(SyncMessage::HeaderListRequest(HeaderListRequest::new(
+                locator,
+            )))
             .await;
 
             log::debug!("Expecting initial header response");
-            let (sent_to, message) = node.message().await;
-            assert_eq!(sent_to, peer);
+            let (sent_to, message) = node.get_sent_message().await;
+            assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
                 SyncMessage::HeaderList(HeaderList::new(Vec::new()))
@@ -518,8 +506,8 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting first announcement");
-            let (sent_to, message) = node.message().await;
-            assert_eq!(sent_to, peer);
+            let (sent_to, message) = node.get_sent_message().await;
+            assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
                 SyncMessage::HeaderList(HeaderList::new(headers.clone()))
@@ -546,8 +534,8 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting second announcement");
-            let (sent_to, message) = node.message().await;
-            assert_eq!(sent_to, peer);
+            let (sent_to, message) = node.get_sent_message().await;
+            assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
                 SyncMessage::HeaderList(HeaderList::new(headers.clone()))
@@ -570,8 +558,8 @@ async fn best_known_header_is_considered(#[case] seed: Seed) {
             .await;
 
             log::debug!("Expecting third announcement");
-            let (sent_to, message) = node.message().await;
-            assert_eq!(sent_to, peer);
+            let (sent_to, message) = node.get_sent_message().await;
+            assert_eq!(sent_to, peer.get_id());
             assert_eq!(
                 message,
                 SyncMessage::HeaderList(HeaderList::new(reorg_headers))
