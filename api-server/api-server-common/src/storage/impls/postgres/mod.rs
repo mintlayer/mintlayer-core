@@ -65,7 +65,7 @@ impl TransactionalApiServerPostgresStorage {
         };
 
         let database_part = match database {
-            Some(d) => format!("database={}", d),
+            Some(d) => format!("dbname={}", d),
             None => "".to_string(),
         };
 
