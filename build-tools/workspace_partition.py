@@ -17,6 +17,24 @@ def get_package_name(crate_dir):
     else:
         raise Exception("Cargo.toml not found for crate {}.".format(crate_dir))
 
+def group_crates_by_first_directory(members):
+    '''
+    Here we ensure that all crates in the same directory are grouped together, to minimize fracturing of coverage.
+    We assume here that crates are tested within their directory. This is a fair assumption since we put test-suites
+    in the same directory as the crate they are testing.
+    '''
+    crate_groups = {}
+    for crate_dir in members:
+        # Split the path name with the directory separator
+        dir_parts = crate_dir.split(os.path.sep)
+        if dir_parts:
+            # Group crates by the first element and join them back using the separator
+            dir_name = os.path.sep.join(dir_parts[:1])
+            if dir_name not in crate_groups:
+                crate_groups[dir_name] = []
+            crate_groups[dir_name].append(crate_dir)
+    return crate_groups
+
 def partition_workspace(m, n):
     cargo_toml = read_cargo_toml("Cargo.toml")
 
@@ -29,16 +47,25 @@ def partition_workspace(m, n):
     if not members:
         raise Exception("No members found in the workspace.")
 
-    total_members = len(members)
-    elements_per_partition = total_members // m
-    remainder = total_members % m
+    # Group crates based on directory structure using directory separators
+    crate_directory_groups = group_crates_by_first_directory(members)
 
+    # Calculate elements per partition and remainder based on the number of crate directories
+    total_directories = len(crate_directory_groups)
+    elements_per_partition = total_directories // m
+    remainder = total_directories % m
+
+    # Calculate the start and end indices for the current partition
     start_idx = n * elements_per_partition + min(n, remainder)
     end_idx = start_idx + elements_per_partition + (1 if n < remainder else 0)
 
-    partition = members[start_idx:end_idx]
+    # Get the crate directories for the current partition
+    partition_directories = []
+    for dir_path in list(crate_directory_groups.keys())[start_idx:end_idx]:
+        partition_directories.extend(crate_directory_groups[dir_path])
 
-    package_names = [get_package_name(crate_dir) for crate_dir in partition]
+    # Get the package names from the crate directories in this partition
+    package_names = [get_package_name(crate_dir) for crate_dir in partition_directories]
 
     return package_names
 
