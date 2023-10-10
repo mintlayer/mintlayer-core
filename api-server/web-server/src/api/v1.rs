@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::error::{
-    APIServerWebServerClientError, APIServerWebServerError, APIServerWebServerServerError,
+    ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerServerError,
 };
 use api_server_common::storage::storage_api::{ApiServerStorage, ApiServerStorageRead};
 use axum::{
@@ -32,12 +32,12 @@ use hex::ToHex;
 use serde_json::json;
 use std::{str::FromStr, sync::Arc};
 
-use crate::APIServerWebServerState;
+use crate::ApiServerWebServerState;
 
 pub const API_VERSION: &str = "1.0.0";
 
 pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
-) -> Router<APIServerWebServerState<Arc<T>>> {
+) -> Router<ApiServerWebServerState<Arc<T>>> {
     let router = Router::new();
 
     let router = router
@@ -82,11 +82,11 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
 
 async fn get_block(
     block_id: &str,
-    state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
-) -> Result<Block, APIServerWebServerError> {
+    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>>,
+) -> Result<Block, ApiServerWebServerError> {
     let block_id: Id<Block> = H256::from_str(block_id)
         .map_err(|_| {
-            APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidBlockId)
         })?
         .into();
 
@@ -95,23 +95,23 @@ async fn get_block(
         .transaction_ro()
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_block(block_id)
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BlockNotFound,
+        .ok_or(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::BlockNotFound,
         ))
 }
 
 #[allow(clippy::unused_async)]
 pub async fn block<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
@@ -125,8 +125,8 @@ pub async fn block<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_header<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
@@ -139,8 +139,8 @@ pub async fn block_header<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_reward<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let _block = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
@@ -151,8 +151,8 @@ pub async fn block_reward<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn block_transaction_ids<T: ApiServerStorage>(
     Path(block_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
     let transaction_ids = block
@@ -172,8 +172,8 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
 
 #[allow(clippy::unused_async)]
 pub async fn chain_genesis<T: ApiServerStorage>(
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let genesis = state.chain_config.genesis_block();
 
     // TODO: expand this with a usable JSON response
@@ -190,10 +190,10 @@ pub async fn chain_genesis<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn chain_at_height<T: ApiServerStorage>(
     Path(block_height): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block_height = block_height.parse::<BlockHeight>().map_err(|_| {
-        APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockHeight)
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidBlockHeight)
     })?;
 
     let block_id = state
@@ -201,37 +201,37 @@ pub async fn chain_at_height<T: ApiServerStorage>(
         .transaction_ro()
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_main_chain_block_id(block_height)
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
     match block_id {
         Some(block_id) => Ok(Json(block_id)),
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::NoBlockAtHeight,
+        None => Err(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::NoBlockAtHeight,
         )),
     }
 }
 
 #[allow(clippy::unused_async)]
 pub async fn chain_tip<T: ApiServerStorage>(
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let best_block = state
         .db
         .transaction_ro()
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_best_block()
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
     Ok(Json(json!({
@@ -246,12 +246,12 @@ pub async fn chain_tip<T: ApiServerStorage>(
 
 async fn get_transaction(
     transaction_id: &str,
-    state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
-) -> Result<(Option<Id<Block>>, SignedTransaction), APIServerWebServerError> {
+    state: &ApiServerWebServerState<Arc<impl ApiServerStorage>>,
+) -> Result<(Option<Id<Block>>, SignedTransaction), ApiServerWebServerError> {
     let transaction_id: Id<Transaction> = H256::from_str(transaction_id)
         .map_err(|_| {
-            APIServerWebServerError::ClientError(
-                APIServerWebServerClientError::InvalidTransactionId,
+            ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::InvalidTransactionId,
             )
         })?
         .into();
@@ -261,23 +261,23 @@ async fn get_transaction(
         .transaction_ro()
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
         .get_transaction(transaction_id)
         .await
         .map_err(|_| {
-            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .ok_or(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::TransactionNotFound,
+        .ok_or(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::TransactionNotFound,
         ))
 }
 
 #[allow(clippy::unused_async)]
 pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block_id, transaction) = get_transaction(&transaction_id, &state).await?;
 
     Ok(Json(json!({
@@ -293,16 +293,16 @@ pub async fn transaction<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn transaction_merkle_path<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
-    State(state): State<APIServerWebServerState<Arc<T>>>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
         (Some(block_id), transaction) => {
             let block = get_block(&block_id.to_hash().encode_hex::<String>(), &state).await?;
             (block, transaction.transaction().clone())
         }
         (None, _) => {
-            return Err(APIServerWebServerError::ClientError(
-                APIServerWebServerClientError::TransactionNotPartOfBlock,
+            return Err(ApiServerWebServerError::ClientError(
+                ApiServerWebServerClientError::TransactionNotPartOfBlock,
             ))
         }
     };
@@ -311,13 +311,13 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         .transactions()
         .iter()
         .position(|t| t.transaction().get_id() == transaction.get_id())
-        .ok_or(APIServerWebServerError::ServerError(
-            APIServerWebServerServerError::CannotFindTransactionInBlock,
+        .ok_or(ApiServerWebServerError::ServerError(
+            ApiServerWebServerServerError::CannotFindTransactionInBlock,
         ))?
         .try_into()
         .map_err(|_| {
-            APIServerWebServerError::ServerError(
-                APIServerWebServerServerError::TransactionIndexOverflow,
+            ApiServerWebServerError::ServerError(
+                ApiServerWebServerServerError::TransactionIndexOverflow,
             )
         })?;
 
@@ -325,15 +325,15 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
         .body()
         .merkle_tree_proxy()
         .map_err(|_| {
-            APIServerWebServerError::ServerError(
-                APIServerWebServerServerError::ErrorCalculatingMerkleTree,
+            ApiServerWebServerError::ServerError(
+                ApiServerWebServerServerError::ErrorCalculatingMerkleTree,
             )
         })?
         .merkle_tree()
         .transaction_inclusion_proof(transaction_index)
         .map_err(|_| {
-            APIServerWebServerError::ServerError(
-                APIServerWebServerServerError::ErrorCalculatingMerklePath,
+            ApiServerWebServerError::ServerError(
+                ApiServerWebServerServerError::ErrorCalculatingMerklePath,
             )
         })?
         .into_hashes()
@@ -356,7 +356,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 #[allow(clippy::unused_async)]
 pub async fn destination_address(
     Path(_public_key_hash): Path<String>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -379,7 +379,7 @@ pub async fn destination_address(
 #[allow(clippy::unused_async)]
 pub async fn destination_multisig(
     Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -402,7 +402,7 @@ pub async fn destination_multisig(
 #[allow(clippy::unused_async)]
 pub async fn destination_public_key(
     Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -425,7 +425,7 @@ pub async fn destination_public_key(
 #[allow(clippy::unused_async)]
 pub async fn destination_script_hash(
     Path(_script_hash): Path<String>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();
@@ -452,7 +452,7 @@ pub async fn destination_script_hash(
 #[allow(clippy::unused_async)]
 pub async fn pool(
     Path(_pool_id): Path<String>,
-) -> Result<impl IntoResponse, APIServerWebServerError> {
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
     // TODO replace mock with database calls
 
     let mut rng = make_true_rng();

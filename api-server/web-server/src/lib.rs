@@ -17,13 +17,13 @@ pub mod api;
 pub mod config;
 pub mod error;
 
-pub use error::APIServerWebServerError;
+pub use error::ApiServerWebServerError;
 
 use common::chain::ChainConfig;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-pub struct APIServerWebServerState<T> {
+pub struct ApiServerWebServerState<T> {
     pub db: T,
     pub chain_config: Arc<ChainConfig>,
 }

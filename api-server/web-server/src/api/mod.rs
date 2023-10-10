@@ -17,8 +17,8 @@ pub mod v1;
 
 use crate::{
     api,
-    error::{APIServerWebServerClientError, APIServerWebServerError},
-    APIServerWebServerState,
+    error::{ApiServerWebServerClientError, ApiServerWebServerError},
+    ApiServerWebServerState,
 };
 
 use api_server_common::storage::storage_api::ApiServerStorage;
@@ -31,12 +31,12 @@ use serde_json::json;
 use std::{net::TcpListener, sync::Arc};
 
 #[allow(clippy::unused_async)]
-async fn bad_request() -> Result<(), APIServerWebServerError> {
-    Err(APIServerWebServerClientError::BadRequest)?
+async fn bad_request() -> Result<(), ApiServerWebServerError> {
+    Err(ApiServerWebServerClientError::BadRequest)?
 }
 
 #[allow(clippy::unused_async)]
-async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
+async fn server_status() -> Result<impl IntoResponse, ApiServerWebServerError> {
     Ok(Json(json!({
         "versions": [api::v1::API_VERSION]
         //"network": "testnet",
@@ -46,7 +46,7 @@ async fn server_status() -> Result<impl IntoResponse, APIServerWebServerError> {
 #[allow(dead_code)]
 pub fn web_server<T: ApiServerStorage + Send + Sync + 'static>(
     socket: TcpListener,
-    state: APIServerWebServerState<Arc<T>>,
+    state: ApiServerWebServerState<Arc<T>>,
 ) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
     let routes = Router::new()
         .route("/", get(server_status))

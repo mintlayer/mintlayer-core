@@ -30,7 +30,7 @@ use rstest::rstest;
 use serde_json::json;
 use std::{net::TcpListener, sync::Arc};
 use test_utils::random::{make_seedable_rng, Rng, Seed};
-use web_server::{api::web_server, APIServerWebServerState};
+use web_server::{api::web_server, ApiServerWebServerState};
 
 async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -41,7 +41,7 @@ async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Re
             let chain_config = Arc::new(create_unit_test_config());
             let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
-            APIServerWebServerState {
+            ApiServerWebServerState {
                 db: Arc::new(storage),
                 chain_config: Arc::clone(&chain_config),
             }
@@ -169,7 +169,7 @@ mod v1_block {
                 let mut local_node = BlockchainState::new(storage);
                 local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                APIServerWebServerState {
+                ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::new(chain_config),
                 }
@@ -302,7 +302,7 @@ mod v1_block_header {
                 let mut local_node = BlockchainState::new(storage);
                 local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                APIServerWebServerState {
+                ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::new(chain_config),
                 }
@@ -435,7 +435,7 @@ mod v1_block_reward {
                     let mut local_node = BlockchainState::new(storage);
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                    APIServerWebServerState {
+                    ApiServerWebServerState {
                         db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
@@ -564,7 +564,7 @@ mod v1_block_transaction_ids {
                     let mut local_node = BlockchainState::new(storage);
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                    APIServerWebServerState {
+                    ApiServerWebServerState {
                         db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
@@ -617,7 +617,7 @@ async fn v1_chain_genesis() {
 
                 let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
-                APIServerWebServerState {
+                ApiServerWebServerState {
                     db: Arc::new(storage),
                     chain_config: Arc::clone(&chain_config),
                 }
@@ -754,7 +754,7 @@ mod v1_chain_at_height {
                     let mut local_node = BlockchainState::new(storage);
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                    APIServerWebServerState {
+                    ApiServerWebServerState {
                         db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
@@ -807,7 +807,7 @@ mod v1_chain_tip {
 
                     let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
-                    APIServerWebServerState {
+                    ApiServerWebServerState {
                         db: Arc::new(storage),
                         chain_config: chain_config.clone(),
                     }
@@ -895,7 +895,7 @@ mod v1_chain_tip {
                     let mut local_node = BlockchainState::new(storage);
                     local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                    APIServerWebServerState {
+                    ApiServerWebServerState {
                         db: Arc::new(local_node.storage().clone_storage().await),
                         chain_config: Arc::new(chain_config),
                     }
@@ -1037,7 +1037,7 @@ mod v1_transaction {
                 let mut local_node = BlockchainState::new(storage);
                 local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-                APIServerWebServerState {
+                ApiServerWebServerState {
                     db: Arc::new(local_node.storage().clone_storage().await),
                     chain_config: Arc::new(chain_config),
                 }

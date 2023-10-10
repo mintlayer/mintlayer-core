@@ -22,7 +22,7 @@ use clap::Parser;
 use common::chain::config::create_unit_test_config;
 use logging::log;
 use std::sync::Arc;
-use web_server::{api::web_server, config::ApiServerWebServerConfig, APIServerWebServerState};
+use web_server::{api::web_server, config::ApiServerWebServerConfig, ApiServerWebServerState};
 
 #[tokio::main]
 async fn main() {
@@ -53,7 +53,7 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let state = APIServerWebServerState {
+    let state = ApiServerWebServerState {
         db: Arc::new(storage),
         chain_config,
     };
