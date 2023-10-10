@@ -32,10 +32,7 @@ use std::{net::TcpListener, sync::Arc};
 use test_utils::random::{make_seedable_rng, Rng, Seed};
 use web_server::{api::web_server, APIServerWebServerState};
 
-#[tokio::test]
-async fn server_status() {
-    let url = "/";
-
+async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let socket = listener.local_addr().unwrap();
 
@@ -50,12 +47,19 @@ async fn server_status() {
             }
         };
 
-        web_server(listener, web_server_state).await
+        web_server(listener, web_server_state).await.unwrap();
     });
 
     let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
         .await
         .unwrap();
+
+    (task, response)
+}
+
+#[tokio::test]
+async fn server_status() {
+    let (task, response) = spawn_webserver("/").await;
 
     assert_eq!(response.status(), 200);
     assert_eq!(response.text().await.unwrap(), r#"{"versions":["1.0.0"]}"#);
@@ -65,28 +69,7 @@ async fn server_status() {
 
 #[tokio::test]
 async fn bad_request() {
-    let url = "/non-existent-url";
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let socket = listener.local_addr().unwrap();
-
-    let task = tokio::spawn(async move {
-        let web_server_state = {
-            let chain_config = Arc::new(create_unit_test_config());
-            let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-            APIServerWebServerState {
-                db: Arc::new(storage),
-                chain_config: Arc::clone(&chain_config),
-            }
-        };
-
-        web_server(listener, web_server_state).await
-    });
-
-    let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-        .await
-        .unwrap();
+    let (task, response) = spawn_webserver("/non-existent-url").await;
 
     assert_eq!(response.status(), 400);
     assert_eq!(response.text().await.unwrap(), r#"{"error":"Bad request"}"#);
@@ -99,28 +82,7 @@ mod v1_block {
 
     #[tokio::test]
     async fn invalid_block_id() {
-        let url = "/api/v1/block/invalid-block-id";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn(async move {
-            let web_server_state = {
-                let chain_config = Arc::new(create_unit_test_config());
-                let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                APIServerWebServerState {
-                    db: Arc::new(storage),
-                    chain_config: Arc::clone(&chain_config),
-                }
-            };
-
-            web_server(listener, web_server_state).await
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id").await;
 
         assert_eq!(response.status(), 400);
 
@@ -134,28 +96,10 @@ mod v1_block {
 
     #[tokio::test]
     async fn block_not_found() {
-        let url = "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn(async move {
-            let web_server_state = {
-                let chain_config = Arc::new(create_unit_test_config());
-                let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                APIServerWebServerState {
-                    db: Arc::new(storage),
-                    chain_config: Arc::clone(&chain_config),
-                }
-            };
-
-            web_server(listener, web_server_state).await
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver(
+            "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001",
+        )
+        .await;
 
         assert_eq!(response.status(), 400);
 
@@ -271,28 +215,7 @@ mod v1_block_header {
 
     #[tokio::test]
     async fn invalid_block_id() {
-        let url = "/api/v1/block/invalid-block-id/header";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn(async move {
-            let web_server_state = {
-                let chain_config = Arc::new(create_unit_test_config());
-                let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                APIServerWebServerState {
-                    db: Arc::new(storage),
-                    chain_config: Arc::clone(&chain_config),
-                }
-            };
-
-            web_server(listener, web_server_state).await
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id/header").await;
 
         assert_eq!(response.status(), 400);
 
@@ -306,29 +229,10 @@ mod v1_block_header {
 
     #[tokio::test]
     async fn block_not_found() {
-        let url =
-            "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/header";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn(async move {
-            let web_server_state = {
-                let chain_config = Arc::new(create_unit_test_config());
-                let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                APIServerWebServerState {
-                    db: Arc::new(storage),
-                    chain_config: Arc::clone(&chain_config),
-                }
-            };
-
-            web_server(listener, web_server_state).await
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver(
+            "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/header",
+        )
+        .await;
 
         assert_eq!(response.status(), 400);
 
@@ -441,30 +345,7 @@ mod v1_block_reward {
 
     #[tokio::test]
     async fn invalid_block_id() {
-        let url = "/api/v1/block/invalid-block-id/reward";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/block/invalid-block-id/reward").await;
 
         assert_eq!(response.status(), 400);
 
@@ -478,31 +359,10 @@ mod v1_block_reward {
 
     #[tokio::test]
     async fn block_not_found() {
-        let url =
-            "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/reward";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver(
+            "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/reward",
+        )
+        .await;
 
         assert_eq!(response.status(), 400);
 
@@ -610,30 +470,8 @@ mod v1_block_transaction_ids {
 
     #[tokio::test]
     async fn invalid_block_id() {
-        let url = "/api/v1/block/invalid-block-id/transaction-ids";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) =
+            spawn_webserver("/api/v1/block/invalid-block-id/transaction-ids").await;
 
         assert_eq!(response.status(), 400);
 
@@ -647,30 +485,8 @@ mod v1_block_transaction_ids {
 
     #[tokio::test]
     async fn block_not_found() {
-        let url = "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/transaction-ids";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver(
+	    "/api/v1/block/0000000000000000000000000000000000000000000000000000000000000001/transaction-ids").await;
 
         assert_eq!(response.status(), 400);
 
@@ -835,30 +651,7 @@ mod v1_chain_at_height {
 
     #[tokio::test]
     async fn invalid_height() {
-        let url = "/api/v1/chain/invalid-height";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/chain/invalid-height").await;
 
         assert_eq!(response.status(), 400);
 
@@ -872,30 +665,7 @@ mod v1_chain_at_height {
 
     #[tokio::test]
     async fn height_zero() {
-        let url = "/api/v1/chain/0";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/chain/0").await;
 
         assert_eq!(response.status(), 400);
 
@@ -912,30 +682,7 @@ mod v1_chain_at_height {
 
     #[tokio::test]
     async fn height_past_tip() {
-        let url = "/api/v1/chain/1337";
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
-
-        let task = tokio::spawn({
-            async move {
-                let web_server_state = {
-                    let chain_config = Arc::new(create_unit_test_config());
-                    let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
-
-                    APIServerWebServerState {
-                        db: Arc::new(storage),
-                        chain_config: Arc::clone(&chain_config),
-                    }
-                };
-
-                web_server(listener, web_server_state).await
-            }
-        });
-
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
-            .await
-            .unwrap();
+        let (task, response) = spawn_webserver("/api/v1/chain/1337").await;
 
         assert_eq!(response.status(), 400);
 
