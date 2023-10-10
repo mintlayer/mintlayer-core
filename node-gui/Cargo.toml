@@ -31,3 +31,7 @@ rfd = { workspace = true, features = ["gtk3"] } # revert to "xdg-portal" once ht
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+
+[[bin]]
+name = "mintlayer-gui"
+path = "src/main.rs"

@@ -73,7 +73,6 @@ default-members = [
   "logging",
   "mempool",
   "node-daemon",
-  "node-gui",
   "node-lib",
   "p2p",
   "rpc",
@@ -224,3 +223,4 @@ overflow-checks = true
 
 [profile.test.package.script]
 opt-level = 2
+

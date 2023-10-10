@@ -19,3 +19,7 @@ crypto = { path = "../../crypto" }
 clap = { workspace = true, features = ["derive"] }
 
 thiserror.workspace = true
+
+[[bin]]
+name = "mintlayer-address-generator"
+path = "src/main.rs"

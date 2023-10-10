@@ -17,3 +17,7 @@ tokio = { workspace = true, default-features = false }
 
 [dev-dependencies]
 assert_cmd.workspace = true
+
+[[bin]]
+name = "mintlayerd"
+path = "src/main.rs"

@@ -13,3 +13,7 @@ wallet-cli-lib = { path = "../wallet-cli-lib" }
 
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+
+[[bin]]
+name = "mintlayer-cli"
+path = "src/main.rs"
