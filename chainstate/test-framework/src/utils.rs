@@ -138,7 +138,7 @@ pub fn create_multiple_utxo_data(
                     // (e.g. single genesis output on issuance)
                     vec![
                         TxOutput::Transfer(
-                            random_nft_issuance(chainstate.get_chain_config().clone(), rng).into(),
+                            random_nft_issuance(chainstate.get_chain_config(), rng).into(),
                             Destination::AnyoneCanSpend,
                         ),
                         TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
@@ -154,8 +154,7 @@ pub fn create_multiple_utxo_data(
                     // (e.g. single genesis output on issuance)
                     vec![
                         TxOutput::Transfer(
-                            random_token_issuance(chainstate.get_chain_config().clone(), rng)
-                                .into(),
+                            random_token_issuance(chainstate.get_chain_config(), rng).into(),
                             Destination::AnyoneCanSpend,
                         ),
                         TxOutput::Burn(OutputValue::Coin(min_tx_fee)),

@@ -73,10 +73,12 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{
             get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenId,
+            TokenIssuanceVersion,
         },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
@@ -727,6 +729,44 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
+        // Check if v0 tokens are allowed to be used at this height
+        let latest_token_version = self
+            .chain_config
+            .as_ref()
+            .chainstate_upgrades()
+            .version_at_height(tx_source.expected_block_height())
+            .1
+            .token_issuance_version();
+
+        match latest_token_version {
+            TokenIssuanceVersion::V0 => { /* ok */ }
+            TokenIssuanceVersion::V1 => {
+                let has_v0_tokens = tx.outputs().iter().any(|output| match output {
+                    TxOutput::Transfer(output_value, _)
+                    | TxOutput::Burn(output_value)
+                    | TxOutput::LockThenTransfer(output_value, _, _) => match output_value {
+                        OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                        OutputValue::TokenV0(_) => true,
+                    },
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::TokensOp(_) => false,
+                });
+                ensure!(
+                    !has_v0_tokens,
+                    ConnectTransactionError::TokensError(
+                        TokensError::DeprecatedTokenIssuanceVersion(
+                            tx.get_id(),
+                            TokenIssuanceVersion::V0,
+                        ),
+                    )
+                );
+            }
+            _ => unreachable!(),
+        };
+
         tx.inputs().iter().try_for_each(|input| match input {
             TxInput::Utxo(_) => Ok(()),
             TxInput::Account(account_input) => match account_input.account() {
