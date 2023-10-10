@@ -104,6 +104,7 @@ async fn ok(#[case] seed: Seed) {
     let (block_id, expected_transaction_ids) = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/transaction-ids");
 
+    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();

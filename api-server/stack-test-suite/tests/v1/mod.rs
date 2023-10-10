@@ -44,6 +44,7 @@ async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Re
         web_server(listener, web_server_state).await.unwrap();
     });
 
+    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -100,6 +101,7 @@ async fn v1_chain_genesis() {
         }
     });
 
+    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
