@@ -84,7 +84,7 @@ async fn get_block(
     block_id: &str,
     state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
 ) -> Result<Block, APIServerWebServerError> {
-    let block_id: Id<Block> = H256::from_str(&block_id)
+    let block_id: Id<Block> = H256::from_str(block_id)
         .map_err(|_| {
             APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
         })?
@@ -102,9 +102,9 @@ async fn get_block(
         .map_err(|_| {
             APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
         })?
-        .ok_or_else(|| {
-            APIServerWebServerError::ClientError(APIServerWebServerClientError::BlockNotFound)
-        })
+        .ok_or(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::BlockNotFound,
+        ))
 }
 
 #[allow(clippy::unused_async)]
@@ -248,7 +248,7 @@ async fn get_transaction(
     transaction_id: &str,
     state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
 ) -> Result<(Option<Id<Block>>, SignedTransaction), APIServerWebServerError> {
-    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+    let transaction_id: Id<Transaction> = H256::from_str(transaction_id)
         .map_err(|_| {
             APIServerWebServerError::ClientError(
                 APIServerWebServerClientError::InvalidTransactionId,
@@ -298,7 +298,7 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
     let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
         (Some(block_id), transaction) => {
             let block = get_block(&block_id.to_hash().encode_hex::<String>(), &state).await?;
-            (block, transaction.transaction().to_owned())
+            (block, transaction.transaction().clone())
         }
         (None, _) => {
             return Err(APIServerWebServerError::ClientError(
