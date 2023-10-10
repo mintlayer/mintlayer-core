@@ -34,7 +34,7 @@ use web_server::{api::web_server, ApiServerWebServerState};
 
 async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let socket = listener.local_addr().unwrap();
+    let addr = listener.local_addr().unwrap();
 
     let task = tokio::spawn(async move {
         let web_server_state = {
@@ -50,7 +50,7 @@ async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Re
         web_server(listener, web_server_state).await.unwrap();
     });
 
-    let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
 
@@ -117,7 +117,7 @@ mod v1_block {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -126,6 +126,8 @@ mod v1_block {
                 let mut rng = make_seedable_rng(seed);
                 let block_height = rng.gen_range(1..50);
                 let n_blocks = rng.gen_range(block_height..100);
+
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
                 let chain_config = create_unit_test_config();
 
@@ -181,7 +183,7 @@ mod v1_block {
         let (block_id, expected_block) = rx.await.unwrap();
         let url = format!("/api/v1/block/{block_id}");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -250,7 +252,7 @@ mod v1_block_header {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -314,7 +316,7 @@ mod v1_block_header {
         let (block_id, expected_block) = rx.await.unwrap();
         let url = format!("/api/v1/block/{block_id}/header");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -380,7 +382,7 @@ mod v1_block_reward {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -448,7 +450,7 @@ mod v1_block_reward {
         let (block_id, _expected_block_reward) = rx.await.unwrap();
         let url = format!("/api/v1/block/{block_id}/reward");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -504,7 +506,7 @@ mod v1_block_transaction_ids {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -577,7 +579,7 @@ mod v1_block_transaction_ids {
         let (block_id, expected_transaction_ids) = rx.await.unwrap();
         let url = format!("/api/v1/block/{block_id}/transaction-ids");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -603,7 +605,7 @@ async fn v1_chain_genesis() {
     let url = "/api/v1/chain/genesis";
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let socket = listener.local_addr().unwrap();
+    let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -627,7 +629,7 @@ async fn v1_chain_genesis() {
         }
     });
 
-    let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
 
@@ -708,7 +710,7 @@ mod v1_chain_at_height {
         let url = format!("/api/v1/chain/{block_height}");
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -764,7 +766,7 @@ mod v1_chain_at_height {
             }
         });
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -792,7 +794,7 @@ mod v1_chain_tip {
         let url = "/api/v1/chain/tip";
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -817,7 +819,7 @@ mod v1_chain_tip {
             }
         });
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -846,7 +848,7 @@ mod v1_chain_tip {
         let url = "/api/v1/chain/tip";
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -905,7 +907,7 @@ mod v1_chain_tip {
             }
         });
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -968,7 +970,7 @@ mod v1_transaction {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -1041,7 +1043,7 @@ mod v1_transaction {
         let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
         let url = format!("/api/v1/transaction/{transaction_id}");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -1099,7 +1101,7 @@ mod v1_transaction_merkle_path {
     // #[tokio::test]
     // async fn get_block_failed(#[case] seed: Seed) {
     //     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    //     let socket = listener.local_addr().unwrap();
+    //     let addr = listener.local_addr().unwrap();
 
     //     let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -1177,7 +1179,7 @@ mod v1_transaction_merkle_path {
     //     let transaction_id = rx.await.unwrap();
     //     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-    //     let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+    //     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
     //         .await
     //         .unwrap();
 
@@ -1198,7 +1200,7 @@ mod v1_transaction_merkle_path {
     #[tokio::test]
     async fn transaction_not_part_of_block(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -1279,7 +1281,7 @@ mod v1_transaction_merkle_path {
         let transaction_id = rx.await.unwrap();
         let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
@@ -1302,7 +1304,7 @@ mod v1_transaction_merkle_path {
     // - CannotFindTransactionInBlock
     // - TransactionIndexOverflow
     // - ErrorCalculatingMerkleTree
-    // - ErrorCalcutingMerklePath
+    // - ErrorCalculatingMerklePath
 
     #[rstest]
     #[trace]
@@ -1310,7 +1312,7 @@ mod v1_transaction_merkle_path {
     #[tokio::test]
     async fn ok(#[case] seed: Seed) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let socket = listener.local_addr().unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -1391,7 +1393,7 @@ mod v1_transaction_merkle_path {
         let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
         let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-        let response = reqwest::get(format!("http://{}:{}{url}", socket.ip(), socket.port()))
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
             .await
             .unwrap();
 
