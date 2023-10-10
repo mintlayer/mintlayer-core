@@ -8,9 +8,17 @@ on:
 
 name: Code Coverage
 
+env:
+  PARTITIONS_COUNT: 5
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        partitions: [0, 1, 2, 3, 4]
+
     steps:
       - id: skip-check
         uses: fkirc/skip-duplicate-actions@v5.3.0
@@ -28,10 +36,8 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clean
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --no-fail-fast
+      - name: Run coverage tests
+        run: python3 build-tools/workspace_partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partitions }} -p | xargs cargo test
         env:
           RUST_LOG: debug
           RUST_BACKTRACE: full
