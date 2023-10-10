@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         # This range spans from `0` to `PARTITIONS_COUNT - 1`, where `PARTITIONS_COUNT` is the number of partitions (defined in env var above)
-        partitions: [0, 1, 2, 3, 4]
+        partition: [0, 1, 2, 3, 4]
 
     steps:
       - id: skip-check
@@ -39,7 +39,7 @@ jobs:
         with:
           command: clean
       - name: Run coverage tests
-        run: python3 build-tools/workspace_partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partitions }} -p | xargs cargo test
+        run: python3 build-tools/workspace_partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partition }} -p | xargs cargo test
         env:
           RUST_LOG: debug
           RUST_BACKTRACE: full
