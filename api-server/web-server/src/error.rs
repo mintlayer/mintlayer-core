@@ -41,15 +41,29 @@ pub enum APIServerWebServerClientError {
     InvalidBlockHeight,
     #[error("Invalid block Id")]
     InvalidBlockId,
+    #[error("Invalid transaction Id")]
+    InvalidTransactionId,
     #[error("No block found at supplied height")]
     NoBlockAtHeight,
+    #[error("Transaction not found")]
+    TransactionNotFound,
+    #[error("Transaction not part of any block")]
+    TransactionNotPartOfBlock,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
 pub enum APIServerWebServerServerError {
+    #[error("Cannot find transaction in block")]
+    CannotFindTransactionInBlock,
+    #[error("Error calculating merkle path")]
+    ErrorCalculatingMerklePath,
+    #[error("Error calculating merkle tree")]
+    ErrorCalculatingMerkleTree,
     #[error("Internal server error")]
     InternalServerError,
+    #[error("Transaction index overflowed")]
+    TransactionIndexOverflow,
 }
 
 impl IntoResponse for APIServerWebServerError {
