@@ -22,13 +22,13 @@ use chainstate::{
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
 use common::chain::UtxoOutPoint;
-use common::primitives::{id, Id};
+use common::primitives::{id, BlockHeight, Id};
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, TokenData, TokenId},
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        tokens::{make_token_id, TokenData, TokenId, TokenIssuanceVersion},
+        ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -36,6 +36,7 @@ use crypto::{hash::StreamHasher, random::Rng};
 use expect_test::expect;
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
+use test_utils::nft_utils::random_token_issuance;
 use test_utils::{
     gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
@@ -2022,5 +2023,139 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
             .build_and_process()
             .unwrap()
             .unwrap();
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn no_v0_issuance_after_v1(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                        )])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                random_token_issuance(tf.chain_config(), &mut rng).into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let tx_id = tx.transaction().get_id();
+
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenIssuanceVersion(
+                    tx_id,
+                    TokenIssuanceVersion::V0
+                ))
+            ))
+        );
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn no_v0_transfer_after_v1(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                            ),
+                            (
+                                BlockHeight::new(2),
+                                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
+        let tx_with_issuance = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                random_token_issuance(tf.chain_config(), &mut rng).into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let tx_with_issuance_id = tx_with_issuance.transaction().get_id();
+        let token_id = make_token_id(tx_with_issuance.inputs()).unwrap();
+
+        tf.make_block_builder()
+            .add_transaction(tx_with_issuance)
+            .build_and_process()
+            .unwrap();
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx_with_issuance_id), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                })
+                .into(),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenIssuanceVersion(
+                    tx_id,
+                    TokenIssuanceVersion::V0
+                ))
+            ))
+        );
     })
 }

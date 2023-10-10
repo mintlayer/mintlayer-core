@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::random_string;
 use common::{
     chain::{
@@ -32,10 +30,7 @@ pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
     TokenCreator::from(public_key)
 }
 
-pub fn random_token_issuance(
-    chain_config: Arc<ChainConfig>,
-    rng: &mut impl Rng,
-) -> TokenIssuanceV0 {
+pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> TokenIssuanceV0 {
     let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
@@ -49,7 +44,7 @@ pub fn random_token_issuance(
 }
 
 pub fn random_nft_issuance(
-    chain_config: Arc<ChainConfig>,
+    chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
 ) -> NftIssuanceV0 {
     let max_desc_len = chain_config.token_max_description_len();
