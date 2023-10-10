@@ -19,6 +19,7 @@ use crate::{
     primitives::id::hash_encoded,
 };
 
+// TODO: the argument to the function should be a utxo, right now it might be an account
 pub fn make_token_id(inputs: &[TxInput]) -> Option<TokenId> {
     Some(TokenId::new(hash_encoded(inputs.get(0)?)))
 }

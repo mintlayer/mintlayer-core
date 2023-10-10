@@ -18,125 +18,23 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        output_value::OutputValue,
-        stakelock::StakePoolData,
-        timelock::OutputTimeLock,
-        tokens::{
-            Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance, TokenIssuanceV1,
-            TokenTotalSupply,
-        },
-        Block, DelegationId, Destination, GenBlock, OutPointSourceId, PoolId, TokenOutput, TxInput,
-        TxOutput, UtxoOutPoint,
+        tokens::TokenId,
+        Block, DelegationId, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
+    primitives::{Compact, Id, H256},
 };
 use crypto::{
     random::{seq::IteratorRandom, Rng},
     vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
 };
 use itertools::Itertools;
-use serialization::extras::non_empty_vec::DataOrNoVec;
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::*;
 
 mod constraints_tests;
+mod outputs_utils;
 mod purpose_tests;
-
-fn transfer() -> TxOutput {
-    TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)
-}
-
-fn burn() -> TxOutput {
-    TxOutput::Burn(OutputValue::Coin(Amount::ZERO))
-}
-
-fn lock_then_transfer() -> TxOutput {
-    TxOutput::LockThenTransfer(
-        OutputValue::Coin(Amount::ZERO),
-        Destination::AnyoneCanSpend,
-        OutputTimeLock::ForBlockCount(1),
-    )
-}
-
-fn stake_pool() -> TxOutput {
-    let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-    TxOutput::CreateStakePool(
-        PoolId::new(H256::zero()),
-        Box::new(StakePoolData::new(
-            Amount::ZERO,
-            Destination::AnyoneCanSpend,
-            vrf_pub_key,
-            Destination::AnyoneCanSpend,
-            PerThousand::new(0).unwrap(),
-            Amount::ZERO,
-        )),
-    )
-}
-
-fn produce_block() -> TxOutput {
-    TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
-}
-
-fn create_delegation() -> TxOutput {
-    TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
-}
-
-fn delegate_staking() -> TxOutput {
-    TxOutput::DelegateStaking(Amount::ZERO, DelegationId::new(H256::zero()))
-}
-
-fn issue_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::IssueFungibleToken(Box::new(
-        TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: Vec::new(),
-            number_of_decimals: 0,
-            metadata_uri: Vec::new(),
-            total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
-        }),
-    )))
-}
-
-fn issue_nft() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::IssueNft(
-        TokenId::new(H256::zero()),
-        Box::new(NftIssuance::V0(NftIssuanceV0 {
-            metadata: Metadata {
-                creator: None,
-                name: Vec::new(),
-                description: Vec::new(),
-                ticker: Vec::new(),
-                icon_uri: DataOrNoVec::from(None),
-                additional_metadata_uri: DataOrNoVec::from(None),
-                media_uri: DataOrNoVec::from(None),
-                media_hash: Vec::new(),
-            },
-        })),
-        Destination::AnyoneCanSpend,
-    ))
-}
-
-fn mint_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::MintTokens(
-        TokenId::new(H256::zero()),
-        Amount::ZERO,
-        Destination::AnyoneCanSpend,
-    ))
-}
-
-fn redeem_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::RedeemTokens(
-        TokenId::new(H256::zero()),
-        Amount::ZERO,
-    ))
-}
-
-fn lock_tokens_supply() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(TokenId::new(
-        H256::zero(),
-    )))
-}
 
 fn get_random_outputs_combination(
     rng: &mut impl Rng,
