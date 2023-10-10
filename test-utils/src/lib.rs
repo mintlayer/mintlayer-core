@@ -64,6 +64,19 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     token_ticker
 }
 
+pub fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
+    let mut remaining = value;
+    let mut result = Vec::new();
+
+    while remaining > 0 {
+        let fraction = rng.gen_range(1..=remaining);
+        result.push(fraction);
+        remaining -= fraction;
+    }
+
+    result
+}
+
 #[macro_export]
 macro_rules! assert_matches_return_val {
     ($in:expr, $pattern:pat, $out:expr) => {
@@ -89,6 +102,10 @@ macro_rules! assert_matches {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::random::{make_seedable_rng, Seed};
+    use rstest::rstest;
+
     mod match_macro_tests {
         #[allow(unused)]
         enum TestEnum {
@@ -126,5 +143,19 @@ mod tests {
 
             assert_matches!(test_val, TestEnum::E2);
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn decompose_value_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        assert_eq!(Vec::<u128>::new(), decompose_value(&mut rng, 0));
+        assert_eq!(vec![1], decompose_value(&mut rng, 1));
+
+        let value = rng.gen::<u128>();
+        let result = decompose_value(&mut rng, value);
+        assert_eq!(value, result.iter().sum());
     }
 }

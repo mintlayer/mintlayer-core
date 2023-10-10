@@ -28,25 +28,13 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    decompose_value,
+    random::{make_seedable_rng, Seed},
+};
 
 use super::outputs_utils::*;
 use super::*;
-
-fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
-    let mut remaining = value;
-    let mut result = Vec::new();
-
-    while remaining > 0 {
-        let fraction = rng.gen_range(1..=remaining);
-        result.push(fraction);
-        remaining -= fraction;
-    }
-
-    assert_eq!(value, result.iter().sum());
-
-    result
-}
 
 fn random_input_utxos(
     rng: &mut impl Rng,
