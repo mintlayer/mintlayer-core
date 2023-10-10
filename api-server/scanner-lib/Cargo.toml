@@ -1,5 +1,5 @@
 [package]
-name = "blockchain-scanner-lib"
+name = "api-blockchain-scanner-lib"
 edition.workspace = true
 rust-version.workspace = true
 version.workspace = true

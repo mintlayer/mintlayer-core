@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use api_blockchain_scanner_lib::blockchain_state::BlockchainState;
 use api_server_common::storage::{
     impls::postgres::TransactionalApiServerPostgresStorage,
     storage_api::{
@@ -22,7 +23,6 @@ use api_server_common::storage::{
         ApiServerTransactionRw,
     },
 };
-use blockchain_scanner_lib::blockchain_state::BlockchainState;
 use clap::Parser;
 use common::chain::{config::ChainType, ChainConfig};
 use config::ApiServerScannerArgs;
@@ -85,7 +85,7 @@ pub async fn run<S: ApiServerStorage>(
     let mut local_block = BlockchainState::new(storage);
     loop {
         let sync_result =
-            blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, &mut local_block)
+            api_blockchain_scanner_lib::sync::sync_once(chain_config, rpc_client, &mut local_block)
                 .await;
 
         match sync_result {

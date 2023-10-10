@@ -10,9 +10,9 @@ api-server-common = { path = "../api-server-common" }
 chainstate-test-framework = { path = '../../chainstate/test-framework' }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
-blockchain-scanner-lib = { path = "../scanner-lib" }
+api-blockchain-scanner-lib = { path = "../scanner-lib" }
 utils = { path = "../../utils" }
-web-server = { path = "../web-server" }
+api-web-server = { path = "../web-server" }
 
 async-trait.workspace = true
 axum.workspace = true

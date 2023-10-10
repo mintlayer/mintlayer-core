@@ -223,6 +223,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
+name = "api-blockchain-scanner-daemon"
+version = "0.1.2"
+dependencies = [
+ "api-blockchain-scanner-lib",
+ "api-server-common",
+ "clap",
+ "common",
+ "logging",
+ "node-comm",
+ "node-lib",
+ "rpc",
+ "thiserror",
+ "tokio",
+ "utils",
+]
+
+[[package]]
+name = "api-blockchain-scanner-lib"
+version = "0.1.2"
+dependencies = [
+ "api-server-common",
+ "async-trait",
+ "chainstate",
+ "chainstate-test-framework",
+ "common",
+ "crypto",
+ "logging",
+ "node-comm",
+ "rstest",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "utils",
+]
+
+[[package]]
 name = "api-server-backend-test-suite"
 version = "0.1.2"
 dependencies = [
@@ -267,10 +303,11 @@ dependencies = [
 name = "api-server-stack-test-suite"
 version = "0.1.2"
 dependencies = [
+ "api-blockchain-scanner-lib",
  "api-server-common",
+ "api-web-server",
  "async-trait",
  "axum",
- "blockchain-scanner-lib",
  "chainstate-test-framework",
  "common",
  "crypto",
@@ -283,7 +320,24 @@ dependencies = [
  "test-utils",
  "tokio",
  "utils",
- "web-server",
+]
+
+[[package]]
+name = "api-web-server"
+version = "0.1.2"
+dependencies = [
+ "api-server-common",
+ "axum",
+ "clap",
+ "common",
+ "crypto",
+ "hex",
+ "hyper",
+ "logging",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -634,42 +688,6 @@ checksum = "8dd9e63c1744f755c2f60332b88de39d341e5e86239014ad839bd71c106dec42"
 dependencies = [
  "block-sys",
  "objc2-encode",
-]
-
-[[package]]
-name = "blockchain-scanner-daemon"
-version = "0.1.2"
-dependencies = [
- "api-server-common",
- "blockchain-scanner-lib",
- "clap",
- "common",
- "logging",
- "node-comm",
- "node-lib",
- "rpc",
- "thiserror",
- "tokio",
- "utils",
-]
-
-[[package]]
-name = "blockchain-scanner-lib"
-version = "0.1.2"
-dependencies = [
- "api-server-common",
- "async-trait",
- "chainstate",
- "chainstate-test-framework",
- "common",
- "crypto",
- "logging",
- "node-comm",
- "rstest",
- "test-utils",
- "thiserror",
- "tokio",
- "utils",
 ]
 
 [[package]]
@@ -7713,24 +7731,6 @@ dependencies = [
  "lazy_static",
  "log",
  "pkg-config",
-]
-
-[[package]]
-name = "web-server"
-version = "0.1.2"
-dependencies = [
- "api-server-common",
- "axum",
- "clap",
- "common",
- "crypto",
- "hex",
- "hyper",
- "logging",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

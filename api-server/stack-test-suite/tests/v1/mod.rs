@@ -22,13 +22,14 @@ mod chain_tip;
 mod transaction;
 mod transaction_merkle_path;
 
+use api_blockchain_scanner_lib::{
+    blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
+};
 use api_server_common::storage::{
     impls::in_memory::transactional::TransactionalApiServerInMemoryStorage,
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
-use blockchain_scanner_lib::{
-    blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState,
-};
+use api_web_server::{api::web_server, ApiServerWebServerState};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::config::create_unit_test_config,
@@ -39,7 +40,6 @@ use rstest::rstest;
 use serde_json::json;
 use std::{net::TcpListener, sync::Arc};
 use test_utils::random::{make_seedable_rng, Rng, Seed};
-use web_server::{api::web_server, ApiServerWebServerState};
 
 async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
