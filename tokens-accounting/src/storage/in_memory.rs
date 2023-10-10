@@ -22,6 +22,7 @@ use crate::{TokenData, TokensAccountingView};
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 
 #[must_use]
+#[derive(Debug, Eq, PartialEq)]
 pub struct InMemoryTokensAccounting {
     tokens_data: BTreeMap<TokenId, TokenData>,
     circulating_supply: BTreeMap<TokenId, Amount>,

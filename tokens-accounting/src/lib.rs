@@ -36,4 +36,5 @@ pub use {
     view::{FlushableTokensAccountingView, TokensAccountingView},
 };
 
-// TODO: tests
+#[cfg(test)]
+mod tests;

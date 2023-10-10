@@ -6330,6 +6330,7 @@ dependencies = [
  "crypto",
  "hex",
  "rand_chacha 0.3.1",
+ "rstest",
  "serialization",
  "utils",
 ]
@@ -6484,6 +6485,7 @@ dependencies = [
  "accounting",
  "chainstate-types",
  "common",
+ "crypto",
  "parity-scale-codec",
  "rstest",
  "serialization",
