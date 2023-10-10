@@ -103,6 +103,10 @@ pub enum WalletError {
     InconsistentProduceBlockFromStake(PoolId),
     #[error("Delegation nonce overflow for id: {0}")]
     DelegationNonceOverflow(DelegationId),
+    #[error("Token issuance nonce overflow for id: {0}")]
+    TokenIssuanceNonceOverflow(TokenId),
+    #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
@@ -135,6 +139,14 @@ pub enum WalletError {
     ConsumedUtxo(UtxoOutPoint),
     #[error("Selected UTXO is still locked")]
     LockedUtxo(UtxoOutPoint),
+    #[error("Selected UTXO is a token v0 and cannot be used")]
+    TokenV0Utxo(UtxoOutPoint),
+    #[error("Cannot change Token supply in state: {0}")]
+    CannotChangeTokenSupply(&'static str),
+    #[error("Cannot lock Token supply in state: {0}")]
+    CannotLockTokenSupply(&'static str),
+    #[error("Cannot revert lock Token supply in state: {0}")]
+    InconsistentUnLockTokenSupply(&'static str),
 }
 
 /// Result type used for the wallet
