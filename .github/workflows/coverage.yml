@@ -9,6 +9,7 @@ on:
 name: Code Coverage
 
 env:
+  # We partition coverage tests into multiple parts to avoid filling diskspace
   PARTITIONS_COUNT: 5
 
 jobs:
@@ -17,6 +18,7 @@ jobs:
 
     strategy:
       matrix:
+        # This range spans from `0` to `PARTITIONS_COUNT - 1`, where `PARTITIONS_COUNT` is the number of partitions (defined in env var above)
         partitions: [0, 1, 2, 3, 4]
 
     steps:
@@ -42,8 +44,8 @@ jobs:
           RUST_LOG: debug
           RUST_BACKTRACE: full
           CARGO_INCREMENTAL: 0
-          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-          RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
+          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
+          RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
       - id: coverage
         uses: actions-rs/grcov@v0.1
       - uses: actions/upload-artifact@v2
