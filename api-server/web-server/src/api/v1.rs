@@ -24,10 +24,11 @@ use axum::{
     Json, Router,
 };
 use common::{
-    chain::{Block, Transaction, TxOutput},
+    chain::{Block, SignedTransaction, Transaction, TxOutput},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{make_true_rng, Rng};
+use hex::ToHex;
 use serde_json::json;
 use std::{str::FromStr, sync::Arc};
 
@@ -79,52 +80,46 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
 // block/
 //
 
+async fn get_block(
+    block_id: &str,
+    state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
+) -> Result<Block, APIServerWebServerError> {
+    let block_id: Id<Block> = H256::from_str(&block_id)
+        .map_err(|_| {
+            APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
+        })?
+        .into();
+
+    state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .get_block(block_id)
+        .await
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or_else(|| {
+            APIServerWebServerError::ClientError(APIServerWebServerClientError::BlockNotFound)
+        })
+}
+
 #[allow(clippy::unused_async)]
 pub async fn block<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    let block = {
-        let block_id: Id<Block> = H256::from_str(&block_id)
-            .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
-            })?
-            .into();
+    let block = get_block(&block_id, &state).await?;
 
-        state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_block(block_id)
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-    };
-
-    match block {
-        Some(block) => {
-            //: TODO expand this with a usable JSON response
-            let transactions: Vec<Transaction> = vec![];
-
-            Ok(Json(json!({
-            "previous_block_id": block.prev_block_id(),
-            "timestamp": block.timestamp(),
-            "merkle_root": block.merkle_root(),
-            "transactions": transactions,
-            })))
-        }
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BlockNotFound,
-        )),
-    }
+    Ok(Json(json!({
+    "previous_block_id": block.prev_block_id(),
+    "timestamp": block.timestamp(),
+    "merkle_root": block.merkle_root(),
+    "transactions": block.transactions(),
+    })))
 }
 
 #[allow(clippy::unused_async)]
@@ -132,41 +127,13 @@ pub async fn block_header<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    let block = {
-        let block_id: Id<Block> = H256::from_str(&block_id)
-            .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
-            })?
-            .into();
+    let block = get_block(&block_id, &state).await?;
 
-        state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_block(block_id)
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-    };
-
-    match block {
-        Some(block) => Ok(Json(json!({
-            "previous_block_id": block.prev_block_id(),
-            "timestamp": block.timestamp(),
-            "merkle_root": block.merkle_root(),
-        }))),
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BlockNotFound,
-        )),
-    }
+    Ok(Json(json!({
+        "previous_block_id": block.prev_block_id(),
+        "timestamp": block.timestamp(),
+        "merkle_root": block.merkle_root(),
+    })))
 }
 
 #[allow(clippy::unused_async)]
@@ -174,39 +141,11 @@ pub async fn block_reward<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    let block = {
-        let block_id: Id<Block> = H256::from_str(&block_id)
-            .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
-            })?
-            .into();
+    let _block = get_block(&block_id, &state).await?;
 
-        state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_block(block_id)
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-    };
-
-    match block {
-        Some(_block) => Ok(Json(json!({
-            // TODO: expand this with a usable JSON response
-        }))),
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BlockNotFound,
-        )),
-    }
+    Ok(Json(json!({
+        // TODO: expand this with a usable JSON response
+    })))
 }
 
 #[allow(clippy::unused_async)]
@@ -214,47 +153,17 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    let block = {
-        let block_id: Id<Block> = H256::from_str(&block_id)
-            .map_err(|_| {
-                APIServerWebServerError::ClientError(APIServerWebServerClientError::InvalidBlockId)
-            })?
-            .into();
+    let block = get_block(&block_id, &state).await?;
 
-        state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_block(block_id)
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-    };
+    let transaction_ids = block
+        .transactions()
+        .iter()
+        .map(|tx| tx.transaction().get_id())
+        .collect::<Vec<_>>();
 
-    match block {
-        Some(block) => {
-            let transaction_ids = block
-                .transactions()
-                .iter()
-                .map(|tx| tx.transaction().get_id())
-                .collect::<Vec<_>>();
-
-            Ok(Json(json!({
-                "transaction_ids": transaction_ids,
-            })))
-        }
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BlockNotFound,
-        )),
-    }
+    Ok(Json(json!({
+        "transaction_ids": transaction_ids,
+    })))
 }
 
 //
@@ -335,68 +244,109 @@ pub async fn chain_tip<T: ApiServerStorage>(
 // transaction/
 //
 
+async fn get_transaction(
+    transaction_id: &str,
+    state: &APIServerWebServerState<Arc<impl ApiServerStorage>>,
+) -> Result<(Option<Id<Block>>, SignedTransaction), APIServerWebServerError> {
+    let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
+        .map_err(|_| {
+            APIServerWebServerError::ClientError(
+                APIServerWebServerClientError::InvalidTransactionId,
+            )
+        })?
+        .into();
+
+    state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .get_transaction(transaction_id)
+        .await
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(APIServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(APIServerWebServerError::ClientError(
+            APIServerWebServerClientError::TransactionNotFound,
+        ))
+}
+
 #[allow(clippy::unused_async)]
 pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    let transaction = {
-        let transaction_id: Id<Transaction> = H256::from_str(&transaction_id)
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .into();
+    let (block_id, transaction) = get_transaction(&transaction_id, &state).await?;
 
-        state
-            .db
-            .transaction_ro()
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-            .get_transaction(transaction_id)
-            .await
-            .map_err(|_| {
-                APIServerWebServerError::ServerError(
-                    APIServerWebServerServerError::InternalServerError,
-                )
-            })?
-    };
-
-    match transaction {
-        Some((block_id, transaction)) => {
-            let transaction = transaction.transaction();
-
-            Ok(Json(json!({
-            "block_id": if let Some(block_id) = block_id { block_id.to_string() } else { "".into() },
-            "version_byte": transaction.version_byte(),
-            "is_replaceable": transaction.is_replaceable(),
-            "flags": transaction.flags(),
-            "inputs": transaction.inputs(),
-            "outputs": transaction.outputs(),
-                })))
-        }
-        None => Err(APIServerWebServerError::ClientError(
-            APIServerWebServerClientError::BadRequest,
-        )),
-    }
+    Ok(Json(json!({
+    "block_id": block_id.map_or("".to_string(), |b| b.to_hash().encode_hex::<String>()),
+    "version_byte": transaction.version_byte(),
+    "is_replaceable": transaction.is_replaceable(),
+    "flags": transaction.flags(),
+    "inputs": transaction.inputs(),
+    "outputs": transaction.outputs(),
+    })))
 }
 
 #[allow(clippy::unused_async)]
-pub async fn transaction_merkle_path(
-    Path(_transaction_id): Path<String>,
+pub async fn transaction_merkle_path<T: ApiServerStorage>(
+    Path(transaction_id): Path<String>,
+    State(state): State<APIServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, APIServerWebServerError> {
-    // TODO replace mock with database calls
+    let (block, transaction) = match get_transaction(&transaction_id, &state).await? {
+        (Some(block_id), transaction) => {
+            let block = get_block(&block_id.to_hash().encode_hex::<String>(), &state).await?;
+            (block, transaction.transaction().to_owned())
+        }
+        (None, _) => {
+            return Err(APIServerWebServerError::ClientError(
+                APIServerWebServerClientError::TransactionNotPartOfBlock,
+            ))
+        }
+    };
 
-    let mut rng = make_true_rng();
+    let transaction_index: u32 = block
+        .transactions()
+        .iter()
+        .position(|t| t.transaction().get_id() == transaction.get_id())
+        .ok_or(APIServerWebServerError::ServerError(
+            APIServerWebServerServerError::CannotFindTransactionInBlock,
+        ))?
+        .try_into()
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(
+                APIServerWebServerServerError::TransactionIndexOverflow,
+            )
+        })?;
 
-    Ok(Json(json!([(0..rng.gen_range(1..10))
-        .map(|_| H256::random_using(&mut rng))
-        .collect::<Vec<_>>()])))
+    let merkle_tree = block
+        .body()
+        .merkle_tree_proxy()
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(
+                APIServerWebServerServerError::ErrorCalculatingMerkleTree,
+            )
+        })?
+        .merkle_tree()
+        .transaction_inclusion_proof(transaction_index)
+        .map_err(|_| {
+            APIServerWebServerError::ServerError(
+                APIServerWebServerServerError::ErrorCalculatingMerklePath,
+            )
+        })?
+        .into_hashes()
+        .into_iter()
+        .map(|h| h.encode_hex::<String>())
+        .collect::<Vec<_>>();
+
+    Ok(Json(json!({
+    "block_id": block.get_id(),
+    "merkle_root": block.merkle_root().encode_hex::<String>(),
+    "transaction_index": transaction_index,
+    "merkle_path": merkle_tree,
+    })))
 }
 
 //
