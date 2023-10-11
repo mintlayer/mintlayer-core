@@ -75,6 +75,13 @@ if __name__ == "__main__":
         print("")
         print("Partitions the workspace into m partitions and returns the crates in the n-th partition.")
         print("This can be used to split the workload of running tests across multiple CI jobs.")
+        print("")
+        print("To run the tests for the n-th partition, use the following command (for 3 partitions):")
+        print("---")
+        print("python3 build-tools/workspace_partition.py 3 0 -p | xargs cargo test")
+        print("python3 build-tools/workspace_partition.py 3 1 -p | xargs cargo test")
+        print("python3 build-tools/workspace_partition.py 3 2 -p | xargs cargo test")
+        print("---")
         sys.exit(1)
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
