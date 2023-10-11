@@ -126,7 +126,9 @@ async fn height_n(#[case] seed: Seed) {
         }
     });
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();

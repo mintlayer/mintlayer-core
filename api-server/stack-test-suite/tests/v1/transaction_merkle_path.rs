@@ -117,7 +117,9 @@ async fn get_transaction_failed() {
 //     let transaction_id = rx.await.unwrap();
 //     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-//     // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+//     // Given that the listener port is open, this will block until a
+//     // response is made (by the web server, which takes the listener
+//     // over)
 //     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
 //         .await
 //         .unwrap();
@@ -220,7 +222,9 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
     let transaction_id = rx.await.unwrap();
     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -333,7 +337,9 @@ async fn ok(#[case] seed: Seed) {
     let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
