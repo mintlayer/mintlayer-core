@@ -475,19 +475,6 @@ impl BlockProduction {
                     )
                     .await?;
 
-                /*
-                match accumulator {
-                    Ok(acc) => acc.transactions().clone(),
-                    Err(err) => {
-                        // TODO(PR): Should errors be handled differently depending on error type?
-                        log::warn!("Mempool rejected transactions: {err}");
-                        // If the mempool rejects the accumulator (due
-                        // to tip mismatch, or otherwise), only use
-                        // the provided transactions
-                        transactions.clone()
-                    }
-                }
-                */
                 accumulator.transactions().clone()
             };
 

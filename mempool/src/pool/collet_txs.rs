@@ -118,8 +118,15 @@ pub fn collect_txs<M>(
 
     // Transaction IDs specified by the user
     let given_txids = {
-        graph_traversals::dag_depth_postorder_multiroot(transaction_ids.iter(), |tx_id| {
-            mempool.store.get_entry(tx_id).expect("TODO(PR)").parents()
+        for tx_id in &transaction_ids {
+            ensure!(
+                mempool.store.get_entry(tx_id).is_some(),
+                BlockConstructionError::TxNotFound(*tx_id),
+            );
+        }
+        // Pull in the parents before the user-specified transactions so we get a valid sequence
+        graph_traversals::dag_depth_postorder_multiroot(&transaction_ids, |tx_id| {
+            mempool.store.get_entry(tx_id).expect("already checked").parents()
         })
     };
 
@@ -140,8 +147,6 @@ pub fn collect_txs<M>(
         .filter_map(|tx_id| {
             // If the transaction with this ID has already been processed, skip it
             ensure!(processed.insert(tx_id));
-            // TODO(PR) The whole procedure should probably fail if the transaction was added by
-            // the user and is subsequently rejected by this due to `time lock fail.
             let tx = mempool.store.txs_by_id.get(&tx_id).expect("already checked").deref();
             let timelock_check = chainstate::tx_verifier::timelock_check::check_timelocks(
                 &chainstate,
@@ -197,7 +202,7 @@ pub fn collect_txs<M>(
         if let Err(err) = verification_result {
             // TODO(PR) Narrow down when the critical error is presented
             log::error!(
-                "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}: {err}",
+                "CRITICAL: Verifier and mempool do not agree on transaction deps for {}: {err}",
                 next_tx.tx_id()
             );
             continue;
@@ -206,9 +211,8 @@ pub fn collect_txs<M>(
         if let Err(err) = tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
             // TODO(PR) Should this be an error?
             log::error!(
-                "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
+                "CRITICAL: Failed to add transaction {} from mempool. Error: {err}",
                 next_tx.tx_id(),
-                err
             );
             break;
         }

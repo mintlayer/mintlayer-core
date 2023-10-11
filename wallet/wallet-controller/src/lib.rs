@@ -388,38 +388,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .map_err(ControllerError::NodeCallError)
     }
 
-    /*
-    pub async fn generate_block(
-        &mut self,
-        account_index: U31,
-        transactions: Vec<SignedTransaction>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-    ) -> Result<Block, ControllerError<T>> {
-        let current_fee_rate = self
-            .rpc_client
-            .mempool_get_fee_rate(IN_TOP_N_MB)
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        let staker_balance = self
-            .rpc_client
-            .get_stake_pool_pledge(pool_id)
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
-                pool_id,
-            )))?;
-
-        let tx = self
-            .wallet
-            .decommission_stake_pool(account_index, pool_id, staker_balance, current_fee_rate)
-            .map_err(ControllerError::WalletError)?;
-
-        self.broadcast_to_mempool(tx).await
-    }
-    */
-
     /// Attempt to generate a new block by trying all pools. If all pools fail,
     /// the last pool block generation error is returned (or `ControllerError::NoStakingPool` if there are no staking pools).
     pub async fn generate_block(
@@ -432,7 +400,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let pools =
             self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
 
-        // TODO(PR) remove the clones somehow?
         let mut last_error = ControllerError::NoStakingPool;
         for (pool_id, _) in pools {
             let block_res = self

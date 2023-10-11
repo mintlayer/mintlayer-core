@@ -21,7 +21,7 @@ use subsystem::error::CallError;
 use thiserror::Error;
 
 use common::{
-    chain::GenBlock,
+    chain::{GenBlock, Transaction},
     primitives::{Id, H256},
 };
 
@@ -38,6 +38,8 @@ pub enum BlockConstructionError {
     TipMoved(Id<GenBlock>, Id<GenBlock>),
     #[error("Subsystem call: {0}")]
     Call(#[from] subsystem::error::CallError),
+    #[error("User-requested transaction {0} not found in mempool")]
+    TxNotFound(Id<Transaction>),
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
