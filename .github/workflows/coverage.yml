@@ -41,10 +41,9 @@ jobs:
           RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
           RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
       - id: coverage
-        uses: actions-rs/grcov@v0.1.5
+        uses: actions-rs/grcov@v0.1
         with:
-          output-type: lcov
-          output-path: ./lcov.info
+          config: build-tools/coverage/grcov.toml
       - uses: actions/upload-artifact@v2
         with:
           name: code-coverage-report-${{ matrix.partition }}
