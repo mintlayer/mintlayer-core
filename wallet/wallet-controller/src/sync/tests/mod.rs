@@ -23,7 +23,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, PoolId, SignedTransaction,
+        DelegationId, PoolId, SignedTransaction, Transaction,
     },
     primitives::Amount,
 };
@@ -31,7 +31,7 @@ use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use futures::executor::block_on;
 use logging::log;
-use mempool::FeeRate;
+use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
@@ -270,7 +270,9 @@ impl NodeInterface for MockNode {
     async fn generate_block(
         &self,
         _input_data: GenerateBlockInputData,
-        _transactions_hex: Option<Vec<SignedTransaction>>,
+        _transactions_hex: Vec<SignedTransaction>,
+        _transaction_ids: Vec<Id<Transaction>>,
+        _packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         unreachable!()
     }

@@ -17,13 +17,13 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 
 use consensus::GenerateBlockInputData;
-use mempool::FeeRate;
+use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
@@ -60,7 +60,9 @@ pub trait NodeInterface {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
     async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error>;

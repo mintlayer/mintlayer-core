@@ -31,6 +31,7 @@ use std::{
     time::Duration,
 };
 
+use mempool::tx_accumulator::PackingStrategy;
 use read::ReadOnlyController;
 use synced_controller::SyncedController;
 use utils::tap_error_log::LogError;
@@ -42,7 +43,7 @@ use common::{
             RPCTokenInfo::{FungibleToken, NonFungibleToken},
             TokenId,
         },
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, TxOutput,
+        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{
         time::{get_time, Time},
@@ -368,7 +369,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         account_index: U31,
         pool_id: PoolId,
-        transactions_opt: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
         let pos_data = self
             .wallet
@@ -377,7 +380,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.rpc_client
             .generate_block(
                 GenerateBlockInputData::PoS(pos_data.into()),
-                transactions_opt.clone(),
+                transactions,
+                transaction_ids,
+                packing_strategy,
             )
             .await
             .map_err(ControllerError::NodeCallError)
@@ -388,7 +393,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn generate_block(
         &self,
         account_index: U31,
-        transactions_opt: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
         let pools =
             self.wallet.get_pool_ids(account_index).map_err(ControllerError::WalletError)?;
@@ -396,7 +403,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let mut last_error = ControllerError::NoStakingPool;
         for (pool_id, _) in pools {
             let block_res = self
-                .generate_block_by_pool(account_index, pool_id, transactions_opt.clone())
+                .generate_block_by_pool(
+                    account_index,
+                    pool_id,
+                    transactions.clone(),
+                    transaction_ids.clone(),
+                    packing_strategy,
+                )
                 .await;
             match block_res {
                 Ok(block) => return Ok(block),
@@ -415,8 +428,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     ) -> Result<(), ControllerError<T>> {
         for _ in 0..block_count {
             self.sync_once().await?;
-
-            let block = self.generate_block(account_index, None).await?;
+            let block = self
+                .generate_block(
+                    account_index,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await?;
 
             self.rpc_client
                 .submit_block(block)
@@ -528,6 +547,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) -> Result<(), ControllerError<T>> {
         let mut rebroadcast_txs_timer = get_time();
+        let staking_started = self.staking_started.clone();
 
         'outer: loop {
             let sync_res = self.sync_once().await;
@@ -538,8 +558,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 continue;
             }
 
-            for account_index in self.staking_started.iter() {
-                let generate_res = self.generate_block(*account_index, None).await;
+            for account_index in staking_started.iter() {
+                let generate_res = self
+                    .generate_block(
+                        *account_index,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await;
 
                 if let Ok(block) = generate_res {
                     log::info!(

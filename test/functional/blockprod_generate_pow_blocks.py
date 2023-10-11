@@ -59,10 +59,10 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
             try:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
                 break
             except JSONRPCException:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
                 time.sleep(1)
 
         block_hex_array = bytearray.fromhex(block_hex)
