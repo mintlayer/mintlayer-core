@@ -27,7 +27,7 @@ ls -1a grcov-report-* | sed 's/^/-a /' | tr '\n' ' ' | xargs lcov -o grcov-repor
 5. run the following command:
 
 ```bash
-genhtml --exclude /rustc/* --exclude */.cargo/registry/* --exclude */.cargo/git/* --exclude /cargo/registry/* --exclude "*target/*" -o grcov-report --ignore-errors unmapped --ignore-errors source /path/to/grcov-report.info
+genhtml --exclude /rustc/* --exclude */.cargo/registry/* --exclude */.cargo/git/* --exclude /cargo/registry/* --exclude "*target/*" -o grcov-report --ignore-errors unmapped /path/to/grcov-report.info
 ```
 
 6. Now you can open the `grcov-report/index.html` file in your browser and see the report.
