@@ -70,8 +70,15 @@ def partition_workspace(m, n):
     return package_names
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and (sys.argv[1] == "--help" or sys.argv[1] == "-h"):
+        print("Usage: python partition_workspace.py <total_partitions> <partition_index> [prefix]")
+        print("")
+        print("Partitions the workspace into m partitions and returns the crates in the n-th partition.")
+        print("This can be used to split the workload of running tests across multiple CI jobs.")
+        sys.exit(1)
+
     if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: python partition_workspace.py <total_splits> <partition_index> [prefix]")
+        print("Usage: python partition_workspace.py <total_partitions> <partition_index> [prefix]")
         sys.exit(1)
 
     total_splits = int(sys.argv[1])
