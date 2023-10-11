@@ -752,38 +752,3 @@ impl Ord for TxMempoolEntry {
         other.tx_id().cmp(self.tx_id())
     }
 }
-
-/// Wrapper over [TxMempoolEntry] but ordered by ancestor score from highest to lowest
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TxMempoolEntryByScore<T>(T);
-
-impl<T> TxMempoolEntryByScore<T> {
-    pub fn take_entry(self) -> T {
-        self.0
-    }
-}
-
-impl<T: std::borrow::Borrow<TxMempoolEntry>> From<T> for TxMempoolEntryByScore<T> {
-    fn from(entry: T) -> Self {
-        Self(entry)
-    }
-}
-
-impl<T: std::borrow::Borrow<TxMempoolEntry>> std::ops::Deref for TxMempoolEntryByScore<T> {
-    type Target = TxMempoolEntry;
-    fn deref(&self) -> &Self::Target {
-        self.0.borrow()
-    }
-}
-
-impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> PartialOrd for TxMempoolEntryByScore<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: std::borrow::Borrow<TxMempoolEntry> + Eq> Ord for TxMempoolEntryByScore<T> {
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        (rhs.ancestor_score(), self.tx_id()).cmp(&(self.ancestor_score(), rhs.tx_id()))
-    }
-}

@@ -23,18 +23,24 @@ use std::collections::BTreeSet;
 /// that are pointed to by it.
 ///
 /// Note the input has to be a DAG. The algorithm does not check for cycles.
-pub fn dag_depth_postorder<'a, T, I, F>(root: T, children: F) -> impl Iterator<Item = T> + 'a
+pub fn dag_depth_postorder_multiroot<'a, T, RI, I, F>(
+    roots: RI,
+    children: F,
+) -> impl Iterator<Item = T> + 'a
 where
     T: Clone + Ord + 'a,
+    RI::IntoIter: DoubleEndedIterator,
+    RI: IntoIterator<Item = T> + 'a,
     I: IntoIterator<Item = T> + 'a,
     F: Fn(&T) -> I + 'a,
 {
-    // Keep track of already visited items
-    let mut visited = BTreeSet::from_iter([root.clone()]);
-
     // Stack of items paired with iterator over the item's children that have to be visited before
     // the item itself is emitted.
-    let mut stack = vec![(children(&root).into_iter(), root)];
+    let mut stack: Vec<_> =
+        roots.into_iter().rev().map(|x| (children(&x).into_iter(), x)).collect();
+
+    // Keep track of already visited items
+    let mut visited: BTreeSet<T> = stack.iter().map(|x| x.1.clone()).collect();
 
     let iter_fn = move || {
         stack.pop().map(|(mut top_children, mut top_item)| {
@@ -56,6 +62,15 @@ where
     };
 
     std::iter::from_fn(iter_fn)
+}
+
+pub fn dag_depth_postorder<'a, T, I, F>(root: T, children: F) -> impl Iterator<Item = T> + 'a
+where
+    T: Clone + Ord + 'a,
+    I: IntoIterator<Item = T> + 'a,
+    F: Fn(&T) -> I + 'a,
+{
+    dag_depth_postorder_multiroot(std::iter::once(root), children)
 }
 
 #[cfg(test)]
@@ -97,5 +112,24 @@ mod test {
         };
         let traversal: Vec<_> = dag_depth_postorder(&0, children).collect();
         assert_eq!(traversal, vec![&3, &1, &2, &0]);
+    }
+
+    #[test]
+    fn multiroot() {
+        let children = |n: &i32| {
+            let children = match n {
+                0 => &[1, 2, 3][..],
+                1..=3 => &[4][..],
+                4 => &[][..],
+                5 => &[3][..],
+                6 => &[5][..],
+                7 => &[][..],
+                8 => &[][..],
+                _ => panic!("unreachable graph node"),
+            };
+            children.iter().copied()
+        };
+        let traversal: Vec<_> = dag_depth_postorder_multiroot([0, 6, 7], children).collect();
+        assert_eq!(traversal, vec![4, 1, 2, 3, 0, 5, 6, 7]);
     }
 }

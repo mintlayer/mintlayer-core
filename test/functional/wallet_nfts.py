@@ -56,7 +56,7 @@ class WalletNfts(BitcoinTestFramework):
         block_input_data = block_input_data_obj.encode(block_input_data).to_hex()[2:]
 
         # create a new block, taking transactions from mempool
-        block = node.blockprod_generate_block(block_input_data, None)
+        block = node.blockprod_generate_block(block_input_data, [], [], "FillSpaceFromMempool")
         node.chainstate_submit_block(block)
         block_id = node.chainstate_best_block_id()
 

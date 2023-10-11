@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, GenBlock},
+    chain::{block::BlockCreationError, ChainConfig, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -33,22 +33,20 @@ use detail::{
     BlockProduction,
 };
 use interface::blockprod_interface::BlockProductionInterface;
-use mempool::MempoolHandle;
+use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
 use p2p::P2pHandle;
 use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
-    #[error("Mempool channel closed")]
-    MempoolChannelClosed,
-    #[error("Chainstate channel closed")]
-    ChainstateChannelClosed,
     #[error("Failed to retrieve chainstate info")]
     ChainstateInfoRetrievalError,
     #[error("Wait for chainstate to sync before producing blocks")]
     ChainstateWaitForSync,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
+    #[error("Failed to add transaction {0}: {1}")]
+    FailedToAddTransaction(Id<Transaction>, TxAccumulatorError),
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
@@ -67,6 +65,8 @@ pub enum BlockProductionError {
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
     JobManagerError(#[from] JobManagerError),
+    #[error("Mempool failed to construct block: {0}")]
+    MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

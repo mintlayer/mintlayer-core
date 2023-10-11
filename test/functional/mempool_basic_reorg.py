@@ -65,8 +65,8 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
             }
         ).to_hex()[2:]
 
-        # create a new block, taking transactions from mempool
-        block1 = node.blockprod_generate_block(block_input_data, [tx1])
+        # create a new block, not taking transactions from mempool
+        block1 = node.blockprod_generate_block(block_input_data, [tx1], [], "LeaveEmptySpace")
         node.chainstate_submit_block(block1)
         block1_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block1_id, timeout = 5)
@@ -82,7 +82,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert node.mempool_contains_tx(tx3_id)
 
         # Submit a block with the other two transactions
-        block2 = node.blockprod_generate_block(block_input_data, [tx2, tx3])
+        block2 = node.blockprod_generate_block(block_input_data, [tx2, tx3], [], "LeaveEmptySpace")
         node.chainstate_submit_block(block2)
         block2_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block2_id, timeout = 5)

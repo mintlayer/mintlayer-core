@@ -18,12 +18,12 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::{FeeRate, MempoolHandle};
+use mempool::{tx_accumulator::PackingStrategy, FeeRate, MempoolHandle};
 use p2p::{
     error::P2pError,
     interface::types::ConnectedPeer,
@@ -188,11 +188,15 @@ impl NodeInterface for WalletHandlesClient {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| this.generate_block(input_data, transactions))
+            .call_async_mut(move |this| {
+                this.generate_block(input_data, transactions, transaction_ids, packing_strategy)
+            })
             .await??;
 
         Ok(block)

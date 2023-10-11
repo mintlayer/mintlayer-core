@@ -69,7 +69,7 @@ class SyncingTest(BitcoinTestFramework):
         ).to_hex()[2:]
 
         # add first block
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[0])
         assert_equal(self.block_height(0), 1)
@@ -77,7 +77,7 @@ class SyncingTest(BitcoinTestFramework):
         self.assert_tip(0, blocks[0])
 
         # add second block
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[1])
         assert_equal(self.block_height(0), 2)
@@ -100,14 +100,14 @@ class SyncingTest(BitcoinTestFramework):
         self.assert_tip(1, blocks[1])
 
         # submit third block
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[2])
         assert_equal(self.block_height(0), 3)
         self.assert_tip(0, blocks[2])
 
         # submit final block
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[3])
         assert_equal(self.block_height(0), 4)

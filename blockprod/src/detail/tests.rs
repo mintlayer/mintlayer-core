@@ -39,8 +39,8 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use mempool::{
-    error::{Error, TxValidationError},
-    tx_accumulator::DefaultTxAccumulator,
+    error::{BlockConstructionError, TxValidationError},
+    tx_accumulator::{DefaultTxAccumulator, PackingStrategy},
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
 use rstest::rstest;
@@ -58,7 +58,7 @@ use utils::once_destructor::OnceDestructor;
 use crate::{
     detail::{
         job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
-        CustomId, GenerateBlockInputData, TransactionsSource,
+        CustomId, GenerateBlockInputData,
     },
     prepare_thread_pool, test_blockprod_config,
     tests::{assert_process_block, setup_blockprod_test, setup_pos},
@@ -79,10 +79,10 @@ mod collect_transactions {
             setup_blockprod_test(None, None);
 
         let mut mock_mempool = MockMempoolInterface::default();
-        mock_mempool.expect_collect_txs().return_once(|_| {
-            Err(Error::Validity(TxValidationError::CallError(
-                ResponseError::NoResponse.into(),
-            )))
+        mock_mempool.expect_collect_txs().return_once(|_, _, _| {
+            Err(BlockConstructionError::Validity(
+                TxValidationError::CallError(ResponseError::NoResponse.into()),
+            ))
         });
 
         let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
@@ -102,11 +102,20 @@ mod collect_transactions {
             )
             .expect("Error initializing blockprod");
 
-            let accumulator =
-                block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
+            let accumulator = block_production
+                .collect_transactions(
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await;
 
             match accumulator {
-                Err(BlockProductionError::MempoolChannelClosed) => {}
+                Err(BlockProductionError::MempoolBlockConstruction(
+                    BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                )) => {}
                 _ => panic!("Expected collect_tx() to fail"),
             };
 
@@ -150,12 +159,20 @@ mod collect_transactions {
             )
             .expect("Error initializing blockprod");
 
-            let accumulator =
-                block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
+            let accumulator = block_production
+                .collect_transactions(
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::LeaveEmptySpace,
+                )
+                .await;
 
             match accumulator {
+                Ok(_) => panic!("Expected an error"),
                 Err(BlockProductionError::SubsystemCallError(_)) => {}
-                _ => panic!("Expected a subsystem error"),
+                Err(err) => panic!("Expected a subsystem error, got {err:?}"),
             };
         })
         .await
@@ -171,12 +188,12 @@ mod collect_transactions {
 
         mock_mempool
             .expect_collect_txs()
-            .returning(|_| {
-                Ok(Some(Box::new(DefaultTxAccumulator::new(
+            .returning(|_, _, _| {
+                Ok(Box::new(DefaultTxAccumulator::new(
                     usize::default(),
                     Id::new(H256::zero()),
                     DUMMY_TIMESTAMP,
-                ))))
+                )))
             })
             .times(1);
 
@@ -203,8 +220,15 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator =
-                    block_production.collect_transactions(current_tip, DUMMY_TIMESTAMP).await;
+                let accumulator = block_production
+                    .collect_transactions(
+                        current_tip,
+                        DUMMY_TIMESTAMP,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await;
 
                 assert!(
                     accumulator.is_ok(),
@@ -260,7 +284,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
                     )
                     .await;
 
@@ -304,7 +330,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -360,7 +388,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -412,7 +442,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -466,7 +498,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -516,7 +550,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -590,7 +626,7 @@ mod produce_block {
                     .await;
 
                 let result = block_production
-                    .produce_block(input_data, TransactionsSource::Provided(vec![]))
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
                 match result {
@@ -658,7 +694,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -723,7 +761,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -788,7 +828,9 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -810,10 +852,10 @@ mod produce_block {
 
         let mut mock_mempool = MockMempoolInterface::default();
 
-        mock_mempool.expect_collect_txs().return_once(|_| {
-            Err(Error::Validity(TxValidationError::CallError(
-                ResponseError::NoResponse.into(),
-            )))
+        mock_mempool.expect_collect_txs().return_once(|_, _, _| {
+            Err(BlockConstructionError::Validity(
+                TxValidationError::CallError(ResponseError::NoResponse.into()),
+            ))
         });
 
         let mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
@@ -838,12 +880,19 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let result = block_production
-                    .produce_block(GenerateBlockInputData::None, TransactionsSource::Mempool)
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await;
 
                 match result {
-                    Err(BlockProductionError::MempoolChannelClosed) => {}
-                    _ => panic!("Unexpected return value"),
+                    Err(BlockProductionError::MempoolBlockConstruction(
+                        BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                    )) => {}
+                    _ => panic!("Unexpected return value: {result:?}"),
                 }
             }
         });
@@ -876,10 +925,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let (new_block, job_finished_receiver) = block_production
+                    // TODO: Add transactions to the mempool
                     .produce_block(
                         GenerateBlockInputData::None,
-                        // TODO: Add transactions to the mempool
-                        TransactionsSource::Mempool,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -919,10 +970,12 @@ mod produce_block {
                 .expect("Error initializing blockprod");
 
                 let (new_block, job_finished_receiver) = block_production
+                    // TODO: Add transactions to the parameters
                     .produce_block(
                         GenerateBlockInputData::None,
-                        // TODO: Add transactions to the parameters
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1009,7 +1062,9 @@ mod produce_block {
                         GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                             Destination::AnyoneCanSpend,
                         ))),
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
 
@@ -1050,7 +1105,9 @@ mod produce_block {
                 let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1107,7 +1164,9 @@ mod produce_block {
                         GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                             Destination::AnyoneCanSpend,
                         ))),
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1171,7 +1230,9 @@ mod produce_block {
                 let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::PoS(input_data),
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
@@ -1330,7 +1391,9 @@ mod produce_block {
                             let (new_block, job_finished_receiver) = block_production
                                 .produce_block(
                                     GenerateBlockInputData::None,
-                                    TransactionsSource::Provided(vec![]),
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await
                                 .expect("Failed to produce a block: {:?}");
@@ -1345,7 +1408,9 @@ mod produce_block {
                             let input_data_none_result = block_production
                                 .produce_block(
                                     GenerateBlockInputData::None,
-                                    TransactionsSource::Provided(vec![]),
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await;
 
@@ -1361,7 +1426,12 @@ mod produce_block {
                             // Try PoW input data for PoS consensus
 
                             let input_data_pow_result = block_production
-                                .produce_block(input_data_pow, TransactionsSource::Provided(vec![]))
+                                .produce_block(
+                                    input_data_pow,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_pow_result {
@@ -1376,7 +1446,12 @@ mod produce_block {
                             // Try PoS input data for PoS consensus
 
                             let (new_block, job_finished_receiver) = block_production
-                                .produce_block(input_data_pos, TransactionsSource::Provided(vec![]))
+                                .produce_block(
+                                    input_data_pos,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await
                                 .expect("Failed to produce a job: {:?}");
 
@@ -1404,7 +1479,9 @@ mod produce_block {
                             let input_data_none_result = block_production
                                 .produce_block(
                                     GenerateBlockInputData::None,
-                                    TransactionsSource::Provided(vec![]),
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await;
 
@@ -1420,7 +1497,12 @@ mod produce_block {
                             // Try PoS input data for PoW consensus
 
                             let input_data_pos_result = block_production
-                                .produce_block(input_data_pos, TransactionsSource::Provided(vec![]))
+                                .produce_block(
+                                    input_data_pos,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await;
 
                             match input_data_pos_result {
@@ -1435,7 +1517,12 @@ mod produce_block {
                             // Try PoW input data for PoW consensus
 
                             let (new_block, job_finished_receiver) = block_production
-                                .produce_block(input_data_pow, TransactionsSource::Provided(vec![]))
+                                .produce_block(
+                                    input_data_pow,
+                                    vec![],
+                                    vec![],
+                                    PackingStrategy::LeaveEmptySpace,
+                                )
                                 .await
                                 .expect("Failed to produce a block: {:?}");
 
@@ -1485,7 +1572,9 @@ mod produce_block {
                     let (_block, job) = block_production
                         .produce_block(
                             GenerateBlockInputData::None,
-                            TransactionsSource::Provided(vec![]),
+                            vec![],
+                            vec![],
+                            PackingStrategy::LeaveEmptySpace,
                         )
                         .await
                         .unwrap();
@@ -1539,7 +1628,9 @@ mod process_block_with_custom_id {
 
                     block_production.produce_block_with_custom_id(
                         GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                         Some(id),
                     )
                 });
@@ -1602,7 +1693,9 @@ mod process_block_with_custom_id {
                     let result = block_production
                         .produce_block_with_custom_id(
                             GenerateBlockInputData::None,
-                            TransactionsSource::Provided(vec![]),
+                            vec![],
+                            vec![],
+                            PackingStrategy::LeaveEmptySpace,
                             Some(id.clone()),
                         )
                         .await;

@@ -99,13 +99,14 @@ class WalletSubmitTransaction(BitcoinTestFramework):
     def generate_block(self, expected_height, block_input_data, transactions):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
 
+        fill_mode = 'LeaveEmptySpace'
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
             try:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], fill_mode)
                 break
             except JSONRPCException:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions)
+                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], fill_mode)
                 time.sleep(1)
 
         block_hex_array = bytearray.fromhex(block_hex)

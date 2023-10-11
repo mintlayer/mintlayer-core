@@ -33,10 +33,11 @@ class RestartWithDifferentMagicBytes(BitcoinTestFramework):
 
     def run_test(self):
         # generate and process block to update chainstate db
-        block_input_data = block_input_data_obj.encode({"PoW": {"reward_destination": "AnyoneCanSpend"}}
-                                                       ).to_hex()[2:]
+        block_input_data = block_input_data_obj.encode(
+            {"PoW": {"reward_destination": "AnyoneCanSpend"}}
+        ).to_hex()[2:]
 
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         self.nodes[0].chainstate_submit_block(block)
 
         tip_height = self.nodes[0].chainstate_best_block_height()

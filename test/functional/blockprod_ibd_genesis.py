@@ -53,7 +53,9 @@ class BlockprodIBDGenesisFailsTest(BitcoinTestFramework):
             IBD_ERR,
             node.blockprod_generate_block,
             block_input_data,
-            []
+            [],
+            [],
+            "FillSpaceFromMempool",
         )
 
 class BlockprodIBDGenesisFailsButSkipSucceedsTest(BitcoinTestFramework):
@@ -82,7 +84,7 @@ class BlockprodIBDGenesisFailsButSkipSucceedsTest(BitcoinTestFramework):
 
         # Blockprod should succeed because we're skipping the initial block download check
 
-        block = node.blockprod_generate_block(block_input_data, [])
+        block = node.blockprod_generate_block(block_input_data, [], [], "FillSpaceFromMempool")
 
         assert(genesis_id != node.chainstate_best_block_id())
 
@@ -111,7 +113,7 @@ class BlockprodIBDGenesisSucceedsTest(BitcoinTestFramework):
 
         # Blockprod should succeed because we're no longer in initial block download
 
-        block = node.blockprod_generate_block(block_input_data, [])
+        block = node.blockprod_generate_block(block_input_data, [], [], "FillSpaceFromMempool")
         node.chainstate_submit_block(block)
 
         assert(genesis_id != node.chainstate_best_block_id())

@@ -67,7 +67,9 @@ class BlockprodIBDTest(BitcoinTestFramework):
             IBD_ERR,
             node.blockprod_generate_block,
             block_input_data,
-            []
+            [],
+            [],
+            'FillSpaceFromMempool',
         )
 
         # Advance the blockchain but wait, which should still cause blockprod to fail
@@ -82,7 +84,9 @@ class BlockprodIBDTest(BitcoinTestFramework):
             IBD_ERR,
             node.blockprod_generate_block,
             block_input_data,
-            []
+            [],
+            [],
+            'FillSpaceFromMempool',
         )
 
         # Advance the blockchain but this time succeed in producing a block
@@ -92,7 +96,7 @@ class BlockprodIBDTest(BitcoinTestFramework):
         (block2, block2_id) = mine_pow_block(block1_id, timestamp = self.mock_time)
         self.submit_block(block2)
 
-        node.blockprod_generate_block(block_input_data, [])
+        node.blockprod_generate_block(block_input_data, [], [], 'FillSpaceFromMempool')
 
 if __name__ == '__main__':
     BlockprodIBDTest().main()

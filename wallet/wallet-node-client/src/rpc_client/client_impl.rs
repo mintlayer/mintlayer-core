@@ -18,12 +18,12 @@ use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction,
+        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
-use mempool::{rpc::MempoolRpcClient, FeeRate};
+use mempool::{rpc::MempoolRpcClient, tx_accumulator::PackingStrategy, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
     rpc::P2pRpcClient,
@@ -131,13 +131,21 @@ impl NodeInterface for NodeRpcClient {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Option<Vec<SignedTransaction>>,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
-        let transactions = transactions.map(|txs| txs.into_iter().map(HexEncoded::new).collect());
-        BlockProductionRpcClient::generate_block(&self.http_client, input_data.into(), transactions)
-            .await
-            .map(HexEncoded::take)
-            .map_err(NodeRpcError::ResponseError)
+        let transactions = transactions.into_iter().map(HexEncoded::new).collect::<Vec<_>>();
+        BlockProductionRpcClient::generate_block(
+            &self.http_client,
+            input_data.into(),
+            transactions,
+            transaction_ids,
+            packing_strategy,
+        )
+        .await
+        .map(HexEncoded::take)
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error> {
