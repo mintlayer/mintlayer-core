@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    error::Error,
+    error::{BlockConstructionError, Error},
     event::MempoolEvent,
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
@@ -215,8 +215,8 @@ impl MempoolInterface for MempoolImpl {
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
-        Ok(self.mempool.collect_txs(tx_accumulator, transaction_ids, packing_strategy))
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
+        self.mempool.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
     }
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

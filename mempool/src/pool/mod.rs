@@ -49,7 +49,10 @@ use self::{
 };
 use crate::{
     config,
-    error::{Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError, TxValidationError},
+    error::{
+        BlockConstructionError, Error, MempoolConflictError, MempoolPolicyError, OrphanPoolError,
+        TxValidationError,
+    },
     event::{self, MempoolEvent},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{RemoteTxOrigin, TxOrigin},
@@ -955,7 +958,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         tx_accumulator: Box<dyn TransactionAccumulator>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Option<Box<dyn TransactionAccumulator>> {
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
         collet_txs::collect_txs(self, tx_accumulator, transaction_ids, packing_strategy)
     }
 

@@ -20,9 +20,25 @@ use chainstate::{tx_verifier::error::ConnectTransactionError, ChainstateError};
 use subsystem::error::CallError;
 use thiserror::Error;
 
-use common::primitives::H256;
+use common::{
+    chain::GenBlock,
+    primitives::{Id, H256},
+};
 
 use crate::pool::fee::Fee;
+
+/// Error related to the construction of transaction sequence for inclusion in a block
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum BlockConstructionError {
+    #[error(transparent)]
+    Validity(#[from] TxValidationError),
+    #[error("The tip expected by accumulator ({0:?}) does not match mempool tip ({1:?})")]
+    AccumTipMismatch(Id<GenBlock>, Id<GenBlock>),
+    #[error("The moved during block construction: {0:?} -> {1:?}")]
+    TipMoved(Id<GenBlock>, Id<GenBlock>),
+    #[error("Subsystem call: {0}")]
+    Call(#[from] subsystem::error::CallError),
+}
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum Error {

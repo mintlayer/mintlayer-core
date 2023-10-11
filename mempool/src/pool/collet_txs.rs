@@ -14,11 +14,13 @@
 // limitations under the License.
 
 use crate::{
-    pool::{store, tx_verifier, Mempool, TxMempoolEntry},
+    error::{BlockConstructionError, TxValidationError},
+    pool::{tx_verifier, Mempool, TxMempoolEntry},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
 
 use std::{
+    cmp::Ordering,
     collections::{binary_heap, btree_map, BTreeMap, BTreeSet, BinaryHeap},
     ops::Deref,
 };
@@ -29,25 +31,54 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use utils::shallow_clone::ShallowClone;
+use utils::{ensure, graph_traversals, shallow_clone::ShallowClone};
+
+/// Transaction entry together with priority
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EntryByScore<'a> {
+    entry: &'a TxMempoolEntry,
+}
+
+impl PartialOrd for EntryByScore<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::ops::Deref for EntryByScore<'_> {
+    type Target = TxMempoolEntry;
+    fn deref(&self) -> &Self::Target {
+        &self.entry
+    }
+}
+
+impl Ord for EntryByScore<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.ancestor_score()
+            .cmp(&other.ancestor_score())
+            .then_with(|| self.tx_id().cmp(other.tx_id()))
+    }
+}
+
+impl<'a> From<&'a TxMempoolEntry> for EntryByScore<'a> {
+    fn from(entry: &'a TxMempoolEntry) -> Self {
+        Self { entry }
+    }
+}
 
 pub fn collect_txs<M>(
     mempool: &Mempool<M>,
     mut tx_accumulator: Box<dyn TransactionAccumulator>,
     transaction_ids: Vec<Id<Transaction>>,
     packing_strategy: PackingStrategy,
-) -> Option<Box<dyn TransactionAccumulator>> {
+) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
     let mempool_tip = mempool.best_block_id();
     let block_timestamp = tx_accumulator.block_timestamp();
 
-    if tx_accumulator.expected_tip() != mempool_tip {
-        log::debug!(
-            "Tx accumulator rejected due to tip mismatch: expected tip {:?} (current tip {:?})",
-            tx_accumulator.expected_tip(),
-            mempool.best_block_id(),
-        );
-        return None;
-    }
+    ensure!(
+        tx_accumulator.expected_tip() == mempool_tip,
+        BlockConstructionError::AccumTipMismatch(tx_accumulator.expected_tip(), mempool_tip),
+    );
 
     let chainstate = tx_verifier::ChainstateHandle::new(mempool.chainstate_handle.shallow_clone());
     let chain_config = mempool.chain_config.deref();
@@ -64,57 +95,72 @@ pub fn collect_txs<M>(
 
     let best_index = mempool
         .blocking_chainstate_handle()
-        .call(|c| c.get_best_block_index())
-        .expect("chainstate to live")
+        .call(|c| c.get_best_block_index())?
         .expect("best index to exist");
     let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
-    // Use transactions already in the Accumulator to sort for
-    // uniqueness only i.e don't send them through the verifier
-    let mut unique_txids = BTreeSet::from_iter(
-        tx_accumulator.transactions().iter().map(|tx| tx.transaction().get_id()),
-    );
+    // Use transactions already in the Accumulator to check for uniqueness and to update the
+    // verifier state to update UTXOs they consume / provide.
+    let accum_ids = tx_accumulator
+        .transactions()
+        .iter()
+        .map(|transaction| {
+            let _fee =
+                tx_verifier.connect_transaction(&tx_source, transaction, &verifier_time, None)?;
+            Ok(transaction.transaction().get_id())
+        })
+        .collect::<Result<Vec<_>, TxValidationError>>()?;
+
+    // Set of transactions already placed into the accumulator
+    let mut emitted: BTreeSet<_> = accum_ids.iter().collect();
+    // Set of already processed transactions, for de-duplication
+    let mut processed = emitted.clone();
 
     // Transaction IDs specified by the user
-    let given_txids = transaction_ids.iter();
+    let given_txids = {
+        graph_traversals::dag_depth_postorder_multiroot(transaction_ids.iter(), |tx_id| {
+            mempool.store.get_entry(tx_id).expect("TODO(PR)").parents()
+        })
+    };
 
-    // Get transactions from mempool by score
-    let mempool_txids = mempool.store.txs_by_ancestor_score.iter().map(|x| &x.1).rev();
-    // Take the appropriate amount of them as determined by the packing strategy
-    let mempool_txids = mempool_txids.take(match packing_strategy {
-        PackingStrategy::FillSpaceFromMempool => usize::MAX,
-        PackingStrategy::LeaveEmptySpace => 0,
-    });
+    // Transaction IDs taken from mempool to fill in the rest of the block
+    let mempool_txids = {
+        // Get transactions from mempool by score
+        let txids = mempool.store.txs_by_ancestor_score.iter().map(|x| &x.1).rev();
+        // Take the appropriate amount of them as determined by the packing strategy
+        txids.take(match packing_strategy {
+            PackingStrategy::FillSpaceFromMempool => usize::MAX,
+            PackingStrategy::LeaveEmptySpace => 0,
+        })
+    };
 
     // Put all the transaction IDs together
-    let txids = given_txids.chain(mempool_txids).filter(|&tx_id| unique_txids.insert(*tx_id));
-
-    let mut tx_iter = txids
+    let mut tx_iter = given_txids
+        .chain(mempool_txids)
         .filter_map(|tx_id| {
+            // If the transaction with this ID has already been processed, skip it
+            ensure!(processed.insert(tx_id));
             // TODO(PR) The whole procedure should probably fail if the transaction was added by
-            // the user and is subsequently rejected by this due to not being present in mempool or
-            // time lock fail.
-            let tx = mempool.store.txs_by_id.get(tx_id)?.deref();
-            chainstate::tx_verifier::timelock_check::check_timelocks(
+            // the user and is subsequently rejected by this due to `time lock fail.
+            let tx = mempool.store.txs_by_id.get(&tx_id).expect("already checked").deref();
+            let timelock_check = chainstate::tx_verifier::timelock_check::check_timelocks(
                 &chainstate,
                 chain_config,
                 &utxo_view,
                 tx.transaction(),
                 &tx_source,
                 &block_timestamp,
-            )
-            .ok()?;
+            );
+            ensure!(timelock_check.is_ok());
             Some(tx)
         })
         .fuse()
         .peekable();
 
-    // Set of transactions already placed into the accumulator
-    let mut emitted = BTreeSet::new();
     // Set of transaction waiting for one or more parents to be emitted
     let mut pending = BTreeMap::new();
     // A queue of transactions that can be emitted
-    let mut ready = BinaryHeap::<store::TxMempoolEntryByScore<&TxMempoolEntry>>::new();
+    let mut ready = BinaryHeap::<EntryByScore>::new();
 
     while !tx_accumulator.done() {
         // Take out the transactions from tx_iter until there is one ready
@@ -133,11 +179,11 @@ pub fn collect_txs<M>(
                 if store_tx.ancestor_score() > ready_tx.ancestor_score() {
                     tx_iter.next().expect("just checked")
                 } else {
-                    binary_heap::PeekMut::pop(ready_tx).take_entry()
+                    binary_heap::PeekMut::pop(ready_tx).entry
                 }
             }
             (Some(_store_tx), None) => tx_iter.next().expect("just checked"),
-            (None, Some(ready_tx)) => binary_heap::PeekMut::pop(ready_tx).take_entry(),
+            (None, Some(ready_tx)) => binary_heap::PeekMut::pop(ready_tx).entry,
             (None, None) => break,
         };
 
@@ -149,6 +195,7 @@ pub fn collect_txs<M>(
         );
 
         if let Err(err) = verification_result {
+            // TODO(PR) Narrow down when the critical error is presented
             log::error!(
                 "CRITICAL ERROR: Verifier and mempool do not agree on transaction deps for {}: {err}",
                 next_tx.tx_id()
@@ -157,6 +204,7 @@ pub fn collect_txs<M>(
         }
 
         if let Err(err) = tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
+            // TODO(PR) Should this be an error?
             log::error!(
                 "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
                 next_tx.tx_id(),
@@ -186,14 +234,10 @@ pub fn collect_txs<M>(
 
     let final_chainstate_tip =
         utxo::UtxosView::best_block_hash(&chainstate).expect("cannot fetch tip");
-    if final_chainstate_tip != mempool_tip {
-        log::debug!(
-            "Chainstate moved while collecting txns: mempool {:?}, chainstate {:?}",
-            mempool_tip,
-            final_chainstate_tip,
-        );
-        return None;
-    }
+    ensure!(
+        mempool_tip == final_chainstate_tip,
+        BlockConstructionError::TipMoved(mempool_tip, final_chainstate_tip),
+    );
 
-    Some(tx_accumulator)
+    Ok(tx_accumulator)
 }

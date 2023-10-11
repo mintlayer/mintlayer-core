@@ -39,7 +39,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use mempool::{
-    error::{Error, TxValidationError},
+    error::{BlockConstructionError, TxValidationError},
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy},
     MempoolInterface, MempoolSubsystemInterface,
 };
@@ -81,9 +81,9 @@ mod collect_transactions {
 
         let mut mock_mempool = MockMempoolInterface::default();
         mock_mempool.expect_collect_txs().return_once(|_, _, _| {
-            Err(Error::Validity(TxValidationError::CallError(
-                ResponseError::NoResponse.into(),
-            )))
+            Err(BlockConstructionError::Validity(
+                TxValidationError::CallError(ResponseError::NoResponse.into()),
+            ))
         });
 
         let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
@@ -119,7 +119,9 @@ mod collect_transactions {
                     .await;
 
                 match accumulator {
-                    Err(BlockProductionError::MempoolChannelClosed) => {}
+                    Err(BlockProductionError::MempoolBlockConstruction(
+                        BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                    )) => {}
                     _ => panic!("Expected collect_tx() to fail"),
                 };
             },
@@ -178,8 +180,9 @@ mod collect_transactions {
                 .await;
 
             match accumulator {
+                Ok(_) => panic!("Expected an error"),
                 Err(BlockProductionError::SubsystemCallError(_)) => {}
-                _ => panic!("Expected a subsystem error"),
+                Err(err) => panic!("Expected a subsystem error, got {err:?}"),
             };
         })
         .await
@@ -196,11 +199,11 @@ mod collect_transactions {
         mock_mempool
             .expect_collect_txs()
             .returning(|_, _, _| {
-                Ok(Some(Box::new(DefaultTxAccumulator::new(
+                Ok(Box::new(DefaultTxAccumulator::new(
                     usize::default(),
                     Id::new(H256::zero()),
                     DUMMY_TIMESTAMP,
-                ))))
+                )))
             })
             .times(1);
 
@@ -254,6 +257,7 @@ mod collect_transactions {
 }
 
 mod produce_block {
+    use mempool::error::BlockConstructionError;
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -860,9 +864,9 @@ mod produce_block {
         let mut mock_mempool = MockMempoolInterface::default();
 
         mock_mempool.expect_collect_txs().return_once(|_, _, _| {
-            Err(Error::Validity(TxValidationError::CallError(
-                ResponseError::NoResponse.into(),
-            )))
+            Err(BlockConstructionError::Validity(
+                TxValidationError::CallError(ResponseError::NoResponse.into()),
+            ))
         });
 
         let mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
@@ -900,8 +904,10 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::MempoolChannelClosed) => {}
-                    _ => panic!("Unexpected return value"),
+                    Err(BlockProductionError::MempoolBlockConstruction(
+                        BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                    )) => {}
+                    _ => panic!("Unexpected return value: {result:?}"),
                 }
             }
         });

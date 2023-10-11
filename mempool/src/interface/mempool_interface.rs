@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    error::Error,
+    error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
@@ -67,7 +67,7 @@ pub trait MempoolInterface: Send + Sync {
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error>;
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError>;
 
     /// Subscribe to events emitted by mempool
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);

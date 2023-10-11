@@ -39,10 +39,6 @@ use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
-    #[error("Mempool channel closed")]
-    MempoolChannelClosed,
-    #[error("Chainstate channel closed")]
-    ChainstateChannelClosed,
     #[error("Failed to retrieve chainstate info")]
     ChainstateInfoRetrievalError,
     #[error("Wait for chainstate to sync before producing blocks")]
@@ -69,6 +65,8 @@ pub enum BlockProductionError {
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
     JobManagerError(#[from] JobManagerError),
+    #[error("Mempool failed to construct block: {0}")]
+    MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
 }
 
 impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {}

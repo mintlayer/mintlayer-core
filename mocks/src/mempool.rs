@@ -22,7 +22,7 @@ use common::{
     primitives::Id,
 };
 use mempool::{
-    error::Error,
+    error::{BlockConstructionError, Error},
     event::MempoolEvent,
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
@@ -58,7 +58,7 @@ mockall::mock! {
             tx_accumulator: Box<dyn TransactionAccumulator + Send>,
             transaction_ids: Vec<Id<Transaction>>,
             packing_strategy: PackingStrategy,
-        ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error>;
+        ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError>;
 
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
         fn memory_usage(&self) -> usize;

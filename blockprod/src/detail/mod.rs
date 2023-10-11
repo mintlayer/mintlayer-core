@@ -183,7 +183,7 @@ impl BlockProduction {
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
         let mut accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
             current_tip,
@@ -203,8 +203,7 @@ impl BlockProduction {
             .call(move |mempool| {
                 mempool.collect_txs(accumulator, transaction_ids, packing_strategy)
             })
-            .await?
-            .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
+            .await??;
 
         Ok(returned_accumulator)
     }
@@ -476,15 +475,20 @@ impl BlockProduction {
                     )
                     .await?;
 
+                /*
                 match accumulator {
-                    Some(acc) => acc.transactions().clone(),
-                    None => {
+                    Ok(acc) => acc.transactions().clone(),
+                    Err(err) => {
+                        // TODO(PR): Should errors be handled differently depending on error type?
+                        log::warn!("Mempool rejected transactions: {err}");
                         // If the mempool rejects the accumulator (due
                         // to tip mismatch, or otherwise), only use
                         // the provided transactions
                         transactions.clone()
                     }
                 }
+                */
+                accumulator.transactions().clone()
             };
 
             let block_body = BlockBody::new(block_reward, collected_transactions);

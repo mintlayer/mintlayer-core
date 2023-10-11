@@ -22,6 +22,7 @@ import time
 
 MAX_TIP_AGE = 24 * 60 * 60
 IBD_ERR = "Wait for chainstate to sync before producing blocks"
+FILL_FROM_MEMPOOL =  {'FillSpaceFromMempool': None}
 
 class BlockprodIBDGenesisFailsTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -53,7 +54,9 @@ class BlockprodIBDGenesisFailsTest(BitcoinTestFramework):
             IBD_ERR,
             node.blockprod_generate_block,
             block_input_data,
-            []
+            [],
+            [],
+            FILL_FROM_MEMPOOL
         )
 
 class BlockprodIBDGenesisFailsButSkipSucceedsTest(BitcoinTestFramework):
@@ -82,7 +85,7 @@ class BlockprodIBDGenesisFailsButSkipSucceedsTest(BitcoinTestFramework):
 
         # Blockprod should succeed because we're skipping the initial block download check
 
-        block = node.blockprod_generate_block(block_input_data, [])
+        block = node.blockprod_generate_block(block_input_data, [], [], FILL_FROM_MEMPOOL)
 
         assert(genesis_id != node.chainstate_best_block_id())
 
@@ -111,7 +114,7 @@ class BlockprodIBDGenesisSucceedsTest(BitcoinTestFramework):
 
         # Blockprod should succeed because we're no longer in initial block download
 
-        block = node.blockprod_generate_block(block_input_data, [])
+        block = node.blockprod_generate_block(block_input_data, [], [], FILL_FROM_MEMPOOL)
         node.chainstate_submit_block(block)
 
         assert(genesis_id != node.chainstate_best_block_id())
