@@ -78,9 +78,9 @@ if __name__ == "__main__":
         print("")
         print("To run the tests for the n-th partition, use the following command (for 3 partitions):")
         print("---")
-        print("python3 build-tools/workspace_partition.py 3 0 -p | xargs cargo test")
-        print("python3 build-tools/workspace_partition.py 3 1 -p | xargs cargo test")
-        print("python3 build-tools/workspace_partition.py 3 2 -p | xargs cargo test")
+        print("python3 build-tools/{} 3 0 -p | xargs cargo test".format(sys.argv[0]))
+        print("python3 build-tools/{} 3 1 -p | xargs cargo test".format(sys.argv[0]))
+        print("python3 build-tools/{} 3 2 -p | xargs cargo test".format(sys.argv[0]))
         print("---")
         sys.exit(1)
 
