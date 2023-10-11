@@ -78,14 +78,14 @@ if __name__ == "__main__":
         print("")
         print("To run the tests for the n-th partition, use the following command (for 3 partitions):")
         print("---")
-        print("python3 build-tools/{} 3 0 -p | xargs cargo test".format(sys.argv[0]))
-        print("python3 build-tools/{} 3 1 -p | xargs cargo test".format(sys.argv[0]))
-        print("python3 build-tools/{} 3 2 -p | xargs cargo test".format(sys.argv[0]))
+        print("python3 {} 3 0 -p | xargs cargo test".format(sys.argv[0]))
+        print("python3 {} 3 1 -p | xargs cargo test".format(sys.argv[0]))
+        print("python3 {} 3 2 -p | xargs cargo test".format(sys.argv[0]))
         print("---")
         sys.exit(1)
 
     if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: python partition_workspace.py <total_partitions> <partition_index> [prefix]")
+        print("Usage: python3 {} <total_partitions> <partition_index> [prefix]".format(sys.argv[0]))
         sys.exit(1)
 
     total_splits = int(sys.argv[1])
