@@ -21,14 +21,20 @@ use crate::{
             create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
             emission_schedule, ChainConfig, ChainType, EmissionScheduleTabular,
         },
-        create_testnet_pos_config, get_initial_randomness, pos_initial_difficulty,
+        get_initial_randomness,
+        pos::{
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+        },
+        pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, PoSChainConfig,
         PoSConsensusVersion, PoWChainConfig, UpgradeVersion,
     },
     primitives::{
-        id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, Id, Idable, H256,
+        id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockDistance, BlockHeight,
+        Id, Idable, H256,
     },
+    Uint256,
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
@@ -61,6 +67,10 @@ impl ChainType {
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
+                let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
+                let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+                    .expect("Target block time cannot be zero as per NonZeroU64");
+
                 let upgrades = vec![
                     (
                         BlockHeight::new(0),
@@ -72,7 +82,15 @@ impl ChainType {
                             initial_difficulty: Some(
                                 pos_initial_difficulty(ChainType::Testnet).into(),
                             ),
-                            config: create_testnet_pos_config(PoSConsensusVersion::V0),
+                            config: PoSChainConfig::new(
+                                target_limit,
+                                target_block_time,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_MATURITY_DISTANCE,
+                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                PerThousand::new(1).expect("must be valid"),
+                                PoSConsensusVersion::V0,
+                            ),
                         }),
                     ),
                     (
@@ -80,7 +98,15 @@ impl ChainType {
                         BlockHeight::new(9999999999),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                             initial_difficulty: None,
-                            config: create_testnet_pos_config(PoSConsensusVersion::V1),
+                            config: PoSChainConfig::new(
+                                target_limit,
+                                target_block_time,
+                                BlockDistance::new(7200),
+                                BlockDistance::new(7200),
+                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                PerThousand::new(1).expect("must be valid"),
+                                PoSConsensusVersion::V1,
+                            ),
                         }),
                     ),
                 ];

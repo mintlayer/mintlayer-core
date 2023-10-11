@@ -177,9 +177,7 @@ impl PartialEq for OutputGroupOrd {
 
 impl PartialOrd for OutputGroupOrd {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0
-            .get_effective_value(PayFee::PayFeeWithThisCurrency)
-            .partial_cmp(&other.0.get_effective_value(PayFee::PayFeeWithThisCurrency))
+        Some(self.cmp(other))
     }
 }
 

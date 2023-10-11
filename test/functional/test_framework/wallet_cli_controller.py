@@ -58,7 +58,7 @@ class WalletCliController:
     async def __aenter__(self):
         wallet_cli = os.path.join(self.config["environment"]["BUILDDIR"], "test_wallet"+self.config["environment"]["EXEEXT"] )
         cookie_file = os.path.join(self.node.datadir, ".cookie")
-        wallet_args = ["--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file] + self.wallet_args + ["regtest"] + self.chain_config_args
+        wallet_args = ["regtest", "--rpc-address", self.node.url.split("@")[1], "--rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_", dir=os.path.dirname(self.node.datadir), delete=False)
 

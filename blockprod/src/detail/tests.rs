@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroU64, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
 use common::{
@@ -22,8 +22,8 @@ use common::{
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
         stakelock::StakePoolData,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
-        PoSChainConfig, PoSConsensusVersion, PoolId, RequiredConsensus, TxOutput, UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
+        RequiredConsensus, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -41,11 +41,10 @@ use crypto::{
 use mempool::{
     error::{BlockConstructionError, TxValidationError},
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy},
-    MempoolInterface, MempoolSubsystemInterface,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
 use rstest::rstest;
-use subsystem::{error::ResponseError, subsystem::CallRequest};
+use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
@@ -86,48 +85,44 @@ mod collect_transactions {
             ))
         });
 
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            move |call, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
+        let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
 
         let current_tip = Id::new(H256::zero());
 
-        manager.add_subsystem_with_custom_eventloop(
-            "test-call",
-            move |_: CallRequest<()>, _| async move {
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    Arc::new(test_blockprod_config()),
-                    chainstate,
-                    mock_mempool_subsystem,
-                    p2p,
-                    Default::default(),
-                    prepare_thread_pool(1),
+        let shutdown = manager.make_shutdown_trigger();
+        let tester = tokio::spawn(async move {
+            let block_production = BlockProduction::new(
+                chain_config,
+                Arc::new(test_blockprod_config()),
+                chainstate,
+                mock_mempool_subsystem,
+                p2p,
+                Default::default(),
+                prepare_thread_pool(1),
+            )
+            .expect("Error initializing blockprod");
+
+            let accumulator = block_production
+                .collect_transactions(
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
                 )
-                .expect("Error initializing blockprod");
+                .await;
 
-                let accumulator = block_production
-                    .collect_transactions(
-                        current_tip,
-                        DUMMY_TIMESTAMP,
-                        vec![],
-                        vec![],
-                        PackingStrategy::FillSpaceFromMempool,
-                    )
-                    .await;
+            match accumulator {
+                Err(BlockProductionError::MempoolBlockConstruction(
+                    BlockConstructionError::Validity(TxValidationError::CallError(_)),
+                )) => {}
+                _ => panic!("Expected collect_tx() to fail"),
+            };
 
-                match accumulator {
-                    Err(BlockProductionError::MempoolBlockConstruction(
-                        BlockConstructionError::Validity(TxValidationError::CallError(_)),
-                    )) => {}
-                    _ => panic!("Expected collect_tx() to fail"),
-                };
-            },
-        );
+            shutdown.initiate();
+        });
 
-        manager.main().await;
+        let _ = tokio::join!(manager.main(), tester);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -136,19 +131,14 @@ mod collect_transactions {
             setup_blockprod_test(None, None);
 
         let mock_mempool = MockMempoolInterface::default();
-
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            move |call: CallRequest<dyn MempoolInterface>, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
+        let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
 
         mock_mempool_subsystem
-            .call({
+            .as_submit_only()
+            .submit({
                 let shutdown = manager.make_shutdown_trigger();
                 move |_| shutdown.initiate()
             })
-            .submit_only()
             .unwrap();
 
         // shutdown straight after startup, *then* call collect_transactions()
@@ -207,11 +197,7 @@ mod collect_transactions {
             })
             .times(1);
 
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            move |call, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
+        let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
 
         let current_tip = Id::new(H256::zero());
 
@@ -257,20 +243,22 @@ mod collect_transactions {
 }
 
 mod produce_block {
-    use mempool::error::BlockConstructionError;
+    use common::chain::PoSChainConfigBuilder;
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
+    use chainstate::chainstate_interface::ChainstateInterface;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn initial_block_download() {
         let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
 
         let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = Box::new(MockChainstateInterface::new());
+            let mut mock_chainstate = MockChainstateInterface::new();
             mock_chainstate.expect_is_initial_block_download().returning(|| true);
 
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
+
             manager.add_subsystem("mock-chainstate", mock_chainstate)
         };
 
@@ -374,6 +362,7 @@ mod produce_block {
                 ))
             });
 
+            let mock_chainstate: Box<dyn ChainstateInterface> = Box::new(mock_chainstate);
             manager.add_subsystem("mock-chainstate", mock_chainstate)
         };
 
@@ -729,7 +718,7 @@ mod produce_block {
         let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
 
         let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = Box::new(MockChainstateInterface::new());
+            let mut mock_chainstate = MockChainstateInterface::new();
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
@@ -796,7 +785,7 @@ mod produce_block {
         let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
 
         let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = Box::new(MockChainstateInterface::new());
+            let mut mock_chainstate = MockChainstateInterface::new();
             mock_chainstate.expect_subscribe_to_events().times(..=1).returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
@@ -869,11 +858,7 @@ mod produce_block {
             ))
         });
 
-        let mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            move |call, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
+        let mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1314,16 +1299,7 @@ mod produce_block {
                 vec![kernel_input_utxo.clone()],
             );
 
-            let easy_pos_config = PoSChainConfig::new(
-                Uint256::MAX,
-                NonZeroU64::new(2 * 60).expect("cannot be 0").into(),
-                2000.into(),
-                2000.into(),
-                5,
-                PerThousand::new(1).expect("must be valid"),
-                PoSConsensusVersion::V1,
-            )
-            .expect("Valid PoS config values");
+            let easy_pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
 
             let consensus_types = vec![
                 ConsensusUpgrade::IgnoreConsensus,

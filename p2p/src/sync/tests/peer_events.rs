@@ -38,7 +38,7 @@ async fn connect_peer() {
         let mut node = TestNode::start(protocol_version).await;
 
         let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let _ = node.connect_peer(peer, protocol_version).await;
 
         node.join_subsystem_manager().await;
     })
@@ -56,10 +56,10 @@ async fn connect_peer() {
 async fn connect_peer_twice(#[case] protocol_version: ProtocolVersion) {
     let mut node = TestNode::start(protocol_version).await;
 
-    let peer = PeerId::new();
-    node.connect_peer(peer, protocol_version).await;
+    let peer_id = PeerId::new();
+    let _ = node.connect_peer(peer_id, protocol_version).await;
 
-    node.try_connect_peer(peer, protocol_version);
+    let _ = node.try_connect_peer(peer_id, protocol_version);
 
     node.resume_panic().await;
 }
@@ -86,9 +86,9 @@ async fn disconnect_peer() {
     for_each_protocol_version(|protocol_version| async move {
         let mut node = TestNode::start(protocol_version).await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
-        node.disconnect_peer(peer);
+        let peer_id = PeerId::new();
+        let _ = node.connect_peer(peer_id, protocol_version).await;
+        node.disconnect_peer(peer_id);
         node.assert_no_error().await;
 
         node.join_subsystem_manager().await;
@@ -140,12 +140,11 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
             .await;
 
         // Connect peer and assume we requested a header list.
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         // Peer sends us a header list but we already know the containing block.
         let msg = SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]));
-        node.send_message(peer, msg).await;
+        peer.send_message(msg).await;
 
         // Advance time across the timeout boundary. This would trigger a disconnect in a scenario
         // where we expect additional data from the peer. However, in this case we don't expect
@@ -153,7 +152,7 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
         time.advance_time(*p2p_config.sync_stalling_timeout);
 
         // Ensure the peer does not get disconnected.
-        node.assert_no_disconnect_peer_event(peer).await;
+        node.assert_no_disconnect_peer_event(peer.get_id()).await;
 
         node.join_subsystem_manager().await;
     })

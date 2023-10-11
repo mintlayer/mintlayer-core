@@ -73,9 +73,9 @@ impl HasTxIndexDisabledError for ChainstateError {
     }
 }
 
-impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
+pub type ChainstateSubsystem = Box<dyn ChainstateInterface>;
 
-pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
+pub type ChainstateHandle = subsystem::Handle<dyn ChainstateInterface>;
 
 pub fn make_chainstate<S, V>(
     chain_config: Arc<ChainConfig>,
@@ -84,7 +84,7 @@ pub fn make_chainstate<S, V>(
     tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
-) -> Result<Box<dyn ChainstateInterface>, ChainstateError>
+) -> Result<ChainstateSubsystem, ChainstateError>
 where
     S: chainstate_storage::BlockchainStorage + Sync + 'static,
     V: TransactionVerificationStrategy + Sync + 'static,

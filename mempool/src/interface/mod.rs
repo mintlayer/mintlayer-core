@@ -16,5 +16,5 @@
 mod mempool_interface;
 mod mempool_interface_impl;
 
-pub use mempool_interface::{MempoolInterface, MempoolSubsystemInterface};
+pub use mempool_interface::MempoolInterface;
 pub use mempool_interface_impl::make_mempool;

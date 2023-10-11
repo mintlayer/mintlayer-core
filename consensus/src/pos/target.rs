@@ -219,7 +219,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{num::NonZeroU64, sync::Arc};
 
     use chainstate_types::{
         BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError, PropertyQueryError,
@@ -228,8 +228,8 @@ mod tests {
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::Builder as ConfigBuilder,
-            create_unittest_pos_config, Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades,
-            PoSConsensusVersion, PoolId, UpgradeVersion,
+            Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoSChainConfigBuilder, PoolId,
+            UpgradeVersion,
         },
         primitives::{per_thousand::PerThousand, Idable, H256},
     };
@@ -387,7 +387,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_new_target_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config = create_unittest_pos_config();
+        let config = PoSChainConfigBuilder::new_for_unit_test().build();
         {
             // average block time <= target block time
             let prev_target = Uint256::from_u64(rng.gen::<u64>());
@@ -408,45 +408,30 @@ mod tests {
 
     #[test]
     fn calculate_new_target_swing_limit() {
+        let target_block_time = NonZeroU64::new(100).unwrap();
+        let config = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_block_time(target_block_time)
+            .block_count_to_average_for_blocktime(2)
+            .difficulty_change_limit(PerThousand::new(100).unwrap())
+            .build();
+
         {
-            let target_block_time = 100;
             let actual_block_time = 1000; // 10 times bigger
 
             let prev_target = Uint256::from_u64(100);
             let expected_target = Uint256::from_u64(110); // only 10% times bigger
 
-            let config = PoSChainConfig::new(
-                Uint256::MAX,
-                target_block_time,
-                1.into(),
-                1.into(),
-                2,
-                PerThousand::new(100).unwrap(),
-                PoSConsensusVersion::V1,
-            )
-            .unwrap();
             let new_target =
                 calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
             assert_eq!(new_target, Compact::from(expected_target));
         }
 
         {
-            let target_block_time = 100;
             let actual_block_time = 10; // 10 times smaller
 
             let prev_target = Uint256::from_u64(100);
             let expected_target = Uint256::from_u64(90); // only 10% times smaller
 
-            let config = PoSChainConfig::new(
-                Uint256::MAX,
-                target_block_time,
-                1.into(),
-                1.into(),
-                2,
-                PerThousand::new(100).unwrap(),
-                PoSConsensusVersion::V1,
-            )
-            .unwrap();
             let new_target =
                 calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
             assert_eq!(new_target, Compact::from(expected_target));
@@ -458,16 +443,10 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_new_target_too_easy(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config = PoSChainConfig::new(
-            Uint256::ZERO,
-            1,
-            1.into(),
-            1.into(),
-            2,
-            PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let config = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_limit(Uint256::ZERO)
+            .block_count_to_average_for_blocktime(2)
+            .build();
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
             calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
@@ -477,16 +456,11 @@ mod tests {
 
     #[test]
     fn calculate_new_target_with_overflow() {
-        let config = PoSChainConfig::new(
-            Uint256::ONE,
-            1,
-            1.into(),
-            1.into(),
-            2,
-            PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let config = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_limit(Uint256::ONE)
+            .targe_block_time(NonZeroU64::new(1).unwrap())
+            .block_count_to_average_for_blocktime(2)
+            .build();
         let prev_target = Uint256::MAX;
         let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
 
@@ -498,16 +472,9 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_average_block_time_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = PoSChainConfig::new(
-            Uint256::MAX,
-            2 * 60,
-            2000.into(),
-            2000.into(),
-            5,
-            PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test()
+            .block_count_to_average_for_blocktime(5)
+            .build();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -574,16 +541,9 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_average_time_between_2_blocks(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = PoSChainConfig::new(
-            Uint256::MAX,
-            2 * 60,
-            2000.into(),
-            2000.into(),
-            2, // block_count_to_average
-            PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test()
+            .block_count_to_average_for_blocktime(2)
+            .build();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -623,16 +583,9 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_average_time_between_3_blocks(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = PoSChainConfig::new(
-            Uint256::MAX,
-            2 * 60,
-            2000.into(),
-            2000.into(),
-            3, // block_count_to_average
-            PerThousand::new(100).expect("must be valid"),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test()
+            .block_count_to_average_for_blocktime(3)
+            .build();
         let upgrades = vec![(
             BlockHeight::new(0),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
@@ -671,7 +624,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_average_block_time_no_ancestor(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = create_unittest_pos_config();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
         let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
 
@@ -718,26 +671,16 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config_1 = PoSChainConfig::new(
-            target_limit_1,
-            10,
-            1.into(),
-            1.into(),
-            2,
-            PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
-        let pos_config_2 = PoSChainConfig::new(
-            target_limit_2,
-            20,
-            1.into(),
-            1.into(),
-            5,
-            PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let pos_config_1 = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_limit(target_limit_1)
+            .targe_block_time(NonZeroU64::new(10).unwrap())
+            .block_count_to_average_for_blocktime(2)
+            .build();
+        let pos_config_2 = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_limit(target_limit_2)
+            .targe_block_time(NonZeroU64::new(20).unwrap())
+            .block_count_to_average_for_blocktime(5)
+            .build();
         let upgrades = vec![
             (
                 BlockHeight::new(0),
@@ -844,7 +787,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn not_monotonic_block_time(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let pos_config = create_unittest_pos_config();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
         let net_upgrades = NetUpgrades::regtest_with_pos();
         let chain_config = ConfigBuilder::test_chain()
             .net_upgrades(net_upgrades)
@@ -879,16 +822,11 @@ mod tests {
     fn calculate_target_through_netupgrade(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let target_limit = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config = PoSChainConfig::new(
-            target_limit,
-            10,
-            1.into(),
-            1.into(),
-            3,
-            PerThousand::new(100).unwrap(),
-            PoSConsensusVersion::V1,
-        )
-        .unwrap();
+        let pos_config = PoSChainConfigBuilder::new_for_unit_test()
+            .targe_limit(target_limit)
+            .targe_block_time(NonZeroU64::new(10).unwrap())
+            .block_count_to_average_for_blocktime(3)
+            .build();
         let upgrades = vec![
             (
                 BlockHeight::new(0),

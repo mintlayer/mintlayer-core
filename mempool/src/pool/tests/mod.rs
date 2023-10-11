@@ -189,7 +189,7 @@ async fn tx_no_inputs() {
 // value to prevent IBD state.
 pub fn start_chainstate_with_config(
     chain_config: Arc<ChainConfig>,
-) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
+) -> chainstate::ChainstateHandle {
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let chainstate_config = {
         let mut config = ChainstateConfig::new();
@@ -234,9 +234,7 @@ fn setup_with_chainstate(
     )
 }
 
-pub fn start_chainstate(
-    chainstate: Box<dyn ChainstateInterface>,
-) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
+pub fn start_chainstate(chainstate: Box<dyn ChainstateInterface>) -> chainstate::ChainstateHandle {
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem("chainstate", chainstate);
     tokio::spawn(async move { man.main().await });

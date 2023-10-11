@@ -65,29 +65,26 @@ async fn invalid_transaction(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
         let tx = SignedTransaction::new(tx, vec![]).unwrap();
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
-        assert_eq!(peer, sent_to);
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
             SyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        node.send_message(
-            peer,
-            SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
-        )
+        peer.send_message(SyncMessage::TransactionResponse(
+            TransactionResponse::Found(tx),
+        ))
         .await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::NoInputs)).ban_score()
@@ -111,12 +108,10 @@ async fn initial_block_download() {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
         node.assert_no_event().await;
         node.assert_no_peer_manager_event().await;
@@ -176,15 +171,13 @@ async fn no_transaction_service(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
@@ -245,15 +238,13 @@ async fn too_many_announcements(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0))
@@ -290,25 +281,22 @@ async fn duplicated_announcement(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
-        assert_eq!(peer, sent_to);
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
             SyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (adjusted_peer, score) = node.adjust_peer_score_event().await;
-        assert_eq!(peer, adjusted_peer);
+        let (adjusted_peer, score) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(peer.get_id(), adjusted_peer);
         assert_eq!(
             score,
             P2pError::ProtocolError(ProtocolError::DuplicatedTransactionAnnouncement(
@@ -347,24 +335,21 @@ async fn valid_transaction(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
 
         let tx = transaction(chain_config.genesis_block_id());
-        node.send_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()))
-            .await;
+        peer.send_message(SyncMessage::NewTransaction(tx.transaction().get_id())).await;
 
-        let (sent_to, message) = node.message().await;
-        assert_eq!(peer, sent_to);
+        let (sent_to, message) = node.get_sent_message().await;
+        assert_eq!(peer.get_id(), sent_to);
         assert_eq!(
             message,
             SyncMessage::TransactionRequest(tx.transaction().get_id())
         );
 
-        node.send_message(
-            peer,
-            SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
-        )
+        peer.send_message(SyncMessage::TransactionResponse(
+            TransactionResponse::Found(tx.clone()),
+        ))
         .await;
 
         // There should be no `NewTransaction` message because the transaction is already known
@@ -399,8 +384,8 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
             .build()
             .await;
 
-        let peer = PeerId::new();
-        node.connect_peer(peer, protocol_version).await;
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+        let peer_id = peer.get_id();
 
         let mut txs = std::collections::BTreeMap::<Id<Transaction>, _>::new();
 
@@ -429,18 +414,18 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         let res = node
             .mempool()
-            .call_mut(move |m| m.add_transaction_remote(tx1, RemoteTxOrigin::new(peer)))
+            .call_mut(move |m| m.add_transaction_remote(tx1, RemoteTxOrigin::new(peer_id)))
             .await
             .unwrap();
         assert_eq!(res, Ok(mempool::TxStatus::InOrphanPool));
 
         // The transaction should be held up in the orphan pool for now, so we don't expect it to be
         // propagated at this point
-        assert_eq!(node.try_message(), None);
+        assert_eq!(node.try_get_sent_message(), None);
 
         let res = node
             .mempool()
-            .call_mut(move |m| m.add_transaction_remote(tx0, RemoteTxOrigin::new(peer)))
+            .call_mut(move |m| m.add_transaction_remote(tx0, RemoteTxOrigin::new(peer_id)))
             .await
             .unwrap();
         assert_eq!(res, Ok(mempool::TxStatus::InMempool));
@@ -451,7 +436,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
 
         // Now the orphan has been resolved, both transactions should be announced.
         for _ in 0..2 {
-            let (_peer, msg) = node.message().await;
+            let (_peer, msg) = node.get_sent_message().await;
             logging::log::error!("Msg new: {msg:?}");
             let tx_id = match msg {
                 SyncMessage::NewTransaction(tx_id) => tx_id,

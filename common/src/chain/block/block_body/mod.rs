@@ -95,8 +95,7 @@ mod tests {
     }
 
     fn generate_random_bytes(rng: &mut impl Rng, length: usize) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.resize(length, 0);
+        let mut bytes = vec![0; length];
         rng.fill_bytes(&mut bytes);
         bytes
     }

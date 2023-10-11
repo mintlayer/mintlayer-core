@@ -16,7 +16,7 @@
 #![deny(clippy::clone_on_ref_ptr)]
 
 pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface, MempoolSubsystemInterface};
+pub use interface::{make_mempool, MempoolInterface};
 pub use mempool_types::{tx_origin, TxStatus};
 
 mod config;

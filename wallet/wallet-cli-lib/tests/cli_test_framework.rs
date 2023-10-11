@@ -32,21 +32,21 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::{self, regtest::GenesisStakingSettings, ChainType},
-        create_unittest_pos_config,
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
+        TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
-use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
+use mempool::rpc::MempoolRpcServer;
 use p2p::rpc::P2pRpcServer;
 use rpc::{rpc_creds::RpcCreds, RpcConfig};
-use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
-    config::{Network, WalletCliArgs},
+    config::{Network, RegtestOptions, WalletCliArgs},
     console::{ConsoleInput, ConsoleOutput},
     errors::WalletCliError,
 };
@@ -141,7 +141,6 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
 
 fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
     let genesis = create_custom_regtest_genesis(rng);
-    let pos_config = create_unittest_pos_config();
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -151,7 +150,7 @@ fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
             BlockHeight::new(1),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                config: pos_config,
+                config: PoSChainConfigBuilder::new_for_unit_test().build(),
             }),
         ),
     ];
@@ -225,9 +224,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         chainstate.clone(),
         Default::default(),
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
-        move |call, shutdn| mempool.run(call, shutdn)
-    });
+    let mempool = manager.add_custom_subsystem("wallet-cli-test-mempool", |hdl| mempool.init(hdl));
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
@@ -238,10 +235,8 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         Default::default(),
         peerdb_storage,
     )
-    .unwrap();
-    let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
-        move |call, shutdown| p2p.run(call, shutdown)
-    });
+    .unwrap()
+    .add_to_manager("p2p", &mut manager);
 
     // Block production
     let block_prod = manager.add_subsystem(
@@ -298,34 +293,52 @@ impl CliTestFramework {
         let manager_task = manager.main_in_task();
 
         let wallet_options = WalletCliArgs {
-            network: Network::Regtest(Box::new(config::regtest_options::ChainConfigOptions {
-                chain_magic_bytes: None,
-                chain_max_future_block_time_offset: None,
-                software_version: None,
-                chain_target_block_spacing: None,
-                chain_coin_decimals: None,
-                chain_emission_schedule: None,
-                chain_max_block_header_size: None,
-                chain_max_block_size_with_standard_txs: None,
-                chain_max_block_size_with_smart_contracts: None,
-                chain_initial_difficulty: None,
-                chain_pos_netupgrades: None,
-                chain_pos_netupgrades_v0_to_v1: None,
-                chain_genesis_block_timestamp: None,
-                chain_genesis_staking_settings: GenesisStakingSettings::default(),
-            })),
-            wallet_file: None,
-            wallet_password: None,
-            start_staking: false,
-            rpc_address: Some(rpc_address.to_string()),
-            rpc_cookie_file: None,
-            rpc_username: Some(RPC_USERNAME.to_owned()),
-            rpc_password: Some(RPC_PASSWORD.to_owned()),
-            commands_file: None,
-            history_file: None,
-            exit_on_error: None,
-            vi_mode: false,
-            in_top_x_mb: 5,
+            network: Some(Network::Regtest(Box::new(RegtestOptions {
+                chain_config: config::regtest_options::ChainConfigOptions {
+                    chain_magic_bytes: None,
+                    chain_max_future_block_time_offset: None,
+                    software_version: None,
+                    chain_target_block_spacing: None,
+                    chain_coin_decimals: None,
+                    chain_emission_schedule: None,
+                    chain_max_block_header_size: None,
+                    chain_max_block_size_with_standard_txs: None,
+                    chain_max_block_size_with_smart_contracts: None,
+                    chain_initial_difficulty: None,
+                    chain_pos_netupgrades: None,
+                    chain_pos_netupgrades_v0_to_v1: None,
+                    chain_genesis_block_timestamp: None,
+                    chain_genesis_staking_settings: GenesisStakingSettings::default(),
+                },
+                run_options: wallet_cli_lib::config::CliArgs {
+                    wallet_file: None,
+                    wallet_password: None,
+                    start_staking: false,
+                    rpc_address: Some(rpc_address.to_string()),
+                    rpc_cookie_file: None,
+                    rpc_username: Some(RPC_USERNAME.to_owned()),
+                    rpc_password: Some(RPC_PASSWORD.to_owned()),
+                    commands_file: None,
+                    history_file: None,
+                    exit_on_error: None,
+                    vi_mode: false,
+                    in_top_x_mb: 5,
+                },
+            }))),
+            run_options: wallet_cli_lib::config::CliArgs {
+                wallet_file: None,
+                wallet_password: None,
+                start_staking: false,
+                rpc_address: Some(rpc_address.to_string()),
+                rpc_cookie_file: None,
+                rpc_username: Some(RPC_USERNAME.to_owned()),
+                rpc_password: Some(RPC_PASSWORD.to_owned()),
+                commands_file: None,
+                history_file: None,
+                exit_on_error: None,
+                vi_mode: false,
+                in_top_x_mb: 5,
+            },
         };
 
         let (output_tx, output_rx) = std::sync::mpsc::channel();

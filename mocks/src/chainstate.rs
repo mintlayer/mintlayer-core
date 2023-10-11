@@ -182,4 +182,14 @@ mockall::mock! {
     }
 }
 
-impl subsystem::Subsystem for MockChainstateInterface {}
+impl subsystem::Subsystem for MockChainstateInterface {
+    type Interface = dyn ChainstateInterface;
+
+    fn interface_ref(&self) -> &Self::Interface {
+        self
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self
+    }
+}

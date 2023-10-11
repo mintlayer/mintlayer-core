@@ -35,9 +35,8 @@ pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use pos::{
-    create_regtest_pos_config, create_testnet_pos_config, create_unittest_pos_config,
-    get_initial_randomness, pos_initial_difficulty, DelegationId, PoSChainConfig,
-    PoSConsensusVersion, PoolId,
+    config::PoSChainConfig, config_builder::PoSChainConfigBuilder, get_initial_randomness,
+    pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

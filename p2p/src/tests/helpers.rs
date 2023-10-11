@@ -24,7 +24,7 @@ use p2p_types::{
     bannable_address::BannableAddress, p2p_event::P2pEventHandler, socket_address::SocketAddress,
 };
 use storage_inmemory::InMemory;
-use subsystem::manager::ShutdownTrigger;
+use subsystem::ShutdownTrigger;
 use tokio::{
     sync::{
         mpsc::{self, UnboundedSender},
@@ -71,7 +71,7 @@ where
     peer_mgr_join_handle: JoinHandle<(PeerMgr<TTM>, P2pError)>,
     sync_mgr_join_handle: JoinHandle<P2pError>,
     shutdown_trigger: ShutdownTrigger,
-    subsystem_mgr_join_handle: subsystem::manager::ManagerJoinHandle,
+    subsystem_mgr_join_handle: subsystem::ManagerJoinHandle,
     peer_mgr_notification_rx: mpsc::UnboundedReceiver<PeerManagerNotification>,
 }
 

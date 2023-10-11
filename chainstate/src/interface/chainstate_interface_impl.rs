@@ -673,3 +673,15 @@ fn get_output_coin_amount(
 
     Ok(amount)
 }
+
+impl subsystem::Subsystem for Box<dyn ChainstateInterface> {
+    type Interface = dyn ChainstateInterface;
+
+    fn interface_ref(&self) -> &Self::Interface {
+        self.as_ref()
+    }
+
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self.as_mut()
+    }
+}

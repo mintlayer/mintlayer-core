@@ -48,7 +48,7 @@ impl<T, H> Eq for NodeWithAbsOrder<'_, T, H> {}
 
 impl<T, H> PartialOrd for NodeWithAbsOrder<'_, T, H> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.node.abs_index().partial_cmp(&other.node.abs_index())
+        Some(self.cmp(other))
     }
 }
 

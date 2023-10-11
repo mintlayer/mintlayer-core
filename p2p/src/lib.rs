@@ -42,7 +42,6 @@ use tokio::{
 
 use ::utils::atomics::SeqCstAtomicBool;
 use ::utils::ensure;
-use chainstate::chainstate_interface;
 use common::{
     chain::{config::ChainType, ChainConfig},
     time_getter::TimeGetter,
@@ -54,7 +53,6 @@ use net::default_backend::transport::{
     NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
-use subsystem::{CallRequest, ShutdownRequest};
 use types::socket_address::SocketAddress;
 
 use crate::{
@@ -110,12 +108,12 @@ where
     ///
     /// This function starts the networking backend and individual manager objects.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new<S: PeerDbStorage + 'static>(
+    async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
         bind_addresses: Vec<SocketAddress>,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        chainstate_handle: chainstate::ChainstateHandle,
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
         peerdb_storage: S,
@@ -206,35 +204,7 @@ where
             _phantom: PhantomData,
         })
     }
-
-    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
-        log::trace!("Entering p2p main loop");
-        loop {
-            tokio::select! {
-                () = shutdown.recv() => {
-                    self.shutdown().await;
-                    break;
-                },
-                call = call.recv() => call.handle_call_mut(&mut self).await,
-            }
-        }
-    }
-
-    async fn shutdown(self) {
-        self.shutdown.store(true);
-        let _ = self.backend_shutdown_sender.send(());
-
-        // Wait for the tasks to shut down.
-        futures::future::join_all([
-            self.backend_task,
-            self.peer_manager_task,
-            self.sync_manager_task,
-        ])
-        .await;
-    }
 }
-
-impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<dyn P2pInterface>;
 
@@ -290,7 +260,7 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
 pub struct P2pInit<S: PeerDbStorage + 'static> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    chainstate_handle: chainstate::ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
@@ -298,21 +268,41 @@ pub struct P2pInit<S: PeerDbStorage + 'static> {
 }
 
 impl<S: PeerDbStorage + 'static> P2pInit<S> {
-    pub async fn run(self, call: CallRequest<dyn P2pInterface>, shutdown: ShutdownRequest) {
-        if let Err(e) = run_p2p(
+    async fn init<T>(self, transport: T::Transport) -> Result<P2p<T>>
+    where
+        T: 'static + NetworkingService + Send + Sync,
+        T::ConnectivityHandle: ConnectivityService<T>,
+        T::MessagingHandle: MessagingService,
+        T::SyncingEventReceiver: SyncingEventReceiver,
+    {
+        P2p::<T>::new(
+            transport,
+            self.bind_addresses,
             self.chain_config,
             self.p2p_config,
             self.chainstate_handle,
             self.mempool_handle,
             self.time_getter,
             self.peerdb_storage,
-            self.bind_addresses,
-            call,
-            shutdown,
         )
         .await
-        {
-            log::error!("Failed to run p2p: {e:?}");
+    }
+
+    pub fn add_to_manager(self, name: &'static str, manager: &mut subsystem::Manager) -> P2pHandle {
+        if let Some(true) = self.p2p_config.disable_noise {
+            type NetService = P2pNetworkingServiceUnencrypted;
+            assert_eq!(*self.chain_config.chain_type(), ChainType::Regtest);
+            assert!(self.p2p_config.socks5_proxy.is_none());
+            let transport = make_p2p_transport_unencrypted();
+            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
+        } else if let Some(socks5_proxy) = &self.p2p_config.socks5_proxy {
+            type NetService = P2pNetworkingServiceSocks5Proxy;
+            let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
+            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
+        } else {
+            type NetService = P2pNetworkingService;
+            let transport = make_p2p_transport();
+            manager.add_custom_subsystem(name, move |_| self.init::<NetService>(transport))
         }
     }
 }
@@ -320,7 +310,7 @@ impl<S: PeerDbStorage + 'static> P2pInit<S> {
 pub fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    chainstate_handle: chainstate::ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
@@ -358,70 +348,34 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn run_p2p<S: PeerDbStorage + 'static>(
-    chain_config: Arc<ChainConfig>,
-    p2p_config: Arc<P2pConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    mempool_handle: MempoolHandle,
-    time_getter: TimeGetter,
-    peerdb_storage: S,
-    bind_addresses: Vec<SocketAddress>,
-    call: CallRequest<dyn P2pInterface>,
-    shutdown: ShutdownRequest,
-) -> Result<()> {
-    if let Some(true) = p2p_config.disable_noise {
-        assert_eq!(*chain_config.chain_type(), ChainType::Regtest);
-        assert!(p2p_config.socks5_proxy.is_none());
+#[async_trait::async_trait]
+impl<T: NetworkingService> subsystem::Subsystem for P2p<T>
+where
+    T: 'static + NetworkingService + Send + Sync,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::MessagingHandle: MessagingService,
+    T::SyncingEventReceiver: SyncingEventReceiver,
+{
+    type Interface = dyn P2pInterface;
 
-        let transport = make_p2p_transport_unencrypted();
-
-        P2p::<P2pNetworkingServiceUnencrypted>::new(
-            transport,
-            bind_addresses,
-            chain_config,
-            p2p_config,
-            chainstate_handle,
-            mempool_handle,
-            time_getter,
-            peerdb_storage,
-        )
-        .await?
-        .run(call, shutdown)
-        .await;
-    } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
-        let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
-
-        P2p::<P2pNetworkingServiceSocks5Proxy>::new(
-            transport,
-            bind_addresses,
-            chain_config,
-            p2p_config,
-            chainstate_handle,
-            mempool_handle,
-            time_getter,
-            peerdb_storage,
-        )
-        .await?
-        .run(call, shutdown)
-        .await;
-    } else {
-        let transport = make_p2p_transport();
-
-        P2p::<P2pNetworkingService>::new(
-            transport,
-            bind_addresses,
-            chain_config,
-            p2p_config,
-            chainstate_handle,
-            mempool_handle,
-            time_getter,
-            peerdb_storage,
-        )
-        .await?
-        .run(call, shutdown)
-        .await;
+    fn interface_ref(&self) -> &Self::Interface {
+        self
     }
 
-    Ok(())
+    fn interface_mut(&mut self) -> &mut Self::Interface {
+        self
+    }
+
+    async fn shutdown(self) {
+        self.shutdown.store(true);
+        let _ = self.backend_shutdown_sender.send(());
+
+        // Wait for the tasks to shut down.
+        futures::future::join_all([
+            self.backend_task,
+            self.peer_manager_task,
+            self.sync_manager_task,
+        ])
+        .await;
+    }
 }
