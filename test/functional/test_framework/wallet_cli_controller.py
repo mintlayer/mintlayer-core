@@ -178,12 +178,22 @@ class WalletCliController:
                               amount_to_issue: str,
                               number_of_decimals: int,
                               metadata_uri: str,
-                              destination_address: str) -> Tuple[Optional[str], Optional[str]]:
-        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{amount_to_issue}" "{number_of_decimals}" "{metadata_uri}" {destination_address}\n')
+                              destination_address: str,
+                              token_supply: str = 'unlimited') -> Tuple[Optional[str], Optional[str]]:
+        output = await self._write_command(f'issuenewtoken "{token_ticker}" "{amount_to_issue}" "{number_of_decimals}" "{metadata_uri}" {destination_address} {token_supply}\n')
         if output.startswith("A new token has been issued with ID"):
             return output[output.find(':')+2:], None
 
         return None, output
+
+    async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
+        return await self._write_command(f"minttokens {token_id} {address} {amount}\n")
+
+    async def redeem_tokens(self, token_id: str, amount: int) -> str:
+        return await self._write_command(f"redeemtokens {token_id} {amount}\n")
+
+    async def lock_tokens(self, token_id: str) -> str:
+        return await self._write_command(f"locktokens {token_id}\n")
 
     async def issue_new_nft(self,
                             destination_address: str,

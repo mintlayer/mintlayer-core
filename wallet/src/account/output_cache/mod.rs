@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::Add,
+};
 
 use common::{
     chain::{
@@ -78,16 +81,16 @@ impl PoolData {
 }
 
 pub enum TokenTotalSupplyState {
-    Fixed(Amount),     // fixed to a certain amount
-    Lockable(Amount),  // not known in advance but can be locked once at some point in time
-    Locked(Amount),    // Locked
-    Unlimited(Amount), // limited only by the Amount data type
+    Fixed(Amount, Amount), // fixed to a certain amount
+    Lockable(Amount),      // not known in advance but can be locked once at some point in time
+    Locked(Amount),        // Locked
+    Unlimited(Amount),     // limited only by the Amount data type
 }
 
 impl From<TokenTotalSupply> for TokenTotalSupplyState {
     fn from(value: TokenTotalSupply) -> Self {
         match value {
-            TokenTotalSupply::Fixed(amount) => TokenTotalSupplyState::Fixed(amount),
+            TokenTotalSupply::Fixed(amount) => TokenTotalSupplyState::Fixed(amount, Amount::ZERO),
             TokenTotalSupply::Lockable => TokenTotalSupplyState::Lockable(Amount::ZERO),
             TokenTotalSupply::Unlimited => TokenTotalSupplyState::Unlimited(Amount::ZERO),
         }
@@ -95,12 +98,60 @@ impl From<TokenTotalSupply> for TokenTotalSupplyState {
 }
 
 impl TokenTotalSupplyState {
-    fn str_state(&self) -> &'static str {
+    pub fn str_state(&self) -> &'static str {
         match self {
             Self::Unlimited(_) => "Unlimited",
             Self::Locked(_) => "Locked",
             Self::Lockable(_) => "Lockable",
-            Self::Fixed(_) => "Fixed",
+            Self::Fixed(_, _) => "Fixed",
+        }
+    }
+
+    pub fn check_can_mint(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::Unlimited(_) | Self::Lockable(_) => Ok(()),
+            Self::Fixed(max, current) => {
+                let changed = current.add(amount).ok_or(WalletError::OutputAmountOverflow)?;
+                ensure!(
+                    changed <= *max,
+                    WalletError::CannotMintFixedTokenSupply(*max, *current, amount)
+                );
+                Ok(())
+            }
+            Self::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    pub fn check_can_redeem(&self, amount: Amount) -> WalletResult<()> {
+        match self {
+            Self::Unlimited(current) | Self::Lockable(current) | Self::Fixed(_, current) => {
+                ensure!(
+                    *current >= amount,
+                    WalletError::CannotRedeemTokenSupply(amount, *current)
+                );
+                Ok(())
+            }
+            Self::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+        }
+    }
+
+    pub fn check_can_lock(&self) -> WalletResult<()> {
+        match self {
+            TokenTotalSupplyState::Lockable(_) => Ok(()),
+            TokenTotalSupplyState::Unlimited(_)
+            | TokenTotalSupplyState::Fixed(_, _)
+            | TokenTotalSupplyState::Locked(_) => {
+                Err(WalletError::CannotLockTokenSupply(self.str_state()))
+            }
+        }
+    }
+
+    pub fn current_supply(&self) -> Amount {
+        match self {
+            Self::Unlimited(amount)
+            | Self::Fixed(_, amount)
+            | Self::Locked(amount)
+            | Self::Lockable(amount) => *amount,
         }
     }
 
@@ -112,23 +163,34 @@ impl TokenTotalSupplyState {
             TokenTotalSupplyState::Unlimited(current) => Ok(TokenTotalSupplyState::Unlimited(
                 (*current + amount).ok_or(WalletError::OutputAmountOverflow)?,
             )),
-            TokenTotalSupplyState::Fixed(_) | TokenTotalSupplyState::Locked(_) => {
-                Err(WalletError::CannotChangeTokenSupply(self.str_state()))
+            TokenTotalSupplyState::Fixed(max, current) => {
+                let changed = (*current + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                ensure!(
+                    changed <= *max,
+                    WalletError::CannotMintFixedTokenSupply(*max, *current, amount)
+                );
+                Ok(TokenTotalSupplyState::Fixed(*max, changed))
             }
+            TokenTotalSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
         }
     }
 
     fn redeem(&self, amount: Amount) -> WalletResult<TokenTotalSupplyState> {
         match self {
             TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Lockable(
-                (*current - amount).ok_or(WalletError::OutputAmountOverflow)?,
+                (*current - amount)
+                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
             )),
             TokenTotalSupplyState::Unlimited(current) => Ok(TokenTotalSupplyState::Unlimited(
-                (*current - amount).ok_or(WalletError::OutputAmountOverflow)?,
+                (*current - amount)
+                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
             )),
-            TokenTotalSupplyState::Fixed(_) | TokenTotalSupplyState::Locked(_) => {
-                Err(WalletError::CannotChangeTokenSupply(self.str_state()))
-            }
+            TokenTotalSupplyState::Fixed(max, current) => Ok(TokenTotalSupplyState::Fixed(
+                *max,
+                (*current - amount)
+                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
+            )),
+            TokenTotalSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
         }
     }
 
@@ -136,7 +198,7 @@ impl TokenTotalSupplyState {
         match self {
             TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Locked(*current)),
             TokenTotalSupplyState::Unlimited(_)
-            | TokenTotalSupplyState::Fixed(_)
+            | TokenTotalSupplyState::Fixed(_, _)
             | TokenTotalSupplyState::Locked(_) => {
                 Err(WalletError::CannotLockTokenSupply(self.str_state()))
             }
@@ -147,9 +209,9 @@ impl TokenTotalSupplyState {
         match self {
             TokenTotalSupplyState::Locked(current) => Ok(TokenTotalSupplyState::Lockable(*current)),
             TokenTotalSupplyState::Unlimited(_)
-            | TokenTotalSupplyState::Fixed(_)
+            | TokenTotalSupplyState::Fixed(_, _)
             | TokenTotalSupplyState::Lockable(_) => {
-                Err(WalletError::InconsistentUnLockTokenSupply(self.str_state()))
+                Err(WalletError::InconsistentUnlockTokenSupply(self.str_state()))
             }
         }
     }
@@ -490,7 +552,7 @@ impl OutputCache {
         Ok(())
     }
 
-    /// Update delegation state with new tx input
+    /// Update token issuance state with new tx input
     fn update_token_issuance_state(
         unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
         data: &mut TokenIssuanceData,

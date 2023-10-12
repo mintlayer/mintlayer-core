@@ -669,6 +669,9 @@ pub fn select_coins(
     cost_of_change: Amount,
     coin_selection_algo: CoinSelectionAlgo,
 ) -> Result<SelectionResult, UtxoSelectorError> {
+    if selection_target == Amount::ZERO && pay_fees == PayFee::DoNotPayFeeWithThisCurrency {
+        return Ok(SelectionResult::new(selection_target));
+    }
     ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
 
     let total_available_value = utxo_pool

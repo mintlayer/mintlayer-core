@@ -41,7 +41,7 @@ pub struct OutputGroup {
 
 /// Should we pay fee with this currency or not in the case we pay the total fees with another
 /// currency. Here Currency refers to either a coin or a token_id.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PayFee {
     PayFeeWithThisCurrency,
     DoNotPayFeeWithThisCurrency,

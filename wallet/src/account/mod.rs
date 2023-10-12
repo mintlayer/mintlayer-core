@@ -261,6 +261,11 @@ impl Account {
 
         total_fees_not_paid =
             (total_fees_not_paid + preselected_fee).ok_or(WalletError::OutputAmountOverflow)?;
+        total_fees_not_paid = preselected_inputs
+            .values()
+            .try_fold(total_fees_not_paid, |total, (_amount, fee)| total + *fee)
+            .ok_or(WalletError::OutputAmountOverflow)?;
+
         let mut amount_to_be_paid_in_currency_with_fees = (amount_to_be_paid_in_currency_with_fees
             + total_fees_not_paid)
             .ok_or(WalletError::OutputAmountOverflow)?;
@@ -716,9 +721,54 @@ impl Account {
         let outputs =
             make_mint_token_outputs(token_id, amount, address, self.chain_config.as_ref())?;
 
+        self.find_token(&token_id)?.total_supply.check_can_mint(amount)?;
+
         self.change_token_supply_transaction(
             token_id,
             amount,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn redeem_tokens(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        amount: Amount,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_redeem_token_outputs(token_id, amount, self.chain_config.as_ref())?;
+
+        self.find_token(&token_id)?.total_supply.check_can_redeem(amount)?;
+
+        self.change_token_supply_transaction(
+            token_id,
+            amount,
+            outputs,
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
+    pub fn lock_tokens(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_id: TokenId,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
+
+        self.find_token(&token_id)?.total_supply.check_can_lock()?;
+
+        self.change_token_supply_transaction(
+            token_id,
+            Amount::ZERO,
             outputs,
             db_tx,
             median_time,
@@ -736,6 +786,7 @@ impl Account {
         fee_rate: CurrentFeeRate,
     ) -> Result<SignedTransaction, WalletError> {
         let token_data = self.find_token(&token_id)?;
+
         let nonce = token_data
             .last_nonce
             .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
@@ -761,45 +812,6 @@ impl Account {
 
         let tx = self.sign_transaction_from_req(request, db_tx)?;
         Ok(tx)
-    }
-
-    pub fn redeem_tokens(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
-        amount: Amount,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        let outputs = make_redeem_token_outputs(token_id, amount, self.chain_config.as_ref())?;
-
-        self.change_token_supply_transaction(
-            token_id,
-            amount,
-            outputs,
-            db_tx,
-            median_time,
-            fee_rate,
-        )
-    }
-
-    pub fn lock_tokens(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-        token_id: TokenId,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
-
-        self.change_token_supply_transaction(
-            token_id,
-            Amount::ZERO,
-            outputs,
-            db_tx,
-            median_time,
-            fee_rate,
-        )
     }
 
     pub fn get_pos_gen_block_data(
@@ -1364,6 +1376,10 @@ impl Account {
     }
 }
 
+/// There are some preselected inputs like the Token account inputs with a nonce
+/// that need to be included in the request
+/// Here we group them up by currency and sum the total amount and fee they bring to the
+/// transaction
 fn group_preselected_inputs(
     request: &SendRequest,
     current_fee_rate: FeeRate,

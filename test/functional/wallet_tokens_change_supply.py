@@ -14,7 +14,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet tokens test
+"""Wallet tokens change supply test
 
 Check that:
 * We can create a new wallet,
@@ -23,8 +23,9 @@ Check that:
 * sync the wallet with the node
 * check balance
 * issue new token
-* transfer some tokens
-* check balance
+* mint new tokens
+* redeem existing tokens
+* lock the tokens supply
 """
 
 from test_framework.test_framework import BitcoinTestFramework
@@ -56,7 +57,7 @@ class WalletTokens(BitcoinTestFramework):
         block_input_data = block_input_data_obj.encode(block_input_data).to_hex()[2:]
 
         # create a new block, taking transactions from mempool
-        block = node.blockprod_generate_block(block_input_data, [], [], "FillSpaceFromMempool")
+        block = node.blockprod_generate_block(block_input_data, None)
         node.chainstate_submit_block(block)
         block_id = node.chainstate_best_block_id()
 
@@ -90,7 +91,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 201 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -107,7 +108,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block_height(), '1')
             assert_equal(await wallet.get_best_block(), block_id)
 
-            assert_in("Coins amount: 201", await wallet.get_balance())
+            assert_in("Coins amount: 1001", await wallet.get_balance())
 
             address = await wallet.new_address()
 
@@ -136,7 +137,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address, 'lockable')
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -144,35 +145,49 @@ class WalletTokens(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 10000))
+            tokens_to_mint = 10000
+            total_tokens_supply = tokens_to_mint
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
 
-            ## create a new account and send some tokens to it
-            await wallet.create_new_account()
-            await wallet.select_account(1)
-            address = await wallet.new_address()
+            # cannot unmint more than minted
+            assert_in(f"Trying to redeem Amount {{ val: {tokens_to_mint+1}00 }} but the current supply is Amount {{ val: {tokens_to_mint}00 }}", await wallet.redeem_tokens(token_id, tokens_to_mint + 1))
 
-            await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            output = await wallet.send_tokens_to_address(token_id, address, 10.01)
-            assert_in("The transaction was submitted successfully", output)
+            tokens_to_redeem = 1000
+            total_tokens_supply = total_tokens_supply - tokens_to_redeem
+            assert_in("The transaction was submitted successfully", await wallet.redeem_tokens(token_id, tokens_to_redeem))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
 
-            ## check the new balance
-            assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
+            # mint some more tokens
+            tokens_to_mint = 1000
+            total_tokens_supply = total_tokens_supply + tokens_to_mint
+            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
 
-            ## try to issue a new token, should fail with not enough coins
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
-            assert token_id is None
-            assert err is not None
-            assert_in("Not enough funds", err)
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
+            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+
+            # lock token suply
+            assert_in("The transaction was submitted successfully", await wallet.lock_tokens(token_id))
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
+            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+
+            # cannot mint any more tokens as it is locked
+            assert_in("Cannot change a Locked Token supply", await wallet.mint_tokens(token_id, address, tokens_to_mint))
+            assert_in("Cannot change a Locked Token supply", await wallet.redeem_tokens(token_id, tokens_to_mint))
+            assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_tokens(token_id))
+
 
 if __name__ == '__main__':
     WalletTokens().main()
+
 
 

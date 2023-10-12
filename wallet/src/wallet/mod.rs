@@ -141,12 +141,18 @@ pub enum WalletError {
     LockedUtxo(UtxoOutPoint),
     #[error("Selected UTXO is a token v0 and cannot be used")]
     TokenV0Utxo(UtxoOutPoint),
-    #[error("Cannot change Token supply in state: {0}")]
-    CannotChangeTokenSupply(&'static str),
+    #[error("Cannot change a Locked Token supply")]
+    CannotChangeLockedTokenSupply,
     #[error("Cannot lock Token supply in state: {0}")]
     CannotLockTokenSupply(&'static str),
     #[error("Cannot revert lock Token supply in state: {0}")]
-    InconsistentUnLockTokenSupply(&'static str),
+    InconsistentUnlockTokenSupply(&'static str),
+    #[error(
+        "Cannot mint Token over the fixed supply {0:?}, current supply {1:?} trying to mint {2:?}"
+    )]
+    CannotMintFixedTokenSupply(Amount, Amount, Amount),
+    #[error("Trying to redeem {0:?} but the current supply is {1:?}")]
+    CannotRedeemTokenSupply(Amount, Amount),
 }
 
 /// Result type used for the wallet
