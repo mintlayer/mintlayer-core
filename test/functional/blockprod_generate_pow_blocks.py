@@ -54,21 +54,23 @@ class GeneratePoWBlocksTest(BitcoinTestFramework):
         return self.nodes[n].chainstate_block_height_in_main_chain(tip)
 
     def generate_block(self, expected_height, block_input_data, transactions):
-        previous_block_id = self.nodes[0].chainstate_best_block_id()
+        node = self.nodes[0]
+        previous_block_id = node.chainstate_best_block_id()
 
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
             try:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
+                block_hex = node.blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
                 break
             except JSONRPCException:
-                block_hex = self.nodes[0].blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
+                block_hex = node.blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
                 time.sleep(1)
 
         block_hex_array = bytearray.fromhex(block_hex)
         block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(block_hex_array)).decode()
 
-        self.nodes[0].chainstate_submit_block(block_hex)
+        node.chainstate_submit_block(block_hex)
+        self.wait_until(lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(), timeout = 5)
 
         self.assert_tip(block_hex)
         self.assert_height(expected_height, block_hex)

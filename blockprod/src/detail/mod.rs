@@ -464,19 +464,17 @@ impl BlockProduction {
             // scratch every time a different timestamp is attempted. That is more costly
             // in terms of computational resources but will allow the node to include more
             // transactions since the passing time may release some time locks.
-            let collected_transactions = {
-                let accumulator = self
-                    .collect_transactions(
-                        current_tip_index.block_id(),
-                        min_constructed_block_timestamp,
-                        transactions.clone(),
-                        transaction_ids.clone(),
-                        packing_strategy,
-                    )
-                    .await?;
-
-                accumulator.transactions().clone()
-            };
+            let collected_transactions = self
+                .collect_transactions(
+                    current_tip_index.block_id(),
+                    min_constructed_block_timestamp,
+                    transactions.clone(),
+                    transaction_ids.clone(),
+                    packing_strategy,
+                )
+                .await?
+                .transactions()
+                .clone();
 
             let block_body = BlockBody::new(block_reward, collected_transactions);
 

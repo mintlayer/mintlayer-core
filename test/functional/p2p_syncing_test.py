@@ -47,6 +47,11 @@ class SyncingTest(BitcoinTestFramework):
         block = self.nodes[n].chainstate_get_block(tip)
         assert_equal(block, expected)
 
+    def submit_block(self, block):
+        node = self.nodes[0]
+        node.chainstate_submit_block(block)
+        self.wait_until(lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(), timeout = 5)
+
     def run_test(self):
         # get current tip hash
         node0_tip = self.nodes[0].chainstate_best_block_id()
@@ -71,7 +76,7 @@ class SyncingTest(BitcoinTestFramework):
         # add first block
         block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
-        self.nodes[0].chainstate_submit_block(blocks[0])
+        self.submit_block(blocks[0])
         assert_equal(self.block_height(0), 1)
         assert_equal(self.block_height(1), 0)
         self.assert_tip(0, blocks[0])
@@ -79,7 +84,7 @@ class SyncingTest(BitcoinTestFramework):
         # add second block
         block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
-        self.nodes[0].chainstate_submit_block(blocks[1])
+        self.submit_block(blocks[1])
         assert_equal(self.block_height(0), 2)
         assert_equal(self.block_height(1), 0)
         self.assert_tip(0, blocks[1])
@@ -102,14 +107,14 @@ class SyncingTest(BitcoinTestFramework):
         # submit third block
         block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
-        self.nodes[0].chainstate_submit_block(blocks[2])
+        self.submit_block(blocks[2])
         assert_equal(self.block_height(0), 3)
         self.assert_tip(0, blocks[2])
 
         # submit final block
         block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
-        self.nodes[0].chainstate_submit_block(blocks[3])
+        self.submit_block(blocks[3])
         assert_equal(self.block_height(0), 4)
         self.assert_tip(0, blocks[3])
 

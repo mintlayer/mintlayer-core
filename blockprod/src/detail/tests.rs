@@ -917,7 +917,7 @@ mod produce_block {
                     chain_config,
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -938,7 +938,7 @@ mod produce_block {
                 job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, new_block).await;
+                assert_process_block(&chainstate, &mempool, new_block).await;
             }
         });
 
@@ -962,7 +962,7 @@ mod produce_block {
                     chain_config,
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -983,7 +983,7 @@ mod produce_block {
                 job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, new_block).await;
+                assert_process_block(&chainstate, &mempool, new_block).await;
             }
         });
 
@@ -1095,7 +1095,7 @@ mod produce_block {
                     chain_config,
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -1115,7 +1115,7 @@ mod produce_block {
                 job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, new_block).await;
+                assert_process_block(&chainstate, &mempool, new_block).await;
             }
         });
 
@@ -1152,7 +1152,7 @@ mod produce_block {
                     chain_config,
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -1174,7 +1174,7 @@ mod produce_block {
                 job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, new_block).await;
+                assert_process_block(&chainstate, &mempool, new_block).await;
             }
         });
 
@@ -1209,7 +1209,7 @@ mod produce_block {
                     chain_config.clone(),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -1240,7 +1240,7 @@ mod produce_block {
                 job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_job_count(&block_production, 0).await;
-                assert_process_block(&chainstate, new_block).await;
+                assert_process_block(&chainstate, &mempool, new_block).await;
             }
         });
 
@@ -1354,7 +1354,7 @@ mod produce_block {
                     chain_config.clone(),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -1400,7 +1400,7 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_process_block(&chainstate, new_block.clone()).await;
+                            assert_process_block(&chainstate, &mempool, new_block.clone()).await;
                         }
                         RequiredConsensus::PoS(_) => {
                             // Try no input data for PoS consensus
@@ -1457,7 +1457,8 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            let result = assert_process_block(&chainstate, new_block).await;
+                            let result =
+                                assert_process_block(&chainstate, &mempool, new_block).await;
 
                             // Update kernel input parameters for future PoS blocks
 
@@ -1528,7 +1529,7 @@ mod produce_block {
 
                             job_finished_receiver.await.expect("Job finished receiver closed");
 
-                            assert_process_block(&chainstate, new_block.clone()).await;
+                            assert_process_block(&chainstate, &mempool, new_block.clone()).await;
                         }
                     }
                 }
