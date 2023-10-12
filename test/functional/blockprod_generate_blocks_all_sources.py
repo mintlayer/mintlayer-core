@@ -138,6 +138,8 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                         timeout = 5
                     )
 
+                    old_tip = node.chainstate_best_block_id()
+
                     block_hex = node.blockprod_generate_block(
                         block_input_data,
                         transactions,
@@ -150,10 +152,14 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
                     for expected_transaction in expected_transactions:
                         self.assert_transaction_in_block(expected_transaction, block)
 
-                    old_tip = node.chainstate_best_block_id()
                     node.chainstate_submit_block(block_hex)
                     new_tip = node.chainstate_best_block_id()
                     assert(old_tip != new_tip)
+
+                    self.wait_until(
+                        lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(),
+                        timeout = 5
+                    )
 
                     #
                     # Check chainstate and mempool is as expected

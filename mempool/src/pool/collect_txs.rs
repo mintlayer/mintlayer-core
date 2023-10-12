@@ -91,8 +91,6 @@ pub fn collect_txs<M>(
         mempool.chainstate_handle.shallow_clone(),
     );
 
-    let verifier_time = tx_accumulator.block_timestamp();
-
     let best_index = mempool
         .blocking_chainstate_handle()
         .call(|c| c.get_best_block_index())?
@@ -106,7 +104,7 @@ pub fn collect_txs<M>(
         .iter()
         .map(|transaction| {
             let _fee =
-                tx_verifier.connect_transaction(&tx_source, transaction, &verifier_time, None)?;
+                tx_verifier.connect_transaction(&tx_source, transaction, &block_timestamp, None)?;
             Ok(transaction.transaction().get_id())
         })
         .collect::<Result<Vec<_>, TxValidationError>>()?;
@@ -195,7 +193,7 @@ pub fn collect_txs<M>(
         let verification_result = tx_verifier.connect_transaction(
             &tx_source,
             next_tx.transaction(),
-            &verifier_time,
+            &block_timestamp,
             None,
         );
 

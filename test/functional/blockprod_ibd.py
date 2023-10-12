@@ -42,6 +42,7 @@ class BlockprodIBDTest(BitcoinTestFramework):
         node = self.nodes[0]
         node.chainstate_submit_block(block)
         block_id = node.chainstate_best_block_id()
+        self.wait_until(lambda: node.mempool_local_best_block_id() == block_id, timeout = 5)
         return block_id
 
     def run_test(self):
