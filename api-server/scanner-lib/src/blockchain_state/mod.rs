@@ -37,6 +37,10 @@ impl<S: ApiServerStorage> BlockchainState<S> {
     pub fn new(storage: S) -> Self {
         Self { storage }
     }
+
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
 }
 
 #[async_trait::async_trait]

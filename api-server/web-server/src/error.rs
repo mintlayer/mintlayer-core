@@ -23,34 +23,56 @@ use serde_json::json;
 use thiserror::Error;
 
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerWebServerError {
+pub enum ApiServerWebServerError {
     #[error("Client error: {0}")]
-    ClientError(#[from] APIServerWebServerClientError),
+    ClientError(#[from] ApiServerWebServerClientError),
     #[error("Server error: {0}")]
-    ServerError(#[from] APIServerWebServerServerError),
+    ServerError(#[from] ApiServerWebServerServerError),
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerWebServerClientError {
+pub enum ApiServerWebServerClientError {
     #[error("Bad request")]
     BadRequest,
+    #[error("Block not found")]
+    BlockNotFound,
+    #[error("Invalid block height")]
+    InvalidBlockHeight,
+    #[error("Invalid block Id")]
+    InvalidBlockId,
+    #[error("Invalid transaction Id")]
+    InvalidTransactionId,
+    #[error("No block found at supplied height")]
+    NoBlockAtHeight,
+    #[error("Transaction not found")]
+    TransactionNotFound,
+    #[error("Transaction not part of any block")]
+    TransactionNotPartOfBlock,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
-pub enum APIServerWebServerServerError {
+pub enum ApiServerWebServerServerError {
+    #[error("Cannot find transaction in block")]
+    CannotFindTransactionInBlock,
+    #[error("Error calculating merkle path")]
+    ErrorCalculatingMerklePath,
+    #[error("Error calculating merkle tree")]
+    ErrorCalculatingMerkleTree,
     #[error("Internal server error")]
     InternalServerError,
+    #[error("Transaction index overflowed")]
+    TransactionIndexOverflow,
 }
 
-impl IntoResponse for APIServerWebServerError {
+impl IntoResponse for ApiServerWebServerError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            APIServerWebServerError::ClientError(error) => {
+            ApiServerWebServerError::ClientError(error) => {
                 (StatusCode::BAD_REQUEST, error.to_string())
             }
-            APIServerWebServerError::ServerError(error) => {
+            ApiServerWebServerError::ServerError(error) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }
         };

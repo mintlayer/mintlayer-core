@@ -1,5 +1,5 @@
 [package]
-name = "blockchain-scanner-daemon"
+name = "api-blockchain-scanner-daemon"
 edition.workspace = true
 rust-version.workspace = true
 version.workspace = true
@@ -9,7 +9,7 @@ license.workspace = true
 
 [dependencies]
 api-server-common = { path = "../api-server-common" }
-blockchain-scanner-lib = { path = "../scanner-lib" }
+api-blockchain-scanner-lib = { path = "../scanner-lib" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
 node-comm = { path = "../../wallet/wallet-node-client" }
