@@ -22,10 +22,10 @@ use clap::Parser;
 use common::{
     address::Address,
     chain::{
-        tokens::{Metadata, TokenCreator, TokenId},
-        Block, ChainConfig, Destination, PoolId, SignedTransaction, Transaction, UtxoOutPoint,
+        tokens::{Metadata, TokenCreator},
+        Block, ChainConfig, SignedTransaction, Transaction, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
@@ -40,11 +40,16 @@ use wallet_controller::{
     ControllerError, NodeInterface, NodeRpcClient, PeerId, DEFAULT_ACCOUNT_INDEX,
 };
 
-use crate::{errors::WalletCliError, CliController};
+use crate::{
+    commands::helper_types::{parse_address, parse_token_supply},
+    errors::WalletCliError,
+    CliController,
+};
 
 use self::helper_types::{
-    format_delegation_info, format_pool_info, parse_utxo_outpoint, CliStoreSeedPhrase,
-    CliUtxoState, CliUtxoTypes, CliWithLocked,
+    format_delegation_info, format_pool_info, parse_coin_amount, parse_pool_id, parse_token_amount,
+    parse_token_id, parse_utxo_outpoint, print_coin_amount, print_token_amount, to_per_thousand,
+    CliStoreSeedPhrase, CliUtxoState, CliUtxoTypes, CliWithLocked,
 };
 
 #[derive(Debug, Parser)]
@@ -186,6 +191,7 @@ pub enum WalletCommand {
         number_of_decimals: u8,
         metadata_uri: String,
         destination_address: String,
+        token_supply: String,
     },
 
     /// Issue a new token
@@ -199,6 +205,24 @@ pub enum WalletCommand {
         icon_uri: Option<String>,
         media_uri: Option<String>,
         additional_metadata_uri: Option<String>,
+    },
+
+    /// Mint new tokens and increase the total supply
+    MintTokens {
+        token_id: String,
+        address: String,
+        amount: String,
+    },
+
+    /// Redeem existing tokens and reduce the total supply
+    RedeemTokens {
+        token_id: String,
+        amount: String,
+    },
+
+    /// Lock the total supply for the tokens
+    LockTokens {
+        token_id: String,
     },
 
     /// Rescan
@@ -361,50 +385,6 @@ pub enum ConsoleCommand {
         print_message: String,
     },
     Exit,
-}
-
-fn to_per_thousand(value_str: &str, variable_name: &str) -> Result<PerThousand, WalletCliError> {
-    PerThousand::from_decimal_str(value_str).ok_or(WalletCliError::InvalidInput(format!(
-        "Failed to parse {variable_name} the decimal that must be in the range [0.001,1.000] or [0.1%,100%]",
-    )))
-}
-
-fn parse_address(
-    chain_config: &ChainConfig,
-    address: &str,
-) -> Result<Address<Destination>, WalletCliError> {
-    Address::from_str(chain_config, address)
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
-}
-
-fn parse_pool_id(chain_config: &ChainConfig, pool_id: &str) -> Result<PoolId, WalletCliError> {
-    Address::<PoolId>::from_str(chain_config, pool_id)
-        .and_then(|address| address.decode_object(chain_config))
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid pool ID '{pool_id}': {e}")))
-}
-
-fn parse_token_id(chain_config: &ChainConfig, token_id: &str) -> Result<TokenId, WalletCliError> {
-    Address::<TokenId>::from_str(chain_config, token_id)
-        .and_then(|address| address.decode_object(chain_config))
-        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid token ID '{token_id}': {e}")))
-}
-
-fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, WalletCliError> {
-    Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
-        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
-}
-
-fn parse_token_amount(token_number_of_decimals: u8, value: &str) -> Result<Amount, WalletCliError> {
-    Amount::from_fixedpoint_str(value, token_number_of_decimals)
-        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
-}
-
-fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
-    value.into_fixedpoint_str(chain_config.coin_decimals())
-}
-
-fn print_token_amount(token_number_of_decimals: u8, value: Amount) -> String {
-    value.into_fixedpoint_str(token_number_of_decimals)
 }
 
 struct CliWalletState {
@@ -797,6 +777,7 @@ impl CommandHandler {
                 number_of_decimals,
                 metadata_uri,
                 destination_address,
+                token_supply,
             } => {
                 ensure!(
                     number_of_decimals <= chain_config.token_max_dec_count(),
@@ -806,6 +787,7 @@ impl CommandHandler {
                 );
 
                 let destination_address = parse_address(chain_config, &destination_address)?;
+                let token_supply = parse_token_supply(&token_supply, number_of_decimals)?;
 
                 let token_id = self
                     .get_synced_controller()
@@ -815,9 +797,7 @@ impl CommandHandler {
                         token_ticker.into_bytes(),
                         number_of_decimals,
                         metadata_uri.into_bytes(),
-                        // TODO: add support for tokens v1
-                        // See https://github.com/mintlayer/mintlayer-core/issues/1237
-                        common::chain::tokens::TokenTotalSupply::Unlimited,
+                        token_supply,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -865,6 +845,62 @@ impl CommandHandler {
                     Address::new(chain_config, &token_id)
                         .expect("Encoding token id should never fail"),
                 )))
+            }
+
+            WalletCommand::MintTokens {
+                token_id,
+                address,
+                amount,
+            } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let address = parse_address(chain_config, &address)?;
+                let amount = {
+                    let token_number_of_decimals = self
+                        .controller()?
+                        .get_token_number_of_decimals(token_id)
+                        .await
+                        .map_err(WalletCliError::Controller)?;
+                    parse_token_amount(token_number_of_decimals, &amount)?
+                };
+
+                self.get_synced_controller()
+                    .await?
+                    .mint_tokens(token_id, amount, address)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::RedeemTokens { token_id, amount } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+                let amount = {
+                    let token_number_of_decimals = self
+                        .controller()?
+                        .get_token_number_of_decimals(token_id)
+                        .await
+                        .map_err(WalletCliError::Controller)?;
+                    parse_token_amount(token_number_of_decimals, &amount)?
+                };
+
+                self.get_synced_controller()
+                    .await?
+                    .redeem_tokens(token_id, amount)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(Self::tx_submitted_command())
+            }
+
+            WalletCommand::LockTokens { token_id } => {
+                let token_id = parse_token_id(chain_config, token_id.as_str())?;
+
+                self.get_synced_controller()
+                    .await?
+                    .lock_tokens(token_id)
+                    .await
+                    .map_err(WalletCliError::Controller)?;
+
+                Ok(Self::tx_submitted_command())
             }
 
             WalletCommand::Rescan => {

@@ -2015,9 +2015,6 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(0)));
 }
 
-// TODO: add support for tokens v1
-// See https://github.com/mintlayer/mintlayer-core/issues/1237
-#[ignore]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -2041,9 +2038,16 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     // Generate a new block which sends reward to the wallet
-    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
-        + chain_config.token_min_issuance_fee())
-    .unwrap();
+    let mut block1_amount =
+        (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+            + chain_config.token_min_issuance_fee())
+        .unwrap();
+
+    let issue_token = rng.gen::<bool>();
+    if issue_token {
+        block1_amount = (block1_amount + chain_config.token_min_supply_change_fee()).unwrap();
+    }
+
     let address = get_address(
         &chain_config,
         MNEMONIC,
@@ -2088,8 +2092,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
-    let (issued_token_id, token_issuance_transaction) = if rng.gen::<bool>() {
-        wallet
+    let (issued_token_id, token_issuance_transaction) = if issue_token {
+        let (issued_token_id, token_issuance_transaction) = wallet
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
                 TokenIssuance::V1(TokenIssuanceV1 {
@@ -2102,10 +2106,30 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
-            .unwrap()
+            .unwrap();
+
+        wallet
+            .add_unconfirmed_tx(token_issuance_transaction.clone(), &WalletEventsNoOp)
+            .unwrap();
+
+        let mint_transaction = wallet
+            .mint_tokens(
+                DEFAULT_ACCOUNT_INDEX,
+                issued_token_id,
+                token_amount_to_issue,
+                address2,
+                FeeRate::new(Amount::ZERO),
+                FeeRate::new(Amount::ZERO),
+            )
+            .unwrap();
+
+        (
+            issued_token_id,
+            vec![token_issuance_transaction, mint_transaction],
+        )
     } else {
         token_amount_to_issue = Amount::from_atoms(1);
-        wallet
+        let (issued_token_id, token_issuance_transaction) = wallet
             .issue_new_nft(
                 DEFAULT_ACCOUNT_INDEX,
                 address2,
@@ -2122,11 +2146,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::new(Amount::ZERO),
                 FeeRate::new(Amount::ZERO),
             )
-            .unwrap()
+            .unwrap();
+        (issued_token_id, vec![token_issuance_transaction])
     };
 
     let block2 = Block::new(
-        vec![token_issuance_transaction],
+        token_issuance_transaction,
         block1_id.into(),
         block1_timestamp,
         ConsensusData::None,
@@ -2144,14 +2169,22 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let currency_balances = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoType::Transfer
+                | UtxoType::LockThenTransfer
+                | UtxoType::MintTokens
+                | UtxoType::IssueNft,
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,
         )
         .unwrap();
+    let mut expected_amount =
+        ((block1_amount * 2).unwrap() - chain_config.token_min_issuance_fee()).unwrap();
+    if issue_token {
+        expected_amount = (expected_amount - chain_config.token_min_supply_change_fee()).unwrap();
+    }
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        ((block1_amount * 2).unwrap() - chain_config.token_min_issuance_fee()).unwrap()
+        expected_amount,
     );
     let token_balances = currency_balances
         .into_iter()
@@ -2213,9 +2246,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             WithLocked::Unlocked,
         )
         .unwrap();
+    let mut expected_amount =
+        ((block1_amount * 3).unwrap() - chain_config.token_min_issuance_fee()).unwrap();
+    if issue_token {
+        expected_amount = (expected_amount - chain_config.token_min_supply_change_fee()).unwrap();
+    }
     assert_eq!(
         currency_balances.get(&Currency::Coin).copied().unwrap_or(Amount::ZERO),
-        ((block1_amount * 3).unwrap() - chain_config.token_min_issuance_fee()).unwrap()
+        expected_amount,
     );
     let token_balances = currency_balances
         .into_iter()

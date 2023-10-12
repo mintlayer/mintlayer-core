@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{Currency, DelegationData, UtxoSelectorError};
+use crate::account::{Currency, CurrentFeeRate, DelegationData, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::send_request::{make_issue_token_outputs, IssueNftArguments, StakePoolDataArguments};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -768,8 +768,10 @@ impl<B: storage::Backend> Wallet<B> {
                 request,
                 inputs,
                 latest_median_time,
-                current_fee_rate,
-                consolidate_fee_rate,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }
@@ -791,6 +793,75 @@ impl<B: storage::Backend> Wallet<B> {
                 delegation_id,
                 delegation_share,
                 current_fee_rate,
+            )
+        })
+    }
+
+    pub fn mint_tokens(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        amount: Amount,
+        destination: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.mint_tokens(
+                db_tx,
+                token_id,
+                destination,
+                amount,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn redeem_tokens(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        amount: Amount,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.redeem_tokens(
+                db_tx,
+                token_id,
+                amount,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn lock_tokens(
+        &mut self,
+        account_index: U31,
+        token_id: TokenId,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
+            account.lock_tokens(
+                db_tx,
+                token_id,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }
@@ -861,8 +932,10 @@ impl<B: storage::Backend> Wallet<B> {
                         destination,
                     },
                     latest_median_time,
-                    current_fee_rate,
-                    consolidate_fee_rate,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
                 )
             })?;
 
@@ -886,8 +959,10 @@ impl<B: storage::Backend> Wallet<B> {
                 stake_pool_arguments,
                 decommission_key,
                 latest_median_time,
-                current_fee_rate,
-                consolidate_fee_rate,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
             )
         })
     }

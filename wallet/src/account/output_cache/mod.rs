@@ -156,16 +156,18 @@ impl TokenTotalSupplyState {
 }
 
 pub struct TokenIssuanceData {
-    total_supply: TokenTotalSupplyState,
+    pub total_supply: TokenTotalSupplyState,
+    pub reissuance_controller: Destination,
     pub last_nonce: Option<AccountNonce>,
     /// last parent transaction if the parent is unconfirmed
     pub last_parent: Option<OutPointSourceId>,
 }
 
 impl TokenIssuanceData {
-    fn new(data: TokenTotalSupply) -> Self {
+    fn new(data: TokenTotalSupply, reissuance_controller: Destination) -> Self {
         Self {
             total_supply: data.into(),
+            reissuance_controller,
             last_nonce: None,
             last_parent: None,
         }
@@ -267,6 +269,10 @@ impl OutputCache {
         self.delegations.get(delegation_id)
     }
 
+    pub fn token_data(&self, token_id: &TokenId) -> Option<&TokenIssuanceData> {
+        self.token_issuance.get(token_id)
+    }
+
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
         let already_present = self.txs.contains_key(&tx_id);
         let is_unconfirmed = match tx.state() {
@@ -282,15 +288,19 @@ impl OutputCache {
 
         self.update_inputs(&tx, is_unconfirmed, &tx_id, already_present)?;
 
-        if let Some(block_info) = get_block_info(&tx) {
-            self.update_outputs(&tx, block_info)?;
-        }
+        self.update_outputs(&tx, get_block_info(&tx), already_present)?;
+
         self.txs.insert(tx_id, tx);
         Ok(())
     }
 
     /// Update the pool states for a newly confirmed transaction
-    fn update_outputs(&mut self, tx: &WalletTx, block_info: BlockInfo) -> Result<(), WalletError> {
+    fn update_outputs(
+        &mut self,
+        tx: &WalletTx,
+        block_info: Option<BlockInfo>,
+        already_present: bool,
+    ) -> Result<(), WalletError> {
         for (idx, output) in tx.outputs().iter().enumerate() {
             match output {
                 TxOutput::ProduceBlockFromStake(_, pool_id) => {
@@ -301,26 +311,34 @@ impl OutputCache {
                     }
                 }
                 TxOutput::CreateStakePool(pool_id, data) => {
-                    self.pools
-                        .entry(*pool_id)
-                        .and_modify(|entry| {
-                            entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
-                        })
-                        .or_insert_with(|| {
-                            PoolData::new(
-                                UtxoOutPoint::new(tx.id(), idx as u32),
-                                block_info,
-                                data.decommission_key().clone(),
-                            )
-                        });
+                    if let Some(block_info) = block_info {
+                        self.pools
+                            .entry(*pool_id)
+                            .and_modify(|entry| {
+                                entry.utxo_outpoint = UtxoOutPoint::new(tx.id(), idx as u32)
+                            })
+                            .or_insert_with(|| {
+                                PoolData::new(
+                                    UtxoOutPoint::new(tx.id(), idx as u32),
+                                    block_info,
+                                    data.decommission_key().clone(),
+                                )
+                            });
+                    }
                 }
                 TxOutput::DelegateStaking(_, delegation_id) => {
+                    if block_info.is_none() {
+                        continue;
+                    }
                     if let Some(delegation_data) = self.delegations.get_mut(delegation_id) {
                         delegation_data.not_staked_yet = false;
                     }
                     // Else it is not ours
                 }
                 TxOutput::CreateDelegationId(destination, pool_id) => {
+                    if block_info.is_none() {
+                        continue;
+                    }
                     let input0_outpoint = tx
                         .inputs()
                         .get(0)
@@ -336,13 +354,21 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
-                | TxOutput::IssueFungibleToken(issuance) => {
+                TxOutput::IssueFungibleToken(issuance) => {
+                    if already_present {
+                        continue;
+                    }
                     let input0_outpoint = tx.inputs();
                     let token_id = make_token_id(input0_outpoint).ok_or(WalletError::NoUtxos)?;
                     match issuance.as_ref() {
                         TokenIssuance::V1(data) => {
-                            self.token_issuance
-                                .insert(token_id, TokenIssuanceData::new(data.total_supply));
+                            self.token_issuance.insert(
+                                token_id,
+                                TokenIssuanceData::new(
+                                    data.total_supply,
+                                    data.reissuance_controller.clone(),
+                                ),
+                            );
                         }
                     }
                 }

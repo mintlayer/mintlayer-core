@@ -159,6 +159,69 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(token_id)
     }
 
+    pub async fn mint_tokens(
+        &mut self,
+        token_id: TokenId,
+        amount: Amount,
+        address: Address<Destination>,
+    ) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = self
+            .wallet
+            .mint_tokens(
+                self.account_index,
+                token_id,
+                amount,
+                address,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn redeem_tokens(
+        &mut self,
+        token_id: TokenId,
+        amount: Amount,
+    ) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = self
+            .wallet
+            .redeem_tokens(
+                self.account_index,
+                token_id,
+                amount,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
+    pub async fn lock_tokens(&mut self, token_id: TokenId) -> Result<(), ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let tx = self
+            .wallet
+            .lock_tokens(
+                self.account_index,
+                token_id,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        self.broadcast_to_mempool(tx).await
+    }
+
     pub async fn send_to_address(
         &mut self,
         address: Address<Destination>,

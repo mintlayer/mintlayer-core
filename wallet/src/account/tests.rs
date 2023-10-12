@@ -212,14 +212,14 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let tx = Transaction::new(0, inputs, outputs).unwrap();
 
-    let req = SendRequest::from_transaction(tx, utxos.clone());
+    let req = SendRequest::from_transaction(tx, utxos.clone()).unwrap();
 
     let sig_tx = account.sign_transaction_from_req(req, &db_tx).unwrap();
 
     let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
-        let destination = Account::get_tx_output_destination(utxos_ref[i].unwrap()).unwrap();
+        let destination = get_tx_output_destination(utxos_ref[i].unwrap()).unwrap();
         verify_signature(&config, destination, &sig_tx, &utxos_ref, i).unwrap();
     }
 }

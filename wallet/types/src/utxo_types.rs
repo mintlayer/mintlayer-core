@@ -31,6 +31,8 @@ pub enum UtxoType {
     ProduceBlockFromStake = 1 << 4,
     CreateDelegationId = 1 << 5,
     DelegateStaking = 1 << 6,
+    MintTokens = 1 << 7,
+    IssueNft = 1 << 8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

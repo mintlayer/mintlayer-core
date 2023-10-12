@@ -27,6 +27,7 @@ use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;
 
+#[derive(Debug)]
 pub struct SelectionResult {
     outputs: Vec<(TxInput, TxOutput)>,
     effective_value: Amount,
@@ -56,6 +57,11 @@ impl SelectionResult {
 
     pub fn get_change(&self) -> Amount {
         self.change
+    }
+
+    pub fn add_change(mut self, change: Amount) -> Result<Self, UtxoSelectorError> {
+        self.change = (self.change + change).ok_or(UtxoSelectorError::AmountArithmeticError)?;
+        Ok(self)
     }
 
     pub fn into_output_pairs(self) -> Vec<(TxInput, TxOutput)> {

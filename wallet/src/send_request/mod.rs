@@ -26,7 +26,7 @@ use common::primitives::{Amount, BlockHeight};
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 
-use crate::WalletResult;
+use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet
 /// on the precise method of sending funds to a designated destination.
@@ -35,7 +35,10 @@ pub struct SendRequest {
     flags: u128,
 
     /// The UTXOs for each input, this can be empty
-    utxos: Vec<TxOutput>,
+    utxos: Vec<Option<TxOutput>>,
+
+    /// destination for each input
+    destinations: Vec<Destination>,
 
     inputs: Vec<TxInput>,
 
@@ -78,6 +81,44 @@ pub fn make_issue_token_outputs(
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
 
     Ok(vec![issuance_output, token_issuance_fee])
+}
+
+pub fn make_mint_token_outputs(
+    token_id: TokenId,
+    amount: Amount,
+    address: Address<Destination>,
+    chain_config: &ChainConfig,
+) -> WalletResult<Vec<TxOutput>> {
+    let destination = address.decode_object(chain_config)?;
+    let mint_output = TxOutput::Transfer(OutputValue::TokenV1(token_id, amount), destination);
+
+    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
+        chain_config.token_min_supply_change_fee(),
+    ));
+
+    Ok(vec![mint_output, token_change_supply_fee])
+}
+
+pub fn make_redeem_token_outputs(
+    token_id: TokenId,
+    amount: Amount,
+    chain_config: &ChainConfig,
+) -> WalletResult<Vec<TxOutput>> {
+    let burn_tokens = TxOutput::Burn(OutputValue::TokenV1(token_id, amount));
+
+    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
+        chain_config.token_min_supply_change_fee(),
+    ));
+
+    Ok(vec![burn_tokens, token_change_supply_fee])
+}
+
+pub fn make_lock_token_outputs(chain_config: &ChainConfig) -> WalletResult<Vec<TxOutput>> {
+    let token_change_supply_fee = TxOutput::Burn(OutputValue::Coin(
+        chain_config.token_min_supply_change_fee(),
+    ));
+
+    Ok(vec![token_change_supply_fee])
 }
 
 pub fn make_create_delegation_output(
@@ -156,43 +197,78 @@ pub struct IssueNftArguments {
     pub destination: Destination,
 }
 
+type TxAndInputs = (Transaction, Vec<Option<TxOutput>>, Vec<Destination>);
+
 impl SendRequest {
     pub fn new() -> Self {
         Self {
             flags: 0,
             utxos: Vec::new(),
+            destinations: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
         }
     }
 
-    pub fn from_transaction(transaction: Transaction, utxos: Vec<TxOutput>) -> Self {
-        Self {
+    pub fn from_transaction(transaction: Transaction, utxos: Vec<TxOutput>) -> WalletResult<Self> {
+        let destinations = utxos
+            .iter()
+            .map(|utxo| {
+                get_tx_output_destination(utxo).cloned().ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
+                })
+            })
+            .collect::<WalletResult<Vec<_>>>()?;
+
+        Ok(Self {
             flags: transaction.flags(),
-            utxos,
+            utxos: utxos.into_iter().map(Some).collect(),
+            destinations,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
-        }
+        })
     }
 
     pub fn inputs(&self) -> &[TxInput] {
         &self.inputs
     }
 
+    pub fn destinations(&self) -> &[Destination] {
+        &self.destinations
+    }
+
     pub fn outputs(&self) -> &[TxOutput] {
         &self.outputs
     }
 
-    pub fn utxos(&self) -> &[TxOutput] {
-        &self.utxos
+    pub fn with_inputs_and_destinations(
+        mut self,
+        utxos: impl IntoIterator<Item = (TxInput, Destination)>,
+    ) -> Self {
+        for (outpoint, destination) in utxos {
+            self.inputs.push(outpoint);
+            self.destinations.push(destination);
+            self.utxos.push(None);
+        }
+
+        self
     }
 
-    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (TxInput, TxOutput)>) -> Self {
+    pub fn with_inputs(
+        mut self,
+        utxos: impl IntoIterator<Item = (TxInput, TxOutput)>,
+    ) -> WalletResult<Self> {
         for (outpoint, txo) in utxos {
             self.inputs.push(outpoint);
-            self.utxos.push(txo);
+            self.destinations.push(
+                get_tx_output_destination(&txo).cloned().ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                })?,
+            );
+            self.utxos.push(Some(txo));
         }
-        self
+
+        Ok(self)
     }
 
     pub fn with_outputs(mut self, outputs: impl IntoIterator<Item = TxOutput>) -> Self {
@@ -204,10 +280,22 @@ impl SendRequest {
         &mut self.outputs
     }
 
-    pub fn into_transaction_and_utxos(
-        self,
-    ) -> Result<(Transaction, Vec<TxOutput>), TransactionCreationError> {
+    pub fn into_transaction_and_utxos(self) -> Result<TxAndInputs, TransactionCreationError> {
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
-        Ok((tx, self.utxos))
+        Ok((tx, self.utxos, self.destinations))
+    }
+}
+
+pub fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+    match txo {
+        TxOutput::Transfer(_, d)
+        | TxOutput::LockThenTransfer(_, d, _)
+        | TxOutput::CreateDelegationId(d, _)
+        | TxOutput::IssueNft(_, _, d)
+        | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
+        TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+        TxOutput::IssueFungibleToken(_) | TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => {
+            None
+        }
     }
 }
