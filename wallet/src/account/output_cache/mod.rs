@@ -485,7 +485,7 @@ impl OutputCache {
                                         outpoint,
                                         tx_id,
                                     )?;
-                                    data.total_supply.mint(*amount)?;
+                                    data.total_supply = data.total_supply.mint(*amount)?;
                                 }
                             }
                             AccountOp::UnmintTokens(token_id) => {
@@ -498,7 +498,7 @@ impl OutputCache {
                                         tx_id,
                                     )?;
                                     let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                                    data.total_supply.redeem(amount)?;
+                                    data.total_supply = data.total_supply.redeem(amount)?;
                                 }
                             }
                             | AccountOp::LockTokenSupply(token_id) => {
@@ -510,7 +510,7 @@ impl OutputCache {
                                         outpoint,
                                         tx_id,
                                     )?;
-                                    data.total_supply.lock()?;
+                                    data.total_supply = data.total_supply.lock()?;
                                 }
                             }
                         }
@@ -605,7 +605,7 @@ impl OutputCache {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.total_supply.redeem(*amount)?;
+                                data.total_supply = data.total_supply.redeem(*amount)?;
                             }
                         }
 
@@ -615,7 +615,7 @@ impl OutputCache {
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                                 let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                                data.total_supply.mint(amount)?;
+                                data.total_supply = data.total_supply.mint(amount)?;
                             }
                         }
                         AccountOp::LockTokenSupply(token_id) => {
@@ -623,7 +623,7 @@ impl OutputCache {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.total_supply.unlock()?;
+                                data.total_supply = data.total_supply.unlock()?;
                             }
                         }
                     },
@@ -806,7 +806,8 @@ impl OutputCache {
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
                                                 );
-                                                data.total_supply.redeem(*amount)?;
+                                                data.total_supply =
+                                                    data.total_supply.redeem(*amount)?;
                                             }
                                         }
                                         | AccountOp::UnmintTokens(token_id) => {
@@ -822,7 +823,8 @@ impl OutputCache {
                                                     tx.get_transaction().outputs(),
                                                     token_id,
                                                 )?;
-                                                data.total_supply.mint(amount)?;
+                                                data.total_supply =
+                                                    data.total_supply.mint(amount)?;
                                             }
                                         }
                                         | AccountOp::LockTokenSupply(token_id) => {
@@ -834,7 +836,7 @@ impl OutputCache {
                                                     &self.unconfirmed_descendants,
                                                     tx_id.into(),
                                                 );
-                                                data.total_supply.unlock()?;
+                                                data.total_supply = data.total_supply.unlock()?;
                                             }
                                         }
                                     },

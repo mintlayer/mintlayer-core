@@ -188,10 +188,7 @@ impl Account {
         let (utxos, selection_algo) = if input_utxos.is_empty() {
             (
                 self.get_utxos(
-                    UtxoType::Transfer
-                        | UtxoType::LockThenTransfer
-                        | UtxoType::IssueNft
-                        | UtxoType::MintTokens,
+                    UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::TokensOp,
                     median_time,
                     UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
                     WithLocked::Unlocked,
@@ -721,11 +718,22 @@ impl Account {
         let outputs =
             make_mint_token_outputs(token_id, amount, address, self.chain_config.as_ref())?;
 
-        self.find_token(&token_id)?.total_supply.check_can_mint(amount)?;
+        let token_data = self.find_token(&token_id)?;
+        token_data.total_supply.check_can_mint(amount)?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::MintTokens(token_id, amount),
+        ));
+        let reissuance_controller = token_data.reissuance_controller.clone();
 
         self.change_token_supply_transaction(
-            token_id,
-            amount,
+            reissuance_controller,
+            tx_input,
             outputs,
             db_tx,
             median_time,
@@ -743,11 +751,22 @@ impl Account {
     ) -> WalletResult<SignedTransaction> {
         let outputs = make_redeem_token_outputs(token_id, amount, self.chain_config.as_ref())?;
 
-        self.find_token(&token_id)?.total_supply.check_can_redeem(amount)?;
+        let token_data = self.find_token(&token_id)?;
+        token_data.total_supply.check_can_redeem(amount)?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::UnmintTokens(token_id),
+        ));
+        let reissuance_controller = token_data.reissuance_controller.clone();
 
         self.change_token_supply_transaction(
-            token_id,
-            amount,
+            reissuance_controller,
+            tx_input,
             outputs,
             db_tx,
             median_time,
@@ -764,11 +783,22 @@ impl Account {
     ) -> WalletResult<SignedTransaction> {
         let outputs = make_lock_token_outputs(self.chain_config.as_ref())?;
 
-        self.find_token(&token_id)?.total_supply.check_can_lock()?;
+        let token_data = self.find_token(&token_id)?;
+        token_data.total_supply.check_can_lock()?;
+
+        let nonce = token_data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
+        let tx_input = TxInput::Account(AccountOutPoint::new(
+            nonce,
+            AccountOp::LockTokenSupply(token_id),
+        ));
+        let reissuance_controller = token_data.reissuance_controller.clone();
 
         self.change_token_supply_transaction(
-            token_id,
-            Amount::ZERO,
+            reissuance_controller,
+            tx_input,
             outputs,
             db_tx,
             median_time,
@@ -778,28 +808,16 @@ impl Account {
 
     fn change_token_supply_transaction(
         &mut self,
-        token_id: TokenId,
-        amount: Amount,
+        reissuance_controller: Destination,
+        tx_input: TxInput,
         outputs: Vec<TxOutput>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> Result<SignedTransaction, WalletError> {
-        let token_data = self.find_token(&token_id)?;
-
-        let nonce = token_data
-            .last_nonce
-            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
-            .ok_or(WalletError::TokenIssuanceNonceOverflow(token_id))?;
-        //FIXME: pass different input in
-        let tx_input = TxInput::Account(AccountOutPoint::new(
-            nonce,
-            AccountOp::MintTokens(token_id, amount),
-        ));
-
         let request = SendRequest::new()
             .with_outputs(outputs)
-            .with_inputs_and_destinations([(tx_input, token_data.reissuance_controller.clone())]);
+            .with_inputs_and_destinations([(tx_input, reissuance_controller)]);
 
         let request = self.select_inputs_for_send_request(
             request,
@@ -1416,7 +1434,9 @@ fn group_preselected_inputs(
                 AccountOp::MintTokens(token_id, amount) => {
                     update_preselected_inputs(Currency::Token(*token_id), *amount, *fee)?;
                 }
-                AccountOp::LockTokenSupply(_) | AccountOp::UnmintTokens(_) => {}
+                AccountOp::LockTokenSupply(token_id) | AccountOp::UnmintTokens(token_id) => {
+                    update_preselected_inputs(Currency::Token(*token_id), Amount::ZERO, *fee)?;
+                }
                 AccountOp::SpendDelegationBalance(_, amount) => {
                     update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
