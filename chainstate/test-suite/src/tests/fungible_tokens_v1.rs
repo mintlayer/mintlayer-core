@@ -19,18 +19,15 @@ use chainstate::{
 };
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::tokens::{
-    make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
-};
-use common::chain::{AccountType, Block, GenBlock, Transaction, UtxoOutPoint};
-use common::primitives::signed_amount::SignedAmount;
-use common::primitives::Id;
 use common::{
     chain::{
-        output_value::OutputValue, signature::inputsig::InputWitness, AccountNonce,
-        AccountSpending, Destination, OutPointSourceId, TokenOutput, TxInput, TxOutput,
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
+        tokens::{make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        AccountNonce, AccountSpending, AccountType, Block, Destination, GenBlock, OutPointSourceId,
+        TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
 };
 use crypto::random::Rng;
 use rstest::rstest;
@@ -569,15 +566,16 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             nonce,
-                            AccountSpending::TokenCirculatingSupply(
-                                token_id,
-                                amount_to_redeem_over_limit,
-                            ),
+                            AccountSpending::TokenCirculatingSupply(token_id),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
                         TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -594,12 +592,9 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::NotEnoughCirculatingSupplyToRedeem(
-                        amount_to_mint,
-                        amount_to_redeem_over_limit,
-                        token_id
-                    )
+                ConnectTransactionError::AttemptToPrintMoney(
+                    amount_to_mint,
+                    amount_to_redeem_over_limit,
                 )
             ))
         );
@@ -611,7 +606,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             nonce,
-                            AccountSpending::TokenCirculatingSupply(token_id, amount_to_redeem),
+                            AccountSpending::TokenCirculatingSupply(token_id),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -738,19 +733,13 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
                 .build_and_process()
         };
 
-        let result = mint_from_account(AccountSpending::TokenCirculatingSupply(
-            token_id,
-            amount_to_mint,
-        ));
-        assert!(matches!(
+        let result = mint_from_account(AccountSpending::TokenCirculatingSupply(token_id));
+        assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToViolateBurnConstraints,
-                    _
-                )
+                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, amount_to_mint)
             ))
-        ));
+        );
 
         let result = mint_from_account(AccountSpending::TokenSupplyLock(token_id));
         assert_eq!(
@@ -999,7 +988,150 @@ fn redeem_from_lock_supply_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn try_to_bypass_burning_tokens_on_redeem(#[case] seed: Seed) {
+fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let amount_to_mint =
+            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        let nonce = BlockchainStorageRead::get_account_nonce_count(
+            &tf.storage,
+            AccountType::TokenSupply(token_id),
+        )
+        .unwrap()
+        .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+
+        // Try to skip burning tokens at all
+        // In this case no tokens are unminted
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            nonce,
+                            AccountSpending::TokenCirculatingSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some(amount_to_mint));
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn burning_less_then_input_on_unmint(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let amount_to_mint =
+            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+        let amount_to_burn = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        let nonce = BlockchainStorageRead::get_account_nonce_count(
+            &tf.storage,
+            AccountType::TokenSupply(token_id),
+        )
+        .unwrap()
+        .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+
+        // it's ok to burn less tokens than the input has. In this case only the burned amount will be unminted
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            nonce,
+                            AccountSpending::TokenCirculatingSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_burn,
+                    )))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(
+            actual_supply,
+            Some((amount_to_mint - amount_to_burn).unwrap())
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -1024,6 +1156,30 @@ fn try_to_bypass_burning_tokens_on_redeem(#[case] seed: Seed) {
             true,
         );
 
+        // split coins in 2 utxo so that one can be used to try to cheat burning rules
+        let tx_transfer_tokens = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(
+                    token_id,
+                    (amount_to_redeem - Amount::from_atoms(1)).unwrap(),
+                ),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_transfer_tokens_id = tx_transfer_tokens.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(tx_transfer_tokens)
+            .build_and_process()
+            .unwrap();
+
         let nonce = BlockchainStorageRead::get_account_nonce_count(
             &tf.storage,
             AccountType::TokenSupply(token_id),
@@ -1031,74 +1187,44 @@ fn try_to_bypass_burning_tokens_on_redeem(#[case] seed: Seed) {
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
-        // Try to skip burning tokens at all
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_account(
-                    nonce,
-                    AccountSpending::TokenCirculatingSupply(token_id, amount_to_redeem),
-                ),
-                InputWitness::NoSignature(None),
+        // The outputs contain proper amount of burn tokens
+        // But inputs use a utxo that is less by 1 and thus should fail to satisfy constraints
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            nonce,
+                            AccountSpending::TokenCirculatingSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(tx_transfer_tokens_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_redeem,
+                    )))
+                    .build(),
             )
-            .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 1),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 2),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Burn(OutputValue::Coin(
-                token_min_supply_change_fee,
-            )))
-            .build();
-        let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+            .build_and_process();
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToViolateBurnConstraints,
-                    tx_id.into()
-                )
-            ))
-        );
-
-        // Try to burn less than required
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_account(
-                    nonce,
-                    AccountSpending::TokenCirculatingSupply(token_id, amount_to_redeem),
-                ),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 1),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 2),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Burn(OutputValue::Coin(
-                token_min_supply_change_fee,
-            )))
-            .add_output(TxOutput::Burn(OutputValue::TokenV1(
-                token_id,
-                (amount_to_redeem - Amount::from_atoms(1)).unwrap(),
-            )))
-            .build();
-        let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
-
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    chainstate::IOPolicyError::AttemptToViolateBurnConstraints,
-                    tx_id.into()
+                ConnectTransactionError::AttemptToPrintMoney(
+                    (amount_to_redeem - Amount::from_atoms(1)).unwrap(),
+                    amount_to_redeem
                 )
             ))
         );
@@ -1240,12 +1366,16 @@ fn check_lockable_supply(#[case] seed: Seed) {
                     .add_input(
                         TxInput::from_account(
                             nonce,
-                            AccountSpending::TokenCirculatingSupply(token_id, amount_to_redeem),
+                            AccountSpending::TokenCirculatingSupply(token_id),
                         ),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
                         TxInput::from_utxo(lock_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(OutputValue::Coin(

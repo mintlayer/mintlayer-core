@@ -170,11 +170,11 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::TokenTotalSupply(token_id, amount)
-            | AccountSpending::TokenCirculatingSupply(token_id, amount) => {
+            AccountSpending::TokenTotalSupply(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
-            AccountSpending::TokenSupplyLock(token_id) => {
+            AccountSpending::TokenCirculatingSupply(token_id)
+            | AccountSpending::TokenSupplyLock(token_id) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -366,6 +366,25 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     };
 
     Ok(())
+}
+
+pub fn calculate_tokens_burned_in_outputs(outputs: &[TxOutput]) -> BTreeMap<TokenId, Amount> {
+    outputs
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Burn(output_value) => match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                OutputValue::TokenV1(token_id, amount) => Some((*token_id, *amount)),
+            },
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::TokensOp(_) => None,
+        })
+        .collect::<BTreeMap<_, _>>()
 }
 
 // TODO: add more tests

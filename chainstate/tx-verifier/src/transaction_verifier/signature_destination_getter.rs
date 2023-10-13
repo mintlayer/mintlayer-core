@@ -147,7 +147,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             .spend_destination()
                             .clone()),
                         AccountSpending::TokenTotalSupply(token_id, _)
-                        | AccountSpending::TokenCirculatingSupply(token_id, _)
+                        | AccountSpending::TokenCirculatingSupply(token_id)
                         | AccountSpending::TokenSupplyLock(token_id) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),

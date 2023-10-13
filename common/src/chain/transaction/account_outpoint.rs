@@ -34,7 +34,7 @@ impl From<AccountSpending> for AccountType {
         match spending {
             AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
             AccountSpending::TokenTotalSupply(id, _)
-            | AccountSpending::TokenCirculatingSupply(id, _)
+            | AccountSpending::TokenCirculatingSupply(id)
             | AccountSpending::TokenSupplyLock(id) => AccountType::TokenSupply(id),
         }
     }
@@ -54,7 +54,7 @@ pub enum AccountSpending {
     // of tokens is no longer supported by underlying fiat currency, which can only be done by
     // reissuance controller.
     #[codec(index = 2)]
-    TokenCirculatingSupply(TokenId, Amount),
+    TokenCirculatingSupply(TokenId),
     // After supply is locked tokens cannot be minted or redeemed ever again.
     // Works only for Lockable tokens supply.
     #[codec(index = 3)]

@@ -550,7 +550,7 @@ where
                             Some(res)
                         }
                         AccountSpending::TokenTotalSupply(_, _)
-                        | AccountSpending::TokenCirculatingSupply(_, _)
+                        | AccountSpending::TokenCirculatingSupply(_)
                         | AccountSpending::TokenSupplyLock(_) => None,
                     }
                 }
@@ -784,12 +784,23 @@ where
                         });
                         Some(res)
                     }
-                    AccountSpending::TokenCirculatingSupply(token_id, amount) => {
-                        let res = self.spend_input_from_account(account_input).and_then(|_| {
-                            self.tokens_accounting_cache
-                                .redeem_tokens(*token_id, *amount)
-                                .map_err(ConnectTransactionError::TokensAccountingError)
-                        });
+                    AccountSpending::TokenCirculatingSupply(token_id) => {
+                        let res = self
+                            .spend_input_from_account(account_input)
+                            .map(|_| {
+                                // actual amount to unmint is determined by the number of burned tokens in the outputs
+                                let total_burned_map =
+                                    transferred_amount_check::calculate_tokens_burned_in_outputs(
+                                        tx.outputs(),
+                                    );
+                                total_burned_map.get(token_id).cloned()
+                            })
+                            .transpose()? // return if no tokens were burned
+                            .and_then(|total_burned| {
+                                self.tokens_accounting_cache
+                                    .redeem_tokens(*token_id, total_burned)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
                         Some(res)
                     }
                     AccountSpending::TokenSupplyLock(token_id) => {
