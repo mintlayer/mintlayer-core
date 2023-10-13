@@ -60,7 +60,7 @@ impl TxDependency {
                 Self::DelegationAccount(TxAccountDependency::new((*acct).into(), nonce))
             }
             AccountSpending::TokenTotalSupply(_, _)
-            | AccountSpending::TokenCirculatingSupply(_, _)
+            | AccountSpending::TokenCirculatingSupply(_)
             | AccountSpending::TokenSupplyLock(_) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new((*acct).into(), nonce))
             }

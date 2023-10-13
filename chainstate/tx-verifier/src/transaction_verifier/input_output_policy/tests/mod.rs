@@ -18,7 +18,6 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        tokens::TokenId,
         Block, DelegationId, GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Compact, Id, H256},

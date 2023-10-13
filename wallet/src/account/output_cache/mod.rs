@@ -282,7 +282,7 @@ impl OutputCache {
                                 }
                             }
                             AccountSpending::TokenTotalSupply(_, _)
-                            | AccountSpending::TokenCirculatingSupply(_, _)
+                            | AccountSpending::TokenCirculatingSupply(_)
                             | AccountSpending::TokenSupplyLock(_) => {
                                 // TODO: add support for tokens v1
                                 // See https://github.com/mintlayer/mintlayer-core/issues/1237
@@ -345,7 +345,7 @@ impl OutputCache {
                             }
                         }
                         AccountSpending::TokenTotalSupply(_, _)
-                        | AccountSpending::TokenCirculatingSupply(_, _)
+                        | AccountSpending::TokenCirculatingSupply(_)
                         | AccountSpending::TokenSupplyLock(_) => {
                             // TODO: add support for tokens v1
                             // See https://github.com/mintlayer/mintlayer-core/issues/1237
@@ -517,7 +517,7 @@ impl OutputCache {
                                             }
                                         }
                                         AccountSpending::TokenTotalSupply(_, _)
-                                        | AccountSpending::TokenCirculatingSupply(_, _)
+                                        | AccountSpending::TokenCirculatingSupply(_)
                                         | AccountSpending::TokenSupplyLock(_) => {
                                             // TODO: add support for tokens v1
                                             // See https://github.com/mintlayer/mintlayer-core/issues/1237

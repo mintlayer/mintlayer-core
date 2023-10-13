@@ -1005,7 +1005,7 @@ impl Account {
                     self.find_delegation(delegation_id).is_ok()
                 }
                 AccountSpending::TokenTotalSupply(_, _)
-                | AccountSpending::TokenCirculatingSupply(_, _)
+                | AccountSpending::TokenCirculatingSupply(_)
                 | AccountSpending::TokenSupplyLock(_) => {
                     // TODO: add support for tokens v1
                     // See https://github.com/mintlayer/mintlayer-core/issues/1237
