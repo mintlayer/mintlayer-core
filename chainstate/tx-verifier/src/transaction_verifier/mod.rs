@@ -58,7 +58,7 @@ use self::{
     pos_accounting_undo_cache::{PoSAccountingBlockUndoCache, PoSAccountingBlockUndoEntry},
     signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
-    token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
+    token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
     tokens_accounting_undo_cache::{
         TokensAccountingBlockUndoCache, TokensAccountingBlockUndoEntry,
     },
@@ -787,13 +787,15 @@ where
                     AccountSpending::TokenCirculatingSupply(token_id) => {
                         let res = self
                             .spend_input_from_account(account_input)
-                            .map(|_| {
+                            .and_then(|_| {
                                 // actual amount to unmint is determined by the number of burned tokens in the outputs
                                 let total_burned_map =
                                     transferred_amount_check::calculate_tokens_burned_in_outputs(
                                         tx.outputs(),
-                                    );
-                                total_burned_map.get(token_id).cloned()
+                                    )?;
+                                Ok(total_burned_map
+                                    .get(&CoinOrTokenId::TokenId(*token_id))
+                                    .cloned())
                             })
                             .transpose()? // return if no tokens were burned
                             .and_then(|total_burned| {

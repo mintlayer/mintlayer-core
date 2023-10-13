@@ -32,7 +32,7 @@ use common::{
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::{
-    gen_text_with_non_ascii,
+    decompose_value, gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
     random_string,
 };
@@ -1156,7 +1156,7 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             true,
         );
 
-        // split coins in 2 utxo so that one can be used to try to cheat burning rules
+        // split tokens in 2 utxo so that one can be used to try to cheat burning rules
         let tx_transfer_tokens = TransactionBuilder::new()
             .add_input(
                 TxInput::from_utxo(mint_tx_id.into(), 1),
@@ -1227,6 +1227,110 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
                     amount_to_unmint
                 )
             ))
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        let split_outputs = decompose_value(&mut rng, amount_to_unmint.into_atoms())
+            .iter()
+            .map(|value| {
+                TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, Amount::from_atoms(*value)),
+                    Destination::AnyoneCanSpend,
+                )
+            })
+            .collect::<Vec<_>>();
+        let number_of_tokens_utxos = split_outputs.len();
+
+        // split tokens into random number of utxos
+        let tx_split_tokens = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .with_outputs(split_outputs)
+            .build();
+        let tx_split_tokens_id = tx_split_tokens.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(tx_split_tokens)
+            .build_and_process()
+            .unwrap();
+
+        let nonce = BlockchainStorageRead::get_account_nonce_count(
+            &tf.storage,
+            AccountType::TokenSupply(token_id),
+        )
+        .unwrap()
+        .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+
+        // The outputs contain proper amount of burn tokens
+        // But inputs use a utxo that is less by 1 and thus should fail to satisfy constraints
+        let inputs_to_unmint = (0..number_of_tokens_utxos)
+            .map(|i| TxInput::from_utxo(tx_split_tokens_id.into(), i as u32))
+            .collect::<Vec<_>>();
+        let burn_outputs = decompose_value(&mut rng, amount_to_unmint.into_atoms())
+            .iter()
+            .map(|value| TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::from_atoms(*value))))
+            .collect::<Vec<_>>();
+        let witnesses = vec![InputWitness::NoSignature(None); inputs_to_unmint.len()];
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .with_inputs(inputs_to_unmint)
+                    .with_witnesses(witnesses)
+                    .add_input(
+                        TxInput::from_account(
+                            nonce,
+                            AccountSpending::TokenCirculatingSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .with_outputs(burn_outputs)
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(
+            actual_supply,
+            Some((amount_to_mint - amount_to_unmint).unwrap())
         );
     });
 }
