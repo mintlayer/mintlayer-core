@@ -35,7 +35,7 @@ use super::IOPolicyError;
 /// TODO: this struct can be extended to collect tokens replacing `AmountsMap`
 pub struct ConstrainedValueAccumulator {
     unconstrained_value: Amount,
-    timelock_constrained: BTreeMap<BlockDistance, Amount>, // FIXME: don't like how it looks cant prove that it's correct
+    timelock_constrained: BTreeMap<BlockDistance, Amount>,
     burn_constrained: BTreeMap<TokenId, Amount>,
 }
 
@@ -376,6 +376,90 @@ mod tests {
             constraints_accumulator.consume().unwrap().into_atoms(),
             fee_atoms
         );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
+            .build();
+
+        let pool_id = PoolId::new(H256::zero());
+        let staked_atoms = rng.gen_range(100..1000);
+        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
+
+        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
+
+        let inputs = vec![
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            ),
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                1,
+            ),
+        ];
+        let inputs_utxos = vec![
+            Some(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            )),
+            Some(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        // it's an error if output includes staked coins
+        let outputs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(staked_atoms)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+            constraints_accumulator
+                .process_inputs(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    pledge_getter,
+                    &inputs,
+                    &inputs_utxos,
+                )
+                .unwrap();
+
+            let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+            assert_eq!(
+                result,
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+            );
+        }
+
+        // it's not an error if output does not include staked coins
+        let outputs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+            constraints_accumulator
+                .process_inputs(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    pledge_getter,
+                    &inputs,
+                    &inputs_utxos,
+                )
+                .unwrap();
+
+            constraints_accumulator.process_outputs(&outputs).unwrap();
+        }
     }
 
     #[rstest]
