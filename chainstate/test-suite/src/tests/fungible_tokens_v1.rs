@@ -465,7 +465,7 @@ fn token_issue_cannot_be_spent(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn mint_redeem_fixed_supply(#[case] seed: Seed) {
+fn mint_unmint_fixed_supply(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -481,8 +481,8 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms()));
         let amount_to_mint_over_limit = (total_supply + Amount::from_atoms(1)).unwrap();
 
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
-        let amount_to_redeem_over_limit = (amount_to_mint + Amount::from_atoms(1)).unwrap();
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint_over_limit = (amount_to_mint + Amount::from_atoms(1)).unwrap();
 
         // Mint over the limit
         let result = tf
@@ -558,7 +558,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
             TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
-        // Redeem more than minted
+        // Unmint more than minted
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -583,7 +583,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem_over_limit,
+                        amount_to_unmint_over_limit,
                     )))
                     .build(),
             )
@@ -594,12 +594,12 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::AttemptToPrintMoney(
                     amount_to_mint,
-                    amount_to_redeem_over_limit,
+                    amount_to_unmint_over_limit,
                 )
             ))
         );
 
-        // Redeem some tokens
+        // Unmint some tokens
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -623,7 +623,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem,
+                        amount_to_unmint,
                     )))
                     .build(),
             )
@@ -634,7 +634,7 @@ fn mint_redeem_fixed_supply(#[case] seed: Seed) {
             TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
         assert_eq!(
             actual_supply,
-            Some((amount_to_mint - amount_to_redeem).unwrap())
+            Some((amount_to_mint - amount_to_unmint).unwrap())
         );
     });
 }
@@ -845,7 +845,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn redeem_from_total_supply_account(#[case] seed: Seed) {
+fn unmint_from_total_supply_account(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -854,7 +854,7 @@ fn redeem_from_total_supply_account(#[case] seed: Seed) {
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1_000_000));
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, _, utxo_with_change) =
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
@@ -876,14 +876,14 @@ fn redeem_from_total_supply_account(#[case] seed: Seed) {
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
-        // Redeeming from TokenTotalSupply is not an error because it's basically minting and burning at once
+        // Unminting from TokenTotalSupply is not an error because it's basically minting and burning at once
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
                         TxInput::from_account(
                             nonce,
-                            AccountSpending::TokenTotalSupply(token_id, amount_to_redeem),
+                            AccountSpending::TokenTotalSupply(token_id, amount_to_unmint),
                         ),
                         InputWitness::NoSignature(None),
                     )
@@ -900,7 +900,7 @@ fn redeem_from_total_supply_account(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem,
+                        amount_to_unmint,
                     )))
                     .build(),
             )
@@ -911,7 +911,7 @@ fn redeem_from_total_supply_account(#[case] seed: Seed) {
             TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
         assert_eq!(
             circulating_supply,
-            Some((amount_to_mint + amount_to_redeem).unwrap())
+            Some((amount_to_mint + amount_to_unmint).unwrap())
         );
     });
 }
@@ -919,7 +919,7 @@ fn redeem_from_total_supply_account(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn redeem_from_lock_supply_account(#[case] seed: Seed) {
+fn unmint_from_lock_supply_account(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -929,7 +929,7 @@ fn redeem_from_lock_supply_account(#[case] seed: Seed) {
 
         let amount_to_mint =
             Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, _, utxo_with_change) =
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
@@ -951,7 +951,7 @@ fn redeem_from_lock_supply_account(#[case] seed: Seed) {
         .unwrap()
         .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
 
-        // Redeeming from TokenSupplyLock is not an error because it's basically just locking and burning at once
+        // Unminting from TokenSupplyLock is not an error because it's basically just locking and burning at once
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -972,7 +972,7 @@ fn redeem_from_lock_supply_account(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem,
+                        amount_to_unmint,
                     )))
                     .build(),
             )
@@ -1141,7 +1141,7 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
 
         let amount_to_mint =
             Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
         let (token_id, _, utxo_with_change) =
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
@@ -1165,7 +1165,7 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(
                     token_id,
-                    (amount_to_redeem - Amount::from_atoms(1)).unwrap(),
+                    (amount_to_unmint - Amount::from_atoms(1)).unwrap(),
                 ),
                 Destination::AnyoneCanSpend,
             ))
@@ -1213,7 +1213,7 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem,
+                        amount_to_unmint,
                     )))
                     .build(),
             )
@@ -1223,8 +1223,8 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::AttemptToPrintMoney(
-                    (amount_to_redeem - Amount::from_atoms(1)).unwrap(),
-                    amount_to_redeem
+                    (amount_to_unmint - Amount::from_atoms(1)).unwrap(),
+                    amount_to_unmint
                 )
             ))
         );
@@ -1247,7 +1247,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
@@ -1358,7 +1358,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
             ))
         );
 
-        // Try to redeem some tokens
+        // Try to unmint some tokens
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1383,7 +1383,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                     )))
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(
                         token_id,
-                        amount_to_redeem,
+                        amount_to_unmint,
                     )))
                     .build(),
             )
@@ -1393,7 +1393,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotRedeemFromLockedSupply(token_id)
+                    tokens_accounting::Error::CannotUnmintFromLockedSupply(token_id)
                 )
             ))
         );
@@ -1567,7 +1567,7 @@ fn supply_change_fees(#[case] seed: Seed) {
             ))
         ));
 
-        // Try redeem with insufficient fee
+        // Try unmint with insufficient fee
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1630,7 +1630,7 @@ fn supply_change_fees(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
+fn lock_and_unmint_outputs_cannot_be_spent(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -1643,7 +1643,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
         // Mint some tokens
         let mint_tx = TransactionBuilder::new()
@@ -1679,12 +1679,12 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
             TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
         assert_eq!(actual_supply, Some(amount_to_mint));
 
-        // Redeem some tokens
-        let redeem_tx = TransactionBuilder::new()
+        // Unmint some tokens
+        let unmint_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_account(
                     nonce,
-                    AccountSpending::TokenTotalSupply(token_id, amount_to_redeem),
+                    AccountSpending::TokenTotalSupply(token_id, amount_to_unmint),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -1701,11 +1701,11 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
             )))
             .add_output(TxOutput::Burn(OutputValue::TokenV1(
                 token_id,
-                amount_to_redeem,
+                amount_to_unmint,
             )))
             .build();
-        let redeem_tx_id = redeem_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(redeem_tx).build_and_process().unwrap();
+        let unmint_tx_id = unmint_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(unmint_tx).build_and_process().unwrap();
         nonce = nonce.increment().unwrap();
 
         // Lock the supply
@@ -1715,7 +1715,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::from_utxo(redeem_tx_id.into(), 0),
+                TxInput::from_utxo(unmint_tx_id.into(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -1725,13 +1725,13 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
         let lock_tx_id = lock_tx.transaction().get_id();
         tf.make_block_builder().add_transaction(lock_tx).build_and_process().unwrap();
 
-        // Try to spend redeem output
+        // Try to spend unmint output
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(redeem_tx_id.into(), 1),
+                        TxInput::from_utxo(unmint_tx_id.into(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1746,7 +1746,7 @@ fn lock_and_redeem_outputs_cannot_be_spent(#[case] seed: Seed) {
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::MissingOutputOrSpent(common::chain::UtxoOutPoint::new(
-                    redeem_tx_id.into(),
+                    unmint_tx_id.into(),
                     1
                 ))
             ))

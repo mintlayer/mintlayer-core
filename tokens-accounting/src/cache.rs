@@ -23,8 +23,8 @@ use crate::{
     data::{TokenData, TokensAccountingDeltaData},
     error::Error,
     operations::{
-        BurnTokenUndo, IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
-        TokensAccountingOperations,
+        IssueTokenUndo, LockSupplyUndo, MintTokenUndo, TokenAccountingUndo,
+        TokensAccountingOperations, UnmintTokenUndo,
     },
     view::TokensAccountingView,
     FlushableTokensAccountingView,
@@ -138,7 +138,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         }))
     }
 
-    fn redeem_tokens(
+    fn unmint_tokens(
         &mut self,
         id: TokenId,
         amount_to_burn: Amount,
@@ -150,13 +150,13 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         match token_data {
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
-                    return Err(Error::CannotRedeemFromLockedSupply(id));
+                    return Err(Error::CannotUnmintFromLockedSupply(id));
                 }
             }
         };
 
         if circulating_supply < amount_to_burn {
-            return Err(Error::NotEnoughCirculatingSupplyToRedeem(
+            return Err(Error::NotEnoughCirculatingSupplyToUnmint(
                 circulating_supply,
                 amount_to_burn,
                 id,
@@ -165,7 +165,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
 
         self.data.circulating_supply.sub_unsigned(id, amount_to_burn)?;
 
-        Ok(TokenAccountingUndo::BurnTokens(BurnTokenUndo {
+        Ok(TokenAccountingUndo::UnmintTokens(UnmintTokenUndo {
             id,
             amount_to_burn,
         }))
@@ -212,7 +212,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                 .circulating_supply
                 .sub_unsigned(undo.id, undo.amount_to_add)
                 .map_err(Error::AccountingError),
-            TokenAccountingUndo::BurnTokens(undo) => self
+            TokenAccountingUndo::UnmintTokens(undo) => self
                 .data
                 .circulating_supply
                 .add_unsigned(undo.id, undo.amount_to_burn)

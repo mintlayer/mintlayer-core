@@ -50,12 +50,12 @@ pub enum AccountSpending {
     // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 1)]
     TokenTotalSupply(TokenId, Amount),
-    // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount
+    // Take tokens out of circulation. Not the same as Burn because unmintint means that certain amount
     // of tokens is no longer supported by underlying fiat currency, which can only be done by
     // reissuance controller.
     #[codec(index = 2)]
     TokenCirculatingSupply(TokenId),
-    // After supply is locked tokens cannot be minted or redeemed ever again.
+    // After supply is locked tokens cannot be minted or unminted ever again.
     // Works only for Lockable tokens supply.
     #[codec(index = 3)]
     TokenSupplyLock(TokenId),

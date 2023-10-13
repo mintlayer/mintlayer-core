@@ -296,13 +296,13 @@ fn mint_token_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn redeem_token_and_flush(#[case] seed: Seed) {
+fn unmint_token_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = make_token_id(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -310,7 +310,7 @@ fn redeem_token_and_flush(#[case] seed: Seed) {
     );
 
     let mut cache = TokensAccountingCache::new(&mut storage);
-    let _ = cache.redeem_tokens(token_id, amount_to_redeem).unwrap();
+    let _ = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
@@ -318,7 +318,7 @@ fn redeem_token_and_flush(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        amount_to_mint - amount_to_redeem
+        amount_to_mint - amount_to_unmint
     );
 
     let consumed_data = cache.consume();
@@ -327,7 +327,7 @@ fn redeem_token_and_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data)]),
-        BTreeMap::from_iter([(token_id, (amount_to_mint - amount_to_redeem).unwrap())]),
+        BTreeMap::from_iter([(token_id, (amount_to_mint - amount_to_unmint).unwrap())]),
     );
 
     assert_eq!(storage, expected_storage);
@@ -336,13 +336,13 @@ fn redeem_token_and_flush(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn redeem_token_undo(#[case] seed: Seed) {
+fn unmint_token_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = make_token_id(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -350,7 +350,7 @@ fn redeem_token_undo(#[case] seed: Seed) {
     );
 
     let mut cache = TokensAccountingCache::new(&mut storage);
-    let undo = cache.redeem_tokens(token_id, amount_to_redeem).unwrap();
+    let undo = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
@@ -358,7 +358,7 @@ fn redeem_token_undo(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        amount_to_mint - amount_to_redeem
+        amount_to_mint - amount_to_unmint
     );
 
     cache.undo(undo).unwrap();
@@ -376,7 +376,7 @@ fn redeem_token_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn redeem_token_multiple_times_and_over_minted(#[case] seed: Seed) {
+fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let total_supply = Amount::from_atoms(rng.gen_range(100..100_000));
@@ -392,8 +392,8 @@ fn redeem_token_multiple_times_and_over_minted(#[case] seed: Seed) {
 
     let exceed_minted_by = (amount_minted + Amount::from_atoms(1)).unwrap();
     assert_eq!(
-        cache.redeem_tokens(token_id, exceed_minted_by),
-        Err(crate::Error::NotEnoughCirculatingSupplyToRedeem(
+        cache.unmint_tokens(token_id, exceed_minted_by),
+        Err(crate::Error::NotEnoughCirculatingSupplyToUnmint(
             amount_minted,
             exceed_minted_by,
             token_id
@@ -402,8 +402,8 @@ fn redeem_token_multiple_times_and_over_minted(#[case] seed: Seed) {
 
     test_utils::decompose_value(&mut rng, amount_minted.into_atoms())
         .iter()
-        .for_each(|amount_to_redeem| {
-            let _ = cache.redeem_tokens(token_id, Amount::from_atoms(*amount_to_redeem)).unwrap();
+        .for_each(|amount_to_unmint| {
+            let _ = cache.unmint_tokens(token_id, Amount::from_atoms(*amount_to_unmint)).unwrap();
         });
 
     assert_eq!(
@@ -415,11 +415,11 @@ fn redeem_token_multiple_times_and_over_minted(#[case] seed: Seed) {
         Some(Amount::ZERO)
     );
 
-    // Try to redeem over circulating supply
+    // Try to unmint over circulating supply
     let exceed_minted_by = Amount::from_atoms(rng.gen_range(1..100));
     assert_eq!(
-        cache.redeem_tokens(token_id, exceed_minted_by),
-        Err(crate::Error::NotEnoughCirculatingSupplyToRedeem(
+        cache.unmint_tokens(token_id, exceed_minted_by),
+        Err(crate::Error::NotEnoughCirculatingSupplyToUnmint(
             Amount::ZERO,
             exceed_minted_by,
             token_id
@@ -501,13 +501,13 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn lock_supply_and_try_mint_redeem(#[case] seed: Seed) {
+fn lock_supply_and_try_mint_unmint(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
     let token_id = make_token_id(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -518,8 +518,8 @@ fn lock_supply_and_try_mint_redeem(#[case] seed: Seed) {
 
     // Mint more
     let _ = cache.mint_tokens(token_id, amount_to_mint).unwrap();
-    // Redeem some
-    let _ = cache.redeem_tokens(token_id, amount_to_redeem).unwrap();
+    // Unmint some
+    let _ = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 
     // Lock supply
     let _ = cache.lock_circulating_supply(token_id).unwrap();
@@ -529,23 +529,23 @@ fn lock_supply_and_try_mint_redeem(#[case] seed: Seed) {
         cache.mint_tokens(token_id, amount_to_mint),
         Err(crate::Error::CannotMintFromLockedSupply(token_id))
     );
-    // Try to redeem
+    // Try to unmint
     assert_eq!(
-        cache.redeem_tokens(token_id, amount_to_redeem),
-        Err(crate::Error::CannotRedeemFromLockedSupply(token_id))
+        cache.unmint_tokens(token_id, amount_to_unmint),
+        Err(crate::Error::CannotUnmintFromLockedSupply(token_id))
     );
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn lock_supply_undo_mint_redeem(#[case] seed: Seed) {
+fn lock_supply_undo_mint_unmint(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, false);
     let token_id = make_token_id(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
-    let amount_to_redeem = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+    let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
     let mut storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
@@ -573,8 +573,8 @@ fn lock_supply_undo_mint_redeem(#[case] seed: Seed) {
 
     // Mint more
     let _ = cache.mint_tokens(token_id, amount_to_mint).unwrap();
-    // Redeem some
-    let _ = cache.redeem_tokens(token_id, amount_to_redeem).unwrap();
+    // Unmint some
+    let _ = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 }
 
 #[rstest]
