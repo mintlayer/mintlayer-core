@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    error::{BlockConstructionError, TxValidationError},
+    error::BlockConstructionError,
     pool::{tx_verifier, Mempool, TxMempoolEntry},
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
 };
@@ -26,10 +26,7 @@ use std::{
 };
 
 use chainstate::tx_verifier::transaction_verifier::TransactionSourceForConnect;
-use common::{
-    chain::transaction::Transaction,
-    primitives::{Id, Idable},
-};
+use common::{chain::transaction::Transaction, primitives::Id};
 use logging::log;
 use utils::{ensure, graph_traversals, shallow_clone::ShallowClone};
 
@@ -69,7 +66,7 @@ impl<'a> From<&'a TxMempoolEntry> for EntryByScore<'a> {
 pub fn collect_txs<M>(
     mempool: &Mempool<M>,
     mut tx_accumulator: Box<dyn TransactionAccumulator>,
-    transaction_ids: Vec<Id<Transaction>>,
+    transaction_ids: &[Id<Transaction>],
     packing_strategy: PackingStrategy,
 ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
     let mempool_tip = mempool.best_block_id();
@@ -97,33 +94,16 @@ pub fn collect_txs<M>(
         .expect("best index to exist");
     let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
-    // Use transactions already in the Accumulator to check for uniqueness and to update the
-    // verifier state to update UTXOs they consume / provide.
-    let accum_ids = tx_accumulator
-        .transactions()
-        .iter()
-        .map(|transaction| {
-            let _fee =
-                tx_verifier.connect_transaction(&tx_source, transaction, &block_timestamp, None)?;
-            Ok(transaction.transaction().get_id())
-        })
-        .collect::<Result<Vec<_>, TxValidationError>>()?;
-
-    // Set of transactions already placed into the accumulator
-    let mut emitted: BTreeSet<_> = accum_ids.iter().collect();
-    // Set of already processed transactions, for de-duplication
-    let mut processed = emitted.clone();
-
     // Transaction IDs specified by the user
     let given_txids = {
-        for tx_id in &transaction_ids {
+        for tx_id in transaction_ids {
             ensure!(
                 mempool.store.get_entry(tx_id).is_some(),
                 BlockConstructionError::TxNotFound(*tx_id),
             );
         }
         // Pull in the parents before the user-specified transactions so we get a valid sequence
-        graph_traversals::dag_depth_postorder_multiroot(&transaction_ids, |tx_id| {
+        graph_traversals::dag_depth_postorder_multiroot(transaction_ids, |tx_id| {
             mempool.store.get_entry(tx_id).expect("already checked").parents()
         })
     };
@@ -138,6 +118,11 @@ pub fn collect_txs<M>(
             PackingStrategy::LeaveEmptySpace => 0,
         })
     };
+
+    // Set of transactions already placed into the accumulator
+    let mut emitted = BTreeSet::new();
+    // Set of already processed transactions, for de-duplication
+    let mut processed = BTreeSet::new();
 
     // Put all the transaction IDs together
     let mut tx_iter = given_txids

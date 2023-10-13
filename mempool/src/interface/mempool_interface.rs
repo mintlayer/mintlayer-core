@@ -64,7 +64,7 @@ pub trait MempoolInterface: Send + Sync {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-        transaction_ids: Vec<Id<Transaction>>,
+        transaction_ids: &[Id<Transaction>],
         packing_strategy: PackingStrategy,
     ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError>;
 

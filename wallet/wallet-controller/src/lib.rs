@@ -43,7 +43,7 @@ use common::{
             RPCTokenInfo::{FungibleToken, NonFungibleToken},
             TokenId,
         },
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        Block, ChainConfig, GenBlock, PoolId, Transaction, TxOutput,
     },
     primitives::{
         time::{get_time, Time},
@@ -369,7 +369,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         account_index: U31,
         pool_id: PoolId,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
@@ -380,7 +379,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.rpc_client
             .generate_block(
                 GenerateBlockInputData::PoS(pos_data.into()),
-                transactions,
                 transaction_ids,
                 packing_strategy,
             )
@@ -393,7 +391,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub async fn generate_block(
         &self,
         account_index: U31,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
@@ -406,7 +403,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 .generate_block_by_pool(
                     account_index,
                     pool_id,
-                    transactions.clone(),
                     transaction_ids.clone(),
                     packing_strategy,
                 )
@@ -429,12 +425,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         for _ in 0..block_count {
             self.sync_once().await?;
             let block = self
-                .generate_block(
-                    account_index,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
+                .generate_block(account_index, vec![], PackingStrategy::FillSpaceFromMempool)
                 .await?;
 
             self.rpc_client
@@ -562,7 +553,6 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 let generate_res = self
                     .generate_block(
                         *account_index,
-                        vec![],
                         vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )

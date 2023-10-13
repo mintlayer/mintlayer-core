@@ -68,18 +68,21 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         block = self.nodes[0].chainstate_get_block(tip)
         assert_equal(block, expected_block)
 
-    def generate_block(self, expected_height, block_input_data, transactions):
+    def generate_block(self, expected_height, block_input_data, transaction_ids):
         node = self.nodes[0]
         previous_block_id = node.chainstate_best_block_id()
 
         # Block production may fail if the Job Manager found a new tip, so try and sleep
         for _ in range(5):
+            exception = None
             try:
-                block_hex = node.blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
+                block_hex = node.blockprod_generate_block(block_input_data, transaction_ids, "LeaveEmptySpace")
                 break
-            except JSONRPCException:
-                block_hex = node.blockprod_generate_block(block_input_data, transactions, [], "LeaveEmptySpace")
+            except JSONRPCException as e:
+                block_hex = node.blockprod_generate_block(block_input_data, transaction_ids, "LeaveEmptySpace")
+                exception = e
                 time.sleep(1)
+            raise exception
 
         block_hex_array = bytearray.fromhex(block_hex)
         block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(block_hex_array)).decode()
@@ -132,13 +135,14 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
 
         return (new_vrf_private_key, new_vrf_public_key)
 
-    def pack_transaction(self, transaction):
+    def pack_and_submit_transaction(self, transaction):
         transaction_encoded = signed_tx_obj.encode(transaction).to_hex()[2:]
         transaction_id = ScaleBytes(
             mintlayer_hash(base_tx_obj.encode(transaction["transaction"]).data)
         ).to_hex()[2:]
+        self.nodes[0].mempool_submit_transaction(transaction_encoded)
 
-        return (transaction_encoded, transaction_id)
+        return transaction_id
 
     def previous_block_id(self):
         previous_block_id = self.nodes[0].chainstate_best_block_id()
@@ -254,8 +258,8 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             ],
         }
 
-        (transfer_transaction_encoded, transfer_transaction_id) = self.pack_transaction(transfer_transaction)
-        self.generate_block(1, block_input_data, [transfer_transaction_encoded])
+        transfer_transaction_id = self.pack_and_submit_transaction(transfer_transaction)
+        self.generate_block(1, block_input_data, [transfer_transaction_id])
 
         #
         # Create the new stake pool using the AnyoneCanSpend transaction
@@ -333,8 +337,8 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
             ],
         }
 
-        (create_new_pool_transaction_encoded, create_new_pool_transaction_id) = self.pack_transaction(create_new_pool_transaction)
-        self.generate_block(2, block_input_data, [create_new_pool_transaction_encoded])
+        create_new_pool_transaction_id = self.pack_and_submit_transaction(create_new_pool_transaction)
+        self.generate_block(2, block_input_data, [create_new_pool_transaction_id])
 
         #
         # Stake many blocks with the new stake pool

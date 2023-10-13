@@ -32,7 +32,7 @@ use common::{
         },
         Block, ChainConfig, GenBlock, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::{
@@ -180,28 +180,19 @@ impl BlockProduction {
         &self,
         current_tip: Id<GenBlock>,
         min_block_timestamp: BlockTimestamp,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
-    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
-        let mut accumulator = Box::new(DefaultTxAccumulator::new(
+    ) -> Result<Box<dyn TransactionAccumulator>, mempool::error::BlockConstructionError> {
+        let accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
             current_tip,
             min_block_timestamp,
         ));
 
-        for transaction in transactions.into_iter() {
-            let transaction_id = transaction.transaction().get_id();
-
-            accumulator
-                .add_tx(transaction, Amount::ZERO.into())
-                .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
-        }
-
         let returned_accumulator = self
             .mempool_handle
             .call(move |mempool| {
-                mempool.collect_txs(accumulator, transaction_ids, packing_strategy)
+                mempool.collect_txs(accumulator, &transaction_ids, packing_strategy)
             })
             .await??;
 
@@ -322,24 +313,16 @@ impl BlockProduction {
     pub async fn produce_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(
-            input_data,
-            transactions,
-            transaction_ids,
-            packing_strategy,
-            None,
-        )
-        .await
+        self.produce_block_with_custom_id(input_data, transaction_ids, packing_strategy, None)
+            .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
         custom_id_maybe: Option<Vec<u8>>,
@@ -468,7 +451,6 @@ impl BlockProduction {
                 .collect_transactions(
                     current_tip_index.block_id(),
                     min_constructed_block_timestamp,
-                    transactions.clone(),
                     transaction_ids.clone(),
                     packing_strategy,
                 )

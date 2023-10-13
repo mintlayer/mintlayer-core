@@ -18,7 +18,7 @@ use crate::{
     BlockProductionError,
 };
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{Block, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
@@ -39,13 +39,11 @@ impl BlockProductionInterface for BlockProduction {
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError> {
-        let (block, end_receiver) = self
-            .produce_block(input_data, transactions, transaction_ids, packing_strategy)
-            .await?;
+        let (block, end_receiver) =
+            self.produce_block(input_data, transaction_ids, packing_strategy).await?;
 
         // The only error that can happen is if the channel is closed. We don't care about that here.
         let _finished = end_receiver.await;

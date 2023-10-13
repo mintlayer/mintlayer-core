@@ -270,7 +270,6 @@ impl NodeInterface for MockNode {
     async fn generate_block(
         &self,
         _input_data: GenerateBlockInputData,
-        _transactions_hex: Vec<SignedTransaction>,
         _transaction_ids: Vec<Id<Transaction>>,
         _packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {

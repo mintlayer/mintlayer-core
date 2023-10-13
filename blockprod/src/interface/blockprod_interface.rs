@@ -15,7 +15,7 @@
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{Block, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
@@ -43,7 +43,6 @@ pub trait BlockProductionInterface: Send + Sync {
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError>;

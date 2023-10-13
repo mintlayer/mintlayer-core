@@ -107,15 +107,12 @@ mod collect_transactions {
                     current_tip,
                     DUMMY_TIMESTAMP,
                     vec![],
-                    vec![],
                     PackingStrategy::FillSpaceFromMempool,
                 )
                 .await;
 
             match accumulator {
-                Err(BlockProductionError::MempoolBlockConstruction(
-                    BlockConstructionError::Validity(TxValidationError::CallError(_)),
-                )) => {}
+                Err(BlockConstructionError::Validity(TxValidationError::CallError(_))) => (),
                 _ => panic!("Expected collect_tx() to fail"),
             };
 
@@ -164,14 +161,13 @@ mod collect_transactions {
                     current_tip,
                     DUMMY_TIMESTAMP,
                     vec![],
-                    vec![],
                     PackingStrategy::LeaveEmptySpace,
                 )
                 .await;
 
             match accumulator {
                 Ok(_) => panic!("Expected an error"),
-                Err(BlockProductionError::SubsystemCallError(_)) => {}
+                Err(BlockConstructionError::Call(_)) => {}
                 Err(err) => panic!("Expected a subsystem error, got {err:?}"),
             };
         })
@@ -224,7 +220,6 @@ mod collect_transactions {
                     .collect_transactions(
                         current_tip,
                         DUMMY_TIMESTAMP,
-                        vec![],
                         vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )
@@ -285,7 +280,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )
                     .await;
@@ -330,7 +324,6 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -389,7 +382,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
@@ -442,7 +434,6 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -499,7 +490,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
@@ -550,7 +540,6 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -626,7 +615,7 @@ mod produce_block {
                     .await;
 
                 let result = block_production
-                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
+                    .produce_block(input_data, vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
                 match result {
@@ -695,7 +684,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
@@ -761,7 +749,6 @@ mod produce_block {
                 let result = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -829,7 +816,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
@@ -883,7 +869,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )
                     .await;
@@ -929,7 +914,6 @@ mod produce_block {
                     .produce_block(
                         GenerateBlockInputData::None,
                         vec![],
-                        vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )
                     .await
@@ -973,7 +957,6 @@ mod produce_block {
                     // TODO: Add transactions to the parameters
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -1063,7 +1046,6 @@ mod produce_block {
                             Destination::AnyoneCanSpend,
                         ))),
                         vec![],
-                        vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
                     .await;
@@ -1105,7 +1087,6 @@ mod produce_block {
                 let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -1164,7 +1145,6 @@ mod produce_block {
                         GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                             Destination::AnyoneCanSpend,
                         ))),
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -1230,7 +1210,6 @@ mod produce_block {
                 let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::PoS(input_data),
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                     )
@@ -1392,7 +1371,6 @@ mod produce_block {
                                 .produce_block(
                                     GenerateBlockInputData::None,
                                     vec![],
-                                    vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await
@@ -1408,7 +1386,6 @@ mod produce_block {
                             let input_data_none_result = block_production
                                 .produce_block(
                                     GenerateBlockInputData::None,
-                                    vec![],
                                     vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
@@ -1429,7 +1406,6 @@ mod produce_block {
                                 .produce_block(
                                     input_data_pow,
                                     vec![],
-                                    vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await;
@@ -1448,7 +1424,6 @@ mod produce_block {
                             let (new_block, job_finished_receiver) = block_production
                                 .produce_block(
                                     input_data_pos,
-                                    vec![],
                                     vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
@@ -1481,7 +1456,6 @@ mod produce_block {
                                 .produce_block(
                                     GenerateBlockInputData::None,
                                     vec![],
-                                    vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await;
@@ -1501,7 +1475,6 @@ mod produce_block {
                                 .produce_block(
                                     input_data_pos,
                                     vec![],
-                                    vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
                                 .await;
@@ -1520,7 +1493,6 @@ mod produce_block {
                             let (new_block, job_finished_receiver) = block_production
                                 .produce_block(
                                     input_data_pow,
-                                    vec![],
                                     vec![],
                                     PackingStrategy::LeaveEmptySpace,
                                 )
@@ -1573,7 +1545,6 @@ mod produce_block {
                     let (_block, job) = block_production
                         .produce_block(
                             GenerateBlockInputData::None,
-                            vec![],
                             vec![],
                             PackingStrategy::LeaveEmptySpace,
                         )
@@ -1629,7 +1600,6 @@ mod process_block_with_custom_id {
 
                     block_production.produce_block_with_custom_id(
                         GenerateBlockInputData::None,
-                        vec![],
                         vec![],
                         PackingStrategy::LeaveEmptySpace,
                         Some(id),
@@ -1694,7 +1664,6 @@ mod process_block_with_custom_id {
                     let result = block_production
                         .produce_block_with_custom_id(
                             GenerateBlockInputData::None,
-                            vec![],
                             vec![],
                             PackingStrategy::LeaveEmptySpace,
                             Some(id.clone()),

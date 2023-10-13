@@ -15,11 +15,7 @@
 
 //! Block production subsystem RPC handler
 
-use common::{
-    chain::Block,
-    chain::{SignedTransaction, Transaction},
-    primitives::Id,
-};
+use common::{chain::Block, chain::Transaction, primitives::Id};
 use consensus::GenerateBlockInputData;
 use mempool::tx_accumulator::PackingStrategy;
 use rpc::Result as RpcResult;
@@ -47,7 +43,6 @@ trait BlockProductionRpc {
     async fn generate_block(
         &self,
         input_data: HexEncoded<GenerateBlockInputData>,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> RpcResult<HexEncoded<Block>>;
@@ -71,20 +66,12 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
     async fn generate_block(
         &self,
         input_data: HexEncoded<GenerateBlockInputData>,
-        transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> rpc::Result<HexEncoded<Block>> {
-        let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
-
         let block: Block = rpc::handle_result(
             self.call_async_mut(move |this| {
-                this.generate_block(
-                    input_data.take(),
-                    transactions,
-                    transaction_ids,
-                    packing_strategy,
-                )
+                this.generate_block(input_data.take(), transaction_ids, packing_strategy)
             })
             .await,
         )?;

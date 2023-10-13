@@ -131,15 +131,12 @@ impl NodeInterface for NodeRpcClient {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
-        let transactions = transactions.into_iter().map(HexEncoded::new).collect::<Vec<_>>();
         BlockProductionRpcClient::generate_block(
             &self.http_client,
             input_data.into(),
-            transactions,
             transaction_ids,
             packing_strategy,
         )

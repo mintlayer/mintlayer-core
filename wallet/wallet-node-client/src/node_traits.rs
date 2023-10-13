@@ -60,7 +60,6 @@ pub trait NodeInterface {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;

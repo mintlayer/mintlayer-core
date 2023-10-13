@@ -188,14 +188,13 @@ impl NodeInterface for WalletHandlesClient {
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
             .call_async_mut(move |this| {
-                this.generate_block(input_data, transactions, transaction_ids, packing_strategy)
+                this.generate_block(input_data, transaction_ids, packing_strategy)
             })
             .await??;
 

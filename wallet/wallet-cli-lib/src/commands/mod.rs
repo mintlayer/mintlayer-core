@@ -123,12 +123,8 @@ pub enum WalletCommand {
         hash: String,
     },
 
-    /// Generate a block with the given transactions to the specified
-    /// reward destination. If transactions are None, the block will be
-    /// generated with available transactions in the mempool
-    GenerateBlock {
-        transactions: Vec<HexEncoded<SignedTransaction>>,
-    },
+    /// Generate a block with available transactions from the mempool
+    GenerateBlock {},
 
     GenerateBlocks {
         block_count: u32,
@@ -694,13 +690,12 @@ impl CommandHandler {
                 }
             }
 
-            WalletCommand::GenerateBlock { transactions } => {
-                let transactions = transactions.into_iter().map(HexEncoded::take).collect();
+            WalletCommand::GenerateBlock {} => {
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
                 let block = controller
                     .generate_block(
                         selected_account,
-                        transactions,
+                        // TODO: Allow the user to specify transaction IDs
                         vec![],
                         PackingStrategy::FillSpaceFromMempool,
                     )

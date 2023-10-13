@@ -53,129 +53,115 @@ class GenerateBlocksFromAllSourcesTest(BitcoinTestFramework):
             [reward_input(node.chainstate_best_block_id())],
             [1000 for _ in range(20)],
         )
+        node.mempool_submit_transaction(generate_utxos)
 
-        block = node.blockprod_generate_block(block_input_data, [generate_utxos], [], "LeaveEmptySpace")
+        block = node.blockprod_generate_block(block_input_data, [utxo_id], "LeaveEmptySpace")
         node.chainstate_submit_block(block)
         utxos = [(utxo_id, i) for i in range(20)]
 
-        for include_transaction in ([True, False]):
-            for include_transaction_id in ([True, False]):
-                for include_mempool in ([True, False]):
-                    # Clear the mempool
-                    self.stop_node(0)
-                    self.start_node(0)
+        for include_transaction_id in ([True, False]):
+            for include_mempool in ([True, False]):
+                # Clear the mempool
+                self.stop_node(0)
+                self.start_node(0)
 
-                    transactions = []
-                    transaction_ids = []
-                    expected_transactions = []
-                    missing_transactions = []
-                    mempool_transactions = []
+                transaction_ids = []
+                expected_transactions = []
+                missing_transactions = []
+                mempool_transactions = []
 
-                    #
-                    # Populate the mempool
-                    #
+                #
+                # Populate the mempool
+                #
 
+                (utxo_id, utxo_index) = utxos.pop()
+                utxo = tx_input(utxo_id, utxo_index)
+                (tx, tx_id) = make_tx([utxo], [100])
+
+                node.mempool_submit_transaction(tx)
+
+                if include_mempool:
+                    missing_transactions.append(tx_id)
+                else:
+                    mempool_transactions.append(tx_id)
+
+                #
+                # Setup transaction Id parameter
+                #
+
+                if include_transaction_id:
                     (utxo_id, utxo_index) = utxos.pop()
                     utxo = tx_input(utxo_id, utxo_index)
                     (tx, tx_id) = make_tx([utxo], [100])
 
+                    missing_transactions.append(tx_id)
                     node.mempool_submit_transaction(tx)
+                    assert(node.mempool_contains_tx(tx_id))
 
-                    if include_mempool:
-                        missing_transactions.append(tx_id)
-                    else:
-                        mempool_transactions.append(tx_id)
+                    transaction_ids.append(tx_id)
+                    expected_transactions.append([utxo_id, utxo_index])
 
-                    #
-                    # Setup transactions parameter
-                    #
+                #
+                # Setup Mempool parameter
+                #
 
-                    if include_transaction:
-                        (utxo_id, utxo_index) = utxos.pop()
-                        utxo = tx_input(utxo_id, utxo_index)
-                        (tx, _) = make_tx([utxo], [100])
-                        expected_transactions.append([utxo_id, utxo_index])
+                packing_strategy = "LeaveEmptySpace"
 
-                        transactions.append(tx)
+                if include_mempool:
+                    (utxo_id, utxo_index) = utxos.pop()
+                    utxo = tx_input(utxo_id, utxo_index)
+                    (tx, tx_id) = make_tx([utxo], [100])
 
-                    #
-                    # Setup transaction Id parameter
-                    #
+                    missing_transactions.append(tx_id)
+                    node.mempool_submit_transaction(tx)
+                    assert(node.mempool_contains_tx(tx_id))
 
-                    if include_transaction_id:
-                        (utxo_id, utxo_index) = utxos.pop()
-                        utxo = tx_input(utxo_id, utxo_index)
-                        (tx, tx_id) = make_tx([utxo], [100])
+                    packing_strategy = "FillSpaceFromMempool"
 
-                        missing_transactions.append(tx_id)
-                        node.mempool_submit_transaction(tx)
-                        assert(node.mempool_contains_tx(tx_id))
+                    expected_transactions.append([utxo_id, utxo_index])
 
-                        transaction_ids.append(tx_id)
-                        expected_transactions.append([utxo_id, utxo_index])
+                self.wait_until(
+                    lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(),
+                    timeout = 5
+                )
 
-                    #
-                    # Setup Mempool parameter
-                    #
+                old_tip = node.chainstate_best_block_id()
 
-                    packing_strategy = "LeaveEmptySpace"
+                block_hex = node.blockprod_generate_block(
+                    block_input_data,
+                    transaction_ids,
+                    packing_strategy
+                )
 
-                    if include_mempool:
-                        (utxo_id, utxo_index) = utxos.pop()
-                        utxo = tx_input(utxo_id, utxo_index)
-                        (tx, tx_id) = make_tx([utxo], [100])
+                block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(bytearray.fromhex(block_hex))).decode()
 
-                        missing_transactions.append(tx_id)
-                        node.mempool_submit_transaction(tx)
-                        assert(node.mempool_contains_tx(tx_id))
+                for expected_transaction in expected_transactions:
+                    self.assert_transaction_in_block(expected_transaction, block)
 
-                        packing_strategy = "FillSpaceFromMempool"
+                node.chainstate_submit_block(block_hex)
+                new_tip = node.chainstate_best_block_id()
+                assert(old_tip != new_tip)
 
-                        expected_transactions.append([utxo_id, utxo_index])
+                self.wait_until(
+                    lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(),
+                    timeout = 5
+                )
 
-                    self.wait_until(
-                        lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(),
-                        timeout = 5
-                    )
+                #
+                # Check chainstate and mempool is as expected
+                #
 
-                    old_tip = node.chainstate_best_block_id()
+                new_block_hex = node.chainstate_get_block(new_tip)
+                new_block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(bytearray.fromhex(new_block_hex))).decode()
 
-                    block_hex = node.blockprod_generate_block(
-                        block_input_data,
-                        transactions,
-                        transaction_ids,
-                        packing_strategy
-                    )
+                for expected_transaction in expected_transactions:
+                    self.assert_transaction_in_block(expected_transaction, new_block)
 
-                    block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(bytearray.fromhex(block_hex))).decode()
+                for missing_transaction in missing_transactions:
+                    assert(not node.mempool_contains_tx(missing_transaction))
 
-                    for expected_transaction in expected_transactions:
-                        self.assert_transaction_in_block(expected_transaction, block)
-
-                    node.chainstate_submit_block(block_hex)
-                    new_tip = node.chainstate_best_block_id()
-                    assert(old_tip != new_tip)
-
-                    self.wait_until(
-                        lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(),
-                        timeout = 5
-                    )
-
-                    #
-                    # Check chainstate and mempool is as expected
-                    #
-
-                    new_block_hex = node.chainstate_get_block(new_tip)
-                    new_block = ScaleDecoder.get_decoder_class('BlockV1', ScaleBytes(bytearray.fromhex(new_block_hex))).decode()
-
-                    for expected_transaction in expected_transactions:
-                        self.assert_transaction_in_block(expected_transaction, new_block)
-
-                    for missing_transaction in missing_transactions:
-                        assert(not node.mempool_contains_tx(missing_transaction))
-
-                    for mempool_transaction in mempool_transactions:
-                        assert(node.mempool_contains_tx(mempool_transaction))
+                for mempool_transaction in mempool_transactions:
+                    assert(node.mempool_contains_tx(mempool_transaction))
 
 if __name__ == '__main__':
     GenerateBlocksFromAllSourcesTest().main()
