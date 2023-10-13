@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        output_value::OutputValue, timelock::OutputTimeLock, AccountSpending, ChainConfig, PoolId,
-        TokenOutput, TxInput, TxOutput,
+        timelock::OutputTimeLock, AccountSpending, ChainConfig, PoolId, TokenOutput, TxInput,
+        TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight},
 };
@@ -137,21 +137,13 @@ impl ConstrainedValueAccumulator {
     pub fn process_outputs(&mut self, outputs: &[TxOutput]) -> Result<(), IOPolicyError> {
         for output in outputs {
             match output {
-                TxOutput::Transfer(value, _) => {
+                TxOutput::Transfer(value, _) | TxOutput::Burn(value) => {
                     if let Some(coins) = value.coin_amount() {
                         self.unconstrained_value = (self.unconstrained_value - coins).ok_or(
                             IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
                         )?;
                     }
                 }
-                TxOutput::Burn(value) => match value {
-                    OutputValue::Coin(coins) => {
-                        self.unconstrained_value = (self.unconstrained_value - *coins).ok_or(
-                            IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints,
-                        )?;
-                    }
-                    OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => { /* do nothing */ }
-                },
                 TxOutput::DelegateStaking(coins, _) => {
                     self.unconstrained_value = (self.unconstrained_value - *coins)
                         .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
@@ -160,7 +152,8 @@ impl ConstrainedValueAccumulator {
                     self.unconstrained_value = (self.unconstrained_value - data.value())
                         .ok_or(IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints)?;
                 }
-                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => { /* do nothing as these outputs cannot produce values */
+                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::CreateDelegationId(_, _) => {
+                    /* do nothing as these outputs cannot produce values */
                 }
                 TxOutput::LockThenTransfer(value, _, timelock) => match timelock {
                     OutputTimeLock::UntilHeight(_)
