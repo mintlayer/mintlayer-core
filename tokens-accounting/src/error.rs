@@ -35,10 +35,10 @@ pub enum Error {
     AmountOverflow,
     #[error("Cannot mint from locked supply for token: '{0}`")]
     CannotMintFromLockedSupply(TokenId),
-    #[error("Cannot redeem from locked supply for token: '{0}`")]
-    CannotRedeemFromLockedSupply(TokenId),
-    #[error("Circulating supply `{0:?}` is not enough to redeem `{1:?}` for token `{2}`")]
-    NotEnoughCirculatingSupplyToRedeem(Amount, Amount, TokenId),
+    #[error("Cannot unmint from locked supply for token: '{0}`")]
+    CannotUnmintFromLockedSupply(TokenId),
+    #[error("Circulating supply `{0:?}` is not enough to unmint `{1:?}` for token `{2}`")]
+    NotEnoughCirculatingSupplyToUnmint(Amount, Amount, TokenId),
     #[error("Supply for a token '{0}` is already locked")]
     SupplyIsAlreadyLocked(TokenId),
     #[error("Cannot lock supply for a token '{0}` with not lockable supply type")]

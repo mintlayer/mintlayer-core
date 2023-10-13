@@ -33,7 +33,7 @@ pub struct MintTokenUndo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct BurnTokenUndo {
+pub struct UnmintTokenUndo {
     pub(crate) id: TokenId,
     pub(crate) amount_to_burn: Amount,
 }
@@ -49,7 +49,7 @@ pub struct LockSupplyUndo {
 pub enum TokenAccountingUndo {
     IssueToken(IssueTokenUndo),
     MintTokens(MintTokenUndo),
-    BurnTokens(BurnTokenUndo),
+    UnmintTokens(UnmintTokenUndo),
     LockSupply(LockSupplyUndo),
 }
 
@@ -57,7 +57,7 @@ pub trait TokensAccountingOperations {
     fn issue_token(&mut self, id: TokenId, data: TokenData) -> Result<TokenAccountingUndo>;
 
     fn mint_tokens(&mut self, id: TokenId, amount_to_add: Amount) -> Result<TokenAccountingUndo>;
-    fn redeem_tokens(&mut self, id: TokenId, amount_to_burn: Amount)
+    fn unmint_tokens(&mut self, id: TokenId, amount_to_burn: Amount)
         -> Result<TokenAccountingUndo>;
 
     fn lock_circulating_supply(&mut self, id: TokenId) -> Result<TokenAccountingUndo>;

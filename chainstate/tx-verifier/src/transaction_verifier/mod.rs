@@ -798,7 +798,7 @@ where
                             .transpose()? // return if no tokens were burned
                             .and_then(|total_burned| {
                                 self.tokens_accounting_cache
-                                    .redeem_tokens(*token_id, total_burned)
+                                    .unmint_tokens(*token_id, total_burned)
                                     .map_err(ConnectTransactionError::TokensAccountingError)
                             });
                         Some(res)
