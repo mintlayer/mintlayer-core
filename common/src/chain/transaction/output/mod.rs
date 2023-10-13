@@ -112,19 +112,7 @@ pub enum TxOutput {
 pub enum TokenOutput {
     #[codec(index = 0)]
     IssueFungibleToken(Box<TokenIssuance>),
-    // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 1)]
-    MintTokens(TokenId, Amount, Destination),
-    // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount
-    // of tokens is no longer supported by underlying fiat currency, which can only be done by
-    // reissuance controller.
-    #[codec(index = 2)]
-    RedeemTokens(TokenId, Amount),
-    // After supply is locked tokens cannot be minted or redeemed ever again.
-    // Works only for Lockable tokens supply.
-    #[codec(index = 3)]
-    LockCirculatingSupply(TokenId),
-    #[codec(index = 4)]
     IssueNft(TokenId, Box<NftIssuance>, Destination),
 }
 

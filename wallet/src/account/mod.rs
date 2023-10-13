@@ -661,10 +661,7 @@ impl Account {
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _) => None,
                 TxOutput::TokensOp(token_output) => match token_output {
-                    TokenOutput::IssueFungibleToken(_)
-                    | TokenOutput::MintTokens(_, _, _)
-                    | TokenOutput::RedeemTokens(_, _)
-                    | TokenOutput::LockCirculatingSupply(_) => None,
+                    TokenOutput::IssueFungibleToken(_) => None,
                     TokenOutput::IssueNft(token_id, _, _) => {
                         (*token_id == dummy_token_id).then_some(token_id)
                     }
@@ -842,10 +839,8 @@ impl Account {
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
             TxOutput::TokensOp(tokens_output) => match tokens_output {
-                TokenOutput::MintTokens(_, _, d) | TokenOutput::IssueNft(_, _, d) => Some(d),
-                TokenOutput::IssueFungibleToken(_)
-                | TokenOutput::RedeemTokens(_, _)
-                | TokenOutput::LockCirculatingSupply(_) => None,
+                TokenOutput::IssueNft(_, _, d) => Some(d),
+                TokenOutput::IssueFungibleToken(_) => None,
             },
             TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
         }
@@ -1009,7 +1004,9 @@ impl Account {
                 AccountSpending::Delegation(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
-                AccountSpending::TokenSupply(_, _) => {
+                AccountSpending::TokenTotalSupply(_, _)
+                | AccountSpending::TokenCirculatingSupply(_, _)
+                | AccountSpending::TokenSupplyLock(_) => {
                     // TODO: add support for tokens v1
                     // See https://github.com/mintlayer/mintlayer-core/issues/1237
                     unimplemented!()

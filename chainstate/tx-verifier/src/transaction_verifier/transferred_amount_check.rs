@@ -119,11 +119,10 @@ fn get_output_value<P: PoSAccountingView>(
         TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
         TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
         TxOutput::TokensOp(v) => match v {
-            TokenOutput::IssueFungibleToken(_)
-            | TokenOutput::LockCirculatingSupply(_)
-            | TokenOutput::RedeemTokens(_, _)
-            | TokenOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
-            TokenOutput::MintTokens(id, v, _) => OutputValue::TokenV1(*id, *v),
+            TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => {
+                // FIXME: why nft zero works?? it should be one
+                OutputValue::Coin(Amount::ZERO)
+            }
         },
     };
     Ok(res)
@@ -168,15 +167,10 @@ where
                     ))
                 }
                 TxOutput::TokensOp(v) => match v {
-                    TokenOutput::MintTokens(token_id, amount, _) => {
-                        OutputValue::TokenV1(*token_id, *amount)
-                    }
                     TokenOutput::IssueNft(token_id, _, _) => {
                         OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
                     }
-                    TokenOutput::IssueFungibleToken(_)
-                    | TokenOutput::RedeemTokens(_, _)
-                    | TokenOutput::LockCirculatingSupply(_) => {
+                    TokenOutput::IssueFungibleToken(_) => {
                         return Err(ConnectTransactionError::IOPolicyError(
                             IOPolicyError::InvalidInputTypeInTx,
                             inputs_source.clone(),
@@ -205,8 +199,14 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::TokenSupply(token_id, amount) => {
+            AccountSpending::TokenTotalSupply(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
+            }
+            AccountSpending::TokenCirculatingSupply(token_id, amount) => {
+                Ok((CoinOrTokenId::TokenId(*token_id), *amount))
+            }
+            AccountSpending::TokenSupplyLock(token_id) => {
+                Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
     });

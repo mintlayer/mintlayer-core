@@ -12,6 +12,7 @@ accounting = {path = '../accounting'}
 chainstate-types = { path = '../chainstate/types' }
 common = {path = '../common'}
 serialization = {path = "../serialization"}
+utils = {path = "../utils"}
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true

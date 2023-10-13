@@ -19,7 +19,7 @@ use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
-        TokenOutput, TxOutput,
+        TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -355,27 +355,19 @@ fn burn_constraints_on_tokens_redemption(#[case] seed: Seed) {
     // make burn outputs but total atoms burnt is less than required
     {
         let random_additional_value = rng.gen_range(1..=atoms_to_redeem);
-        let burn_outputs = decompose_value(&mut rng, atoms_to_redeem - random_additional_value)
+        let outputs = decompose_value(&mut rng, atoms_to_redeem - random_additional_value)
             .iter()
             .map(|atoms| TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::from_atoms(*atoms))))
             .collect::<Vec<_>>();
-
-        let outputs = {
-            let mut outputs = std::iter::once(TxOutput::TokensOp(TokenOutput::RedeemTokens(
-                token_id,
-                Amount::from_atoms(atoms_to_redeem),
-            )))
-            .chain(burn_outputs.into_iter())
-            .collect::<Vec<_>>();
-            outputs.shuffle(&mut rng);
-            outputs
-        };
 
         let tx = Transaction::new(
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountSpending::TokenSupply(token_id, Amount::from_atoms(atoms_to_redeem)),
+                AccountSpending::TokenCirculatingSupply(
+                    token_id,
+                    Amount::from_atoms(atoms_to_redeem),
+                ),
             )],
             outputs,
         )
@@ -400,27 +392,19 @@ fn burn_constraints_on_tokens_redemption(#[case] seed: Seed) {
 
     // valid case
     {
-        let burn_outputs = decompose_value(&mut rng, atoms_to_redeem)
+        let outputs = decompose_value(&mut rng, atoms_to_redeem)
             .iter()
             .map(|atoms| TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::from_atoms(*atoms))))
             .collect::<Vec<_>>();
-
-        let outputs = {
-            let mut outputs = std::iter::once(TxOutput::TokensOp(TokenOutput::RedeemTokens(
-                token_id,
-                Amount::from_atoms(atoms_to_redeem),
-            )))
-            .chain(burn_outputs.into_iter())
-            .collect::<Vec<_>>();
-            outputs.shuffle(&mut rng);
-            outputs
-        };
 
         let tx = Transaction::new(
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountSpending::TokenSupply(token_id, Amount::from_atoms(atoms_to_redeem)),
+                AccountSpending::TokenCirculatingSupply(
+                    token_id,
+                    Amount::from_atoms(atoms_to_redeem),
+                ),
             )],
             outputs,
         )

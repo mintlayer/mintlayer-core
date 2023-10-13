@@ -106,14 +106,8 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = [
-        lock_then_transfer(),
-        transfer(),
-        stake_pool(),
-        produce_block(),
-        mint_tokens(),
-        issue_nft(),
-    ];
+    let valid_inputs =
+        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), issue_nft()];
     let valid_outputs = [
         lock_then_transfer(),
         transfer(),
@@ -146,14 +140,7 @@ fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
     let valid_inputs = super::outputs_utils::valid_tx_inputs();
     let valid_outputs = super::outputs_utils::valid_tx_outputs();
 
-    let invalid_inputs = [
-        burn(),
-        delegate_staking(),
-        create_delegation(),
-        issue_tokens(),
-        redeem_tokens(),
-        lock_tokens_supply(),
-    ];
+    let invalid_inputs = [burn(), delegate_staking(), create_delegation(), issue_tokens()];
 
     let input_utxos = {
         let mut outputs =
@@ -330,11 +317,8 @@ fn reward_none_to_any(#[case] seed: Seed) {
             produce_block(),
             create_delegation(),
             delegate_staking(),
-            mint_tokens(),
             issue_nft(),
-            redeem_tokens(),
             issue_tokens(),
-            lock_tokens_supply(),
         ];
 
         let number_of_outputs = rng.gen_range(1..10);

@@ -281,7 +281,9 @@ impl OutputCache {
                                     )?;
                                 }
                             }
-                            AccountSpending::TokenSupply(_, _) => {
+                            AccountSpending::TokenTotalSupply(_, _)
+                            | AccountSpending::TokenCirculatingSupply(_, _)
+                            | AccountSpending::TokenSupplyLock(_) => {
                                 // TODO: add support for tokens v1
                                 // See https://github.com/mintlayer/mintlayer-core/issues/1237
                                 unimplemented!()
@@ -342,7 +344,9 @@ impl OutputCache {
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountSpending::TokenSupply(_, _) => {
+                        AccountSpending::TokenTotalSupply(_, _)
+                        | AccountSpending::TokenCirculatingSupply(_, _)
+                        | AccountSpending::TokenSupplyLock(_) => {
                             // TODO: add support for tokens v1
                             // See https://github.com/mintlayer/mintlayer-core/issues/1237
                             unimplemented!()
@@ -512,7 +516,9 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountSpending::TokenSupply(_, _) => {
+                                        AccountSpending::TokenTotalSupply(_, _)
+                                        | AccountSpending::TokenCirculatingSupply(_, _)
+                                        | AccountSpending::TokenSupplyLock(_) => {
                                             // TODO: add support for tokens v1
                                             // See https://github.com/mintlayer/mintlayer-core/issues/1237
                                             unimplemented!()

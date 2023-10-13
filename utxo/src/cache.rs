@@ -499,10 +499,8 @@ fn can_be_spent(output: &TxOutput) -> bool {
             false
         }
         TxOutput::TokensOp(v) => match v {
-            TokenOutput::IssueFungibleToken(_)
-            | TokenOutput::RedeemTokens(_, _)
-            | TokenOutput::LockCirculatingSupply(_) => false,
-            TokenOutput::IssueNft(_, _, _) | TokenOutput::MintTokens(_, _, _) => true,
+            TokenOutput::IssueFungibleToken(_) => false,
+            TokenOutput::IssueNft(_, _, _) => true,
         },
     }
 }

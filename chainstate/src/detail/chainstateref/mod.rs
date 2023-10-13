@@ -792,9 +792,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                                 })
                             }
                         },
-                        TokenOutput::MintTokens(_, _, _)
-                        | TokenOutput::RedeemTokens(_, _)
-                        | TokenOutput::LockCirculatingSupply(_) => Ok(()),
                     },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
