@@ -99,35 +99,6 @@ where
     Ok(total_fee)
 }
 
-fn get_output_value<P: PoSAccountingView>(
-    pos_accounting_view: &P,
-    output: &TxOutput,
-) -> Result<OutputValue, ConnectTransactionError> {
-    let res = match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            v.clone()
-        }
-        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
-        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pledge_amount = pos_accounting_view
-                .get_pool_data(*pool_id)
-                .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
-                .pledge_amount();
-            OutputValue::Coin(pledge_amount)
-        }
-        TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
-        TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
-        TxOutput::TokensOp(v) => match v {
-            TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => {
-                // FIXME: why nft zero works?? it should be one
-                OutputValue::Coin(Amount::ZERO)
-            }
-        },
-    };
-    Ok(res)
-}
-
 fn calculate_total_inputs<U, P, IssuanceTokenIdGetterFunc>(
     utxo_view: &U,
     pos_accounting_view: &P,
@@ -199,10 +170,8 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::TokenTotalSupply(token_id, amount) => {
-                Ok((CoinOrTokenId::TokenId(*token_id), *amount))
-            }
-            AccountSpending::TokenCirculatingSupply(token_id, amount) => {
+            AccountSpending::TokenTotalSupply(token_id, amount)
+            | AccountSpending::TokenCirculatingSupply(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
             AccountSpending::TokenSupplyLock(token_id) => {
@@ -224,7 +193,28 @@ fn calculate_total_outputs<P: PoSAccountingView>(
     include_issuance: Option<&Transaction>,
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
     let iter = outputs.iter().map(|output| {
-        let output_value = get_output_value(pos_accounting_view, output)?;
+        let output_value = match output {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                v.clone()
+            }
+            TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
+            TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                let pledge_amount = pos_accounting_view
+                    .get_pool_data(*pool_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                    .pledge_amount();
+                OutputValue::Coin(pledge_amount)
+            }
+            TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
+            TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
+            TxOutput::TokensOp(v) => match v {
+                // IssueFungibleToken cannot be spent so the output value is 0
+                TokenOutput::IssueFungibleToken(_) => OutputValue::Coin(Amount::ZERO),
+                // when in tx output IssueNft has 0 output value because it is created there
+                TokenOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
+            },
+        };
         get_output_token_id_and_amount(&output_value, include_issuance)
     });
     let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);

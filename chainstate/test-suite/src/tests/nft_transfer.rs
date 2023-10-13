@@ -18,12 +18,15 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
+use common::chain::TokenOutput;
 use common::primitives::Idable;
 use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, Metadata, NftIssuanceV0, TokenData, TokenId, TokenTransfer},
+        tokens::{
+            make_token_id, Metadata, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+        },
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
@@ -31,6 +34,7 @@ use common::{
 use crypto::random::Rng;
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
+use test_utils::nft_utils::random_nft_issuance;
 use test_utils::{
     nft_utils::random_creator,
     random::{make_seedable_rng, Seed},
@@ -475,5 +479,82 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             get_output_value(transfer_output).unwrap(),
             transfer_value.into()
         );
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ensure_nft_cannot_be_printer_from_tokens_op(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut rng = make_seedable_rng(seed);
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let token_id =
+            make_token_id(&[TxInput::from_utxo(genesis_outpoint_id.clone(), 0)]).unwrap();
+
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
+        let nft_issuance = random_nft_issuance(tf.chainstate.get_chain_config(), &mut rng);
+
+        // Issue
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::TokensOp(TokenOutput::IssueNft(
+                token_id,
+                Box::new(NftIssuance::V0(nft_issuance)),
+                Destination::AnyoneCanSpend,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        // Try print Nfts on transfer
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(
+                    Amount::from_atoms(1),
+                    Amount::from_atoms(2)
+                )
+            ))
+        );
+
+        // Transfer
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
     })
 }
