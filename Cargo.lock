@@ -6674,6 +6674,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "utils",
  "variant_count",
 ]
 

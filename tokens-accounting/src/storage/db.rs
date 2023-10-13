@@ -19,6 +19,7 @@ use accounting::{
     combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
 };
 use common::{chain::tokens::TokenId, primitives::Amount};
+use utils::tap_error_log::LogError;
 
 use crate::{
     data::{TokensAccountingDeltaData, TokensAccountingDeltaUndoData},
@@ -48,12 +49,16 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingDB<S> {
             .into_iter()
             .map(|(id, delta)| -> Result<_, Error> {
                 let undo = delta.clone().invert();
-                let old_data = self.0.get_token_data(&id).map_err(|_| Error::ViewFail)?;
+                let old_data = self.0.get_token_data(&id).log_err().map_err(|_| Error::ViewFail)?;
                 match combine_data_with_delta(old_data, Some(delta))? {
-                    Some(result) => {
-                        self.0.set_token_data(&id, &result).map_err(|_| Error::StorageWrite)?
+                    Some(result) => self
+                        .0
+                        .set_token_data(&id, &result)
+                        .log_err()
+                        .map_err(|_| Error::StorageWrite)?,
+                    None => {
+                        self.0.del_token_data(&id).log_err().map_err(|_| Error::StorageWrite)?
                     }
-                    None => self.0.del_token_data(&id).map_err(|_| Error::StorageWrite)?,
                 };
                 Ok((id, undo))
             })
@@ -64,18 +69,27 @@ impl<S: TokensAccountingStorageWrite> TokensAccountingDB<S> {
             .consume()
             .into_iter()
             .map(|(id, delta)| -> Result<_, Error> {
-                let balance = self.0.get_circulating_supply(&id).map_err(|_| Error::ViewFail)?;
+                let balance =
+                    self.0.get_circulating_supply(&id).log_err().map_err(|_| Error::ViewFail)?;
                 match combine_amount_delta(&balance, &Some(delta))? {
                     Some(result) => {
                         if result > Amount::ZERO {
                             self.0
                                 .set_circulating_supply(&id, &result)
+                                .log_err()
                                 .map_err(|_| Error::StorageWrite)?
                         } else {
-                            self.0.del_circulating_supply(&id).map_err(|_| Error::StorageWrite)?
+                            self.0
+                                .del_circulating_supply(&id)
+                                .log_err()
+                                .map_err(|_| Error::StorageWrite)?
                         }
                     }
-                    None => self.0.del_circulating_supply(&id).map_err(|_| Error::StorageWrite)?,
+                    None => self
+                        .0
+                        .del_circulating_supply(&id)
+                        .log_err()
+                        .map_err(|_| Error::StorageWrite)?,
                 };
                 let balance_undo = delta.neg().expect("amount negation some");
                 Ok((id, balance_undo))
@@ -138,6 +152,6 @@ impl<S: TokensAccountingStorageWrite> FlushableTokensAccountingView for TokensAc
         &mut self,
         delta: TokensAccountingDeltaData,
     ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
-        self.merge_with_delta(delta).map_err(|_| Error::StorageWrite)
+        self.merge_with_delta(delta).log_err().map_err(|_| Error::StorageWrite)
     }
 }

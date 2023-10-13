@@ -134,10 +134,8 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..) => true,
         TxOutput::TokensOp(v) => match v {
-            TokenOutput::MintTokens(_, _, _) | TokenOutput::IssueNft(_, _, _) => true,
-            TokenOutput::IssueFungibleToken(_)
-            | TokenOutput::RedeemTokens(_, _)
-            | TokenOutput::LockCirculatingSupply(_) => false,
+            TokenOutput::IssueNft(_, _, _) => true,
+            TokenOutput::IssueFungibleToken(_) => false,
         },
         TxOutput::Burn(..) | TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) => {
             false

@@ -33,7 +33,9 @@ impl From<AccountSpending> for AccountType {
     fn from(spending: AccountSpending) -> Self {
         match spending {
             AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
-            AccountSpending::TokenSupply(id, _) => AccountType::TokenSupply(id),
+            AccountSpending::TokenTotalSupply(id, _)
+            | AccountSpending::TokenCirculatingSupply(id, _)
+            | AccountSpending::TokenSupplyLock(id) => AccountType::TokenSupply(id),
         }
     }
 }
@@ -45,8 +47,18 @@ impl From<AccountSpending> for AccountType {
 pub enum AccountSpending {
     #[codec(index = 0)]
     Delegation(DelegationId, Amount),
+    // Create certain amount of tokens and add them to circulating supply
     #[codec(index = 1)]
-    TokenSupply(TokenId, Amount),
+    TokenTotalSupply(TokenId, Amount),
+    // Take tokens out of circulation. Not the same as Burn because redemption means that certain amount
+    // of tokens is no longer supported by underlying fiat currency, which can only be done by
+    // reissuance controller.
+    #[codec(index = 2)]
+    TokenCirculatingSupply(TokenId, Amount),
+    // After supply is locked tokens cannot be minted or redeemed ever again.
+    // Works only for Lockable tokens supply.
+    #[codec(index = 3)]
+    TokenSupplyLock(TokenId),
 }
 
 /// Type of OutPoint that represents spending from an account

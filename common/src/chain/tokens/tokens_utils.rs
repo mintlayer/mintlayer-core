@@ -57,7 +57,9 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
             TxInput::Utxo(_) => false,
             TxInput::Account(account) => match account.account() {
                 AccountSpending::Delegation(_, _) => false,
-                AccountSpending::TokenSupply(_, _) => true,
+                AccountSpending::TokenTotalSupply(_, _)
+                | AccountSpending::TokenCirculatingSupply(_, _)
+                | AccountSpending::TokenSupplyLock(_) => true,
             },
         })
         .count()
@@ -76,9 +78,6 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         }
         TxOutput::TokensOp(v) => match v {
             TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => true,
-            TokenOutput::MintTokens(_, _, _)
-            | TokenOutput::RedeemTokens(_, _)
-            | TokenOutput::LockCirculatingSupply(_) => false,
         },
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)

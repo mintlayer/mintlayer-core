@@ -549,7 +549,9 @@ where
                             });
                             Some(res)
                         }
-                        AccountSpending::TokenSupply(_, _) => None,
+                        AccountSpending::TokenTotalSupply(_, _)
+                        | AccountSpending::TokenCirculatingSupply(_, _)
+                        | AccountSpending::TokenSupplyLock(_) => None,
                     }
                 }
             })
@@ -767,15 +769,42 @@ where
             _ => unreachable!(),
         };
 
-        tx.inputs().iter().try_for_each(|input| match input {
-            TxInput::Utxo(_) => Ok(()),
-            TxInput::Account(account_input) => match account_input.account() {
-                AccountSpending::Delegation(_, _) => Ok(()),
-                AccountSpending::TokenSupply(_, _) => self.spend_input_from_account(account_input),
-            },
-        })?;
+        let input_undos = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(_) => None,
+                TxInput::Account(account_input) => match account_input.account() {
+                    AccountSpending::Delegation(_, _) => None,
+                    AccountSpending::TokenTotalSupply(token_id, amount) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .mint_tokens(*token_id, *amount)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountSpending::TokenCirculatingSupply(token_id, amount) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .redeem_tokens(*token_id, *amount)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                    AccountSpending::TokenSupplyLock(token_id) => {
+                        let res = self.spend_input_from_account(account_input).and_then(|_| {
+                            self.tokens_accounting_cache
+                                .lock_circulating_supply(*token_id)
+                                .map_err(ConnectTransactionError::TokensAccountingError)
+                        });
+                        Some(res)
+                    }
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let undos = tx
+        let output_undos = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
@@ -804,35 +833,14 @@ where
                             );
                         Some(result)
                     }
-                    TokenOutput::MintTokens(token_id, mint_amount, _) => {
-                        let res = self
-                            .tokens_accounting_cache
-                            .mint_tokens(*token_id, *mint_amount)
-                            .map_err(ConnectTransactionError::TokensAccountingError);
-                        Some(res)
-                    }
-                    TokenOutput::RedeemTokens(token_id, burn_amount) => {
-                        let res = self
-                            .tokens_accounting_cache
-                            .redeem_tokens(*token_id, *burn_amount)
-                            .map_err(ConnectTransactionError::TokensAccountingError);
-                        Some(res)
-                    }
-                    TokenOutput::LockCirculatingSupply(token_id) => {
-                        let res = self
-                            .tokens_accounting_cache
-                            .lock_circulating_supply(*token_id)
-                            .map_err(ConnectTransactionError::TokensAccountingError);
-                        Some(res)
-                    }
                     TokenOutput::IssueNft(_, _, _) => None,
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Store accounting operations undos
-        if !undos.is_empty() {
-            let tx_undos = undos.into_iter().collect();
+        if !input_undos.is_empty() || !output_undos.is_empty() {
+            let tx_undos = input_undos.into_iter().chain(output_undos).collect();
             self.tokens_accounting_block_undo
                 .get_or_create_block_undo(&tx_source.into())
                 .insert_tx_undo(tx.get_id(), tokens_accounting::TxUndo::new(tx_undos))

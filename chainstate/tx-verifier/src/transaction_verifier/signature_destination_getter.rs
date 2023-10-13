@@ -129,11 +129,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                                     .clone())
                             }
                             TxOutput::TokensOp(v) => match v {
-                                TokenOutput::MintTokens(_, _, d) => Ok(d.clone()),
                                 TokenOutput::IssueNft(_, _, d) => Ok(d.clone()),
-                                TokenOutput::IssueFungibleToken(_)
-                                | TokenOutput::RedeemTokens(_, _)
-                                | TokenOutput::LockCirculatingSupply(_) => {
+                                TokenOutput::IssueFungibleToken(_) => {
                                     // This error is emitted in other places for attempting to make this spend,
                                     // but this is just a double-check.
                                     Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
@@ -149,7 +146,9 @@ impl<'a> SignatureDestinationGetter<'a> {
                             ))?
                             .spend_destination()
                             .clone()),
-                        AccountSpending::TokenSupply(token_id, _) => {
+                        AccountSpending::TokenTotalSupply(token_id, _)
+                        | AccountSpending::TokenCirculatingSupply(token_id, _)
+                        | AccountSpending::TokenSupplyLock(token_id) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;

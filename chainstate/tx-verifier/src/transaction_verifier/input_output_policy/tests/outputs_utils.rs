@@ -42,14 +42,11 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::TokensOp(token) => match token {
             TokenOutput::IssueFungibleToken(_) => unimplemented!(),
             TokenOutput::IssueNft(_, _, _) => unimplemented!(),
-            TokenOutput::MintTokens(_, _, _) => unimplemented!(),
-            TokenOutput::RedeemTokens(_, _) => unimplemented!(),
-            TokenOutput::LockCirculatingSupply(_) => unimplemented!(),
         },
     }
 }
 
-pub fn all_outputs() -> [TxOutput; 12] {
+pub fn all_outputs() -> [TxOutput; 9] {
     [
         transfer(),
         burn(),
@@ -60,13 +57,10 @@ pub fn all_outputs() -> [TxOutput; 12] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
-        mint_tokens(),
-        redeem_tokens(),
-        lock_tokens_supply(),
     ]
 }
 
-pub fn valid_tx_outputs() -> [TxOutput; 11] {
+pub fn valid_tx_outputs() -> [TxOutput; 8] {
     [
         transfer(),
         burn(),
@@ -76,21 +70,11 @@ pub fn valid_tx_outputs() -> [TxOutput; 11] {
         delegate_staking(),
         issue_tokens(),
         issue_nft(),
-        mint_tokens(),
-        redeem_tokens(),
-        lock_tokens_supply(),
     ]
 }
 
-pub fn valid_tx_inputs() -> [TxOutput; 6] {
-    [
-        transfer(),
-        lock_then_transfer(),
-        stake_pool(),
-        produce_block(),
-        issue_nft(),
-        mint_tokens(),
-    ]
+pub fn valid_tx_inputs() -> [TxOutput; 5] {
+    [transfer(), lock_then_transfer(), stake_pool(), produce_block(), issue_nft()]
 }
 
 pub fn transfer() -> TxOutput {
@@ -165,27 +149,6 @@ pub fn issue_nft() -> TxOutput {
         })),
         Destination::AnyoneCanSpend,
     ))
-}
-
-pub fn mint_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::MintTokens(
-        TokenId::new(H256::zero()),
-        Amount::ZERO,
-        Destination::AnyoneCanSpend,
-    ))
-}
-
-pub fn redeem_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::RedeemTokens(
-        TokenId::new(H256::zero()),
-        Amount::ZERO,
-    ))
-}
-
-pub fn lock_tokens_supply() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::LockCirculatingSupply(TokenId::new(
-        H256::zero(),
-    )))
 }
 
 pub fn is_stake_pool(output: &TxOutput) -> bool {
