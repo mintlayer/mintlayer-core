@@ -151,8 +151,8 @@ pub enum WalletError {
         "Cannot mint Token over the fixed supply {0:?}, current supply {1:?} trying to mint {2:?}"
     )]
     CannotMintFixedTokenSupply(Amount, Amount, Amount),
-    #[error("Trying to redeem {0:?} but the current supply is {1:?}")]
-    CannotRedeemTokenSupply(Amount, Amount),
+    #[error("Trying to unmint {0:?} but the current supply is {1:?}")]
+    CannotUnmintTokenSupply(Amount, Amount),
 }
 
 /// Result type used for the wallet
@@ -828,7 +828,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn redeem_tokens(
+    pub fn unmint_tokens(
         &mut self,
         account_index: U31,
         token_id: TokenId,
@@ -838,7 +838,7 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.redeem_tokens(
+            account.unmint_tokens(
                 db_tx,
                 token_id,
                 amount,

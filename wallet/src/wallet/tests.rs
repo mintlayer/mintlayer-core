@@ -2471,36 +2471,36 @@ fn change_and_lock_token_supply(#[case] seed: Seed) {
         token_amount_to_mint,
     );
 
-    // Try to redeem more than the current total supply
-    let token_amount_to_redeem = (token_amount_to_mint + Amount::from_atoms(1)).unwrap();
+    // Try to unmint more than the current total supply
+    let token_amount_to_unmint = (token_amount_to_mint + Amount::from_atoms(1)).unwrap();
     let err = wallet
-        .redeem_tokens(
+        .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
-            token_amount_to_redeem,
+            token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap_err();
     assert_eq!(
         err,
-        WalletError::CannotRedeemTokenSupply(token_amount_to_redeem, token_amount_to_mint)
+        WalletError::CannotUnmintTokenSupply(token_amount_to_unmint, token_amount_to_mint)
     );
 
-    let token_amount_to_redeem =
+    let token_amount_to_unmint =
         Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
-    let redeem_transaction = wallet
-        .redeem_tokens(
+    let unmint_transaction = wallet
+        .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
-            token_amount_to_redeem,
+            token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )
         .unwrap();
 
     let block4 = Block::new(
-        vec![redeem_transaction],
+        vec![unmint_transaction],
         block1_id.into(),
         block1_timestamp,
         ConsensusData::None,
@@ -2526,7 +2526,7 @@ fn change_and_lock_token_supply(#[case] seed: Seed) {
 
     assert_eq!(
         token_issuance_data.total_supply.current_supply(),
-        (token_amount_to_mint - token_amount_to_redeem).unwrap(),
+        (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
     assert!(token_issuance_data.total_supply.check_can_lock().is_ok());
 
@@ -2566,7 +2566,7 @@ fn change_and_lock_token_supply(#[case] seed: Seed) {
 
     assert_eq!(
         token_issuance_data.total_supply.current_supply(),
-        (token_amount_to_mint - token_amount_to_redeem).unwrap(),
+        (token_amount_to_mint - token_amount_to_unmint).unwrap(),
     );
 
     assert_eq!(
@@ -2586,10 +2586,10 @@ fn change_and_lock_token_supply(#[case] seed: Seed) {
         .unwrap_err();
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
     let err = wallet
-        .redeem_tokens(
+        .unmint_tokens(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
-            token_amount_to_redeem,
+            token_amount_to_unmint,
             FeeRate::new(Amount::ZERO),
             FeeRate::new(Amount::ZERO),
         )

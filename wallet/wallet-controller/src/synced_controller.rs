@@ -183,7 +183,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.broadcast_to_mempool(tx).await
     }
 
-    pub async fn redeem_tokens(
+    pub async fn unmint_tokens(
         &mut self,
         token_id: TokenId,
         amount: Amount,
@@ -193,7 +193,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
         let tx = self
             .wallet
-            .redeem_tokens(
+            .unmint_tokens(
                 self.account_index,
                 token_id,
                 amount,

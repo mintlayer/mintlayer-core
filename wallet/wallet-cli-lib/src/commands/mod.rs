@@ -214,8 +214,8 @@ pub enum WalletCommand {
         amount: String,
     },
 
-    /// Redeem existing tokens and reduce the total supply
-    RedeemTokens {
+    /// Unmint existing tokens and reduce the total supply
+    UnmintTokens {
         token_id: String,
         amount: String,
     },
@@ -871,7 +871,7 @@ impl CommandHandler {
                 Ok(Self::tx_submitted_command())
             }
 
-            WalletCommand::RedeemTokens { token_id, amount } => {
+            WalletCommand::UnmintTokens { token_id, amount } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
                 let amount = {
                     let token_number_of_decimals = self
@@ -884,7 +884,7 @@ impl CommandHandler {
 
                 self.get_synced_controller()
                     .await?
-                    .redeem_tokens(token_id, amount)
+                    .unmint_tokens(token_id, amount)
                     .await
                     .map_err(WalletCliError::Controller)?;
 

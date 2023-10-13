@@ -189,8 +189,8 @@ class WalletCliController:
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
         return await self._write_command(f"minttokens {token_id} {address} {amount}\n")
 
-    async def redeem_tokens(self, token_id: str, amount: int) -> str:
-        return await self._write_command(f"redeemtokens {token_id} {amount}\n")
+    async def unmint_tokens(self, token_id: str, amount: int) -> str:
+        return await self._write_command(f"unminttokens {token_id} {amount}\n")
 
     async def lock_tokens(self, token_id: str) -> str:
         return await self._write_command(f"locktokens {token_id}\n")

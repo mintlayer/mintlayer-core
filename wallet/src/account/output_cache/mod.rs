@@ -122,12 +122,12 @@ impl TokenTotalSupplyState {
         }
     }
 
-    pub fn check_can_redeem(&self, amount: Amount) -> WalletResult<()> {
+    pub fn check_can_unmint(&self, amount: Amount) -> WalletResult<()> {
         match self {
             Self::Unlimited(current) | Self::Lockable(current) | Self::Fixed(_, current) => {
                 ensure!(
                     *current >= amount,
-                    WalletError::CannotRedeemTokenSupply(amount, *current)
+                    WalletError::CannotUnmintTokenSupply(amount, *current)
                 );
                 Ok(())
             }
@@ -175,20 +175,20 @@ impl TokenTotalSupplyState {
         }
     }
 
-    fn redeem(&self, amount: Amount) -> WalletResult<TokenTotalSupplyState> {
+    fn unmint(&self, amount: Amount) -> WalletResult<TokenTotalSupplyState> {
         match self {
             TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Lockable(
                 (*current - amount)
-                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
             TokenTotalSupplyState::Unlimited(current) => Ok(TokenTotalSupplyState::Unlimited(
                 (*current - amount)
-                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
             TokenTotalSupplyState::Fixed(max, current) => Ok(TokenTotalSupplyState::Fixed(
                 *max,
                 (*current - amount)
-                    .ok_or(WalletError::CannotRedeemTokenSupply(amount, *current))?,
+                    .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
             TokenTotalSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
         }
@@ -498,7 +498,7 @@ impl OutputCache {
                                         tx_id,
                                     )?;
                                     let amount = sum_burned_token_amount(tx.outputs(), token_id)?;
-                                    data.total_supply = data.total_supply.redeem(amount)?;
+                                    data.total_supply = data.total_supply.unmint(amount)?;
                                 }
                             }
                             | AccountOp::LockTokenSupply(token_id) => {
@@ -605,7 +605,7 @@ impl OutputCache {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
-                                data.total_supply = data.total_supply.redeem(*amount)?;
+                                data.total_supply = data.total_supply.unmint(*amount)?;
                             }
                         }
 
@@ -807,7 +807,7 @@ impl OutputCache {
                                                     tx_id.into(),
                                                 );
                                                 data.total_supply =
-                                                    data.total_supply.redeem(*amount)?;
+                                                    data.total_supply.unmint(*amount)?;
                                             }
                                         }
                                         | AccountOp::UnmintTokens(token_id) => {

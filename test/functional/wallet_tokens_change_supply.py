@@ -24,7 +24,7 @@ Check that:
 * check balance
 * issue new token
 * mint new tokens
-* redeem existing tokens
+* unmint existing tokens
 * lock the tokens supply
 """
 
@@ -155,11 +155,11 @@ class WalletTokens(BitcoinTestFramework):
             assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
 
             # cannot unmint more than minted
-            assert_in(f"Trying to redeem Amount {{ val: {tokens_to_mint+1}00 }} but the current supply is Amount {{ val: {tokens_to_mint}00 }}", await wallet.redeem_tokens(token_id, tokens_to_mint + 1))
+            assert_in(f"Trying to unmint Amount {{ val: {tokens_to_mint+1}00 }} but the current supply is Amount {{ val: {tokens_to_mint}00 }}", await wallet.unmint_tokens(token_id, tokens_to_mint + 1))
 
-            tokens_to_redeem = 1000
-            total_tokens_supply = total_tokens_supply - tokens_to_redeem
-            assert_in("The transaction was submitted successfully", await wallet.redeem_tokens(token_id, tokens_to_redeem))
+            tokens_to_unmint = 1000
+            total_tokens_supply = total_tokens_supply - tokens_to_unmint
+            assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -182,7 +182,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # cannot mint any more tokens as it is locked
             assert_in("Cannot change a Locked Token supply", await wallet.mint_tokens(token_id, address, tokens_to_mint))
-            assert_in("Cannot change a Locked Token supply", await wallet.redeem_tokens(token_id, tokens_to_mint))
+            assert_in("Cannot change a Locked Token supply", await wallet.unmint_tokens(token_id, tokens_to_mint))
             assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_tokens(token_id))
 
 

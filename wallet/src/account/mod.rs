@@ -34,7 +34,7 @@ use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     get_tx_output_destination, make_address_output, make_address_output_from_delegation,
     make_address_output_token, make_decomission_stake_pool_output, make_lock_token_outputs,
-    make_mint_token_outputs, make_redeem_token_outputs, make_stake_output, IssueNftArguments,
+    make_mint_token_outputs, make_stake_output, make_unmint_token_outputs, IssueNftArguments,
     StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -741,7 +741,7 @@ impl Account {
         )
     }
 
-    pub fn redeem_tokens(
+    pub fn unmint_tokens(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         token_id: TokenId,
@@ -749,10 +749,10 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let outputs = make_redeem_token_outputs(token_id, amount, self.chain_config.as_ref())?;
+        let outputs = make_unmint_token_outputs(token_id, amount, self.chain_config.as_ref())?;
 
         let token_data = self.find_token(&token_id)?;
-        token_data.total_supply.check_can_redeem(amount)?;
+        token_data.total_supply.check_can_unmint(amount)?;
 
         let nonce = token_data
             .last_nonce

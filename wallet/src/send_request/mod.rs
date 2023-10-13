@@ -99,7 +99,7 @@ pub fn make_mint_token_outputs(
     Ok(vec![mint_output, token_change_supply_fee])
 }
 
-pub fn make_redeem_token_outputs(
+pub fn make_unmint_token_outputs(
     token_id: TokenId,
     amount: Amount,
     chain_config: &ChainConfig,
