@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,25 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(clippy::clone_on_ref_ptr)]
+/// Specify the rules for including a transaction in the mempool
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, PartialOrd, Ord, Eq, Debug)]
+pub struct InclusionPolicy {
+    /// Force the transaction in even if it conflicts with a existing ones.
+    force_replace: bool,
 
-mod config;
-mod inclusion_policy;
-mod interface;
-mod pool;
+    /// Bypass mempool policy checks
+    bypass_checks: bool,
+}
 
-pub mod error;
-pub mod event;
-pub mod rpc;
-pub mod tx_accumulator;
-
-pub use config::MempoolMaxSize;
-pub use interface::{make_mempool, MempoolInterface};
-pub use mempool_types::{tx_origin, TxStatus};
-pub use inclusion_policy::InclusionPolicy;
-
-pub use pool::FeeRate;
-
-pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
-
-pub type Result<T> = core::result::Result<T, error::Error>;
+impl Default for InclusionPolicy {
+    fn default() -> Self {
+        Self {
+            force_replace: false,
+            bypass_checks: bool,
+        }
+    }
+}
