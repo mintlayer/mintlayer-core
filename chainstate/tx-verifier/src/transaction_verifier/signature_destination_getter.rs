@@ -30,8 +30,8 @@ pub enum SignatureDestinationGetterError {
     SpendingOutputInBlockReward,
     #[error("Attempted to spend from account in block reward")]
     SpendingFromAccountInBlockReward,
-    #[error("Attempted to verify signature for burning output")]
-    SigVerifyOfBurnedOutput,
+    #[error("Attempted to verify signature for not spendable output")]
+    SigVerifyOfNotSpendableOutput,
     #[error("Pool data not found for signature verification {0}")]
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
@@ -100,7 +100,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
-                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
                             TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_view
                                 .get_delegation_data(*delegation_id)?
@@ -133,7 +133,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 TokenOutput::IssueFungibleToken(_) => {
                                     // This error is emitted in other places for attempting to make this spend,
                                     // but this is just a double-check.
-                                    Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                                    Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                                 }
                             },
                         }
@@ -190,11 +190,17 @@ impl<'a> SignatureDestinationGetter<'a> {
                             | TxOutput::DelegateStaking(_, _) => {
                                 Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                             }
-                            TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::Burn(_)
-                            | TxOutput::TokensOp(_) => {
-                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
+                            TxOutput::TokensOp(token_output) => match token_output {
+                                TokenOutput::IssueFungibleToken(_) => Err(
+                                    SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput,
+                                ),
+                                TokenOutput::IssueNft(_, _, _) => Err(
+                                    SignatureDestinationGetterError::SpendingOutputInBlockReward,
+                                ),
+                            },
 
                             TxOutput::ProduceBlockFromStake(d, _) => {
                                 // Spending an output of a block creation output is only allowed to

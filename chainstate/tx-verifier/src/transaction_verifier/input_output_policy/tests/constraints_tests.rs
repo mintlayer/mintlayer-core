@@ -29,8 +29,8 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::{
-    decompose_value,
     random::{make_seedable_rng, Seed},
+    split_value,
 };
 
 use super::outputs_utils::*;
@@ -41,7 +41,7 @@ fn random_input_utxos(
     total_input_atoms: u128,
     timelock_range: Range<u64>,
 ) -> Vec<TxOutput> {
-    decompose_value(rng, total_input_atoms)
+    split_value(rng, total_input_atoms)
         .into_iter()
         .map(|v| {
             if rng.gen::<bool>() {
@@ -127,7 +127,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     // try to unlock random value
     {
         let random_additional_value = rng.gen_range(1..100);
-        let timelocked_outputs = decompose_value(&mut rng, staked_atoms - random_additional_value)
+        let timelocked_outputs = split_value(&mut rng, staked_atoms - random_additional_value)
             .iter()
             .map(|atoms| {
                 let random_additional_value = rng.gen_range(0..10u64);
@@ -181,7 +181,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                 .chain(std::iter::once(decommission_pool_utxo))
                 .collect();
 
-        let timelocked_outputs = decompose_value(&mut rng, staked_atoms)
+        let timelocked_outputs = split_value(&mut rng, staked_atoms)
             .iter()
             .map(|atoms| {
                 let random_additional_distance = rng.gen_range(0..10);
@@ -244,20 +244,19 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     // make timelock outputs but total atoms that locked is less than required
     {
         let random_additional_value = rng.gen_range(1..=atoms_to_spend);
-        let timelocked_outputs =
-            decompose_value(&mut rng, atoms_to_spend - random_additional_value)
-                .iter()
-                .map(|atoms| {
-                    let random_additional_distance = rng.gen_range(0..10);
-                    TxOutput::LockThenTransfer(
-                        OutputValue::Coin(Amount::from_atoms(*atoms)),
-                        Destination::AnyoneCanSpend,
-                        OutputTimeLock::ForBlockCount(
-                            required_maturity_distance + random_additional_distance,
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let timelocked_outputs = split_value(&mut rng, atoms_to_spend - random_additional_value)
+            .iter()
+            .map(|atoms| {
+                let random_additional_distance = rng.gen_range(0..10);
+                TxOutput::LockThenTransfer(
+                    OutputValue::Coin(Amount::from_atoms(*atoms)),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(
+                        required_maturity_distance + random_additional_distance,
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
 
         let outputs = {
             let mut outputs =
@@ -298,7 +297,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
     // valid case
     {
-        let timelocked_outputs = decompose_value(&mut rng, atoms_to_spend)
+        let timelocked_outputs = split_value(&mut rng, atoms_to_spend)
             .iter()
             .map(|atoms| {
                 let random_additional_distance = rng.gen_range(0..10);

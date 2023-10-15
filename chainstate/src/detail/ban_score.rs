@@ -171,7 +171,7 @@ impl BanScore for SignatureDestinationGetterError {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
-            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,

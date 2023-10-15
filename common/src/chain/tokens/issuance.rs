@@ -39,7 +39,7 @@ pub enum TokenTotalSupply {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]
 pub enum TokenIssuance {
-    #[codec(index = 0)]
+    #[codec(index = 1)]
     V1(TokenIssuanceV1),
 }
 
