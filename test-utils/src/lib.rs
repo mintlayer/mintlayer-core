@@ -21,6 +21,7 @@ pub mod test_dir;
 use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
 use hex::ToHex;
+use itertools::Itertools;
 
 /// Assert that the encoded object matches the expected hex string.
 pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {
@@ -64,17 +65,16 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     token_ticker
 }
 
-pub fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
-    let mut remaining = value;
-    let mut result = Vec::new();
+pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
+    let mut numbers = vec![0, value];
+    let n = rng.gen_range(0..10);
 
-    while remaining > 0 {
-        let fraction = rng.gen_range(1..=remaining);
-        result.push(fraction);
-        remaining -= fraction;
+    if value > 1 && n > 0 {
+        numbers.extend((0..=n).map(|_| rng.gen_range(1..value)).collect::<Vec<_>>());
+        numbers.sort();
     }
 
-    result
+    numbers.iter().tuple_windows().map(|(v0, v1)| v1 - v0).collect()
 }
 
 #[macro_export]
@@ -148,14 +148,14 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn decompose_value_test(#[case] seed: Seed) {
+    fn split_value_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        assert_eq!(Vec::<u128>::new(), decompose_value(&mut rng, 0));
-        assert_eq!(vec![1], decompose_value(&mut rng, 1));
+        assert_eq!(vec![0], split_value(&mut rng, 0));
+        assert_eq!(vec![1], split_value(&mut rng, 1));
 
         let value = rng.gen::<u128>();
-        let result = decompose_value(&mut rng, value);
+        let result = split_value(&mut rng, value);
         assert_eq!(value, result.iter().sum());
     }
 }

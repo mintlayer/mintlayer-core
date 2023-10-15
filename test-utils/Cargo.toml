@@ -14,5 +14,6 @@ serialization = { path = '../serialization' }
 utils = { path = '../utils' }
 
 hex.workspace = true
+itertools.workspace = true
 rand_chacha.workspace = true
 rstest.workspace = true

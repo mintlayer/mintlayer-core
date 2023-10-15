@@ -230,11 +230,11 @@ fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
     );
     let mut cache = TokensAccountingCache::new(&mut storage);
 
-    test_utils::decompose_value(&mut rng, total_supply.into_atoms())
-        .iter()
-        .for_each(|amount_to_mint| {
+    test_utils::split_value(&mut rng, total_supply.into_atoms()).iter().for_each(
+        |amount_to_mint| {
             let _ = cache.mint_tokens(token_id, Amount::from_atoms(*amount_to_mint)).unwrap();
-        });
+        },
+    );
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
@@ -400,11 +400,11 @@ fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
         ))
     );
 
-    test_utils::decompose_value(&mut rng, amount_minted.into_atoms())
-        .iter()
-        .for_each(|amount_to_unmint| {
+    test_utils::split_value(&mut rng, amount_minted.into_atoms()).iter().for_each(
+        |amount_to_unmint| {
             let _ = cache.unmint_tokens(token_id, Amount::from_atoms(*amount_to_unmint)).unwrap();
-        });
+        },
+    );
 
     assert_eq!(
         cache.get_token_data(&token_id).unwrap(),
