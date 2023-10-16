@@ -31,7 +31,7 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::{TokenData, TokenIssuanceV1, TokenTransfer},
+        tokens::{TokenData, TokenIssuanceV0, TokenIssuanceV1},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
@@ -2200,10 +2200,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
-        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id: *token_id,
-            amount: tokens_to_transfer,
-        }))),
+        OutputValue::TokenV1(*token_id, tokens_to_transfer),
         Destination::Address(some_other_address),
     );
 
@@ -2275,10 +2272,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let some_other_address = PublicKeyHash::from_low_u64_be(1);
     let new_output = TxOutput::Transfer(
-        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id: *token_id,
-            amount: not_enough_tokens_to_transfer,
-        }))),
+        OutputValue::TokenV1(*token_id, not_enough_tokens_to_transfer),
         Destination::Address(some_other_address),
     );
 
@@ -2313,7 +2307,665 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn change_and_lock_token_supply(#[case] seed: Seed) {
+fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.token_min_issuance_fee())
+    .unwrap();
+
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_issuance_transaction = wallet
+        .create_transaction_to_addresses(
+            DEFAULT_ACCOUNT_INDEX,
+            [TxOutput::Transfer(
+                OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
+                    TokenIssuanceV0 {
+                        token_ticker: "XXXX".as_bytes().to_vec(),
+                        number_of_decimals: rng.gen_range(1..18),
+                        metadata_uri: "http://uri".as_bytes().to_vec(),
+                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
+                    },
+                )))),
+                address2.decode_object(&chain_config).unwrap(),
+            )],
+            [],
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_min_supply_change_fee();
+
+    let block2 = Block::new(
+        vec![token_issuance_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+
+    let currency_balances = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap();
+
+    let token_balances = currency_balances
+        .into_iter()
+        .filter_map(|(c, amount)| match c {
+            Currency::Coin => None,
+            Currency::Token(token_id) => Some((token_id, amount)),
+        })
+        .collect_vec();
+    // the token should be ignored
+    assert_eq!(token_balances.len(), 0);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_token_supply_fixed(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.token_min_issuance_fee())
+    .unwrap();
+
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let fixed_max_amount = Amount::from_atoms(rng.gen_range(1..100000));
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(TokenIssuanceV1 {
+                token_ticker: "XXXX".as_bytes().to_vec(),
+                number_of_decimals: rng.gen_range(1..18),
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+                total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
+                reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+            }),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_min_supply_change_fee();
+
+    let block2 = Block::new(
+        vec![token_issuance_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(
+        token_issuance_data.reissuance_controller,
+        address2.decode_object(&chain_config).unwrap()
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, None);
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        Amount::ZERO,
+    );
+
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1..fixed_max_amount.into_atoms()));
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
+
+    // Try to mint more then the fixed maximum
+    let leftover = (fixed_max_amount - token_amount_to_mint).unwrap();
+    let token_amount_to_mint_more_than_maximum =
+        (leftover + Amount::from_atoms(rng.gen_range(1..1000))).unwrap();
+    let err = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_mint_more_than_maximum,
+            address2.clone(),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+
+    assert_eq!(
+        err,
+        WalletError::CannotMintFixedTokenSupply(
+            fixed_max_amount,
+            token_amount_to_mint,
+            token_amount_to_mint_more_than_maximum
+        )
+    );
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        token_amount_to_mint,
+    );
+
+    // test abandoning a transaction
+    wallet
+        .abandon_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            mint_transaction.transaction().get_id(),
+        )
+        .unwrap();
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, None);
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        Amount::ZERO,
+    );
+
+    let block3 = Block::new(
+        vec![mint_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        token_amount_to_mint,
+    );
+
+    // Try to unmint more than the current total supply
+    let token_amount_to_unmint = (token_amount_to_mint + Amount::from_atoms(1)).unwrap();
+    let err = wallet
+        .unmint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_unmint,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        WalletError::CannotUnmintTokenSupply(token_amount_to_unmint, token_amount_to_mint)
+    );
+
+    let token_amount_to_unmint =
+        Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
+    let unmint_transaction = wallet
+        .unmint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_unmint,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block4 = Block::new(
+        vec![unmint_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        (token_amount_to_mint - token_amount_to_unmint).unwrap(),
+    );
+    assert_eq!(
+        token_issuance_data.total_supply.check_can_lock().unwrap_err(),
+        WalletError::CannotLockTokenSupply("Fixed")
+    );
+
+    let err = wallet
+        .lock_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::CannotLockTokenSupply("Fixed"));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_token_supply_unlimited(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.token_min_issuance_fee())
+    .unwrap();
+
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block1_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    scan_wallet(&mut wallet, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+            UtxoState::Confirmed.into(),
+            WithLocked::Unlocked,
+        )
+        .unwrap()
+        .get(&Currency::Coin)
+        .copied()
+        .unwrap_or(Amount::ZERO);
+    assert_eq!(coin_balance, block1_amount);
+
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(TokenIssuanceV1 {
+                token_ticker: "XXXX".as_bytes().to_vec(),
+                number_of_decimals: rng.gen_range(1..18),
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+                total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+                reissuance_controller: address2.decode_object(&chain_config).unwrap(),
+            }),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_min_supply_change_fee();
+
+    let block2 = Block::new(
+        vec![token_issuance_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(1), vec![block2]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(
+        token_issuance_data.reissuance_controller,
+        address2.decode_object(&chain_config).unwrap()
+    );
+
+    assert_eq!(token_issuance_data.last_nonce, None);
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        Amount::ZERO,
+    );
+
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(1..10000));
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
+
+    let block3 = Block::new(
+        vec![mint_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(2), vec![block3]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(0)));
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        token_amount_to_mint,
+    );
+
+    // Try to unmint more than the current total supply
+    let token_amount_to_unmint = (token_amount_to_mint + Amount::from_atoms(1)).unwrap();
+    let err = wallet
+        .unmint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_unmint,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        WalletError::CannotUnmintTokenSupply(token_amount_to_unmint, token_amount_to_mint)
+    );
+
+    let token_amount_to_unmint =
+        Amount::from_atoms(rng.gen_range(1..token_amount_to_mint.into_atoms()));
+    let unmint_transaction = wallet
+        .unmint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            token_amount_to_unmint,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block4 = Block::new(
+        vec![unmint_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(
+            chain_config.as_ref(),
+            address.clone(),
+            block2_amount,
+        )
+        .unwrap()]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet, BlockHeight::new(3), vec![block4]);
+
+    let token_issuance_data = wallet
+        .accounts
+        .get(&DEFAULT_ACCOUNT_INDEX)
+        .unwrap()
+        .find_token(&issued_token_id)
+        .unwrap();
+
+    assert_eq!(token_issuance_data.last_nonce, Some(AccountNonce::new(1)));
+
+    assert_eq!(
+        token_issuance_data.total_supply.current_supply(),
+        (token_amount_to_mint - token_amount_to_unmint).unwrap(),
+    );
+    assert_eq!(
+        token_issuance_data.total_supply.check_can_lock().unwrap_err(),
+        WalletError::CannotLockTokenSupply("Unlimited")
+    );
+
+    let err = wallet
+        .lock_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            issued_token_id,
+            FeeRate::new(Amount::ZERO),
+            FeeRate::new(Amount::ZERO),
+        )
+        .unwrap_err();
+    assert_eq!(err, WalletError::CannotLockTokenSupply("Unlimited"));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 

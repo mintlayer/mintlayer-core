@@ -336,7 +336,7 @@ impl OutputCache {
     }
 
     pub fn add_tx(&mut self, tx_id: OutPointSourceId, tx: WalletTx) -> WalletResult<()> {
-        let already_present = self.txs.contains_key(&tx_id);
+        let already_present = self.txs.get(&tx_id).map_or(false, |tx| !tx.state().is_abandoned());
         let is_unconfirmed = match tx.state() {
             TxState::Inactive(_)
             | TxState::InMempool(_)
