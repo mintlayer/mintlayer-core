@@ -474,7 +474,7 @@ impl BlockProduction {
                 )
                 .await?
                 .transactions()
-                .clone();
+                .to_vec();
 
             let block_body = BlockBody::new(block_reward, collected_transactions);
 

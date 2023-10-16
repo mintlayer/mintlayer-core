@@ -17,7 +17,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock, SignedTransaction},
     primitives::{Amount, Id},
 };
-use serialization::Encode;
+use serialization::{Compact, Encode};
 
 use crate::pool::fee::Fee;
 
@@ -40,7 +40,7 @@ pub trait TransactionAccumulator: Send {
     // TODO: Add a test for this property, at least for DefaultTxAccumulator
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Fee) -> Result<(), TxAccumulatorError>;
     fn done(&self) -> bool;
-    fn transactions(&self) -> &Vec<SignedTransaction>;
+    fn transactions(&self) -> &[SignedTransaction];
     fn total_fees(&self) -> Fee;
 
     /// The tip that the accumulator expects. This is used so that the mempool remains in sync with block production,
@@ -53,7 +53,7 @@ pub trait TransactionAccumulator: Send {
 
 pub struct DefaultTxAccumulator {
     txs: Vec<SignedTransaction>,
-    total_size: usize,
+    txs_size: usize,
     target_size: usize,
     done: bool,
     total_fees: Fee,
@@ -65,7 +65,7 @@ impl DefaultTxAccumulator {
     pub fn new(target_size: usize, expected_tip: Id<GenBlock>, timestamp: BlockTimestamp) -> Self {
         Self {
             txs: Vec::new(),
-            total_size: 0,
+            txs_size: 0,
             target_size,
             done: false,
             total_fees: Amount::ZERO.into(),
@@ -73,19 +73,39 @@ impl DefaultTxAccumulator {
             timestamp,
         }
     }
+
+    pub fn total_size(&self) -> usize {
+        Compact(self.transactions().len() as u64).encoded_size() + self.txs_size
+    }
+
+    // Calculate total size with an extra transaction of given size
+    fn total_size_with(&self, new_size: usize) -> usize {
+        Compact(self.transactions().len() as u64 + 1).encoded_size() + self.txs_size + new_size
+    }
 }
 
 impl TransactionAccumulator for DefaultTxAccumulator {
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Fee) -> Result<(), TxAccumulatorError> {
-        if self.total_size + tx.encoded_size() <= self.target_size {
-            self.total_size += tx.encoded_size();
+        let tx_size = tx.encoded_size();
+        let total_size_with_tx = self.total_size_with(tx_size);
+
+        if total_size_with_tx <= self.target_size {
+            self.txs_size += tx_size;
             self.total_fees = (self.total_fees + tx_fee).ok_or(
                 TxAccumulatorError::FeeAccumulationError(self.total_fees, tx_fee),
             )?;
             self.txs.push(tx);
+
+            // Sanity check that total_size_with() and total_size() agree
+            assert_eq!(total_size_with_tx, self.total_size());
         } else {
-            self.done = true
+            self.done = true;
         };
+
+        // Sanity check the size tracking is accurate
+        #[cfg(test)]
+        assert_eq!(self.total_size(), self.transactions().encoded_size());
+
         Ok(())
     }
 
@@ -93,7 +113,7 @@ impl TransactionAccumulator for DefaultTxAccumulator {
         self.done
     }
 
-    fn transactions(&self) -> &Vec<SignedTransaction> {
+    fn transactions(&self) -> &[SignedTransaction] {
         &self.txs
     }
 
