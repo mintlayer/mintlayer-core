@@ -18,13 +18,11 @@ use crate::primitives::Amount;
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct TokenIssuanceVersion(u32);
-
-impl TokenIssuanceVersion {
+pub enum TokenIssuanceVersion {
     /// Initial issuance implementation
-    pub const V0: Self = Self(0);
+    V0,
     /// Enable modifying token supply
-    pub const V1: Self = Self(1);
+    V1,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, serde::Serialize)]

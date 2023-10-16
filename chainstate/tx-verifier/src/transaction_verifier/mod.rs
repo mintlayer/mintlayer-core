@@ -766,7 +766,6 @@ where
                     )
                 );
             }
-            _ => unreachable!(),
         };
 
         let input_undos = tx
