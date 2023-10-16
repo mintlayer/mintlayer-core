@@ -103,7 +103,6 @@ impl TokenIssuanceCache {
                         ),
                     ));
                 }
-                _ => unreachable!(),
             };
 
             self.precache_token_issuance(token_data_getter, tx)?;
