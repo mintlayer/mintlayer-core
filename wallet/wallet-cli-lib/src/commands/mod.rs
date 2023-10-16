@@ -28,6 +28,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{hdkd::u31::U31, PublicKey};
+use mempool::tx_accumulator::PackingStrategy;
 use p2p_types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::ensure;
@@ -126,7 +127,7 @@ pub enum WalletCommand {
     /// reward destination. If transactions are None, the block will be
     /// generated with available transactions in the mempool
     GenerateBlock {
-        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
     },
 
     GenerateBlocks {
@@ -694,11 +695,15 @@ impl CommandHandler {
             }
 
             WalletCommand::GenerateBlock { transactions } => {
-                let transactions_opt =
-                    transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
+                let transactions = transactions.into_iter().map(HexEncoded::take).collect();
                 let (controller, selected_account) = self.get_controller_and_selected_acc()?;
                 let block = controller
-                    .generate_block(selected_account, transactions_opt)
+                    .generate_block(
+                        selected_account,
+                        transactions,
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
                     .await
                     .map_err(WalletCliError::Controller)?;
                 rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;

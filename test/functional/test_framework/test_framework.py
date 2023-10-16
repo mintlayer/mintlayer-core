@@ -423,7 +423,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             # To ensure that all nodes are out of IBD, the most recent block
             # must have a timestamp not too old (see chainstate_is_initial_block_download()).
             self.log.debug('Generate a block with current time')
-            block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+            block = self.nodes[0].blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
             for n in self.nodes:
                 n.chainstate_submit_block(block)
                 info = n.chainstate_info()

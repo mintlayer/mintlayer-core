@@ -66,12 +66,16 @@ class ExampleTest(BitcoinTestFramework):
         ).to_hex()[2:]
 
         # add two blocks
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        block = node.blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         node.chainstate_submit_block(blocks[0])
-        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+        self.wait_until(lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(), timeout = 5)
+
+        block = node.blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
         blocks.append(block)
         node.chainstate_submit_block(blocks[1])
+        self.wait_until(lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(), timeout = 5)
+
         assert_equal(self.block_height(), 2)
         self.assert_tip(blocks[1])
 
@@ -84,9 +88,10 @@ class ExampleTest(BitcoinTestFramework):
 
         # Add three more blocks
         for i in range(2, 5):
-            block = self.nodes[0].blockprod_generate_block(block_input_data, [])
+            block = node.blockprod_generate_block(block_input_data, [], [], "LeaveEmptySpace")
             blocks.append(block)
             node.chainstate_submit_block(blocks[i])
+            self.wait_until(lambda: node.mempool_local_best_block_id() == node.chainstate_best_block_id(), timeout = 5)
         assert_equal(self.block_height(), 5)
         self.assert_tip(blocks[4])
 

@@ -21,10 +21,16 @@ use serialization::Encode;
 
 use crate::pool::fee::Fee;
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum TxAccumulatorError {
     #[error("Fee overflow: {0:?} + {1:?} failed")]
     FeeAccumulationError(Fee, Fee),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum PackingStrategy {
+    FillSpaceFromMempool,
+    LeaveEmptySpace,
 }
 
 pub trait TransactionAccumulator: Send {

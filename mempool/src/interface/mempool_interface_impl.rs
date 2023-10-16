@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use crate::{
-    error::Error,
+    error::{BlockConstructionError, Error},
     event::MempoolEvent,
     pool::memory_usage_estimator::StoreMemoryUsageEstimator,
-    tx_accumulator::TransactionAccumulator,
+    tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_origin::{LocalTxOrigin, RemoteTxOrigin},
     FeeRate, MempoolInterface, MempoolMaxSize, TxStatus,
 };
@@ -170,8 +170,10 @@ impl MempoolInterface for MempoolImpl {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, Error> {
-        Ok(self.mempool.collect_txs(tx_accumulator))
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockConstructionError> {
+        self.mempool.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
     }
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

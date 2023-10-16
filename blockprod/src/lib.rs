@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, GenBlock},
+    chain::{block::BlockCreationError, ChainConfig, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -33,22 +33,20 @@ use detail::{
     BlockProduction,
 };
 use interface::blockprod_interface::BlockProductionInterface;
-use mempool::MempoolHandle;
+use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
 use p2p::P2pHandle;
 use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
-    #[error("Mempool channel closed")]
-    MempoolChannelClosed,
-    #[error("Chainstate channel closed")]
-    ChainstateChannelClosed,
     #[error("Failed to retrieve chainstate info")]
     ChainstateInfoRetrievalError,
     #[error("Wait for chainstate to sync before producing blocks")]
     ChainstateWaitForSync,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
+    #[error("Failed to add transaction {0}: {1}")]
+    FailedToAddTransaction(Id<Transaction>, TxAccumulatorError),
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
@@ -67,6 +65,8 @@ pub enum BlockProductionError {
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
     JobManagerError(#[from] JobManagerError),
+    #[error("Mempool failed to construct block: {0}")]
+    MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;
@@ -130,7 +130,7 @@ mod tests {
             Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
             TxOutput, UpgradeVersion,
         },
-        primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
+        primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
         time_getter::TimeGetter,
     };
     use crypto::{
@@ -154,13 +154,37 @@ mod tests {
 
     pub async fn assert_process_block(
         chainstate: &ChainstateHandle,
+        mempool: &MempoolHandle,
         new_block: Block,
     ) -> BlockIndex {
-        chainstate
+        let block_id = new_block.get_id();
+
+        // Wait for mempool to be up-to-date with the new block. The subscriptions are not cleaned
+        // up but hopefully it's not too bad just for testing.
+        let (tip_sx, tip_rx) = tokio::sync::oneshot::channel();
+        let tip_sx = utils::sync::Mutex::new(Some(tip_sx));
+        mempool
+            .call_mut(move |m| {
+                m.subscribe_to_events(Arc::new({
+                    move |evt| match evt {
+                        mempool::event::MempoolEvent::NewTip(tip) => {
+                            if let Some(tip_sx) = tip_sx.lock().unwrap().take() {
+                                assert_eq!(tip.block_id(), &block_id);
+                                tip_sx.send(()).unwrap();
+                            }
+                        }
+                        mempool::event::MempoolEvent::TransactionProcessed(_) => (),
+                    }
+                }))
+            })
+            .await
+            .unwrap();
+
+        let block_index = chainstate
             .call_mut(move |this| {
                 let new_block_index = this
                     .process_block(new_block.clone(), BlockSource::Local)
-                    .expect("Failed to process block: {:?}")
+                    .expect("Failed to process block")
                     .expect("Failed to activate best chain");
 
                 assert_eq!(
@@ -170,7 +194,7 @@ mod tests {
                 );
 
                 let best_block_index =
-                    this.get_best_block_index().expect("Failed to get best block index: {:?}");
+                    this.get_best_block_index().expect("Failed to get best block index");
 
                 assert_eq!(
                     new_block_index.clone().into_gen_block_index().block_id(),
@@ -181,7 +205,11 @@ mod tests {
                 new_block_index
             })
             .await
-            .expect("New block is not the new tip: {:?}")
+            .expect("New block is not the new tip");
+
+        tip_rx.await.unwrap();
+
+        block_index
     }
 
     pub fn setup_blockprod_test(
