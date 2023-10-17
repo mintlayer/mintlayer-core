@@ -14,12 +14,70 @@
 // limitations under the License.
 
 use common::chain::timelock::OutputTimeLock;
+use serialization::Compact;
 
 use super::*;
 use crate::tx_accumulator::DefaultTxAccumulator;
 
 // Useful for testing cases where timestamp is irrelevant.
 const DUMMY_TIMESTAMP: BlockTimestamp = BlockTimestamp::from_int_seconds(0u64);
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_accumulator(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis_id = tf.genesis().get_id();
+    let size_limit = rng.gen_range(10_000..=200_000);
+
+    let mut accumulator = DefaultTxAccumulator::new(size_limit, genesis_id.into(), DUMMY_TIMESTAMP);
+
+    // Create a bunch of transactions that leave a small amount of space in the block
+    let mut amount = 900_000_000_000;
+    let mut source = OutPointSourceId::BlockReward(genesis_id.into());
+    while accumulator.transactions().encoded_size() + 15_000 <= size_limit {
+        let tx = make_tx(&mut rng, &[(source, 0)], &[amount]);
+        source = OutPointSourceId::Transaction(tx.transaction().get_id());
+        amount -= rng.gen_range(1_000_000..=5_000_000);
+        accumulator.add_tx(tx, Fee::new(Amount::from_atoms(0))).unwrap();
+        assert!(!accumulator.done());
+    }
+
+    // How much size is there left in the block
+    let size_left = {
+        let empty = size_limit - accumulator.transactions().encoded_size();
+        let len = accumulator.transactions().len() as u64;
+        let correction = Compact(len + 1).encoded_size() - Compact(len).encoded_size();
+        empty - correction
+    };
+
+    // Create a transaction that exactly fits the size
+    let make_sized_tx = move |witness_size| {
+        TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(source.clone(), 0),
+                InputWitness::NoSignature(Some(vec![0xffu8; witness_size])),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(amount)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build()
+    };
+
+    let tx_100_size = make_sized_tx(100).encoded_size();
+    let last_tx = make_sized_tx(size_left - tx_100_size + 100);
+    let source = OutPointSourceId::Transaction(last_tx.transaction().get_id());
+
+    accumulator.add_tx(last_tx, Fee::new(Amount::from_atoms(0))).unwrap();
+    assert_eq!(accumulator.total_size(), size_limit);
+
+    let leftover_tx = make_tx(&mut rng, &[(source, 0)], &[100_000_000_000]);
+    accumulator.add_tx(leftover_tx, Fee::new(Amount::from_atoms(0))).unwrap();
+    assert_eq!(accumulator.total_size(), size_limit);
+    assert!(accumulator.done());
+}
 
 #[rstest]
 #[trace]
