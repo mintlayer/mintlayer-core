@@ -143,14 +143,12 @@ pub async fn block_reward<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let block = get_block(&block_id, &state).await?;
 
-    Ok(Json(json!(
-        block
-            .block_reward()
-            .outputs()
-            .iter()
-            .map(|o| o.clone())
-            .collect::<Vec<_>>()
-    )))
+    Ok(Json(json!(block
+        .block_reward()
+        .outputs()
+        .iter()
+        .clone()
+        .collect::<Vec<_>>())))
 }
 
 #[allow(clippy::unused_async)]

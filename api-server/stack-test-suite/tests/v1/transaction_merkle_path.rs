@@ -107,7 +107,7 @@ async fn get_block_failed(#[case] seed: Seed) {
                 .into();
 
                 db_tx
-                    .set_transaction(transaction_id, Some(block_id.into()), &signed_transaction)
+                    .set_transaction(transaction_id, Some(block_id), &signed_transaction)
                     .await
                     .unwrap();
 

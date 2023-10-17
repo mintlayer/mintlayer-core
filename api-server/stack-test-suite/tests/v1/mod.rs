@@ -35,10 +35,8 @@ use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
-	config::create_unit_test_config,
-	output_value::OutputValue,
-	transaction::output::timelock::OutputTimeLock,
-	Destination, TxOutput,
+        config::create_unit_test_config, output_value::OutputValue,
+        transaction::output::timelock::OutputTimeLock, Destination, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
 };
