@@ -6,13 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dev-dependencies]
+api-blockchain-scanner-lib = { path = "../scanner-lib" }
 api-server-common = { path = "../api-server-common" }
-chainstate-test-framework = { path = '../../chainstate/test-framework' }
+api-web-server = { path = "../web-server" }
+chainstate = { path = "../../chainstate" }
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
-api-blockchain-scanner-lib = { path = "../scanner-lib" }
+serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
-api-web-server = { path = "../web-server" }
 
 async-trait.workspace = true
 axum.workspace = true

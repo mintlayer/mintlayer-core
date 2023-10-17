@@ -31,10 +31,16 @@ use api_server_common::storage::{
     storage_api::{ApiServerStorageWrite, ApiServerTransactionRw, Transactional},
 };
 use api_web_server::{api::web_server, ApiServerWebServerState};
+use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::config::create_unit_test_config,
-    primitives::{BlockHeight, Idable},
+    chain::{
+	config::create_unit_test_config,
+	output_value::OutputValue,
+	transaction::output::timelock::OutputTimeLock,
+	Destination, TxOutput,
+    },
+    primitives::{Amount, BlockHeight, Idable},
 };
 use hex::ToHex;
 use rstest::rstest;

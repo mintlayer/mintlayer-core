@@ -195,20 +195,15 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
             let mut local_node = BlockchainState::new(storage);
             local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
 
-            storage = local_node.storage().clone_storage().await;
-
-            {
-                // TODO to test this I wanted to delete the block
-                // from the database so that get_block() fails
-                // within transaction_merkle_path(). However it
-                // looks like this isn't deleting the block
-
+            storage = {
+                let mut storage = local_node.storage().clone_storage().await;
                 let mut db_tx = storage.transaction_rw().await.unwrap();
 
                 db_tx.set_transaction(transaction_id, None, &signed_transaction).await.unwrap();
-
                 db_tx.commit().await.unwrap();
-            }
+
+                storage
+            };
 
             ApiServerWebServerState {
                 db: Arc::new(storage),
@@ -243,12 +238,123 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
     task.abort();
 }
 
-// TODO tests for:
-//
-// - CannotFindTransactionInBlock
-// - TransactionIndexOverflow
-// - ErrorCalculatingMerkleTree
-// - ErrorCalculatingMerklePath
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+            let block_height = rng.gen_range(1..50);
+            let n_blocks = rng.gen_range(block_height..100);
+
+            let chain_config = create_unit_test_config();
+
+            let (chainstate_blocks, block, block_id) = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                let chainstate_block_ids = tf
+                    .create_chain_return_ids(&tf.genesis().get_id().into(), n_blocks, &mut rng)
+                    .unwrap();
+
+                // Need the "- 1" to account for the genesis block not in the vec
+                let block_id = chainstate_block_ids[block_height - 1];
+                let block = tf.block(tf.to_chain_block_id(&block_id));
+
+                let transaction_index = rng.gen_range(0..block.transactions().len());
+                let transaction = block.transactions()[transaction_index].transaction();
+                let transaction_id = transaction.get_id();
+
+                _ = tx.send(transaction_id.to_hash().encode_hex::<String>());
+
+                (
+                    chainstate_block_ids
+                        .iter()
+                        .map(|id| tf.block(tf.to_chain_block_id(id)))
+                        .collect::<Vec<_>>(),
+                    block,
+                    block_id,
+                )
+            };
+
+            let mut storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let mut local_node = BlockchainState::new(storage);
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            storage = {
+                let mut storage = local_node.storage().clone_storage().await;
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+
+                let empty_block = Block::new(
+                    vec![],
+                    block.prev_block_id(),
+                    block.timestamp(),
+                    block.consensus_data().clone(),
+                    block.block_reward().clone(),
+                )
+                .unwrap();
+
+                db_tx
+                    .set_block(
+                        block_id.classify(&chain_config).chain_block_id().unwrap(),
+                        &empty_block,
+                    )
+                    .await
+                    .unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            ApiServerWebServerState {
+                db: Arc::new(storage),
+                chain_config: Arc::new(chain_config),
+            }
+        };
+
+        web_server(listener, web_server_state).await
+    });
+
+    let transaction_id = rx.await.unwrap();
+    let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
+
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 500);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let body = body.as_object().unwrap();
+
+    assert_eq!(
+        body["error"].as_str().unwrap(),
+        "Cannot find transaction in block"
+    );
+
+    task.abort();
+}
 
 #[rstest]
 #[trace]
@@ -301,7 +407,6 @@ async fn ok(#[case] seed: Seed) {
                 });
 
                 _ = tx.send((
-                    block_id.to_hash().encode_hex::<String>(),
                     transaction_id.to_hash().encode_hex::<String>(),
                     expected_transaction,
                 ));
@@ -334,7 +439,7 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state).await
     });
 
-    let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
+    let (transaction_id, expected_transaction) = rx.await.unwrap();
     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
     // Given that the listener port is open, this will block until a
@@ -350,7 +455,10 @@ async fn ok(#[case] seed: Seed) {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     let body = body.as_object().unwrap();
 
-    assert_eq!(body.get("block_id").unwrap(), &block_id);
+    assert_eq!(
+        body.get("block_id").unwrap(),
+        expected_transaction.get("block_id").unwrap()
+    );
     assert_eq!(
         body.get("transaction_index").unwrap(),
         expected_transaction.get("transaction_index").unwrap()
