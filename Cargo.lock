@@ -7586,6 +7586,8 @@ checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 name = "wasm-crypto"
 version = "0.1.2"
 dependencies = [
+ "bip39",
+ "common",
  "crypto",
  "getrandom 0.2.10",
  "rstest",

@@ -13,7 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::{KeyKind, PrivateKey, PublicKey, Signature};
+pub use bip39::{Language, Mnemonic};
+use common::{
+    address::{pubkeyhash::PublicKeyHash, Address},
+    chain::{
+        config::{Builder, ChainType, BIP44_PATH},
+        Destination,
+    },
+};
+use crypto::key::{
+    extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicKey},
+    hdkd::{child_number::ChildNumber, derivable::Derivable, u31::U31},
+    KeyKind, PrivateKey, PublicKey, Signature,
+};
 use error::Error;
 use serialization::{DecodeAll, Encode};
 use wasm_bindgen::prelude::*;
@@ -21,9 +33,90 @@ use wasm_bindgen::prelude::*;
 pub mod error;
 
 #[wasm_bindgen]
+pub enum Network {
+    Mainnet,
+    Testnet,
+    Regtest,
+    Signet,
+}
+
+impl From<Network> for ChainType {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Mainnet => ChainType::Mainnet,
+            Network::Testnet => ChainType::Testnet,
+            Network::Regtest => ChainType::Regtest,
+            Network::Signet => ChainType::Signet,
+        }
+    }
+}
+
+#[wasm_bindgen]
 pub fn make_private_key() -> Vec<u8> {
     let key = PrivateKey::new_from_entropy(KeyKind::Secp256k1Schnorr);
     key.0.encode()
+}
+
+#[wasm_bindgen]
+pub fn make_default_account_pubkey(mnemonic: &str, network: Network) -> Result<Vec<u8>, Error> {
+    let mnemonic = bip39::Mnemonic::parse_in(Language::English, mnemonic)
+        .map_err(|_| Error::InvalidMnemonic)?;
+    let seed = mnemonic.to_seed("");
+
+    let root_key = ExtendedPrivateKey::new_master(&seed, ExtendedKeyKind::Secp256k1Schnorr)
+        .expect("Should not fail to create a master key");
+
+    let chain_config = Builder::new(network.into()).build();
+
+    let account_index = U31::ZERO;
+    let path = vec![
+        BIP44_PATH,
+        chain_config.bip44_coin_type(),
+        ChildNumber::from_hardened(account_index),
+    ];
+    let account_path = path.try_into().expect("Path creation should not fail");
+    let account_privkey = root_key
+        .derive_absolute_path(&account_path)
+        .expect("Should not fail to derive path");
+
+    Ok(account_privkey.to_public_key().encode())
+}
+
+#[wasm_bindgen]
+pub fn make_receiving_address(public_key_bytes: &[u8], key_index: u32) -> Result<Vec<u8>, Error> {
+    const RECEIVE_FUNDS_INDEX: ChildNumber = ChildNumber::from_normal(U31::from_u32_with_msb(0).0);
+
+    let account_pubkey = ExtendedPublicKey::decode_all(&mut &public_key_bytes[..])
+        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+
+    let receive_funds_pkey = account_pubkey
+        .derive_child(RECEIVE_FUNDS_INDEX)
+        .expect("Should not fail to derive key");
+
+    let public_key: PublicKey = receive_funds_pkey
+        .derive_child(ChildNumber::from_normal(
+            U31::from_u32(key_index).ok_or(Error::InvalidKeyIndex)?,
+        ))
+        .expect("Should not fail to derive key")
+        .into_public_key();
+
+    Ok(public_key.encode())
+}
+
+#[wasm_bindgen]
+pub fn pubkey_to_string(public_key_bytes: &[u8], network: Network) -> Result<String, Error> {
+    let public_key = PublicKey::decode_all(&mut &public_key_bytes[..])
+        .map_err(|_| Error::InvalidPublicKeyEncoding)?;
+    let chain_config = Builder::new(network.into()).build();
+
+    let public_key_hash = PublicKeyHash::from(&public_key);
+
+    Ok(
+        Address::new(&chain_config, &Destination::Address(public_key_hash))
+            .expect("Should not fail to create address")
+            .get()
+            .to_owned(),
+    )
 }
 
 #[wasm_bindgen]
