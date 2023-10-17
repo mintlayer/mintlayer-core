@@ -69,10 +69,11 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
     }
 
     /// Generate a block with the given transactions.
+    ///
     /// Parameters:
     /// - `input_data`: The input data for block generation, such as staking key.
     /// - `transactions`: The transactions prioritized to be included in the block.
-    ///                   Notice that It's the responsibility of the caller to ensure that the transactions are valid.
+    ///                   Notice that it's the responsibility of the caller to ensure that the transactions are valid.
     ///                   If the transactions are not valid, the block will be rejected and will not be included in the blockchain.
     ///                   It's preferable to use `transaction_ids` instead, where the mempool will ensure that the transactions are valid
     ///                   against the current state of the blockchain.
