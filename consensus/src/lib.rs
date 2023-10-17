@@ -48,7 +48,7 @@ pub use crate::{
     pos::{
         block_sig::BlockSignatureError,
         error::ConsensusPoSError,
-        hash_check::check_pos_hash,
+        hash_check,
         input_data::{PoSFinalizeBlockInputData, PoSGenerateBlockInputData},
         kernel::get_kernel_output,
         stake,
@@ -185,7 +185,7 @@ pub fn finalize_consensus_data(
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.net_upgrades().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
-        RequiredConsensus::PoS(pos_status) => match block_header.consensus_data() {
+        RequiredConsensus::PoS(_) => match block_header.consensus_data() {
             ConsensusData::None => Err(ConsensusCreationError::StakingError(
                 ConsensusPoSError::NoInputDataProvided,
             )),
@@ -204,7 +204,7 @@ pub fn finalize_consensus_data(
 
                     let stake_result = stake(
                         chain_config,
-                        pos_status.get_chain_config(),
+                        block_height,
                         &mut pos_data.clone(),
                         block_header,
                         Arc::clone(&block_timestamp_seconds),

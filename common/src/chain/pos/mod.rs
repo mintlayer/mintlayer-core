@@ -44,16 +44,6 @@ pub type PoolId = Id<Pool>;
 pub enum Delegation {}
 pub type DelegationId = Id<Delegation>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct PoSConsensusVersion(u32);
-
-impl PoSConsensusVersion {
-    /// Initial PoS implementation
-    pub const V0: Self = Self(0);
-    /// Incentivize pledging and prevent centralization with capped probability
-    pub const V1: Self = Self(1);
-}
-
 impl serde::Serialize for PoolId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         HexifiedAddress::serde_serialize(self, serializer)

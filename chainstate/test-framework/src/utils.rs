@@ -31,8 +31,8 @@ use common::{
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgradeVersion, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder,
-        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
+        NetUpgradeVersion, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -421,7 +421,6 @@ pub fn produce_kernel_signature(
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
     storage: &impl BlockchainStorageRead,
-    pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: UtxoOutPoint,
     kernel_witness: InputWitness,
@@ -455,8 +454,8 @@ pub fn pos_mine(
         );
 
         let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
-        if consensus::check_pos_hash(
-            pos_config.consensus_version(),
+
+        if consensus::hash_check::check_pos_hash_v1(
             epoch_index,
             &sealed_epoch_randomness,
             &pos_data,

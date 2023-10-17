@@ -35,7 +35,7 @@ use common::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
-        ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
+        ChainConfig, NetUpgradeVersion, PoSStatus, TxOutput,
     },
     primitives::{BlockHeight, Idable},
 };
@@ -180,24 +180,36 @@ where
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    hash_check::check_pos_hash(
-        pos_status.get_chain_config().consensus_version(),
-        current_epoch_index,
-        &random_seed,
-        pos_data,
-        &vrf_pub_key,
-        header.timestamp(),
-        pledge_amount,
-        pool_balance,
-        final_supply.to_amount_atoms(),
-    )?;
+    if NetUpgradeVersion::PledgeIncentiveAndTokensSupply
+        .is_activated(current_height, chain_config.net_upgrades())
+    {
+        hash_check::check_pos_hash_v1(
+            current_epoch_index,
+            &random_seed,
+            pos_data,
+            &vrf_pub_key,
+            header.timestamp(),
+            pledge_amount,
+            pool_balance,
+            final_supply.to_amount_atoms(),
+        )?;
+    } else {
+        hash_check::check_pos_hash_v0(
+            current_epoch_index,
+            &random_seed,
+            pos_data,
+            &vrf_pub_key,
+            header.timestamp(),
+            pool_balance,
+        )?;
+    }
 
     Ok(())
 }
 
 pub fn stake(
     chain_config: &ChainConfig,
-    pos_config: &PoSChainConfig,
+    block_height: BlockHeight,
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
     block_timestamp_seconds: Arc<AcqRelAtomicU64>,
@@ -238,19 +250,31 @@ pub fn stake(
 
         pos_data.update_vrf_data(vrf_data);
 
-        if hash_check::check_pos_hash(
-            pos_config.consensus_version(),
-            finalize_pos_data.epoch_index(),
-            sealed_epoch_randomness,
-            pos_data,
-            &vrf_pk,
-            block_timestamp,
-            finalize_pos_data.pledge_amount(),
-            finalize_pos_data.pool_balance(),
-            final_supply.to_amount_atoms(),
-        )
-        .is_ok()
+        let check_pos_hash_result = if NetUpgradeVersion::PledgeIncentiveAndTokensSupply
+            .is_activated(block_height, chain_config.net_upgrades())
         {
+            hash_check::check_pos_hash_v1(
+                finalize_pos_data.epoch_index(),
+                sealed_epoch_randomness,
+                pos_data,
+                &vrf_pk,
+                block_timestamp,
+                finalize_pos_data.pledge_amount(),
+                finalize_pos_data.pool_balance(),
+                final_supply.to_amount_atoms(),
+            )
+        } else {
+            hash_check::check_pos_hash_v0(
+                finalize_pos_data.epoch_index(),
+                sealed_epoch_randomness,
+                pos_data,
+                &vrf_pk,
+                block_timestamp,
+                finalize_pos_data.pool_balance(),
+            )
+        };
+
+        if check_pos_hash_result.is_ok() {
             log::info!(
                 "Valid block found, timestamp: {}, pool_id: {}",
                 block_timestamp,

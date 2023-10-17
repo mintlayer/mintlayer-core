@@ -20,7 +20,7 @@ use itertools::Itertools;
 use crate::chain::pos::{
     DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
 };
-use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
+use crate::chain::{pos_initial_difficulty, PoSChainConfig};
 use crate::primitives::per_thousand::PerThousand;
 use crate::Uint256;
 use crate::{
@@ -132,6 +132,14 @@ impl NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
         let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
         let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
             .expect("Target block time cannot be zero as per NonZeroU64");
+        let pos_config = PoSChainConfig::new(
+            target_limit,
+            target_block_time,
+            DEFAULT_MATURITY_DISTANCE,
+            DEFAULT_MATURITY_DISTANCE,
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+            PerThousand::new(1).expect("must be valid"),
+        );
 
         Self::initialize(vec![
             (
@@ -147,15 +155,17 @@ impl NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
                     NetUpgradeVersion::PoS,
                     ConsensusUpgrade::PoS {
                         initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                        config: PoSChainConfig::new(
-                            target_limit,
-                            target_block_time,
-                            DEFAULT_MATURITY_DISTANCE,
-                            DEFAULT_MATURITY_DISTANCE,
-                            DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                            PerThousand::new(1).expect("must be valid"),
-                            PoSConsensusVersion::V1,
-                        ),
+                        config: pos_config.clone(),
+                    },
+                ),
+            ),
+            (
+                BlockHeight::new(1),
+                (
+                    NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                    ConsensusUpgrade::PoS {
+                        initial_difficulty: None,
+                        config: pos_config,
                     },
                 ),
             ),

@@ -27,7 +27,7 @@ use crate::{
             DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
         },
         pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgradeVersion, NetUpgrades,
-        PoSChainConfig, PoSConsensusVersion,
+        PoSChainConfig,
     },
     primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
     Uint256,
@@ -185,7 +185,6 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
             DEFAULT_MATURITY_DISTANCE,
             DEFAULT_BLOCK_COUNT_TO_AVERAGE,
             PerThousand::new(1).expect("must be valid"),
-            PoSConsensusVersion::V0,
         );
 
         builder = builder

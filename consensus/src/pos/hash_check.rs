@@ -18,7 +18,6 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp},
         config::EpochIndex,
-        PoSConsensusVersion,
     },
     primitives::Amount,
     Uint256, Uint512,
@@ -30,7 +29,7 @@ use crate::pos::error::ConsensusPoSError;
 
 use super::effective_pool_balance::effective_pool_balance;
 
-fn check_pos_hash_v0(
+pub fn check_pos_hash_v0(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
     pos_data: &PoSData,
@@ -66,7 +65,7 @@ fn check_pos_hash_v0(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn check_pos_hash_v1(
+pub fn check_pos_hash_v1(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
     pos_data: &PoSData,
@@ -102,39 +101,4 @@ fn check_pos_hash_v1(
     );
 
     Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn check_pos_hash(
-    consensus_version: PoSConsensusVersion,
-    epoch_index: EpochIndex,
-    random_seed: &PoSRandomness,
-    pos_data: &PoSData,
-    vrf_pub_key: &VRFPublicKey,
-    block_timestamp: BlockTimestamp,
-    pledge_amount: Amount,
-    pool_balance: Amount,
-    final_supply: Amount,
-) -> Result<(), ConsensusPoSError> {
-    match consensus_version {
-        PoSConsensusVersion::V0 => check_pos_hash_v0(
-            epoch_index,
-            random_seed,
-            pos_data,
-            vrf_pub_key,
-            block_timestamp,
-            pool_balance,
-        ),
-        PoSConsensusVersion::V1 => check_pos_hash_v1(
-            epoch_index,
-            random_seed,
-            pos_data,
-            vrf_pub_key,
-            block_timestamp,
-            pledge_amount,
-            pool_balance,
-            final_supply,
-        ),
-        _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
-    }
 }

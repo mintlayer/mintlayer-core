@@ -20,7 +20,7 @@ use crate::{
     Uint256,
 };
 
-use super::{config::PoSChainConfig, PoSConsensusVersion};
+use super::config::PoSChainConfig;
 
 pub struct PoSChainConfigBuilder {
     target_limit: Uint256,
@@ -29,7 +29,6 @@ pub struct PoSChainConfigBuilder {
     spend_share_maturity_distance: BlockDistance,
     block_count_to_average_for_blocktime: usize,
     difficulty_change_limit: PerThousand,
-    consensus_version: PoSConsensusVersion,
 }
 
 impl PoSChainConfigBuilder {
@@ -41,7 +40,6 @@ impl PoSChainConfigBuilder {
             spend_share_maturity_distance: super::DEFAULT_MATURITY_DISTANCE,
             block_count_to_average_for_blocktime: super::DEFAULT_BLOCK_COUNT_TO_AVERAGE,
             difficulty_change_limit: PerThousand::new(1).expect("must be valid"),
-            consensus_version: PoSConsensusVersion::V1,
         }
     }
 
@@ -75,11 +73,6 @@ impl PoSChainConfigBuilder {
         self
     }
 
-    pub fn consensus_version(mut self, value: PoSConsensusVersion) -> Self {
-        self.consensus_version = value;
-        self
-    }
-
     pub fn build(self) -> PoSChainConfig {
         PoSChainConfig::new(
             self.target_limit,
@@ -88,7 +81,6 @@ impl PoSChainConfigBuilder {
             self.spend_share_maturity_distance,
             self.block_count_to_average_for_blocktime,
             self.difficulty_change_limit,
-            self.consensus_version,
         )
     }
 }

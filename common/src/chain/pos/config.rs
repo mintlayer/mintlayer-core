@@ -20,8 +20,6 @@ use crate::{
     Uint256,
 };
 
-use super::PoSConsensusVersion;
-
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct PoSChainConfig {
     /// The lowest possible difficulty
@@ -36,8 +34,6 @@ pub struct PoSChainConfig {
     block_count_to_average_for_blocktime: usize,
     /// The limit on how much the difficulty can go up or down after each block
     difficulty_change_limit: PerThousand,
-    /// Version of the consensus protocol
-    consensus_version: PoSConsensusVersion,
 }
 
 impl PoSChainConfig {
@@ -48,7 +44,6 @@ impl PoSChainConfig {
         spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
         difficulty_change_limit: PerThousand,
-        consensus_version: PoSConsensusVersion,
     ) -> Self {
         assert!(block_count_to_average_for_blocktime >= 2);
 
@@ -59,7 +54,6 @@ impl PoSChainConfig {
             spend_share_maturity_distance,
             block_count_to_average_for_blocktime,
             difficulty_change_limit,
-            consensus_version,
         }
     }
 
@@ -85,9 +79,5 @@ impl PoSChainConfig {
 
     pub fn difficulty_change_limit(&self) -> PerThousand {
         self.difficulty_change_limit
-    }
-
-    pub fn consensus_version(&self) -> PoSConsensusVersion {
-        self.consensus_version
     }
 }

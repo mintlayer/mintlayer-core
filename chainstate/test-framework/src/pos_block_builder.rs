@@ -303,7 +303,6 @@ impl<'f> PoSBlockBuilder<'f> {
 
         pos_mine(
             &self.framework.storage,
-            pos_status.get_chain_config(),
             BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
