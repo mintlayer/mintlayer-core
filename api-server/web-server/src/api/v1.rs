@@ -141,11 +141,16 @@ pub async fn block_reward<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let _block = get_block(&block_id, &state).await?;
+    let block = get_block(&block_id, &state).await?;
 
-    Ok(Json(json!({
-        // TODO: expand this with a usable JSON response
-    })))
+    Ok(Json(json!(
+        block
+            .block_reward()
+            .outputs()
+            .iter()
+            .map(|o| o.clone())
+            .collect::<Vec<_>>()
+    )))
 }
 
 #[allow(clippy::unused_async)]
@@ -343,8 +348,8 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 
     Ok(Json(json!({
     "block_id": block.get_id(),
-    "merkle_root": block.merkle_root().encode_hex::<String>(),
     "transaction_index": transaction_index,
+    "merkle_root": block.merkle_root().encode_hex::<String>(),
     "merkle_path": merkle_tree,
     })))
 }
