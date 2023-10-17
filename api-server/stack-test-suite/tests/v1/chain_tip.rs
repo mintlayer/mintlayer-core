@@ -31,7 +31,10 @@ async fn at_genesis() {
                 let binding = Arc::clone(&chain_config);
                 let expected_genesis_id = binding.genesis_block().get_id();
 
-                _ = tx.send(expected_genesis_id);
+                _ = tx.send(json!({
+                    "block_height": 0,
+                    "block_id": expected_genesis_id.to_hash().encode_hex::<String>(),
+                }));
 
                 let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
@@ -54,17 +57,12 @@ async fn at_genesis() {
 
     assert_eq!(response.status(), 200);
 
-    let expected_genesis_id = rx.await.unwrap();
-
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-    assert_eq!(body["block_height"].as_u64().unwrap(), 0);
+    let expected_tip = rx.await.unwrap();
 
-    assert_eq!(
-        body["block_id"].as_str().unwrap(),
-        expected_genesis_id.to_hash().encode_hex::<String>()
-    );
+    assert_eq!(body, expected_tip);
 
     task.abort();
 }
@@ -101,7 +99,10 @@ async fn height_n(#[case] seed: Seed) {
                     // Need the "- 1" to account for the genesis block not in the vec
                     let expected_block_id = chainstate_block_ids[n_blocks - 1];
 
-                    _ = tx.send((n_blocks, expected_block_id));
+                    _ = tx.send(json!({
+                    "block_height": n_blocks,
+                    "block_id": expected_block_id,
+                    }));
 
                     chainstate_block_ids
                         .iter()
@@ -141,18 +142,12 @@ async fn height_n(#[case] seed: Seed) {
 
     assert_eq!(response.status(), 200);
 
-    let (height, expected_block_id) = rx.await.unwrap();
-
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let _body = body.as_object().unwrap();
 
-    assert_eq!(body["block_height"].as_u64().unwrap(), height as u64);
+    let expected_tip = rx.await.unwrap();
 
-    assert_eq!(
-        body["block_id"].as_str().unwrap(),
-        expected_block_id.to_hash().encode_hex::<String>()
-    );
+    assert_eq!(body, expected_tip);
 
     task.abort();
 }

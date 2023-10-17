@@ -135,10 +135,10 @@ async fn height_n(#[case] seed: Seed) {
 
     assert_eq!(response.status(), 200);
 
-    let expected_block_id = rx.await.unwrap();
-
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    let expected_block_id = rx.await.unwrap();
 
     assert_eq!(
         body.as_str().unwrap(),

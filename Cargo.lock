@@ -338,6 +338,7 @@ dependencies = [
  "logging",
  "serde",
  "serde_json",
+ "serialization",
  "thiserror",
  "tokio",
 ]

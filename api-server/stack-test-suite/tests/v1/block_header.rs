@@ -77,13 +77,14 @@ async fn ok(#[case] seed: Seed) {
                 let block_id = chainstate_block_ids[block_height - 1];
                 let block = tf.block(tf.to_chain_block_id(&block_id));
 
-                let expected_block = json!({
+                let expected_header = json!({
                     "previous_block_id": block.prev_block_id().to_hash().encode_hex::<String>(),
                     "timestamp": block.timestamp(),
                     "merkle_root": block.merkle_root().encode_hex::<String>(),
+                    "witness_merkle_root": block.witness_merkle_root(),
                 });
 
-                _ = tx.send((block_id.to_hash().encode_hex::<String>(), expected_block));
+                _ = tx.send((block_id.to_hash().encode_hex::<String>(), expected_header));
 
                 chainstate_block_ids
                     .iter()
@@ -113,7 +114,7 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state).await
     });
 
-    let (block_id, expected_block) = rx.await.unwrap();
+    let (block_id, expected_header) = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/header");
 
     // Given that the listener port is open, this will block until a
@@ -127,19 +128,8 @@ async fn ok(#[case] seed: Seed) {
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let body = body.as_object().unwrap();
 
-    assert_eq!(
-        body.get("previous_block_id").unwrap(),
-        &expected_block["previous_block_id"]
-    );
-    assert_eq!(body.get("timestamp").unwrap(), &expected_block["timestamp"]);
-    assert_eq!(
-        body.get("merkle_root").unwrap(),
-        &expected_block["merkle_root"]
-    );
-
-    assert!(!body.contains_key("transactions"));
+    assert_eq!(body, expected_header);
 
     task.abort();
 }

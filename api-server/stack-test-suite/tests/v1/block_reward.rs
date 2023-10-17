@@ -168,7 +168,7 @@ async fn has_reward(#[case] seed: Seed) {
 
                     _ = tx.send((
                         block_index.block_id().to_hash().encode_hex::<String>(),
-                        block.clone(),
+                        json!(block.block_reward().outputs().iter().clone().collect::<Vec<_>>()),
                     ));
 
                     block
@@ -197,7 +197,7 @@ async fn has_reward(#[case] seed: Seed) {
         }
     });
 
-    let (block_id, expected_block) = rx.await.unwrap();
+    let (block_id, expected_reward) = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/reward");
 
     // Given that the listener port is open, this will block until a
@@ -212,13 +212,7 @@ async fn has_reward(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-    let block_reward = serde_json::to_value(expected_block.block_reward())
-        .unwrap()
-        .get("reward_outputs")
-        .unwrap()
-        .clone();
-
-    assert_eq!(body, block_reward);
+    assert_eq!(body, expected_reward);
 
     task.abort();
 }

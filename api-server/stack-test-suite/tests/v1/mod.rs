@@ -61,7 +61,12 @@ async fn chain_genesis() {
                 let chain_config = Arc::new(create_unit_test_config());
                 let expected_genesis = chain_config.genesis_block().clone();
 
-                _ = tx.send(expected_genesis);
+                _ = tx.send(json!({
+                    "block_id": expected_genesis.get_id(),
+                    "fun_message": expected_genesis.fun_message(),
+                    "timestamp": expected_genesis.timestamp(),
+                    "utxos": expected_genesis.utxos(),
+                }));
 
                 let storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
@@ -84,15 +89,12 @@ async fn chain_genesis() {
 
     assert_eq!(response.status(), 200);
 
-    let expected_genesis = rx.await.unwrap();
-
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-    assert_eq!(
-        body["block_id"].as_str().unwrap(),
-        expected_genesis.get_id().to_hash().encode_hex::<String>()
-    );
+    let expected_genesis = rx.await.unwrap();
+
+    assert_eq!(body, expected_genesis);
 
     task.abort();
 }

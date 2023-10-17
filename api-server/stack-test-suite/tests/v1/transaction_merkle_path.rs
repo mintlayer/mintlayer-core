@@ -409,7 +409,7 @@ async fn ok(#[case] seed: Seed) {
                     .unwrap()
                     .into_hashes();
 
-                let expected_transaction = json!({
+                let expected_path = json!({
                 "block_id": block_id.to_hash().encode_hex::<String>(),
                 "transaction_index": transaction_index,
                 "merkle_root": block.merkle_root().encode_hex::<String>(),
@@ -419,7 +419,7 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send((
                     transaction_id.to_hash().encode_hex::<String>(),
-                    expected_transaction,
+                    expected_path,
                 ));
 
                 chainstate_block_ids
@@ -450,7 +450,7 @@ async fn ok(#[case] seed: Seed) {
         web_server(listener, web_server_state).await
     });
 
-    let (transaction_id, expected_transaction) = rx.await.unwrap();
+    let (transaction_id, expected_path) = rx.await.unwrap();
     let url = format!("/api/v1/transaction/{transaction_id}/merkle-path");
 
     // Given that the listener port is open, this will block until a
@@ -464,27 +464,8 @@ async fn ok(#[case] seed: Seed) {
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let body = body.as_object().unwrap();
 
-    assert_eq!(
-        body.get("block_id").unwrap(),
-        expected_transaction.get("block_id").unwrap()
-    );
-    assert_eq!(
-        body.get("transaction_index").unwrap(),
-        expected_transaction.get("transaction_index").unwrap()
-    );
-    assert_eq!(
-        body.get("merkle_root").unwrap(),
-        expected_transaction.get("merkle_root").unwrap()
-    );
-
-    for (index, hash) in body.get("merkle_path").unwrap().as_array().unwrap().iter().enumerate() {
-        assert_eq!(
-            hash,
-            expected_transaction.get("merkle_path").unwrap().get(index).unwrap()
-        );
-    }
+    assert_eq!(body, expected_path);
 
     task.abort();
 }
