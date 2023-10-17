@@ -35,8 +35,8 @@ use common::{
         output_value::OutputValue,
         pos_initial_difficulty,
         stakelock::StakePoolData,
-        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-        TxOutput,
+        ChainConfig, ConsensusUpgrade, Destination, Genesis, NetUpgradeVersion, NetUpgrades,
+        PoSChainConfigBuilder, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
 };
@@ -142,20 +142,29 @@ fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
 fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
     let genesis = create_custom_regtest_genesis(rng);
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("net upgrades");
 
     config::Builder::new(ChainType::Regtest)
         .genesis_custom(genesis)
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .epoch_length(5.try_into().unwrap())
         .build()
 }

@@ -13,17 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::config::ChainType;
-use crate::chain::pos::{
-    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
-};
-use crate::chain::pow::limit;
-use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
-use crate::primitives::per_thousand::PerThousand;
-use crate::primitives::{BlockHeight, Compact};
-use crate::Uint256;
-
-use super::{Activate, NetUpgrades};
+use crate::chain::PoSChainConfig;
+use crate::primitives::Compact;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusUpgrade {
@@ -90,92 +81,3 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
         }
     }
 }
-
-impl NetUpgrades<ConsensusUpgrade> {
-    pub fn new_for_chain(chain_type: ChainType) -> Self {
-        Self::initialize(vec![(
-            BlockHeight::zero(),
-            ConsensusUpgrade::PoW {
-                initial_difficulty: limit(chain_type).into(),
-            },
-        )])
-        .expect("cannot fail")
-    }
-
-    pub fn unit_tests() -> Self {
-        Self::initialize(vec![(
-            BlockHeight::zero(),
-            ConsensusUpgrade::IgnoreConsensus,
-        )])
-        .expect("cannot fail")
-    }
-
-    #[cfg(test)]
-    pub fn deliberate_ignore_consensus_twice() -> Self {
-        Self::initialize(vec![
-            (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
-            (BlockHeight::new(1), ConsensusUpgrade::IgnoreConsensus),
-        ])
-        .expect("cannot fail")
-    }
-
-    pub fn regtest_with_pos() -> Self {
-        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-            .expect("Target block time cannot be zero as per NonZeroU64");
-
-        Self::initialize(vec![
-            (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
-            (
-                BlockHeight::new(1),
-                ConsensusUpgrade::PoS {
-                    initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                    config: PoSChainConfig::new(
-                        target_limit,
-                        target_block_time,
-                        DEFAULT_MATURITY_DISTANCE,
-                        DEFAULT_MATURITY_DISTANCE,
-                        DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                        PerThousand::new(1).expect("must be valid"),
-                        PoSConsensusVersion::V1,
-                    ),
-                },
-            ),
-        ])
-        .expect("cannot fail")
-    }
-
-    pub fn consensus_status(&self, height: BlockHeight) -> RequiredConsensus {
-        let (last_upgrade_height, last_consensus_upgrade) = self.version_at_height(height);
-
-        match last_consensus_upgrade {
-            ConsensusUpgrade::PoW { initial_difficulty } => {
-                if *last_upgrade_height < height {
-                    RequiredConsensus::PoW(PoWStatus::Ongoing)
-                } else {
-                    debug_assert_eq!(*last_upgrade_height, height);
-                    RequiredConsensus::PoW(PoWStatus::Threshold {
-                        initial_difficulty: *initial_difficulty,
-                    })
-                }
-            }
-            ConsensusUpgrade::PoS {
-                initial_difficulty,
-                config,
-            } => {
-                if *last_upgrade_height < height {
-                    RequiredConsensus::PoS(PoSStatus::Ongoing(config.clone()))
-                } else {
-                    debug_assert_eq!(*last_upgrade_height, height);
-                    RequiredConsensus::PoS(PoSStatus::Threshold {
-                        initial_difficulty: *initial_difficulty,
-                        config: config.clone(),
-                    })
-                }
-            }
-            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
-        }
-    }
-}
-
-impl Activate for ConsensusUpgrade {}

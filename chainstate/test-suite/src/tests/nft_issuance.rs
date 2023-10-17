@@ -24,7 +24,7 @@ use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{Metadata, NftIssuanceV0, TokenData, TokenIssuanceVersion},
-    ChainstateUpgrade, Destination, TxInput, TxOutput,
+    ConsensusUpgrade, Destination, NetUpgradeVersion, NetUpgrades, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use crypto::random::{CryptoRng, Rng};
@@ -1407,11 +1407,23 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        common::chain::NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                        )])
+                    .net_upgrades(
+                        NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                (
+                                    NetUpgradeVersion::Genesis,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
+                            ),
+                            (
+                                BlockHeight::zero(),
+                                (
+                                    NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
+                            ),
+                        ])
                         .unwrap(),
                     )
                     .genesis_unittest(Destination::AnyoneCanSpend)

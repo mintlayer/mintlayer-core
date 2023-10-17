@@ -26,8 +26,8 @@ use crate::{
         pos::{
             DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
         },
-        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgrades, PoSChainConfig,
-        PoSConsensusVersion,
+        pos_initial_difficulty, ConsensusUpgrade, Destination, NetUpgradeVersion, NetUpgrades,
+        PoSChainConfig, PoSConsensusVersion,
     },
     primitives::{self, per_thousand::PerThousand, semver::SemVer, BlockHeight},
     Uint256,
@@ -159,7 +159,7 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
     update_builder!(max_block_size_with_smart_contracts);
 
     if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder.consensus_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
+        builder = builder.net_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
             create_regtest_pos_genesis(
                 chain_genesis_staking_settings.clone(),
                 *chain_genesis_block_timestamp,
@@ -178,43 +178,49 @@ pub fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig>
         let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
             .expect("Target block time cannot be zero as per NonZeroU64");
 
+        let pos_chain_config = PoSChainConfig::new(
+            target_limit,
+            target_block_time,
+            DEFAULT_MATURITY_DISTANCE,
+            DEFAULT_MATURITY_DISTANCE,
+            DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+            PerThousand::new(1).expect("must be valid"),
+            PoSConsensusVersion::V0,
+        );
+
         builder = builder
-            .consensus_upgrades(
+            .net_upgrades(
                 NetUpgrades::initialize(vec![
-                    (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
+                    (
+                        BlockHeight::zero(),
+                        (
+                            NetUpgradeVersion::Genesis,
+                            ConsensusUpgrade::IgnoreConsensus,
+                        ),
+                    ),
                     (
                         BlockHeight::new(1),
-                        ConsensusUpgrade::PoS {
-                            initial_difficulty: Some(
-                                chain_initial_difficulty
-                                    .map(primitives::Compact)
-                                    .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
-                            ),
-                            config: PoSChainConfig::new(
-                                target_limit,
-                                target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                                PerThousand::new(1).expect("must be valid"),
-                                PoSConsensusVersion::V0,
-                            ),
-                        },
+                        (
+                            NetUpgradeVersion::PoS,
+                            ConsensusUpgrade::PoS {
+                                initial_difficulty: Some(
+                                    chain_initial_difficulty.map(primitives::Compact).unwrap_or(
+                                        pos_initial_difficulty(ChainType::Regtest).into(),
+                                    ),
+                                ),
+                                config: pos_chain_config.clone(),
+                            },
+                        ),
                     ),
                     (
                         (*upgrade_height).into(),
-                        ConsensusUpgrade::PoS {
-                            initial_difficulty: None,
-                            config: PoSChainConfig::new(
-                                target_limit,
-                                target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                                PerThousand::new(1).expect("must be valid"),
-                                PoSConsensusVersion::V1,
-                            ),
-                        },
+                        (
+                            NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                            ConsensusUpgrade::PoS {
+                                initial_difficulty: None,
+                                config: pos_chain_config,
+                            },
+                        ),
                     ),
                 ])
                 .expect("NetUpgrades init cannot fail"),

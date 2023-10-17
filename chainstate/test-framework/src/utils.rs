@@ -31,8 +31,8 @@ use common::{
         stakelock::StakePoolData,
         tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
+        NetUpgradeVersion, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder,
+        PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -312,7 +312,7 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
 }
 
 pub fn get_target_block_time(chain_config: &ChainConfig, block_height: BlockHeight) -> NonZeroU64 {
-    match chain_config.consensus_upgrades().consensus_status(block_height) {
+    match chain_config.net_upgrades().consensus_status(block_height) {
         RequiredConsensus::PoS(status) => status.get_chain_config().target_block_time(),
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
             unimplemented!()
@@ -353,13 +353,22 @@ pub fn create_chain_config_with_staking_pool(
     pool_data: StakePoolData,
 ) -> ConfigBuilder {
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(Uint256::MAX.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(Uint256::MAX.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
 
@@ -377,7 +386,7 @@ pub fn create_chain_config_with_staking_pool(
 
     let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
     ConfigBuilder::new(ChainType::Regtest)
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
 }
 

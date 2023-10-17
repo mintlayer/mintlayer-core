@@ -314,7 +314,7 @@ async fn invalid_consensus_data() {
         let chain_config = Arc::new(
             ChainConfigBuilder::new(ChainType::Mainnet)
                 // Enable consensus, so blocks with `ConsensusData::None` would be rejected.
-                .consensus_upgrades(NetUpgrades::new_for_chain(ChainType::Mainnet))
+                .net_upgrades(NetUpgrades::unit_tests_with_pow())
                 .build(),
         );
         let mut node = TestNode::builder(protocol_version)

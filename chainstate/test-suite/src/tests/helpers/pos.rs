@@ -35,17 +35,13 @@ pub fn calculate_new_target(
     tf: &TestFramework,
     block_height: BlockHeight,
 ) -> Result<Compact, ConsensusPoSError> {
-    let pos_status = match tf
-        .chainstate
-        .get_chain_config()
-        .consensus_upgrades()
-        .consensus_status(block_height)
-    {
-        RequiredConsensus::PoS(status) => status,
-        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
-            panic!("Invalid consensus")
-        }
-    };
+    let pos_status =
+        match tf.chainstate.get_chain_config().net_upgrades().consensus_status(block_height) {
+            RequiredConsensus::PoS(status) => status,
+            RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+                panic!("Invalid consensus")
+            }
+        };
 
     let db_tx = tf.storage.transaction_ro().unwrap();
     let block_index_handle =

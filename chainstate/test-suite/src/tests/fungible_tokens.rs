@@ -28,7 +28,8 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, TokenData, TokenId, TokenIssuanceVersion},
-        ChainstateUpgrade, Destination, OutPointSourceId, TxInput, TxOutput,
+        ConsensusUpgrade, Destination, NetUpgradeVersion, NetUpgrades, OutPointSourceId, TxInput,
+        TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -1970,11 +1971,23 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        common::chain::NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                        )])
+                    .net_upgrades(
+                        NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                (
+                                    NetUpgradeVersion::Genesis,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
+                            ),
+                            (
+                                BlockHeight::zero(),
+                                (
+                                    NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
+                            ),
+                        ])
                         .unwrap(),
                     )
                     .genesis_unittest(Destination::AnyoneCanSpend)
@@ -2023,15 +2036,21 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
+                    .net_upgrades(
                         common::chain::NetUpgrades::initialize(vec![
                             (
                                 BlockHeight::zero(),
-                                ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                                (
+                                    NetUpgradeVersion::Genesis,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
                             ),
                             (
                                 BlockHeight::new(2),
-                                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                                (
+                                    NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                                    ConsensusUpgrade::IgnoreConsensus,
+                                ),
                             ),
                         ])
                         .unwrap(),

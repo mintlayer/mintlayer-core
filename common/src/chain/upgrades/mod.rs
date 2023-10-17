@@ -13,14 +13,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod chainstate_upgrade;
 mod consensus_upgrade;
 mod netupgrade;
 
-pub use chainstate_upgrade::ChainstateUpgrade;
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
-pub use netupgrade::{Activate, NetUpgrades};
+pub use netupgrade::NetUpgrades;
+
+use crate::primitives::BlockHeight;
 
 pub enum NetUpgradeError {
     GenerateConfigFailed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum NetUpgradeVersion {
+    Genesis,
+    PoS,
+    PledgeIncentiveAndTokensSupply,
+}
+
+impl NetUpgradeVersion {
+    pub fn is_activated(
+        &self,
+        height: BlockHeight,
+        net_upgrade: &NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>,
+    ) -> bool {
+        if let Ok(idx) = net_upgrade
+            .all_upgrades()
+            .binary_search_by(|(_, (to_match, _))| to_match.cmp(self))
+        {
+            return height >= net_upgrade.all_upgrades()[idx].0;
+        }
+        false
+    }
 }

@@ -15,22 +15,23 @@
 
 use std::ops::Range;
 
-use crate::primitives::BlockHeight;
+use itertools::Itertools;
+
+use crate::chain::pos::{
+    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
+};
+use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
+use crate::primitives::per_thousand::PerThousand;
+use crate::Uint256;
+use crate::{
+    chain::{config::ChainType, pow::limit},
+    primitives::BlockHeight,
+};
+
+use super::{ConsensusUpgrade, NetUpgradeVersion, PoSStatus, PoWStatus, RequiredConsensus};
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
-
-pub trait Activate {
-    fn is_activated(&self, height: BlockHeight, net_upgrades: &NetUpgrades<Self>) -> bool
-    where
-        Self: Sized + Ord + Copy,
-    {
-        if let Ok(idx) = net_upgrades.0.binary_search_by(|&(_, to_match)| to_match.cmp(self)) {
-            return height >= net_upgrades.0[idx].0;
-        }
-        false
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum NetUpgradesInitializeError {
@@ -38,20 +39,11 @@ pub enum NetUpgradesInitializeError {
     NoUpgrades,
     #[error("First upgrade must be at genesis")]
     FirstUpgradeNotAtGenesis,
+    #[error("Upgrade versions must be sorted")]
+    VersionsMustBeSorted,
 }
 
 impl<T: Ord> NetUpgrades<T> {
-    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Result<Self, NetUpgradesInitializeError> {
-        let mut upgrades = upgrades;
-        upgrades.sort_unstable();
-
-        match upgrades.first() {
-            Some(&(height, _)) if height == BlockHeight::zero() => Ok(Self(upgrades)),
-            Some(_) => Err(NetUpgradesInitializeError::FirstUpgradeNotAtGenesis),
-            None => Err(NetUpgradesInitializeError::NoUpgrades),
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -88,12 +80,128 @@ impl<T: Ord> NetUpgrades<T> {
     }
 }
 
+impl NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
+    pub fn initialize(
+        upgrades: Vec<(BlockHeight, (NetUpgradeVersion, ConsensusUpgrade))>,
+    ) -> Result<Self, NetUpgradesInitializeError> {
+        let is_sorted = upgrades.iter().tuple_windows().all(
+            |((left_height, (left_version, _)), (right_height, (right_version, _)))| {
+                left_height <= right_height && left_version <= right_version
+            },
+        );
+        if !is_sorted {
+            return Err(NetUpgradesInitializeError::VersionsMustBeSorted);
+        }
+
+        match upgrades.first() {
+            Some((height, (version, _)))
+                if *height == BlockHeight::zero() && *version == NetUpgradeVersion::Genesis =>
+            {
+                Ok(Self(upgrades))
+            }
+            Some(_) => Err(NetUpgradesInitializeError::FirstUpgradeNotAtGenesis),
+            None => Err(NetUpgradesInitializeError::NoUpgrades),
+        }
+    }
+
+    pub fn unit_tests() -> Self {
+        Self::initialize(vec![(
+            BlockHeight::zero(),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        )])
+        .expect("cannot fail")
+    }
+
+    pub fn unit_tests_with_pow() -> Self {
+        Self::initialize(vec![(
+            BlockHeight::zero(),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::PoW {
+                    initial_difficulty: limit(ChainType::Mainnet).into(),
+                },
+            ),
+        )])
+        .expect("cannot fail")
+    }
+
+    pub fn regtest_with_pos() -> Self {
+        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
+        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
+            .expect("Target block time cannot be zero as per NonZeroU64");
+
+        Self::initialize(vec![
+            (
+                BlockHeight::zero(),
+                (
+                    NetUpgradeVersion::Genesis,
+                    ConsensusUpgrade::IgnoreConsensus,
+                ),
+            ),
+            (
+                BlockHeight::new(1),
+                (
+                    NetUpgradeVersion::PoS,
+                    ConsensusUpgrade::PoS {
+                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                        config: PoSChainConfig::new(
+                            target_limit,
+                            target_block_time,
+                            DEFAULT_MATURITY_DISTANCE,
+                            DEFAULT_MATURITY_DISTANCE,
+                            DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                            PerThousand::new(1).expect("must be valid"),
+                            PoSConsensusVersion::V1,
+                        ),
+                    },
+                ),
+            ),
+        ])
+        .expect("cannot fail")
+    }
+
+    pub fn consensus_status(&self, height: BlockHeight) -> RequiredConsensus {
+        let (last_upgrade_height, (_, last_consensus_upgrade)) = self.version_at_height(height);
+
+        match last_consensus_upgrade {
+            ConsensusUpgrade::PoW { initial_difficulty } => {
+                if *last_upgrade_height < height {
+                    RequiredConsensus::PoW(PoWStatus::Ongoing)
+                } else {
+                    debug_assert_eq!(*last_upgrade_height, height);
+                    RequiredConsensus::PoW(PoWStatus::Threshold {
+                        initial_difficulty: *initial_difficulty,
+                    })
+                }
+            }
+            ConsensusUpgrade::PoS {
+                initial_difficulty,
+                config,
+            } => {
+                if *last_upgrade_height < height {
+                    RequiredConsensus::PoS(PoSStatus::Ongoing(config.clone()))
+                } else {
+                    debug_assert_eq!(*last_upgrade_height, height);
+                    RequiredConsensus::PoS(PoSStatus::Threshold {
+                        initial_difficulty: *initial_difficulty,
+                        config: config.clone(),
+                    })
+                }
+            }
+            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::{
-        Activate, ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
+        ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
     };
     use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
@@ -108,8 +216,6 @@ mod tests {
         Five,
     }
 
-    impl Activate for MockVersion {}
-
     fn mock_netupgrades() -> (NetUpgrades<MockVersion>, BlockHeight, BlockHeight) {
         let mut upgrades = vec![];
         let zero_height = BlockHeight::new(0);
@@ -117,37 +223,40 @@ mod tests {
         let three_height = BlockHeight::new(80000);
 
         upgrades.push((zero_height, MockVersion::Zero));
-
+        upgrades.push((BlockHeight::one(), MockVersion::One));
+        upgrades.push((two_height, MockVersion::Two));
         upgrades.push((three_height, MockVersion::Three));
 
-        upgrades.push((BlockHeight::one(), MockVersion::One));
-
-        upgrades.push((two_height, MockVersion::Two));
-
-        (
-            NetUpgrades::initialize(upgrades).expect("valid net upgrade"),
-            two_height,
-            three_height,
-        )
+        (NetUpgrades(upgrades), two_height, three_height)
     }
 
     #[test]
     fn check_is_activated() {
-        let (upgrades, two_height, three_height) = mock_netupgrades();
+        let upgrades = mock_consensus_upgrades().expect("valid netupgrades");
+        assert_eq!(upgrades.all_upgrades().len(), 3);
+        let two_height = upgrades.all_upgrades()[1].0;
+        let three_height = upgrades.all_upgrades()[2].0;
 
-        assert!(MockVersion::Two.is_activated(two_height, &upgrades));
-        assert!(MockVersion::Two.is_activated(three_height, &upgrades));
-        assert!(!MockVersion::Two.is_activated(BlockHeight::one(), &upgrades));
-        assert!(!MockVersion::Two
+        assert!(NetUpgradeVersion::PoS.is_activated(two_height, &upgrades));
+        assert!(NetUpgradeVersion::PoS.is_activated(three_height, &upgrades));
+        assert!(!NetUpgradeVersion::PoS.is_activated(BlockHeight::one(), &upgrades));
+        assert!(!NetUpgradeVersion::PoS
             .is_activated((two_height - BlockDistance::new(1)).unwrap(), &upgrades));
 
-        assert!(!MockVersion::Three.is_activated(two_height, &upgrades));
-        assert!(!MockVersion::Three.is_activated(
-            two_height.checked_add(10).expect("should be fine"),
-            &upgrades
-        ));
-        assert!(MockVersion::Three.is_activated(three_height, &upgrades));
-        assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
+        assert!(
+            !NetUpgradeVersion::PledgeIncentiveAndTokensSupply.is_activated(two_height, &upgrades)
+        );
+        assert!(
+            !NetUpgradeVersion::PledgeIncentiveAndTokensSupply.is_activated(
+                two_height.checked_add(10).expect("should be fine"),
+                &upgrades
+            )
+        );
+        assert!(
+            NetUpgradeVersion::PledgeIncentiveAndTokensSupply.is_activated(three_height, &upgrades)
+        );
+        assert!(NetUpgradeVersion::PledgeIncentiveAndTokensSupply
+            .is_activated(BlockHeight::max(), &upgrades));
     }
 
     #[test]
@@ -195,7 +304,8 @@ mod tests {
         check(three_height.next_height(), MockVersion::Three);
     }
 
-    fn mock_consensus_upgrades() -> Result<NetUpgrades<ConsensusUpgrade>, NetUpgradesInitializeError>
+    fn mock_consensus_upgrades(
+    ) -> Result<NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>, NetUpgradesInitializeError>
     {
         let genesis_pow = BlockHeight::new(0);
         let first_pos_upgrade = BlockHeight::new(10_000);
@@ -204,22 +314,31 @@ mod tests {
         let upgrades = vec![
             (
                 genesis_pow,
-                ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::from_u64(1000).into(),
-                },
+                (
+                    NetUpgradeVersion::Genesis,
+                    ConsensusUpgrade::PoW {
+                        initial_difficulty: Uint256::from_u64(1000).into(),
+                    },
+                ),
             ),
             (
                 first_pos_upgrade,
-                ConsensusUpgrade::PoS {
-                    initial_difficulty: Some(Uint256::from_u64(1500).into()),
-                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
-                },
+                (
+                    NetUpgradeVersion::PoS,
+                    ConsensusUpgrade::PoS {
+                        initial_difficulty: Some(Uint256::from_u64(1500).into()),
+                        config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                    },
+                ),
             ),
             (
                 back_to_pow,
-                ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::from_u64(2000).into(),
-                },
+                (
+                    NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                    ConsensusUpgrade::PoW {
+                        initial_difficulty: Uint256::from_u64(2000).into(),
+                    },
+                ),
             ),
         ];
 

@@ -22,8 +22,8 @@ use common::{
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
         stakelock::StakePoolData,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgradeVersion, NetUpgrades,
+        OutPointSourceId, PoolId, RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
     time_getter::TimeGetter,
@@ -946,16 +946,19 @@ mod produce_block {
         let override_chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![(
                 BlockHeight::new(0),
-                ConsensusUpgrade::PoW {
-                    // Make difficulty impossible so the cancel from
-                    // the mock job manager is always seen before
-                    // solving the block
-                    initial_difficulty: Uint256::ZERO.into(),
-                },
+                (
+                    NetUpgradeVersion::Genesis,
+                    ConsensusUpgrade::PoW {
+                        // Make difficulty impossible so the cancel from
+                        // the mock job manager is always seen before
+                        // solving the block
+                        initial_difficulty: Uint256::ZERO.into(),
+                    },
+                ),
             )])
             .expect("Net upgrade is valid");
 
-            Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
+            Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -1071,13 +1074,16 @@ mod produce_block {
         let override_chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![(
                 BlockHeight::new(0),
-                ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::MAX.into(),
-                },
+                (
+                    NetUpgradeVersion::Genesis,
+                    ConsensusUpgrade::PoW {
+                        initial_difficulty: Uint256::MAX.into(),
+                    },
+                ),
             )])
             .expect("Net upgrade is valid");
 
-            Builder::new(ChainType::Regtest).consensus_upgrades(net_upgrades).build()
+            Builder::new(ChainType::Regtest).net_upgrades(net_upgrades).build()
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -1251,8 +1257,13 @@ mod produce_block {
                 },
             ];
 
-            let mut randomized_net_upgrades =
-                vec![(BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus)];
+            let mut randomized_net_upgrades = vec![(
+                BlockHeight::new(0),
+                (
+                    NetUpgradeVersion::Genesis,
+                    ConsensusUpgrade::IgnoreConsensus,
+                ),
+            )];
 
             let mut next_height_consensus_change = 1;
 
@@ -1261,7 +1272,10 @@ mod produce_block {
 
                 randomized_net_upgrades.push((
                     BlockHeight::new(next_height_consensus_change),
-                    consensus_types[next_consensus_type].clone(),
+                    (
+                        NetUpgradeVersion::PoS,
+                        consensus_types[next_consensus_type].clone(),
+                    ),
                 ));
 
                 next_height_consensus_change += rng.gen_range(1..50);
@@ -1272,7 +1286,7 @@ mod produce_block {
 
             Builder::new(ChainType::Regtest)
                 .genesis_custom(genesis_block)
-                .consensus_upgrades(net_upgrades)
+                .net_upgrades(net_upgrades)
                 .build()
         };
 
@@ -1321,7 +1335,7 @@ mod produce_block {
                     ));
 
                     match chain_config
-                        .consensus_upgrades()
+                        .net_upgrades()
                         .consensus_status(BlockHeight::new(block_height))
                     {
                         RequiredConsensus::IgnoreConsensus => {

@@ -127,8 +127,8 @@ mod tests {
             config::{create_unit_test_config, Builder, ChainConfig, ChainType},
             pos_initial_difficulty,
             stakelock::StakePoolData,
-            Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
-            TxOutput,
+            Block, ConsensusUpgrade, Destination, Genesis, NetUpgradeVersion, NetUpgrades,
+            PoSChainConfigBuilder, TxOutput,
         },
         primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
         time_getter::TimeGetter,
@@ -293,20 +293,31 @@ mod tests {
             );
 
             let net_upgrades = NetUpgrades::initialize(vec![
-                (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+                (
+                    BlockHeight::new(0),
+                    (
+                        NetUpgradeVersion::Genesis,
+                        ConsensusUpgrade::IgnoreConsensus,
+                    ),
+                ),
                 (
                     BlockHeight::new(1),
-                    ConsensusUpgrade::PoS {
-                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                        config: PoSChainConfigBuilder::new_for_unit_test().build(),
-                    },
+                    (
+                        NetUpgradeVersion::PoS,
+                        ConsensusUpgrade::PoS {
+                            initial_difficulty: Some(
+                                pos_initial_difficulty(ChainType::Regtest).into(),
+                            ),
+                            config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                        },
+                    ),
                 ),
             ])
             .expect("Net upgrades are valid");
 
             Builder::new(ChainType::Regtest)
                 .genesis_custom(genesis_block)
-                .consensus_upgrades(net_upgrades)
+                .net_upgrades(net_upgrades)
                 .build()
         };
 

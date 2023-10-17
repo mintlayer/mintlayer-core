@@ -21,7 +21,7 @@ use common::{
             get_tokens_issuance_v0_count, make_token_id, TokenAuxiliaryData, TokenId,
             TokenIssuanceVersion,
         },
-        Block, ChainConfig, Transaction,
+        Block, ChainConfig, NetUpgradeVersion, Transaction,
     },
     primitives::{Id, Idable, H256},
 };
@@ -87,23 +87,17 @@ impl TokenIssuanceCache {
 
         if was_token_issued {
             // Check if v0 tokens are allowed to be issued at this height
-            let latest_token_version = chain_config
-                .chainstate_upgrades()
-                .version_at_height(tx_source.expected_block_height())
-                .1
-                .token_issuance_version();
-
-            match latest_token_version {
-                TokenIssuanceVersion::V0 => { /* ok */ }
-                TokenIssuanceVersion::V1 => {
-                    return Err(ConnectTransactionError::TokensError(
-                        TokensError::DeprecatedTokenIssuanceVersion(
-                            tx.get_id(),
-                            TokenIssuanceVersion::V0,
-                        ),
-                    ));
-                }
-            };
+            if NetUpgradeVersion::PledgeIncentiveAndTokensSupply.is_activated(
+                tx_source.expected_block_height(),
+                chain_config.net_upgrades(),
+            ) {
+                return Err(ConnectTransactionError::TokensError(
+                    TokensError::DeprecatedTokenIssuanceVersion(
+                        tx.get_id(),
+                        TokenIssuanceVersion::V0,
+                    ),
+                ));
+            }
 
             self.precache_token_issuance(token_data_getter, tx)?;
 

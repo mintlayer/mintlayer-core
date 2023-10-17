@@ -314,7 +314,7 @@ fn build_test_framework(#[case] seed: test_utils::random::Seed) {
     let tf = TestFramework::builder(&mut rng)
         .with_chain_config(
             ChainConfigBuilder::new(chain_type)
-                .consensus_upgrades(NetUpgrades::unit_tests())
+                .net_upgrades(NetUpgrades::unit_tests())
                 .genesis_unittest(Destination::AnyoneCanSpend)
                 .build(),
         )

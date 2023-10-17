@@ -48,8 +48,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, ConsensusUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
+        GenBlock, NetUpgradeVersion, NetUpgrades, OutPointSourceId, PoSChainConfig,
+        PoSChainConfigBuilder, PoolId, RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -157,18 +157,27 @@ fn setup_test_chain_with_staked_pool(
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(2),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(MIN_DIFFICULTY.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .epoch_length(TEST_EPOCH_LENGTH)
         .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
         .build();
@@ -201,13 +210,22 @@ fn setup_test_chain_with_2_staked_pools(
     PrivateKey,
 ) {
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(2),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(MIN_DIFFICULTY.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
 
@@ -218,7 +236,7 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk_1: VRFPublicKey,
     vrf_pk_2: VRFPublicKey,
-    upgrades: Vec<(BlockHeight, ConsensusUpgrade)>,
+    upgrades: Vec<(BlockHeight, (NetUpgradeVersion, ConsensusUpgrade))>,
 ) -> (
     TestFramework,
     UtxoOutPoint,
@@ -230,7 +248,7 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
 ) {
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .epoch_length(TEST_EPOCH_LENGTH)
         .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
         .build();
@@ -289,7 +307,7 @@ fn produce_kernel_signature(
 }
 
 fn get_pos_chain_config(chain_config: &ChainConfig, block_height: BlockHeight) -> PoSChainConfig {
-    match chain_config.consensus_upgrades().consensus_status(block_height) {
+    match chain_config.net_upgrades().consensus_status(block_height) {
         RequiredConsensus::PoS(status) => status.get_chain_config().clone(),
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
             panic!("Invalid consensus")
@@ -582,19 +600,28 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk);
     let chain_config = ConfigBuilder::new(ChainType::Testnet)
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
@@ -907,18 +934,27 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(2),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .epoch_length(NonZeroU64::new(3).unwrap()) // stake pool won't be sealed at height 1
         .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
         .build();
@@ -1510,25 +1546,37 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         PoSChainConfigBuilder::new_for_unit_test().build().target_block_time().get();
 
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(2),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    .decommission_maturity_distance(BlockDistance::new(50))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(MIN_DIFFICULTY.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        .decommission_maturity_distance(BlockDistance::new(50))
+                        .build(),
+                },
+            ),
         ),
         (
             BlockHeight::new(3),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    // decommission maturity increased
-                    .decommission_maturity_distance(BlockDistance::new(100))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        // decommission maturity increased
+                        .decommission_maturity_distance(BlockDistance::new(100))
+                        .build(),
+                },
+            ),
         ),
     ];
 
@@ -1641,13 +1689,22 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
 fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(MIN_DIFFICULTY.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(MIN_DIFFICULTY.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
         ),
     ];
     let genesis_pool_id = PoolId::new(H256::zero());
@@ -1657,7 +1714,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
 
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::new(ChainType::Testnet)
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
 

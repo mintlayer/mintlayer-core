@@ -21,8 +21,8 @@ use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
         timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput,
-        UtxoOutPoint,
+        Destination, NetUpgradeVersion, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockDistance, BlockHeight, Idable},
     Uint256,
@@ -43,30 +43,42 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(Uint256::MAX.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    .decommission_maturity_distance(BlockDistance::new(100))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(Uint256::MAX.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        .decommission_maturity_distance(BlockDistance::new(100))
+                        .build(),
+                },
+            ),
         ),
         (
             BlockHeight::new(3),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    .decommission_maturity_distance(BlockDistance::new(50))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        .decommission_maturity_distance(BlockDistance::new(50))
+                        .build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk.clone());
     let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
     let target_block_time =
@@ -176,31 +188,43 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let upgrades = vec![
-        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+        (
+            BlockHeight::new(0),
+            (
+                NetUpgradeVersion::Genesis,
+                ConsensusUpgrade::IgnoreConsensus,
+            ),
+        ),
         (
             BlockHeight::new(1),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: Some(Uint256::MAX.into()),
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    .spend_share_maturity_distance(BlockDistance::new(100))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(Uint256::MAX.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        .spend_share_maturity_distance(BlockDistance::new(100))
+                        .build(),
+                },
+            ),
         ),
         (
             BlockHeight::new(3),
-            ConsensusUpgrade::PoS {
-                initial_difficulty: None,
-                config: PoSChainConfigBuilder::new_for_unit_test()
-                    // decrease maturity setting
-                    .spend_share_maturity_distance(BlockDistance::new(50))
-                    .build(),
-            },
+            (
+                NetUpgradeVersion::PoS,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: None,
+                    config: PoSChainConfigBuilder::new_for_unit_test()
+                        // decrease maturity setting
+                        .spend_share_maturity_distance(BlockDistance::new(50))
+                        .build(),
+                },
+            ),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk);
     let chain_config = ConfigBuilder::test_chain()
-        .consensus_upgrades(net_upgrades)
+        .net_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
     let target_block_time =

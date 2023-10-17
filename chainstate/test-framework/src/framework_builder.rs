@@ -25,8 +25,7 @@ use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStr
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
-        tokens::TokenIssuanceVersion,
-        ChainConfig, ChainstateUpgrade, ConsensusUpgrade, Destination, NetUpgrades,
+        ChainConfig, ConsensusUpgrade, Destination, NetUpgradeVersion, NetUpgrades,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -58,17 +57,13 @@ impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
-            .consensus_upgrades(
+            .net_upgrades(
                 NetUpgrades::initialize(vec![(
                     BlockHeight::zero(),
-                    ConsensusUpgrade::IgnoreConsensus,
-                )])
-                .unwrap(),
-            )
-            .chainstate_upgrades(
-                NetUpgrades::initialize(vec![(
-                    BlockHeight::zero(),
-                    ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                    (
+                        NetUpgradeVersion::Genesis,
+                        ConsensusUpgrade::IgnoreConsensus,
+                    ),
                 )])
                 .unwrap(),
             )

@@ -27,8 +27,7 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        tokens::TokenIssuanceVersion,
-        ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgradeVersion, NetUpgrades,
         PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
     },
     primitives::{
@@ -49,17 +48,26 @@ impl ChainType {
         }
     }
 
-    fn default_consensus_upgrades(&self) -> NetUpgrades<ConsensusUpgrade> {
+    fn default_net_upgrades(&self) -> NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
         match self {
             ChainType::Mainnet | ChainType::Regtest => {
                 let pow_config = PoWChainConfig::new(*self);
                 let upgrades = vec![
-                    (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+                    (
+                        BlockHeight::new(0),
+                        (
+                            NetUpgradeVersion::Genesis,
+                            ConsensusUpgrade::IgnoreConsensus,
+                        ),
+                    ),
                     (
                         BlockHeight::new(1),
-                        ConsensusUpgrade::PoW {
-                            initial_difficulty: pow_config.limit().into(),
-                        },
+                        (
+                            NetUpgradeVersion::Genesis,
+                            ConsensusUpgrade::PoW {
+                                initial_difficulty: pow_config.limit().into(),
+                            },
+                        ),
                     ),
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -70,70 +78,56 @@ impl ChainType {
                     .expect("Target block time cannot be zero as per NonZeroU64");
 
                 let upgrades = vec![
-                    (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+                    (
+                        BlockHeight::new(0),
+                        (
+                            NetUpgradeVersion::Genesis,
+                            ConsensusUpgrade::IgnoreConsensus,
+                        ),
+                    ),
                     (
                         BlockHeight::new(1),
-                        ConsensusUpgrade::PoS {
-                            initial_difficulty: Some(
-                                pos_initial_difficulty(ChainType::Testnet).into(),
-                            ),
-                            config: PoSChainConfig::new(
-                                target_limit,
-                                target_block_time,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_MATURITY_DISTANCE,
-                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                                PerThousand::new(1).expect("must be valid"),
-                                PoSConsensusVersion::V0,
-                            ),
-                        },
+                        (
+                            NetUpgradeVersion::PoS,
+                            ConsensusUpgrade::PoS {
+                                initial_difficulty: Some(
+                                    pos_initial_difficulty(ChainType::Testnet).into(),
+                                ),
+                                config: PoSChainConfig::new(
+                                    target_limit,
+                                    target_block_time,
+                                    DEFAULT_MATURITY_DISTANCE,
+                                    DEFAULT_MATURITY_DISTANCE,
+                                    DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                    PerThousand::new(1).expect("must be valid"),
+                                    PoSConsensusVersion::V0,
+                                ),
+                            },
+                        ),
                     ),
                     (
                         // TODO: decide on proper height
                         BlockHeight::new(9999999999),
-                        ConsensusUpgrade::PoS {
-                            initial_difficulty: None,
-                            config: PoSChainConfig::new(
-                                target_limit,
-                                target_block_time,
-                                BlockDistance::new(7200),
-                                BlockDistance::new(7200),
-                                DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                                PerThousand::new(1).expect("must be valid"),
-                                PoSConsensusVersion::V1,
-                            ),
-                        },
+                        (
+                            NetUpgradeVersion::PledgeIncentiveAndTokensSupply,
+                            ConsensusUpgrade::PoS {
+                                initial_difficulty: None,
+                                config: PoSChainConfig::new(
+                                    target_limit,
+                                    target_block_time,
+                                    BlockDistance::new(7200),
+                                    BlockDistance::new(7200),
+                                    DEFAULT_BLOCK_COUNT_TO_AVERAGE,
+                                    PerThousand::new(1).expect("must be valid"),
+                                    PoSConsensusVersion::V1,
+                                ),
+                            },
+                        ),
                     ),
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Signet => NetUpgrades::unit_tests(),
-        }
-    }
-
-    fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
-        match self {
-            ChainType::Mainnet | ChainType::Regtest | ChainType::Signet => {
-                let upgrades = vec![(
-                    BlockHeight::new(0),
-                    ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                )];
-                NetUpgrades::initialize(upgrades).expect("net upgrades")
-            }
-            ChainType::Testnet => {
-                let upgrades = vec![
-                    (
-                        BlockHeight::new(0),
-                        ChainstateUpgrade::new(TokenIssuanceVersion::V0),
-                    ),
-                    (
-                        // TODO: decide on proper height
-                        BlockHeight::new(9999999999),
-                        ChainstateUpgrade::new(TokenIssuanceVersion::V1),
-                    ),
-                ];
-                NetUpgrades::initialize(upgrades).expect("net upgrades")
-            }
         }
     }
 }
@@ -180,8 +174,7 @@ pub struct Builder {
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
-    consensus_upgrades: NetUpgrades<ConsensusUpgrade>,
-    chainstate_upgrades: NetUpgrades<ChainstateUpgrade>,
+    net_upgrades: NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     token_min_issuance_fee: Amount,
@@ -222,8 +215,7 @@ impl Builder {
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
-            consensus_upgrades: chain_type.default_consensus_upgrades(),
-            chainstate_upgrades: chain_type.default_chainstate_upgrades(),
+            net_upgrades: chain_type.default_net_upgrades(),
             token_min_issuance_fee: super::TOKEN_MIN_ISSUANCE_FEE,
             token_min_supply_change_fee: super::TOKEN_MIN_SUPPLY_CHANGE_FEE,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
@@ -242,7 +234,7 @@ impl Builder {
     /// New builder initialized with test chain config
     pub fn test_chain() -> Self {
         Self::new(ChainType::Mainnet)
-            .consensus_upgrades(NetUpgrades::unit_tests())
+            .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
     }
 
@@ -268,8 +260,7 @@ impl Builder {
             target_block_spacing,
             genesis_block,
             emission_schedule,
-            consensus_upgrades,
-            chainstate_upgrades,
+            net_upgrades,
             token_min_issuance_fee,
             token_min_supply_change_fee,
             token_max_uri_len,
@@ -309,8 +300,8 @@ impl Builder {
             .into();
 
         let pow_chain_config = {
-            let (_, genesis_upgrade_version) =
-                consensus_upgrades.version_at_height(BlockHeight::new(0));
+            let (_, (_, genesis_upgrade_version)) =
+                net_upgrades.version_at_height(BlockHeight::new(0));
 
             let limit = match genesis_upgrade_version {
                 ConsensusUpgrade::IgnoreConsensus | ConsensusUpgrade::PoS { .. } => None,
@@ -348,8 +339,7 @@ impl Builder {
             height_checkpoint_data,
             emission_schedule,
             final_supply,
-            consensus_upgrades,
-            chainstate_upgrades,
+            net_upgrades,
             token_min_issuance_fee,
             token_min_supply_change_fee,
             token_max_uri_len,
@@ -390,8 +380,7 @@ impl Builder {
     builder_method!(max_block_size_with_standard_txs: usize);
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(max_depth_for_reorg: BlockDistance);
-    builder_method!(consensus_upgrades: NetUpgrades<ConsensusUpgrade>);
-    builder_method!(chainstate_upgrades: NetUpgrades<ChainstateUpgrade>);
+    builder_method!(net_upgrades: NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
