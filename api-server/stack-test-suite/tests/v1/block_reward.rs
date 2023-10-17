@@ -50,7 +50,7 @@ async fn block_not_found() {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn ok(#[case] seed: Seed) {
+async fn no_reward(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -76,13 +76,8 @@ async fn ok(#[case] seed: Seed) {
 
                     // Need the "- 1" to account for the genesis block not in the vec
                     let block_id = chainstate_block_ids[block_height - 1];
-                    let block = tf.block(tf.to_chain_block_id(&block_id));
-                    let expected_block_reward = block.block_reward().clone();
 
-                    _ = tx.send((
-                        block_id.to_hash().encode_hex::<String>(),
-                        expected_block_reward,
-                    ));
+                    _ = tx.send(block_id.to_hash().encode_hex::<String>());
 
                     chainstate_block_ids
                         .iter()
@@ -113,7 +108,7 @@ async fn ok(#[case] seed: Seed) {
         }
     });
 
-    let (block_id, _expected_block_reward) = rx.await.unwrap();
+    let block_id = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/reward");
 
     // Given that the listener port is open, this will block until a
