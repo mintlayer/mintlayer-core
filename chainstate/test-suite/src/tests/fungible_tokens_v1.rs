@@ -24,18 +24,21 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         output_value::OutputValue,
-        signature::inputsig::InputWitness,
+        signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         tokens::{
             make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenIssuanceVersion,
             TokenTotalSupply,
         },
         AccountNonce, AccountSpending, AccountType, Block, ChainstateUpgrade, Destination,
-        GenBlock, NetUpgrades, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        GenBlock, NetUpgrades, OutPointSourceId, SignedTransaction, TokenOutput, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{signed_amount::SignedAmount, Amount, BlockHeight, Id, Idable},
 };
-use crypto::random::{CryptoRng, Rng};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::{CryptoRng, Rng},
+};
 use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
@@ -561,6 +564,7 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
             .unwrap();
     });
 }
+
 // Try issuing a token but burn less coins than required by issuance fee; check that's an error
 #[rstest]
 #[trace]
@@ -853,6 +857,14 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
     });
 }
 
+// Issue a token with random fixed supply.
+// Mint all tokens up to the total supply.
+// Try mint 1 more tokens and check an error.
+// Unmint 1 token.
+// Try mint 2 tokens and check an error.
+// Unmint N tokens.
+// Try mint N+1 tokens and check an error.
+// Mint N tokens and check ok.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1146,6 +1158,9 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
     });
 }
 
+// Issue and mint maximum possible tokens for Unlimited supply.
+// Try to mint 1 more and check an error.
+// Try to mint random number and check an error.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1161,7 +1176,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         let (token_id, _, utxo_with_change) =
             issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
 
-        // Mint tokens <= i128::MAX
+        // Mint tokens i128::MAX
         let mint_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::from_account(
@@ -2708,5 +2723,477 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
             circulating_supply: BTreeMap::from_iter([(token_id_2, amount_to_mint_2)]),
         };
         assert_eq!(actual_data, expected_data);
+    });
+}
+
+// Issue a token.
+// Try to mint without providing input signatures, check an error.
+// Try to mint with random keys, check an error.
+// Mint with controller keys, check ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_mint(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+        let genesis_block_id = tf.genesis().get_id();
+
+        let (controller_sk, controller_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+        });
+
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id.into(),
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            issuance,
+        );
+
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+
+        // Try to mint without signature
+        let tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountSpending::TokenTotalSupply(token_id, amount_to_mint),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .build();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try to mint with wrong signature
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &some_sk,
+                Default::default(),
+                Destination::PublicKey(some_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Mint with proper keys
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &controller_sk,
+                Default::default(),
+                Destination::PublicKey(controller_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    });
+}
+
+// Issue and mint some tokens.
+// Try to unmint without providing input signatures, check an error.
+// Try to unmint with random keys, check an error.
+// Mint with controller keys, check ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_unmint(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+        let genesis_block_id = tf.genesis().get_id();
+
+        let (controller_sk, controller_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+        });
+
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id.into(),
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            issuance,
+        );
+
+        // Mint some tokens
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let mint_tx = {
+            let inputs_utxos = vec![
+                None,
+                tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+            ];
+            let inputs_utxos_refs =
+                inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_account(
+                        AccountNonce::new(0),
+                        AccountSpending::TokenTotalSupply(token_id, amount_to_mint),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    utxo_with_change.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(token_min_supply_change_fee),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, amount_to_mint),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Burn(OutputValue::Coin(
+                    token_min_supply_change_fee,
+                )))
+                .build()
+                .transaction()
+                .clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &controller_sk,
+                Default::default(),
+                Destination::PublicKey(controller_pk.clone()),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+        let mint_tx_id = mint_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+
+        // Try to unmint without signature
+        let tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(1),
+                    AccountSpending::TokenCirculatingSupply(token_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                token_id,
+                amount_to_mint,
+            )))
+            .build();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate
+                .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 0))
+                .unwrap()
+                .map(|utxo| utxo.output().clone()),
+            tf.chainstate
+                .utxo(&UtxoOutPoint::new(mint_tx_id.into(), 1))
+                .unwrap()
+                .map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try to unmint with wrong signature
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &some_sk,
+                Default::default(),
+                Destination::PublicKey(some_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![
+                    InputWitness::Standard(account_sig),
+                    InputWitness::NoSignature(None),
+                    InputWitness::NoSignature(None),
+                ],
+            )
+            .unwrap()
+        };
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Unmint with proper keys
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &controller_sk,
+                Default::default(),
+                Destination::PublicKey(controller_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![
+                    InputWitness::Standard(account_sig),
+                    InputWitness::NoSignature(None),
+                    InputWitness::NoSignature(None),
+                ],
+            )
+            .unwrap()
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    });
+}
+
+// Issue a token.
+// Try to lock the supply without providing input signatures, check an error.
+// Try to lock the supply with random keys, check an error.
+// Lock the supply with controller keys, check ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_lock_supply(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+        let genesis_block_id = tf.genesis().get_id();
+
+        let (controller_sk, controller_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let issuance = TokenIssuance::V1(TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Lockable,
+            reissuance_controller: Destination::PublicKey(controller_pk.clone()),
+        });
+
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id.into(),
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            issuance,
+        );
+
+        // Try to lock without signature
+        let tx_no_signatures = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountSpending::TokenSupplyLock(token_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .build();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(tx_no_signatures.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![
+            None,
+            tf.chainstate.utxo(&utxo_with_change).unwrap().map(|utxo| utxo.output().clone()),
+        ];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try to lock with wrong signature
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &some_sk,
+                Default::default(),
+                Destination::PublicKey(some_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Lock with proper keys
+        let tx = {
+            let tx = tx_no_signatures.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &controller_sk,
+                Default::default(),
+                Destination::PublicKey(controller_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(account_sig), InputWitness::NoSignature(None)],
+            )
+            .unwrap()
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
     });
 }

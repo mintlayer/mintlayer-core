@@ -20,11 +20,13 @@ use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
 };
-use common::chain::{AccountOutPoint, AccountSpending, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
-        output_value::OutputValue, timelock::OutputTimeLock, AccountNonce, Destination,
-        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        output_value::OutputValue,
+        signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
+        timelock::OutputTimeLock,
+        AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
+        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable, H256},
 };
@@ -758,5 +760,129 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
             tf.chainstate.get_stake_delegation_balance(delegation_id).unwrap(),
             Some(amount_to_stake)
         );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_signature_on_spend_share(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (pool_id, _, transfer_outpoint) = prepare_stake_pool(&mut rng, &mut tf);
+        let delegation_id = pos_accounting::make_delegation_id(&transfer_outpoint);
+        let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
+
+        let (delegation_sk, delegation_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let create_delegation_tx = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::PublicKey(delegation_pk.clone()),
+                pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(available_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let create_delegation_tx_id = create_delegation_tx.transaction().get_id();
+
+        let delegate_staking_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(create_delegation_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::DelegateStaking(available_amount, delegation_id))
+            .build();
+
+        tf.make_block_builder()
+            .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
+            .build_and_process()
+            .unwrap();
+
+        let spend_share_tx_no_signature = TransactionBuilder::new()
+            .add_input(
+                TxInput::Account(AccountOutPoint::new(
+                    AccountNonce::new(0),
+                    AccountSpending::Delegation(delegation_id, available_amount),
+                )),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(available_amount),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+
+        // Try to spend share with no input signature
+        let result = tf
+            .make_block_builder()
+            .add_transaction(spend_share_tx_no_signature.clone())
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureNotFound
+                )
+            ))
+        );
+
+        let inputs_utxos = vec![None];
+        let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+        // Try to spend share with wrong signature
+        let tx = {
+            let tx = spend_share_tx_no_signature.transaction().clone();
+
+            let (some_sk, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &some_sk,
+                Default::default(),
+                Destination::PublicKey(some_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(tx, vec![InputWitness::Standard(account_sig)]).unwrap()
+        };
+
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SignatureVerificationFailed(
+                    common::chain::signature::TransactionSigError::SignatureVerificationFailed
+                )
+            ))
+        );
+
+        // Lock with proper keys
+        let tx = {
+            let tx = spend_share_tx_no_signature.transaction().clone();
+
+            let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &delegation_sk,
+                Default::default(),
+                Destination::PublicKey(delegation_pk),
+                &tx,
+                &inputs_utxos_refs,
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(tx, vec![InputWitness::Standard(account_sig)]).unwrap()
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
     });
 }
