@@ -390,7 +390,7 @@ impl MempoolBanScore for tokens_accounting::Error {
         match self {
             tokens_accounting::Error::StorageError(_) => 0,
             tokens_accounting::Error::AccountingError(err) => err.mempool_ban_score(),
-            tokens_accounting::Error::TokenAlreadyExist(_) => 0,
+            tokens_accounting::Error::TokenAlreadyExists(_) => 0,
             tokens_accounting::Error::TokenDataNotFound(_) => 0,
             tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 0,
             tokens_accounting::Error::CirculatingSupplyNotFound(_) => 0,

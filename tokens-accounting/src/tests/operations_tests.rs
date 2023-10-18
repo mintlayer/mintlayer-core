@@ -127,13 +127,13 @@ fn try_issue_twice(#[case] seed: Seed) {
     let mut cache = TokensAccountingCache::new(&mut storage);
     assert_eq!(
         cache.issue_token(token_id, token_data),
-        Err(crate::Error::TokenAlreadyExist(token_id))
+        Err(crate::Error::TokenAlreadyExists(token_id))
     );
 
     let new_token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     assert_eq!(
         cache.issue_token(token_id, new_token_data),
-        Err(crate::Error::TokenAlreadyExist(token_id))
+        Err(crate::Error::TokenAlreadyExists(token_id))
     );
 }
 

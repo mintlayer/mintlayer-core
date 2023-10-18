@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
@@ -23,13 +25,17 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
-        tokens::{make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
-        AccountNonce, AccountSpending, AccountType, Block, Destination, GenBlock, OutPointSourceId,
-        TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        tokens::{
+            make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenIssuanceVersion,
+            TokenTotalSupply,
+        },
+        AccountNonce, AccountSpending, AccountType, Block, ChainstateUpgrade, Destination,
+        GenBlock, NetUpgrades, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
-    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, BlockHeight, Id, Idable},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
@@ -39,6 +45,23 @@ use test_utils::{
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError;
+
+fn make_test_framework_with_v1(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
+    TestFramework::builder(rng)
+        .with_chain_config(
+            common::chain::config::Builder::test_chain()
+                .chainstate_upgrades(
+                    NetUpgrades::initialize(vec![(
+                        BlockHeight::zero(),
+                        ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                    )])
+                    .unwrap(),
+                )
+                .genesis_unittest(Destination::AnyoneCanSpend)
+                .build(),
+        )
+        .build()
+}
 
 fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuance {
     TokenIssuance::V1(TokenIssuanceV1 {
@@ -161,13 +184,89 @@ fn mint_tokens_in_block(
     (block_id, tx_id)
 }
 
+fn unmint_tokens_in_block(
+    tf: &mut TestFramework,
+    parent_block_id: Id<GenBlock>,
+    token_id: TokenId,
+    utxo_to_burn_tokens: UtxoOutPoint,
+    utxo_to_pay_fee: UtxoOutPoint,
+    amount_to_unmint: Amount,
+) -> (Id<Block>, Id<Transaction>) {
+    let token_min_supply_change_fee =
+        tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+    let nonce = BlockchainStorageRead::get_account_nonce_count(
+        &tf.storage,
+        AccountType::TokenSupply(token_id),
+    )
+    .unwrap()
+    .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
+
+    let fee_input_utxo_coins = chainstate_test_framework::get_output_value(
+        tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
+    )
+    .unwrap()
+    .coin_amount()
+    .unwrap();
+
+    let tokens_input_utxo_amount = match chainstate_test_framework::get_output_value(
+        tf.chainstate.utxo(&utxo_to_burn_tokens).unwrap().unwrap().output(),
+    )
+    .unwrap()
+    {
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => panic!("Invalid input to burn tokens"),
+        OutputValue::TokenV1(_, amount) => amount,
+    };
+
+    let tx_builder = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_account(nonce, AccountSpending::TokenCirculatingSupply(token_id)),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            utxo_to_burn_tokens.clone().into(),
+            InputWitness::NoSignature(None),
+        )
+        .add_input(
+            utxo_to_pay_fee.clone().into(),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Burn(OutputValue::TokenV1(
+            token_id,
+            amount_to_unmint,
+        )))
+        .add_output(TxOutput::Burn(OutputValue::Coin(
+            token_min_supply_change_fee,
+        )))
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(
+                token_id,
+                (tokens_input_utxo_amount - amount_to_unmint).unwrap(),
+            ),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin((fee_input_utxo_coins - token_min_supply_change_fee).unwrap()),
+            Destination::AnyoneCanSpend,
+        ));
+
+    let tx = tx_builder.build();
+    let tx_id = tx.transaction().get_id();
+
+    let block = tf.make_block_builder().add_transaction(tx).with_parent(parent_block_id).build();
+    let block_id = block.get_id();
+    tf.process_block(block, BlockSource::Local).unwrap();
+
+    (block_id, tx_id)
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -372,14 +471,33 @@ fn token_issue_test(#[case] seed: Seed) {
     });
 }
 
-// Try issuing a token but burn less coins than required by issuance fee; check that's an error
+// TokensV1 issuance should be an error before V1 fork is activated
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn token_issue_not_enough_fee(#[case] seed: Seed) {
+fn token_issue_before_v1_activation(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                            ),
+                            (
+                                BlockHeight::new(2),
+                                ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
@@ -389,7 +507,78 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                        Box::new(issuance.clone()),
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
+                    TokensError::UnsupportedTokenIssuanceVersion(_, _)
+                ))
+            ))
+        ));
+
+        // Add block to activate fork
+        let coin_transfer_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(outpoint_source_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_min_issuance_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let coin_transfer_tx_id = coin_transfer_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(coin_transfer_tx)
+            .build_and_process()
+            .unwrap();
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(coin_transfer_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                        Box::new(issuance),
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+    });
+}
+// Try issuing a token but burn less coins than required by issuance fee; check that's an error
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn token_issue_not_enough_fee(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
+
+        let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited);
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
@@ -410,6 +599,22 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
                 ))
             ))
         ));
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(outpoint_source_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
+                        Box::new(issuance.clone()),
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
     });
 }
 
@@ -420,7 +625,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
 fn token_issuance_output_cannot_be_spent(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited);
         let tx = TransactionBuilder::new()
@@ -477,7 +682,7 @@ fn token_issuance_output_cannot_be_spent(#[case] seed: Seed) {
 fn mint_unmint_fixed_supply(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let mut nonce = AccountNonce::new(0);
 
         let token_min_supply_change_fee =
@@ -648,6 +853,213 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let total_supply = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Fixed(total_supply));
+
+        // Mint all the tokens up to the total supply
+        let best_block_id = tf.best_block_id();
+        let (_, mint_total_supply_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            total_supply,
+            true,
+        );
+
+        // Mint 1 tokens over the limit
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountSpending::TokenTotalSupply(token_id, Amount::from_atoms(1)),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_total_supply_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::MintExceedsSupplyLimit(
+                        Amount::from_atoms(1),
+                        total_supply,
+                        token_id
+                    )
+                )
+            ))
+        );
+
+        // Unmint 1 token
+        let best_block_id = tf.best_block_id();
+        let (_, unmint_1_token_tx_id) = unmint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            token_id,
+            UtxoOutPoint::new(mint_total_supply_tx_id.into(), 1),
+            UtxoOutPoint::new(mint_total_supply_tx_id.into(), 2),
+            Amount::from_atoms(1),
+        );
+
+        // Try mint 2 tokens which is still over the limit
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountSpending::TokenTotalSupply(token_id, Amount::from_atoms(2)),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unmint_1_token_tx_id.into(), 3),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::MintExceedsSupplyLimit(
+                        Amount::from_atoms(2),
+                        total_supply,
+                        token_id
+                    )
+                )
+            ))
+        );
+
+        // Unmint n tokens
+        // Note: -1 because 1 was unminted previously
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms() - 1));
+        let best_block_id = tf.best_block_id();
+        let (_, unmint_n_tokens_tx_id) = unmint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            token_id,
+            UtxoOutPoint::new(unmint_1_token_tx_id.into(), 2),
+            UtxoOutPoint::new(unmint_1_token_tx_id.into(), 3),
+            amount_to_unmint,
+        );
+
+        // Try mint n+1 tokens which is still over the limit
+        // Note: +2 below because 1 was unminted previously and 1 to get over the limit
+        let amount_to_unmint_plus_1 = (amount_to_unmint + Amount::from_atoms(2)).unwrap();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(3),
+                            AccountSpending::TokenTotalSupply(token_id, amount_to_unmint_plus_1),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unmint_n_tokens_tx_id.into(), 3),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_unmint_plus_1),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::MintExceedsSupplyLimit(
+                        amount_to_unmint_plus_1,
+                        total_supply,
+                        token_id
+                    )
+                )
+            ))
+        );
+
+        // Mint exactly the amount that was totally unminted
+        let amount_to_mint = (amount_to_unmint + Amount::from_atoms(1)).unwrap();
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(3),
+                            AccountSpending::TokenTotalSupply(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unmint_n_tokens_tx_id.into(), 3),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(
+                        token_min_supply_change_fee,
+                    )))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        assert_eq!(
+            tf.storage.get_circulating_supply(&token_id).unwrap().unwrap(),
+            total_supply
+        );
+    });
+}
+
 // Check that if supply is unlimited up to i128::MAX tokens can be minted.
 #[rstest]
 #[trace]
@@ -655,11 +1067,10 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
 fn mint_unlimited_supply(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..=i128::MAX as u128));
         let (token_id, _, utxo_with_change) =
@@ -682,7 +1093,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(token_min_issuance_fee),
+                OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
@@ -720,10 +1131,6 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(token_min_issuance_fee),
-                Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, amount_to_mint),
                 Destination::AnyoneCanSpend,
             ))
@@ -739,6 +1146,120 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_unlimited_supply_max(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        // Mint tokens <= i128::MAX
+        let mint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountSpending::TokenTotalSupply(token_id, max_amount_to_mint),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_min_supply_change_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, max_amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .build();
+        let mint_tx_id = mint_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some(max_amount_to_mint));
+
+        // Try mint one more over i128::MAX
+        let mint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(1),
+                    AccountSpending::TokenTotalSupply(token_id, Amount::from_atoms(1)),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .build();
+        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::TransactionVerifierError(
+                tx_verifier::TransactionVerifierStorageError::TokensAccountingError(
+                    tokens_accounting::Error::StorageWrite
+                )
+            ))
+        );
+
+        // Try mint random number over i128::MAX
+        let random_amount = Amount::from_atoms(rng.gen_range(0..i128::MAX as u128));
+        let mint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(1),
+                    AccountSpending::TokenTotalSupply(token_id, random_amount),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, random_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .build();
+        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::TransactionVerifierError(
+                tx_verifier::TransactionVerifierStorageError::TokensAccountingError(
+                    tokens_accounting::Error::StorageWrite
+                )
+            ))
+        );
+    });
+}
+
 // Issue a token and type to mint from different account types.
 // Mint from TokenCirculatingSupply and check an error.
 // Mint from TokenLockSupply and check an error.
@@ -749,7 +1270,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
 fn mint_from_wrong_account(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -817,7 +1338,7 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
 fn try_to_print_money_on_mint(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -909,7 +1430,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
 fn burn_from_total_supply_account(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -973,7 +1494,7 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
 }
 
 // Issue a token, mint some and try to burn tokens and spend from lock supply account.
-// Check that it's not an error an that the supply actually is locked
+// Check that it's not an error and that the supply is actually locked
 // and tokens are burned without unminting.
 #[rstest]
 #[trace]
@@ -981,7 +1502,7 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
 fn burn_from_lock_supply_account(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1055,7 +1576,7 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
 fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1123,10 +1644,10 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn burning_less_then_input_on_unmint(#[case] seed: Seed) {
+fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1201,10 +1722,10 @@ fn burning_less_then_input_on_unmint(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
+fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1310,7 +1831,7 @@ fn try_to_burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
 fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1416,7 +1937,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
 fn check_lockable_supply(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let mut nonce = AccountNonce::new(0);
 
         let token_min_supply_change_fee =
@@ -1589,7 +2110,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
 fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSupply) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1634,7 +2155,7 @@ fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSu
 fn try_lock_twice(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let mut nonce = AccountNonce::new(0);
 
         let token_min_supply_change_fee =
@@ -1710,7 +2231,7 @@ fn try_lock_twice(#[case] seed: Seed) {
 fn supply_change_fees(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let low_fee = (tf.chainstate.get_chain_config().token_min_supply_change_fee()
             - Amount::from_atoms(1))
@@ -1822,7 +2343,7 @@ fn supply_change_fees(#[case] seed: Seed) {
 fn spend_mint_tokens_output(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
 
         let token_min_supply_change_fee =
             tf.chainstate.get_chain_config().token_min_supply_change_fee();
@@ -1912,7 +2433,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
 fn issue_and_mint_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -1962,7 +2483,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
 fn issue_and_mint_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -2025,6 +2546,68 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
     });
 }
 
+// Produce `genesis -> a -> b`.
+// Block `a` issues a token while block `b` mints some tokens.
+// Then produce parallel chain `genesis -> c -> d -> e`.
+// Block `c`, `d` and `e` are just empty blocks to trigger the reorg.
+// After reorg check that token info was removed from the storage.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_test_simple(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let genesis_block_id = tf.best_block_id();
+
+        // Create block `b` with token issuance
+
+        let token_issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited);
+        let (token_id, block_b_id, block_b_change_utxo) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            token_issuance.clone(),
+        );
+        assert_eq!(tf.best_block_id(), block_b_id);
+
+        // Create block `c` with token minting
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let (block_c_id, _) = mint_tokens_in_block(
+            &mut tf,
+            block_b_id.into(),
+            block_b_change_utxo,
+            token_id,
+            amount_to_mint,
+            false,
+        );
+        assert_eq!(tf.best_block_id(), block_c_id);
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(token_issuance.into()),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id, amount_to_mint)]),
+        };
+        assert_eq!(actual_data, expected_data);
+
+        // Add blocks from genesis to trigger the reorg
+        let block_e_id = tf.create_chain(&genesis_block_id, 3, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::new(),
+            circulating_supply: BTreeMap::new(),
+        };
+        assert_eq!(actual_data, expected_data);
+    });
+}
+
 // Produce `genesis -> a -> b -> c`.
 // Block `a` produces 2 coins utxo to issue tokens from.
 // Block `b` issues token1 and block `c` mints token1.
@@ -2035,10 +2618,10 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn reorg_test(#[case] seed: Seed) {
+fn reorg_test_2_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_block_id = tf.best_block_id();
 
         let amount_to_mint_1 = Amount::from_atoms(rng.gen_range(2..100_000_000));
@@ -2116,26 +2699,14 @@ fn reorg_test(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_f_id);
 
         // Check the storage
-        assert!(
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id_1)
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_1)
-                .unwrap()
-                .is_none()
-        );
-
-        assert_eq!(
-            TokensAccountingStorageRead::get_token_data(&tf.storage, &token_id_2).unwrap(),
-            Some(tokens_accounting::TokenData::FungibleToken(
-                issuance_token_2.into()
-            ))
-        );
-        assert_eq!(
-            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id_2).unwrap(),
-            Some(amount_to_mint_2)
-        );
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id_2,
+                tokens_accounting::TokenData::FungibleToken(issuance_token_2.into()),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id_2, amount_to_mint_2)]),
+        };
+        assert_eq!(actual_data, expected_data);
     });
 }

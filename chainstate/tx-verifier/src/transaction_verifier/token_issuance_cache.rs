@@ -98,8 +98,8 @@ impl TokenIssuanceCache {
                 TokenIssuanceVersion::V1 => {
                     return Err(ConnectTransactionError::TokensError(
                         TokensError::DeprecatedTokenIssuanceVersion(
-                            tx.get_id(),
                             TokenIssuanceVersion::V0,
+                            tx.get_id(),
                         ),
                     ));
                 }

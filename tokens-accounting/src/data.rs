@@ -13,14 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
-use common::chain::{
-    tokens::{TokenId, TokenIssuance, TokenTotalSupply},
-    Destination,
+use common::{
+    chain::{
+        tokens::{TokenId, TokenIssuance, TokenTotalSupply},
+        Destination,
+    },
+    primitives::Amount,
 };
 use serialization::{Decode, Encode};
 
 use crate::Error;
+
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
+pub struct TokensAccountingData {
+    pub token_data: BTreeMap<TokenId, TokenData>,
+    pub circulating_supply: BTreeMap<TokenId, Amount>,
+}
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct TokensAccountingDeltaData {

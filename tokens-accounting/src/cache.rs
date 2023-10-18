@@ -86,11 +86,11 @@ impl<P> FlushableTokensAccountingView for TokensAccountingCache<P> {
 impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCache<P> {
     fn issue_token(&mut self, id: TokenId, data: TokenData) -> Result<TokenAccountingUndo, Error> {
         if self.get_token_data(&id)?.is_some() {
-            return Err(Error::TokenAlreadyExist(id));
+            return Err(Error::TokenAlreadyExists(id));
         }
 
         if self.get_circulating_supply(&id)?.is_some() {
-            return Err(Error::TokenAlreadyExist(id));
+            return Err(Error::TokenAlreadyExists(id));
         }
 
         let undo_data = self

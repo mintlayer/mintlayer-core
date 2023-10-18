@@ -1443,8 +1443,8 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TokensError(TokensError::DeprecatedTokenIssuanceVersion(
+                    TokenIssuanceVersion::V0,
                     tx_id,
-                    TokenIssuanceVersion::V0
                 ))
             ))
         );

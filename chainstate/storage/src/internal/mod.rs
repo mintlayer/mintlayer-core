@@ -96,7 +96,7 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all tip accounting data from storage
-    pub fn read_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+    pub fn read_pos_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
         let pool_data =
@@ -134,7 +134,9 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all sealed accounting data from storage
-    pub fn read_accounting_data_sealed(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+    pub fn read_pos_accounting_data_sealed(
+        &self,
+    ) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
         let pool_data =
@@ -168,6 +170,27 @@ impl<B: storage::Backend> Store<B> {
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
+        })
+    }
+
+    pub fn read_tokens_accounting_data(
+        &self,
+    ) -> crate::Result<tokens_accounting::TokensAccountingData> {
+        let db = self.transaction_ro()?;
+
+        let token_data =
+            db.0.get::<db::DBTokensData, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let circulating_supply =
+            db.0.get::<db::DBTokensCirculatingSupply, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        Ok(tokens_accounting::TokensAccountingData {
+            token_data,
+            circulating_supply,
         })
     }
 }

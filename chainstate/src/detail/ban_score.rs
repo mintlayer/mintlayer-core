@@ -283,6 +283,7 @@ impl BanScore for TokensError {
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
             TokensError::DeprecatedTokenIssuanceVersion(_, _) => 100,
+            TokensError::UnsupportedTokenIssuanceVersion(_, _) => 100,
         }
     }
 }
@@ -516,7 +517,7 @@ impl BanScore for tokens_accounting::Error {
         match self {
             tokens_accounting::Error::StorageError(_) => 0,
             tokens_accounting::Error::AccountingError(_) => 100,
-            tokens_accounting::Error::TokenAlreadyExist(_) => 100,
+            tokens_accounting::Error::TokenAlreadyExists(_) => 100,
             tokens_accounting::Error::TokenDataNotFound(_) => 100,
             tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 100,
             tokens_accounting::Error::CirculatingSupplyNotFound(_) => 100,

@@ -22,7 +22,7 @@ pub enum Error {
     #[error("Base accounting error: {0}")]
     AccountingError(#[from] accounting::Error),
     #[error("Token already exist: `{0}`")]
-    TokenAlreadyExist(TokenId),
+    TokenAlreadyExists(TokenId),
     #[error("Data for token {0}` not found")]
     TokenDataNotFound(TokenId),
     #[error("Data for token {0}` not found on reversal")]

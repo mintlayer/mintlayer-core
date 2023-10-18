@@ -369,16 +369,15 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
 }
 
 pub fn calculate_tokens_burned_in_outputs(
-    outputs: &[TxOutput],
-) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-    let iter = outputs
+    tx: &Transaction,
+    token_id: &TokenId,
+) -> Result<Amount, ConnectTransactionError> {
+    tx.outputs()
         .iter()
         .filter_map(|output| match output {
             TxOutput::Burn(output_value) => match output_value {
                 OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
-                OutputValue::TokenV1(token_id, amount) => {
-                    Some((CoinOrTokenId::TokenId(*token_id), *amount))
-                }
+                OutputValue::TokenV1(id, amount) => (id == token_id).then_some(*amount),
             },
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
@@ -388,13 +387,8 @@ pub fn calculate_tokens_burned_in_outputs(
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::TokensOp(_) => None,
         })
-        .map(Ok);
-
-    let iter = fallible_iterator::convert(iter);
-
-    let amounts_map = AmountsMap::from_fallible_iter(iter)?;
-
-    Ok(amounts_map.take())
+        .sum::<Option<Amount>>()
+        .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
 }
 
 // TODO: add more tests

@@ -25,7 +25,8 @@ pub use {
     block_undo::{BlockUndo, BlockUndoError, TxUndo},
     cache::TokensAccountingCache,
     data::{
-        FungibleTokenData, TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
+        FungibleTokenData, TokenData, TokensAccountingData, TokensAccountingDeltaData,
+        TokensAccountingDeltaUndoData,
     },
     error::Error,
     operations::{TokenAccountingUndo, TokensAccountingOperations},

@@ -25,9 +25,10 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{
-            make_token_id, Metadata, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+            make_token_id, Metadata, NftIssuance, NftIssuanceV0, TokenData, TokenId,
+            TokenIssuanceVersion, TokenTransfer,
         },
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
 };
@@ -485,10 +486,23 @@ fn nft_valid_transfer(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn ensure_nft_cannot_be_printer_from_tokens_op(#[case] seed: Seed) {
+fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                        )])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let token_id =
