@@ -2169,7 +2169,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let currency_balances = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
-            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::TokensOp,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
             UtxoState::Confirmed.into(),
             WithLocked::Unlocked,
         )

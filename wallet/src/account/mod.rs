@@ -188,7 +188,7 @@ impl Account {
         let (utxos, selection_algo) = if input_utxos.is_empty() {
             (
                 self.get_utxos(
-                    UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::TokensOp,
+                    UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
                     median_time,
                     UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
                     WithLocked::Unlocked,

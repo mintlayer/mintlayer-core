@@ -187,7 +187,6 @@ pub enum WalletCommand {
     /// Issue a new token
     IssueNewToken {
         token_ticker: String,
-        amount_to_issue: String,
         number_of_decimals: u8,
         metadata_uri: String,
         destination_address: String,
@@ -220,8 +219,8 @@ pub enum WalletCommand {
         amount: String,
     },
 
-    /// Lock the total supply for the tokens
-    LockTokens {
+    /// Lock the circulating supply for the token
+    LockTokenSuply {
         token_id: String,
     },
 
@@ -773,7 +772,6 @@ impl CommandHandler {
 
             WalletCommand::IssueNewToken {
                 token_ticker,
-                amount_to_issue: _,
                 number_of_decimals,
                 metadata_uri,
                 destination_address,
@@ -891,7 +889,7 @@ impl CommandHandler {
                 Ok(Self::tx_submitted_command())
             }
 
-            WalletCommand::LockTokens { token_id } => {
+            WalletCommand::LockTokenSuply { token_id } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
 
                 self.get_synced_controller()

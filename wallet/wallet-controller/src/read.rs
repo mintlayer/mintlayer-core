@@ -72,7 +72,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         self.wallet
             .get_balance(
                 self.account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::TokensOp,
+                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
                 utxo_states,
                 with_locked,
             )

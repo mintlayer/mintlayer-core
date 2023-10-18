@@ -92,7 +92,7 @@ class WalletTokens(BitcoinTestFramework):
 
             # Submit a valid transaction
             output = {
-                    'Transfer': [ { 'Coin': 1001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+                    'Transfer': [ { 'Coin': 2001 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
             encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
@@ -109,36 +109,36 @@ class WalletTokens(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block_height(), '1')
             assert_equal(await wallet.get_best_block(), block_id)
 
-            assert_in("Coins amount: 1001", await wallet.get_balance())
+            assert_in("Coins amount: 2001", await wallet.get_balance())
 
             address = await wallet.new_address()
 
             # invalid ticker
             # > max len
-            token_id, err = await wallet.issue_new_token("asdddd", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("asdddd", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
-            token_id, err = await wallet.issue_new_token("asd#", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid character in token ticker", err)
 
             # invalid url
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "123 123", address)
+            token_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
             assert token_id is None
             assert err is not None
             assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 99, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address, 'lockable')
+            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address, 'lockable')
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -179,7 +179,7 @@ class WalletTokens(BitcoinTestFramework):
                 assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
 
             # lock token supply
-            assert_in("The transaction was submitted successfully", await wallet.lock_tokens(token_id))
+            assert_in("The transaction was submitted successfully", await wallet.lock_token_suply(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())
             assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
@@ -187,7 +187,7 @@ class WalletTokens(BitcoinTestFramework):
             # cannot mint any more tokens as it is locked
             assert_in("Cannot change a Locked Token supply", await wallet.mint_tokens(token_id, address, tokens_to_mint))
             assert_in("Cannot change a Locked Token supply", await wallet.unmint_tokens(token_id, tokens_to_mint))
-            assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_tokens(token_id))
+            assert_in("Cannot lock Token supply in state: Locked", await wallet.lock_token_suply(token_id))
 
 
 if __name__ == '__main__':

@@ -80,24 +80,24 @@ impl PoolData {
     }
 }
 
-pub enum TokenTotalSupplyState {
+pub enum TokenCurrentSupplyState {
     Fixed(Amount, Amount), // fixed to a certain amount
     Lockable(Amount),      // not known in advance but can be locked once at some point in time
     Locked(Amount),        // Locked
     Unlimited(Amount),     // limited only by the Amount data type
 }
 
-impl From<TokenTotalSupply> for TokenTotalSupplyState {
+impl From<TokenTotalSupply> for TokenCurrentSupplyState {
     fn from(value: TokenTotalSupply) -> Self {
         match value {
-            TokenTotalSupply::Fixed(amount) => TokenTotalSupplyState::Fixed(amount, Amount::ZERO),
-            TokenTotalSupply::Lockable => TokenTotalSupplyState::Lockable(Amount::ZERO),
-            TokenTotalSupply::Unlimited => TokenTotalSupplyState::Unlimited(Amount::ZERO),
+            TokenTotalSupply::Fixed(amount) => TokenCurrentSupplyState::Fixed(amount, Amount::ZERO),
+            TokenTotalSupply::Lockable => TokenCurrentSupplyState::Lockable(Amount::ZERO),
+            TokenTotalSupply::Unlimited => TokenCurrentSupplyState::Unlimited(Amount::ZERO),
         }
     }
 }
 
-impl TokenTotalSupplyState {
+impl TokenCurrentSupplyState {
     pub fn str_state(&self) -> &'static str {
         match self {
             Self::Unlimited(_) => "Unlimited",
@@ -137,10 +137,10 @@ impl TokenTotalSupplyState {
 
     pub fn check_can_lock(&self) -> WalletResult<()> {
         match self {
-            TokenTotalSupplyState::Lockable(_) => Ok(()),
-            TokenTotalSupplyState::Unlimited(_)
-            | TokenTotalSupplyState::Fixed(_, _)
-            | TokenTotalSupplyState::Locked(_) => {
+            TokenCurrentSupplyState::Lockable(_) => Ok(()),
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Locked(_) => {
                 Err(WalletError::CannotLockTokenSupply(self.str_state()))
             }
         }
@@ -155,62 +155,66 @@ impl TokenTotalSupplyState {
         }
     }
 
-    fn mint(&self, amount: Amount) -> WalletResult<TokenTotalSupplyState> {
+    fn mint(&self, amount: Amount) -> WalletResult<TokenCurrentSupplyState> {
         match self {
-            TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Lockable(
+            TokenCurrentSupplyState::Lockable(current) => Ok(TokenCurrentSupplyState::Lockable(
                 (*current + amount).ok_or(WalletError::OutputAmountOverflow)?,
             )),
-            TokenTotalSupplyState::Unlimited(current) => Ok(TokenTotalSupplyState::Unlimited(
+            TokenCurrentSupplyState::Unlimited(current) => Ok(TokenCurrentSupplyState::Unlimited(
                 (*current + amount).ok_or(WalletError::OutputAmountOverflow)?,
             )),
-            TokenTotalSupplyState::Fixed(max, current) => {
+            TokenCurrentSupplyState::Fixed(max, current) => {
                 let changed = (*current + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 ensure!(
                     changed <= *max,
                     WalletError::CannotMintFixedTokenSupply(*max, *current, amount)
                 );
-                Ok(TokenTotalSupplyState::Fixed(*max, changed))
+                Ok(TokenCurrentSupplyState::Fixed(*max, changed))
             }
-            TokenTotalSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+            TokenCurrentSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
         }
     }
 
-    fn unmint(&self, amount: Amount) -> WalletResult<TokenTotalSupplyState> {
+    fn unmint(&self, amount: Amount) -> WalletResult<TokenCurrentSupplyState> {
         match self {
-            TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Lockable(
+            TokenCurrentSupplyState::Lockable(current) => Ok(TokenCurrentSupplyState::Lockable(
                 (*current - amount)
                     .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
-            TokenTotalSupplyState::Unlimited(current) => Ok(TokenTotalSupplyState::Unlimited(
+            TokenCurrentSupplyState::Unlimited(current) => Ok(TokenCurrentSupplyState::Unlimited(
                 (*current - amount)
                     .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
-            TokenTotalSupplyState::Fixed(max, current) => Ok(TokenTotalSupplyState::Fixed(
+            TokenCurrentSupplyState::Fixed(max, current) => Ok(TokenCurrentSupplyState::Fixed(
                 *max,
                 (*current - amount)
                     .ok_or(WalletError::CannotUnmintTokenSupply(amount, *current))?,
             )),
-            TokenTotalSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
+            TokenCurrentSupplyState::Locked(_) => Err(WalletError::CannotChangeLockedTokenSupply),
         }
     }
 
-    fn lock(&self) -> WalletResult<TokenTotalSupplyState> {
+    fn lock(&self) -> WalletResult<TokenCurrentSupplyState> {
         match self {
-            TokenTotalSupplyState::Lockable(current) => Ok(TokenTotalSupplyState::Locked(*current)),
-            TokenTotalSupplyState::Unlimited(_)
-            | TokenTotalSupplyState::Fixed(_, _)
-            | TokenTotalSupplyState::Locked(_) => {
+            TokenCurrentSupplyState::Lockable(current) => {
+                Ok(TokenCurrentSupplyState::Locked(*current))
+            }
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Locked(_) => {
                 Err(WalletError::CannotLockTokenSupply(self.str_state()))
             }
         }
     }
 
-    fn unlock(&self) -> WalletResult<TokenTotalSupplyState> {
+    fn unlock(&self) -> WalletResult<TokenCurrentSupplyState> {
         match self {
-            TokenTotalSupplyState::Locked(current) => Ok(TokenTotalSupplyState::Lockable(*current)),
-            TokenTotalSupplyState::Unlimited(_)
-            | TokenTotalSupplyState::Fixed(_, _)
-            | TokenTotalSupplyState::Lockable(_) => {
+            TokenCurrentSupplyState::Locked(current) => {
+                Ok(TokenCurrentSupplyState::Lockable(*current))
+            }
+            TokenCurrentSupplyState::Unlimited(_)
+            | TokenCurrentSupplyState::Fixed(_, _)
+            | TokenCurrentSupplyState::Lockable(_) => {
                 Err(WalletError::InconsistentUnlockTokenSupply(self.str_state()))
             }
         }
@@ -218,7 +222,7 @@ impl TokenTotalSupplyState {
 }
 
 pub struct TokenIssuanceData {
-    pub total_supply: TokenTotalSupplyState,
+    pub total_supply: TokenCurrentSupplyState,
     pub reissuance_controller: Destination,
     pub last_nonce: Option<AccountNonce>,
     /// last parent transaction if the parent is unconfirmed
@@ -863,7 +867,15 @@ fn sum_burned_token_amount(
         .iter()
         .filter_map(|output| match output {
             TxOutput::Burn(OutputValue::TokenV1(tid, amount)) if tid == token_id => Some(*amount),
-            _ => None,
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _) => None,
         })
         .sum::<Option<Amount>>()
         .ok_or(WalletError::OutputAmountOverflow);

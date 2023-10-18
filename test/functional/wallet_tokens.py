@@ -113,30 +113,30 @@ class WalletTokens(BitcoinTestFramework):
 
             # invalid ticker
             # > max len
-            token_id, err = await wallet.issue_new_token("asdddd", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("asdddd", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid ticker length", err)
             # non alphanumeric
-            token_id, err = await wallet.issue_new_token("asd#", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Invalid character in token ticker", err)
 
             # invalid url
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "123 123", address)
+            token_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
             assert token_id is None
             assert err is not None
             assert_in("Incorrect metadata URI", err)
 
             # invalid num decimals
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 99, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Too many decimals", err)
 
             # issue a valid token
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
             assert token_id is not None
             assert err is None
             self.log.info(f"new token id: {token_id}")
@@ -167,7 +167,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in(f"{token_id} amount: 9989.99", await wallet.get_balance())
 
             ## try to issue a new token, should fail with not enough coins
-            token_id, err = await wallet.issue_new_token("XXX", "10000", 2, "http://uri", address)
+            token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
             assert token_id is None
             assert err is not None
             assert_in("Not enough funds", err)
