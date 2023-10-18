@@ -24,7 +24,7 @@ use axum::{
     Json, Router,
 };
 use common::{
-    chain::{Block, SignedTransaction, Transaction, TxOutput},
+    chain::{Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{make_true_rng, Rng};
@@ -115,10 +115,16 @@ pub async fn block<T: ApiServerStorage>(
     let block = get_block(&block_id, &state).await?;
 
     Ok(Json(json!({
-    "previous_block_id": block.prev_block_id(),
+    "header": {
+        "previous_block_id": block.prev_block_id(),
     "timestamp": block.timestamp(),
-    "merkle_root": block.merkle_root(),
-    "transactions": block.transactions(),
+        "merkle_root": block.merkle_root(),
+        "witness_merkle_root": block.witness_merkle_root(),
+    },
+    "body": {
+        "reward": block.block_reward().outputs().iter().clone().collect::<Vec<_>>(),
+        "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
+    },
     })))
 }
 
@@ -131,8 +137,9 @@ pub async fn block_header<T: ApiServerStorage>(
 
     Ok(Json(json!({
         "previous_block_id": block.prev_block_id(),
-        "timestamp": block.timestamp(),
+    "timestamp": block.timestamp(),
         "merkle_root": block.merkle_root(),
+        "witness_merkle_root": block.witness_merkle_root(),
     })))
 }
 
@@ -141,11 +148,14 @@ pub async fn block_reward<T: ApiServerStorage>(
     Path(block_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let _block = get_block(&block_id, &state).await?;
+    let block = get_block(&block_id, &state).await?;
 
-    Ok(Json(json!({
-        // TODO: expand this with a usable JSON response
-    })))
+    Ok(Json(json!(block
+        .block_reward()
+        .outputs()
+        .iter()
+        .clone()
+        .collect::<Vec<_>>())))
 }
 
 #[allow(clippy::unused_async)]
@@ -161,9 +171,7 @@ pub async fn block_transaction_ids<T: ApiServerStorage>(
         .map(|tx| tx.transaction().get_id())
         .collect::<Vec<_>>();
 
-    Ok(Json(json!({
-        "transaction_ids": transaction_ids,
-    })))
+    Ok(Json(json!(transaction_ids)))
 }
 
 //
@@ -176,14 +184,11 @@ pub async fn chain_genesis<T: ApiServerStorage>(
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let genesis = state.chain_config.genesis_block();
 
-    // TODO: expand this with a usable JSON response
-    let utxos: Vec<TxOutput> = vec![];
-
     Ok(Json(json!({
         "block_id": genesis.get_id(),
         "fun_message": genesis.fun_message(),
         "timestamp": genesis.timestamp(),
-        "utxos": utxos,
+        "utxos": genesis.utxos(),
     })))
 }
 
@@ -343,8 +348,8 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 
     Ok(Json(json!({
     "block_id": block.get_id(),
-    "merkle_root": block.merkle_root().encode_hex::<String>(),
     "transaction_index": transaction_index,
+    "merkle_root": block.merkle_root().encode_hex::<String>(),
     "merkle_path": merkle_tree,
     })))
 }

@@ -62,8 +62,6 @@ async fn ok(#[case] seed: Seed) {
             let block_height = rng.gen_range(1..50);
             let n_blocks = rng.gen_range(block_height..100);
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
             let chain_config = create_unit_test_config();
 
             let chainstate_blocks = {
@@ -80,9 +78,16 @@ async fn ok(#[case] seed: Seed) {
                 let block = tf.block(tf.to_chain_block_id(&block_id));
 
                 let expected_block = json!({
-                    "previous_block_id": block.prev_block_id().to_hash().encode_hex::<String>(),
-                    "timestamp": block.timestamp(),
-                    "merkle_root": block.merkle_root().encode_hex::<String>(),
+                    "header": {
+                        "previous_block_id": block.prev_block_id(),
+                        "merkle_root": block.merkle_root(),
+                        "witness_merkle_root": block.witness_merkle_root(),
+                        "timestamp": block.timestamp(),
+                    },
+                    "body": {
+                        "reward": block.block_reward().outputs().iter().clone().collect::<Vec<_>>(),
+                        "transactions": block.transactions().iter().map(|tx| tx.transaction()).collect::<Vec<_>>(),
+                    },
                 });
 
                 _ = tx.send((block_id.to_hash().encode_hex::<String>(), expected_block));
@@ -118,7 +123,9 @@ async fn ok(#[case] seed: Seed) {
     let (block_id, expected_block) = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -127,22 +134,8 @@ async fn ok(#[case] seed: Seed) {
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let body = body.as_object().unwrap();
 
-    assert_eq!(
-        body.get("previous_block_id").unwrap(),
-        &expected_block["previous_block_id"]
-    );
-    assert_eq!(body.get("timestamp").unwrap(), &expected_block["timestamp"]);
-    assert_eq!(
-        body.get("merkle_root").unwrap(),
-        &expected_block["merkle_root"]
-    );
-
-    assert!(body.contains_key("transactions"));
-
-    // TODO check transactions fields
-    // assert...
+    assert_eq!(body, expected_block);
 
     task.abort();
 }

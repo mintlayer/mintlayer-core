@@ -12,6 +12,7 @@ api-server-common = { path = "../api-server-common" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
 logging = { path = "../../logging" }
+serialization = { path = "../../serialization" }
 
 axum.workspace = true
 clap = { workspace = true, features = ["derive"] }

@@ -86,6 +86,8 @@ async fn ok(#[case] seed: Seed) {
                 "version_byte": transaction.version_byte(),
                 "is_replaceable": transaction.is_replaceable(),
                 "flags": transaction.flags(),
+                "inputs": transaction.inputs(),
+                "outputs": transaction.outputs(),
                 });
 
                 _ = tx.send((
@@ -125,7 +127,9 @@ async fn ok(#[case] seed: Seed) {
     let (block_id, transaction_id, expected_transaction) = rx.await.unwrap();
     let url = format!("/api/v1/transaction/{transaction_id}");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -139,18 +143,18 @@ async fn ok(#[case] seed: Seed) {
     assert_eq!(body.get("block_id").unwrap(), &block_id);
     assert_eq!(
         body.get("version_byte").unwrap(),
-        expected_transaction.get("version_byte").unwrap()
+        &expected_transaction["version_byte"]
     );
     assert_eq!(
         body.get("is_replaceable").unwrap(),
-        expected_transaction.get("is_replaceable").unwrap()
+        &expected_transaction["is_replaceable"]
     );
+    assert_eq!(body.get("flags").unwrap(), &expected_transaction["flags"]);
+    assert_eq!(body.get("inputs").unwrap(), &expected_transaction["inputs"]);
     assert_eq!(
-        body.get("flags").unwrap(),
-        expected_transaction.get("flags").unwrap()
+        body.get("outputs").unwrap(),
+        &expected_transaction["outputs"]
     );
-
-    // TODO check inputs and outputs
 
     task.abort();
 }

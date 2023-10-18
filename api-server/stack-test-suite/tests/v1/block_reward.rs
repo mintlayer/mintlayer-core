@@ -50,7 +50,7 @@ async fn block_not_found() {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn ok(#[case] seed: Seed) {
+async fn no_reward(#[case] seed: Seed) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -76,13 +76,8 @@ async fn ok(#[case] seed: Seed) {
 
                     // Need the "- 1" to account for the genesis block not in the vec
                     let block_id = chainstate_block_ids[block_height - 1];
-                    let block = tf.block(tf.to_chain_block_id(&block_id));
-                    let expected_block_reward = block.block_reward().clone();
 
-                    _ = tx.send((
-                        block_id.to_hash().encode_hex::<String>(),
-                        expected_block_reward,
-                    ));
+                    _ = tx.send(block_id.to_hash().encode_hex::<String>());
 
                     chainstate_block_ids
                         .iter()
@@ -113,10 +108,12 @@ async fn ok(#[case] seed: Seed) {
         }
     });
 
-    let (block_id, _expected_block_reward) = rx.await.unwrap();
+    let block_id = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/reward");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -125,10 +122,97 @@ async fn ok(#[case] seed: Seed) {
 
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let _body = body.as_object().unwrap();
+    let body = body.as_array().unwrap();
 
-    // TODO check block reward fields
-    // assert...
+    assert!(body.is_empty());
+
+    task.abort();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn has_reward(#[case] seed: Seed) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn({
+        async move {
+            let web_server_state = {
+                let mut rng = make_seedable_rng(seed);
+
+                let chain_config = create_unit_test_config();
+
+                let block = {
+                    let mut tf = TestFramework::builder(&mut rng)
+                        .with_chain_config(chain_config.clone())
+                        .build();
+
+                    let genesis_id = tf.genesis().get_id();
+
+                    let block = tf
+                        .make_block_builder()
+                        .with_parent(genesis_id.into())
+                        .with_reward(vec![TxOutput::LockThenTransfer(
+                            OutputValue::Coin(Amount::from_atoms(100)),
+                            Destination::AnyoneCanSpend,
+                            OutputTimeLock::ForBlockCount(0),
+                        )])
+                        .build();
+
+                    let block_index =
+                        tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
+
+                    _ = tx.send((
+                        block_index.block_id().to_hash().encode_hex::<String>(),
+                        json!(block.block_reward().outputs().iter().clone().collect::<Vec<_>>()),
+                    ));
+
+                    block
+                };
+
+                let storage = {
+                    let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                    let mut db_tx = storage.transaction_rw().await.unwrap();
+                    db_tx.initialize_storage(&chain_config).await.unwrap();
+                    db_tx.commit().await.unwrap();
+
+                    storage
+                };
+
+                let mut local_node = BlockchainState::new(storage);
+                local_node.scan_blocks(BlockHeight::new(0), vec![block]).await.unwrap();
+
+                ApiServerWebServerState {
+                    db: Arc::new(local_node.storage().clone_storage().await),
+                    chain_config: Arc::new(chain_config),
+                }
+            };
+
+            web_server(listener, web_server_state).await
+        }
+    });
+
+    let (block_id, expected_reward) = rx.await.unwrap();
+    let url = format!("/api/v1/block/{block_id}/reward");
+
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(body, expected_reward);
 
     task.abort();
 }

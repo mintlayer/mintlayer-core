@@ -84,7 +84,7 @@ async fn ok(#[case] seed: Seed) {
 
                     _ = tx.send((
                         block_id.to_hash().encode_hex::<String>(),
-                        expected_transaction_ids,
+                        json!(expected_transaction_ids),
                     ));
 
                     chainstate_block_ids
@@ -119,7 +119,9 @@ async fn ok(#[case] seed: Seed) {
     let (block_id, expected_transaction_ids) = rx.await.unwrap();
     let url = format!("/api/v1/block/{block_id}/transaction-ids");
 
-    // Given that the listener port is open, this will block until a response is made (by the web server, which takes the listener over)
+    // Given that the listener port is open, this will block until a
+    // response is made (by the web server, which takes the listener
+    // over)
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
@@ -129,14 +131,7 @@ async fn ok(#[case] seed: Seed) {
     let body = response.text().await.unwrap();
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
 
-    let body_transaction_ids =
-        body.as_object().unwrap().get("transaction_ids").unwrap().as_array().unwrap();
-
-    for transaction_id in expected_transaction_ids {
-        assert!(
-            body_transaction_ids.contains(&json!(transaction_id.to_hash().encode_hex::<String>()))
-        );
-    }
+    assert_eq!(body, expected_transaction_ids);
 
     task.abort();
 }
