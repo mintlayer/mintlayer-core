@@ -17,7 +17,8 @@ mod consensus_upgrade;
 mod netupgrade;
 
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
-pub use netupgrade::NetUpgrades;
+
+pub type NetUpgrades = netupgrade::NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>;
 
 use crate::primitives::BlockHeight;
 
@@ -33,11 +34,7 @@ pub enum NetUpgradeVersion {
 }
 
 impl NetUpgradeVersion {
-    pub fn is_activated(
-        &self,
-        height: BlockHeight,
-        net_upgrade: &NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>,
-    ) -> bool {
+    pub fn is_activated(&self, height: BlockHeight, net_upgrade: &NetUpgrades) -> bool {
         if let Ok(idx) = net_upgrade
             .all_upgrades()
             .binary_search_by(|(_, (to_match, _))| to_match.cmp(self))

@@ -48,7 +48,7 @@ impl ChainType {
         }
     }
 
-    fn default_net_upgrades(&self) -> NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
+    fn default_net_upgrades(&self) -> NetUpgrades {
         match self {
             ChainType::Mainnet | ChainType::Regtest => {
                 let pow_config = PoWChainConfig::new(*self);
@@ -172,7 +172,7 @@ pub struct Builder {
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
-    net_upgrades: NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>,
+    net_upgrades: NetUpgrades,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     token_min_issuance_fee: Amount,
@@ -378,7 +378,7 @@ impl Builder {
     builder_method!(max_block_size_with_standard_txs: usize);
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(max_depth_for_reorg: BlockDistance);
-    builder_method!(net_upgrades: NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>);
+    builder_method!(net_upgrades: NetUpgrades);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);

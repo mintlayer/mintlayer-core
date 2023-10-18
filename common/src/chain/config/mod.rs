@@ -44,8 +44,6 @@ use std::time::Duration;
 use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
-use super::ConsensusUpgrade;
-use super::NetUpgradeVersion;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
@@ -159,7 +157,7 @@ pub struct ChainConfig {
     chain_type: ChainType,
     bip44_coin_type: ChildNumber,
     height_checkpoint_data: Checkpoints,
-    net_upgrades: NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)>,
+    net_upgrades: NetUpgrades,
     magic_bytes: [u8; 4],
     p2p_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
@@ -274,7 +272,7 @@ impl ChainConfig {
 
     /// The mechanism by which we define changes in the chain, including consensus and other upgrades/forks
     #[must_use]
-    pub fn net_upgrades(&self) -> &NetUpgrades<(NetUpgradeVersion, ConsensusUpgrade)> {
+    pub fn net_upgrades(&self) -> &NetUpgrades {
         &self.net_upgrades
     }
 
@@ -700,6 +698,8 @@ pub fn assert_no_ignore_consensus_in_chain_config(chain_config: &ChainConfig) {
 
 #[cfg(test)]
 mod tests {
+    use crate::chain::{ConsensusUpgrade, NetUpgradeVersion};
+
     use super::*;
     use rstest::rstest;
 
