@@ -774,7 +774,7 @@ impl Account {
         )
     }
 
-    pub fn lock_tokens(
+    pub fn lock_token_supply(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         token_id: TokenId,

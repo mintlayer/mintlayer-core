@@ -36,6 +36,7 @@ from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCl
 
 import asyncio
 import sys
+import random
 
 class WalletTokens(BitcoinTestFramework):
 
@@ -145,36 +146,39 @@ class WalletTokens(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            tokens_to_mint = 10000
+            tokens_to_mint = random.randrange(2, 10000)
             total_tokens_supply = tokens_to_mint
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
-            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
+            # randomize minting and unminting
+            for _ in range(10):
+                if random.choice([True, False]):
+                    # mint some more tokens
+                    tokens_to_mint = random.randrange(1, 10000)
+                    total_tokens_supply = total_tokens_supply + tokens_to_mint
+                    assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
+                else:
+                    # unmint some tokens
+                    tokens_to_unmint = random.randrange(1, 20000)
+                    if tokens_to_unmint <= total_tokens_supply:
+                        total_tokens_supply = total_tokens_supply - tokens_to_unmint
+                        assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                    else:
+                        assert_in(f"Trying to unmint Amount {{ val: {tokens_to_unmint}00 }} but the current supply is Amount {{ val: {total_tokens_supply}00 }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                        continue
 
-            # cannot unmint more than minted
-            assert_in(f"Trying to unmint Amount {{ val: {tokens_to_mint+1}00 }} but the current supply is Amount {{ val: {tokens_to_mint}00 }}", await wallet.unmint_tokens(token_id, tokens_to_mint + 1))
+                # either generate a new block or leave the transaction as in-memory state
+                if random.choice([True, False]):
+                    self.generate_block()
+                    assert_in("Success", await wallet.sync())
 
-            tokens_to_unmint = 1000
-            total_tokens_supply = total_tokens_supply - tokens_to_unmint
-            assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
+                # check total supply is correct
+                assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance(utxo_states=['confirmed', 'inactive']))
 
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
-            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
-
-            # mint some more tokens
-            tokens_to_mint = 1000
-            total_tokens_supply = total_tokens_supply + tokens_to_mint
-            assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
-
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
-            assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
-
-            # lock token suply
+            # lock token supply
             assert_in("The transaction was submitted successfully", await wallet.lock_tokens(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())

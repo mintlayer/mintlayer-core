@@ -851,7 +851,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn lock_tokens(
+    pub fn lock_token_supply(
         &mut self,
         account_index: U31,
         token_id: TokenId,
@@ -860,7 +860,7 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.lock_tokens(
+            account.lock_token_supply(
                 db_tx,
                 token_id,
                 latest_median_time,

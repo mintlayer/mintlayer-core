@@ -896,7 +896,7 @@ impl CommandHandler {
 
                 self.get_synced_controller()
                     .await?
-                    .lock_tokens(token_id)
+                    .lock_token_supply(token_id)
                     .await
                     .map_err(WalletCliError::Controller)?;
 

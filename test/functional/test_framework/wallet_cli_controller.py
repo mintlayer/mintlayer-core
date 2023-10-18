@@ -258,5 +258,5 @@ class WalletCliController:
     async def get_addresses_usage(self) -> str:
         return await self._write_command("showreceiveaddresses\n")
 
-    async def get_balance(self, with_locked: str = 'unlocked') -> str:
-        return await self._write_command(f"getbalance {with_locked}\n")
+    async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
+        return await self._write_command(f"getbalance {with_locked} {' '.join(utxo_states)}\n")

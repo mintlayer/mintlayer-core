@@ -2716,7 +2716,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     );
 
     let err = wallet
-        .lock_tokens(
+        .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
             FeeRate::new(Amount::ZERO),
@@ -2952,7 +2952,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     );
 
     let err = wallet
-        .lock_tokens(
+        .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
             FeeRate::new(Amount::ZERO),
@@ -3183,7 +3183,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     assert!(token_issuance_data.total_supply.check_can_lock().is_ok());
 
     let lock_transaction = wallet
-        .lock_tokens(
+        .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
             FeeRate::new(Amount::ZERO),
@@ -3249,7 +3249,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     assert_eq!(err, WalletError::CannotChangeLockedTokenSupply);
 
     let err = wallet
-        .lock_tokens(
+        .lock_token_supply(
             DEFAULT_ACCOUNT_INDEX,
             issued_token_id,
             FeeRate::new(Amount::ZERO),
