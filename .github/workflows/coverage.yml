@@ -43,7 +43,7 @@ jobs:
       - id: coverage
         uses: actions-rs/grcov@v0.1
         with:
-          config: build-tools/coverage/grcov.toml
+          config: build-tools/coverage/grcov.yml
       - uses: actions/upload-artifact@v2
         with:
           name: code-coverage-report-${{ matrix.partition }}
