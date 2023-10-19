@@ -15,6 +15,8 @@
 
 //! The node configuration.
 
+pub const DEFAULT_HTTP_RPC_ENABLED: bool = true;
+
 pub use self::{
     chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile, rpc::RpcConfigFile,
 };

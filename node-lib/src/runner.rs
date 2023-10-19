@@ -40,7 +40,7 @@ use test_rpc_functions::make_rpc_test_functions;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
-    config_files::NodeConfigFile,
+    config_files::{NodeConfigFile, DEFAULT_HTTP_RPC_ENABLED},
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
@@ -141,7 +141,7 @@ async fn initialize(
 
     // RPC subsystem
     let rpc_config = node_config.rpc.unwrap_or_default();
-    if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
+    if rpc_config.http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
             rpc_config.username.as_deref(),

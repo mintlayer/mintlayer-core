@@ -63,7 +63,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    /// New builder with no methods. None Option disables http or websocket.
+    /// New builder with no methods. None Option disables RPC.
     pub fn new_empty(http_bind_address: Option<SocketAddr>) -> Self {
         let methods = Methods::new();
         Self {

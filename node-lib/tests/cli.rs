@@ -104,7 +104,6 @@ fn read_config_override_values() {
     let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let p2p_max_clock_diff = 15;
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
-    let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
     let max_tip_age = 1000;
@@ -136,8 +135,6 @@ fn read_config_override_values() {
         max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
-        ws_rpc_addr: Some(ws_rpc_addr),
-        ws_rpc_enabled: Some(false),
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
@@ -227,12 +224,6 @@ fn read_config_override_values() {
         Some(http_rpc_addr)
     );
     assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
-
-    assert_eq!(
-        config.rpc.clone().unwrap().ws_bind_address,
-        Some(ws_rpc_addr)
-    );
-    assert!(!config.rpc.clone().unwrap().ws_enabled.unwrap());
 
     assert_eq!(
         config.rpc.as_ref().unwrap().username.as_deref(),
