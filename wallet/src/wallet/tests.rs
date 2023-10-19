@@ -1647,7 +1647,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     assert_eq!(*deleg_id, delegation_id);
     assert_eq!(deleg_data.last_nonce, Some(AccountNonce::new(2)));
 
-    // abandon tx2 should also abandone tx3 and roll back account nonce to 0
+    // abandon tx2 should also abandon tx3 and roll back account nonce to 0
     wallet
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, delegation_tx2.transaction().get_id())
         .unwrap();
