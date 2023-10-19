@@ -742,7 +742,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_tokens_txs(
+        &self,
+        block: &Block,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue multiple tokens in a single tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());
@@ -769,24 +773,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                                 token_data,
                                 tx.transaction(),
                                 block.get_id(),
+                                block_height,
                             )?;
                         }
                         Ok(())
                     }
-                    TxOutput::IssueFungibleToken(issuance) => {
-                        check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
-                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
-                        })
-                    }
+                    TxOutput::IssueFungibleToken(issuance) => check_tokens_issuance(
+                        self.chain_config,
+                        block_height,
+                        issuance,
+                    )
+                    .map_err(|e| {
+                        TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                    }),
                     TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                        NftIssuance::V0(data) => check_nft_issuance_data(self.chain_config, data)
-                            .map_err(|e| {
-                                TokensError::IssueError(
-                                    e,
-                                    tx.transaction().get_id(),
-                                    block.get_id(),
-                                )
-                            }),
+                        NftIssuance::V0(data) => check_nft_issuance_data(
+                            self.chain_config,
+                            block_height,
+                            data,
+                        )
+                        .map_err(|e| {
+                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                        }),
                     },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
@@ -821,11 +829,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_transactions(
+        &self,
+        block: &Block,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
         self.check_witness_count(block).log_err()?;
         self.check_duplicate_inputs(block).log_err()?;
-        self.check_tokens_txs(block).log_err()?;
+        self.check_tokens_txs(block, block_height).log_err()?;
         self.check_no_signature_size(block).log_err()?;
         Ok(())
     }
@@ -837,7 +849,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(*block_index.block_id()).log_err()
     }
 
-    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
+    pub fn check_block(
+        &self,
+        block: &WithId<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header()).log_err()?;
 
         self.check_block_size(block)
@@ -869,7 +885,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             );
         }
 
-        self.check_transactions(block)
+        self.check_transactions(block, block_height)
             .map_err(CheckBlockError::CheckTransactionFailed)
             .log_err()?;
 
@@ -1159,7 +1175,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             );
 
             if new_tip_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
-                self.check_block(new_tip)?;
+                self.check_block(new_tip, new_tip_block_index.block_height())?;
                 new_tip_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
             }
 

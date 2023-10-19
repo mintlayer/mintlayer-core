@@ -21,7 +21,7 @@ use common::{
         tokens::{NftIssuanceV0, TokenData, TokenIssuance, TokenIssuanceV0},
         Block, ChainConfig, Transaction,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 use serialization::{DecodeAll, Encode};
 use tx_verifier::error::TokenIssuanceError;
@@ -33,11 +33,12 @@ use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
+    current_height: BlockHeight,
     issuance: &NftIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
-    check_token_ticker(chain_config, &issuance.metadata.ticker)?;
-    check_nft_name(chain_config, &issuance.metadata.name)?;
-    check_nft_description(chain_config, &issuance.metadata.description)?;
+    check_token_ticker(chain_config, current_height, &issuance.metadata.ticker)?;
+    check_nft_name(chain_config, current_height, &issuance.metadata.name)?;
+    check_nft_description(chain_config, current_height, &issuance.metadata.description)?;
 
     let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
         .map_err(|_| TokenIssuanceError::IssueErrorIncorrectIconURI)?;
@@ -84,10 +85,11 @@ pub fn check_nft_issuance_data(
 
 pub fn check_tokens_issuance_data_v0(
     chain_config: &ChainConfig,
+    current_height: BlockHeight,
     issuance_data: &TokenIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
     // Check token ticker
-    check_token_ticker(chain_config, &issuance_data.token_ticker)?;
+    check_token_ticker(chain_config, current_height, &issuance_data.token_ticker)?;
 
     // Check amount
     ensure!(
@@ -116,12 +118,13 @@ pub fn check_tokens_issuance_data_v0(
 
 pub fn check_tokens_issuance(
     chain_config: &ChainConfig,
+    current_height: BlockHeight,
     issuance: &TokenIssuance,
 ) -> Result<(), TokenIssuanceError> {
     match issuance {
         TokenIssuance::V1(issuance_data) => {
             // Check token ticker
-            check_token_ticker(chain_config, &issuance_data.token_ticker)?;
+            check_token_ticker(chain_config, current_height, &issuance_data.token_ticker)?;
 
             // Check decimals
             ensure!(
@@ -150,6 +153,7 @@ pub fn check_tokens_data(
     token_data: &TokenData,
     tx: &Transaction,
     source_block_id: Id<Block>,
+    source_block_height: BlockHeight,
 ) -> Result<(), TokensError> {
     match token_data {
         TokenData::TokenTransfer(transfer) => {
@@ -159,9 +163,13 @@ pub fn check_tokens_data(
             );
             Ok(())
         }
-        TokenData::TokenIssuance(issuance) => check_tokens_issuance_data_v0(chain_config, issuance)
-            .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
-        TokenData::NftIssuance(issuance) => check_nft_issuance_data(chain_config, issuance)
-            .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id)),
+        TokenData::TokenIssuance(issuance) => {
+            check_tokens_issuance_data_v0(chain_config, source_block_height, issuance)
+                .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id))
+        }
+        TokenData::NftIssuance(issuance) => {
+            check_nft_issuance_data(chain_config, source_block_height, issuance)
+                .map_err(|err| TokensError::IssueError(err, tx.get_id(), source_block_id))
+        }
     }
 }
