@@ -192,7 +192,7 @@ class WalletCliController:
         return await self._write_command(f"unminttokens {token_id} {amount}\n")
 
     async def lock_token_suply(self, token_id: str) -> str:
-        return await self._write_command(f"locktokensuply {token_id}\n")
+        return await self._write_command(f"locktokensupply {token_id}\n")
 
     async def issue_new_nft(self,
                             destination_address: str,

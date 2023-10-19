@@ -220,7 +220,7 @@ pub enum WalletCommand {
     },
 
     /// Lock the circulating supply for the token
-    LockTokenSuply {
+    LockTokenSupply {
         token_id: String,
     },
 
@@ -889,7 +889,7 @@ impl CommandHandler {
                 Ok(Self::tx_submitted_command())
             }
 
-            WalletCommand::LockTokenSuply { token_id } => {
+            WalletCommand::LockTokenSupply { token_id } => {
                 let token_id = parse_token_id(chain_config, token_id.as_str())?;
 
                 self.get_synced_controller()

@@ -2309,7 +2309,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = Arc::new(create_mainnet());
+    let chain_config = Arc::new(create_regtest());
 
     let mut wallet = create_wallet(chain_config.clone());
 
