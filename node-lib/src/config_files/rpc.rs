@@ -17,7 +17,6 @@ use std::{net::SocketAddr, str::FromStr};
 
 use crate::RunOptions;
 use chainstate_launcher::ChainConfig;
-use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
 use super::DEFAULT_HTTP_RPC_ENABLED;
@@ -42,24 +41,18 @@ pub struct RpcConfigFile {
     pub cookie_file: Option<String>,
 }
 
-impl From<RpcConfigFile> for RpcConfig {
-    fn from(c: RpcConfigFile) -> Self {
-        RpcConfig {
-            http_bind_address: c.http_bind_address.into(),
-            http_enabled: c.http_enabled.into(),
-        }
-    }
-}
-
 impl RpcConfigFile {
+    pub fn default_bind_address(chain_config: &ChainConfig) -> SocketAddr {
+        SocketAddr::from_str(&format!("127.0.0.1:{}", chain_config.default_rpc_port()))
+            .expect("Can't fail")
+    }
+
     pub fn with_run_options(
         chain_config: &ChainConfig,
         config: RpcConfigFile,
         options: &RunOptions,
     ) -> RpcConfigFile {
-        let default_http_rpc_addr =
-            SocketAddr::from_str(&format!("127.0.0.1:{}", chain_config.default_rpc_port()))
-                .expect("Can't fail");
+        let default_http_rpc_addr = Self::default_bind_address(chain_config);
 
         let RpcConfigFile {
             http_bind_address,

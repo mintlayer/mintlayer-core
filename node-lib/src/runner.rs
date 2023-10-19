@@ -44,6 +44,7 @@ use crate::{
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
+    RpcConfigFile,
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -148,18 +149,24 @@ async fn initialize(
             rpc_config.password.as_deref(),
             rpc_config.cookie_file.as_deref(),
         )?;
-        // TODO: get rid of the unwrap_or() after fixing the issue in #446
-        let rpc = rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
-            .register(crate::rpc::init(
-                manager.make_shutdown_trigger(),
-                chain_config,
-            ))
-            .register(block_prod.clone().into_rpc())
-            .register(chainstate.clone().into_rpc())
-            .register(mempool.clone().into_rpc())
-            .register(p2p.clone().into_rpc())
-            .register(rpc_test_functions.into_rpc())
-            .build();
+
+        let rpc = rpc::Builder::new(
+            rpc_config
+                .http_bind_address
+                .unwrap_or_else(|| RpcConfigFile::default_bind_address(&chain_config)),
+            Some(rpc_creds),
+        )
+        .register(crate::rpc::init(
+            manager.make_shutdown_trigger(),
+            chain_config,
+        ))
+        .register(block_prod.clone().into_rpc())
+        .register(chainstate.clone().into_rpc())
+        .register(mempool.clone().into_rpc())
+        .register(p2p.clone().into_rpc())
+        .register(rpc_test_functions.into_rpc())
+        .build();
+
         let rpc = rpc.await?;
         let _rpc = manager.add_subsystem("rpc", rpc);
     };
