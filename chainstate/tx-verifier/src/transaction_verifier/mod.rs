@@ -77,8 +77,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{
-            get_token_supply_change_count, get_tokens_issuance_count, make_token_id, TokenId,
-            TokenIssuanceVersion,
+            get_issuance_count_via_tokens_op, get_token_supply_change_count,
+            get_tokens_issuance_count, make_token_id, TokenId, TokenIssuanceVersion,
         },
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
         DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
@@ -742,20 +742,10 @@ where
 
         match latest_token_version {
             TokenIssuanceVersion::V0 => {
-                let has_v1_tokens = tx.outputs().iter().any(|output| match output {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => false,
-                    TxOutput::TokensOp(tokens_op) => match tokens_op {
-                        TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => true,
-                    },
-                });
+                let was_token_issued_with_token_op =
+                    get_issuance_count_via_tokens_op(tx.outputs()) > 0;
                 ensure!(
-                    !has_v1_tokens,
+                    !was_token_issued_with_token_op,
                     ConnectTransactionError::TokensError(
                         TokensError::UnsupportedTokenIssuanceVersion(
                             TokenIssuanceVersion::V1,
@@ -765,7 +755,7 @@ where
                 );
             }
             TokenIssuanceVersion::V1 => {
-                let has_v0_tokens = tx.outputs().iter().any(|output| match output {
+                let has_tokens_v0_op = tx.outputs().iter().any(|output| match output {
                     TxOutput::Transfer(output_value, _)
                     | TxOutput::Burn(output_value)
                     | TxOutput::LockThenTransfer(output_value, _, _) => match output_value {
@@ -779,9 +769,9 @@ where
                     | TxOutput::TokensOp(_) => false,
                 });
                 ensure!(
-                    !has_v0_tokens,
+                    !has_tokens_v0_op,
                     ConnectTransactionError::TokensError(
-                        TokensError::DeprecatedTokenIssuanceVersion(
+                        TokensError::DeprecatedTokenOperationVersion(
                             TokenIssuanceVersion::V0,
                             tx.get_id(),
                         ),
@@ -944,17 +934,11 @@ where
         self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
 
         // Register tokens if tx has issuance data
-        self.token_issuance_cache.register(
-            self.chain_config.as_ref(),
-            block_id,
-            tx.transaction(),
-            tx_source,
-            |id| {
-                self.storage
-                    .get_token_aux_data(id)
-                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-            },
-        )?;
+        self.token_issuance_cache.register(block_id, tx.transaction(), |id| {
+            self.storage
+                .get_token_aux_data(id)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        })?;
 
         // check timelocks of the outputs and make sure there's no premature spending
         timelock_check::check_timelocks(

@@ -23,12 +23,16 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         output_value::OutputValue,
-        tokens::{make_token_id, TokenAuxiliaryData, TokenData, TokenIssuanceV0, TokenTransfer},
-        Destination, OutPointSourceId, SpendablePosition, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        tokens::{
+            make_token_id, NftIssuance, TokenAuxiliaryData, TokenData, TokenIssuanceV0,
+            TokenIssuanceVersion, TokenTransfer,
+        },
+        ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, SpendablePosition,
+        TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
+use test_utils::nft_utils::random_nft_issuance;
 use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
 
 // Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
@@ -734,5 +738,89 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 )
             );
         }
+    });
+}
+
+// Process a tx with a nft issuance. Check that new token and tx index are stored, best block is updated.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        NetUpgrades::initialize(vec![(
+                            BlockHeight::zero(),
+                            ChainstateUpgrade::new(TokenIssuanceVersion::V1),
+                        )])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let token_id =
+            make_token_id(&[TxInput::from_utxo(tf.genesis().get_id().into(), 0)]).unwrap();
+
+        // issue a token
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tf.genesis().get_id().into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::TokensOp(TokenOutput::IssueNft(
+                token_id,
+                Box::new(NftIssuance::V0(random_nft_issuance(
+                    tf.chainstate.get_chain_config(),
+                    &mut rng,
+                ))),
+                Destination::AnyoneCanSpend,
+            )))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let tx_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
+
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block_id = block.get_id();
+        tf.process_block(block, BlockSource::Local).unwrap();
+
+        let db_tx = tf.storage.transaction_ro().unwrap();
+
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            // tx index is stored
+            let tx_index = db_tx
+                .get_mainchain_tx_index(&tx_outpoint.source_id())
+                .expect("ok")
+                .expect("some");
+            let tx_pos = match tx_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx
+                    .get_mainchain_tx_by_position(tx_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .transaction()
+                    .get_id(),
+                tx_id
+            );
+        }
+
+        // token info is stored
+        assert_eq!(
+            db_tx.get_token_id(&tx_id).expect("ok").expect("some"),
+            token_id
+        );
+        let aux_data = db_tx.get_token_aux_data(&token_id).expect("ok").expect("some");
+        let expected_aux_data = TokenAuxiliaryData::new(tx.transaction().clone(), block_id);
+        assert_eq!(aux_data, expected_aux_data);
     });
 }

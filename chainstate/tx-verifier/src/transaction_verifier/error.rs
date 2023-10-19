@@ -273,8 +273,8 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
-    #[error("Token issuance version {0:?} from tx {1} is deprecated")]
-    DeprecatedTokenIssuanceVersion(TokenIssuanceVersion, Id<Transaction>),
+    #[error("Token version {0:?} from tx {1} is deprecated")]
+    DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
     #[error("Token issuance version {0:?} from tx {1} is not supported yet")]
     UnsupportedTokenIssuanceVersion(TokenIssuanceVersion, Id<Transaction>),
 }

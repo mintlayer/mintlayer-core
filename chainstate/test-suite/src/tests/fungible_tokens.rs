@@ -2005,7 +2005,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenIssuanceVersion(
+                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenOperationVersion(
                     TokenIssuanceVersion::V0,
                     tx_id,
                 ))
@@ -2086,7 +2086,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenIssuanceVersion(
+                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenOperationVersion(
                     TokenIssuanceVersion::V0,
                     tx_id,
                 ))
