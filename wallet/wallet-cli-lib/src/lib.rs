@@ -93,7 +93,7 @@ pub async fn run(
     };
 
     // TODO: Use the constant with the node
-    let default_http_rpc_addr = || "127.0.0.1:3030".to_owned();
+    let default_http_rpc_addr = || format!("127.0.0.1:{}", chain_config.default_rpc_port());
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 
     let rpc_auth = match (rpc_cookie_file, rpc_username, rpc_password) {
