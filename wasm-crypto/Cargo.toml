@@ -13,6 +13,9 @@ crate-type = ["cdylib"]
 [dependencies]
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
+common = { path = "../common" }
+
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 
 # This crate is required for rand to work with wasm. See: https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2", features = ["js"] }

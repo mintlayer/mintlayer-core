@@ -25,6 +25,10 @@ pub enum Error {
     InvalidPublicKeyEncoding,
     #[error("Invalid signature encoding")]
     InvalidSignatureEncoding,
+    #[error("Invalid mnemonic string")]
+    InvalidMnemonic,
+    #[error("Invalid key index, MSB bit set")]
+    InvalidKeyIndex,
 }
 
 // This is required to make an error readable in JavaScript
