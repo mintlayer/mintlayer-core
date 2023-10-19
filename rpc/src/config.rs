@@ -25,14 +25,6 @@ make_config_setting!(
 
 make_config_setting!(HttpRpcEnabled, bool, true);
 
-make_config_setting!(
-    WebsocketBindAddress,
-    SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3032").expect("Address must be correct")
-);
-
-make_config_setting!(WebsocketRpcEnabled, bool, true);
-
 /// The rpc subsystem configuration.
 #[derive(Debug, Default)]
 pub struct RpcConfig {
@@ -41,10 +33,4 @@ pub struct RpcConfig {
 
     /// Whether http RPC is enabled
     pub http_enabled: HttpRpcEnabled,
-
-    /// Address to bind websocket RPC to.
-    pub ws_bind_address: WebsocketBindAddress,
-
-    /// Whether websocket RPC is enabled
-    pub ws_enabled: WebsocketRpcEnabled,
 }

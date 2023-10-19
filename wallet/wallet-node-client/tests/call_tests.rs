@@ -125,10 +125,6 @@ pub async fn start_subsystems(
             .expect("Address must be correct")
             .into(),
         http_enabled: true.into(),
-        ws_bind_address: SocketAddr::from_str("127.0.0.1:3030")
-            .expect("Address must be correct")
-            .into(),
-        ws_enabled: false.into(),
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)
