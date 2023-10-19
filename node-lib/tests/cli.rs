@@ -15,6 +15,7 @@
 
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
+use common::chain::config::create_testnet;
 use p2p::types::ip_or_socket_address::IpOrSocketAddress;
 use tempfile::TempDir;
 
@@ -36,8 +37,10 @@ fn create_default_config() {
     let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
+    let chain_config = create_testnet();
+
     let options = RunOptions::default();
-    let config = NodeConfigFile::read(&config_path, &options).unwrap();
+    let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
     assert_eq!(
         config
@@ -68,7 +71,7 @@ fn create_default_config() {
 
     assert_eq!(
         config.rpc.unwrap_or_default().http_bind_address,
-        Some(SocketAddr::from_str("127.0.0.1:3030").unwrap())
+        Some(SocketAddr::from_str("127.0.0.1:13030").unwrap())
     );
 }
 
@@ -81,6 +84,8 @@ fn read_config_override_values() {
 
     let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
+
+    let chain_config = create_testnet();
 
     let blockprod_min_peers_to_produce_blocks = 10;
     let blockprod_skip_ibd_check = true;
@@ -138,7 +143,7 @@ fn read_config_override_values() {
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
         clean_data: Some(false),
     };
-    let config = NodeConfigFile::read(&config_path, &options).unwrap();
+    let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
     assert_eq!(
         config.blockprod.clone().unwrap().min_peers_to_produce_blocks,

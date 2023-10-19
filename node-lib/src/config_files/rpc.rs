@@ -16,6 +16,7 @@
 use std::{net::SocketAddr, str::FromStr};
 
 use crate::RunOptions;
+use chainstate_launcher::ChainConfig;
 use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
@@ -57,11 +58,18 @@ impl From<RpcConfigFile> for RpcConfig {
 }
 
 impl RpcConfigFile {
-    pub fn with_run_options(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
+    pub fn with_run_options(
+        chain_config: &ChainConfig,
+        config: RpcConfigFile,
+        options: &RunOptions,
+    ) -> RpcConfigFile {
         const DEFAULT_HTTP_RPC_ENABLED: bool = true;
 
         const DEFAULT_WS_RPC_ENABLED: bool = false;
-        let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
+        let default_http_rpc_addr =
+            SocketAddr::from_str(&format!("127.0.0.1:{}", chain_config.default_rpc_port()))
+                .expect("Can't fail");
+        // TODO(PR): get rid of WS RPC
         let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3032").expect("Can't fail");
 
         let RpcConfigFile {

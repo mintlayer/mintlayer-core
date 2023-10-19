@@ -147,7 +147,8 @@ async fn main() -> Result<(), ApiServerScannerError> {
         }
     };
 
-    let default_http_rpc_addr = || default_rpc_config().http_bind_address.expect("Can't fail");
+    let default_http_rpc_addr =
+        || default_rpc_config(&chain_config).http_bind_address.expect("Can't fail");
 
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 

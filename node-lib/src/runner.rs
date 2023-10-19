@@ -251,8 +251,8 @@ async fn start(
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
 
-    let node_config =
-        NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
+    let node_config = NodeConfigFile::read(&chain_config, config_path, run_options)
+        .context("Failed to initialize config")?;
 
     let data_dir = prepare_data_dir(
         || default_data_dir(*chain_config.chain_type()),

@@ -27,6 +27,7 @@ mod rpc;
 
 use std::{fs, path::Path};
 
+use ::chainstate_launcher::ChainConfig;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
@@ -71,7 +72,11 @@ impl NodeConfigFile {
     }
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
-    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
+    pub fn read(
+        chain_config: &ChainConfig,
+        config_path: &Path,
+        options: &RunOptions,
+    ) -> Result<Self> {
         let config_as_str = Self::read_to_string_with_policy(config_path)?;
 
         let NodeConfigFile {
@@ -84,7 +89,7 @@ impl NodeConfigFile {
         let blockprod = blockprod_config(blockprod.unwrap_or_default(), options);
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
-        let rpc = RpcConfigFile::with_run_options(rpc.unwrap_or_default(), options);
+        let rpc = RpcConfigFile::with_run_options(chain_config, rpc.unwrap_or_default(), options);
 
         Ok(Self {
             blockprod: Some(blockprod),
