@@ -19,8 +19,8 @@ use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
         tokens::{
-            RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo, RPCTokenTotalSupply,
-            TokenAuxiliaryData, TokenData, TokenId,
+            NftIssuance, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
+            RPCTokenTotalSupply, TokenAuxiliaryData, TokenData, TokenId,
         },
         Block, GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxMainChainIndex,
         TxOutput,
@@ -298,39 +298,29 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 .issuance_tx()
                 .outputs()
                 .iter()
-                // Filter tokens
-                .filter_map(|output| match output {
+                // find tokens
+                .find_map(|output| match output {
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => v.token_data(),
+                    | TxOutput::Burn(v) => v.token_data().and_then(|token_data| {
+                        to_rpc_token_info(token_data, token_id, &token_aux_data)
+                    }),
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _) => None,
-                })
-                // Find issuance data and return RPCTokenInfo
-                .find_map(|token_data| match token_data {
-                    TokenData::TokenIssuance(issuance) => {
-                        Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
-                            token_id,
-                            issuance.token_ticker.clone(),
-                            issuance.number_of_decimals,
-                            issuance.metadata_uri.clone(),
-                            issuance.amount_to_issue,
-                            RPCTokenTotalSupply::Fixed(issuance.amount_to_issue),
-                        )))
-                    }
-                    TokenData::NftIssuance(nft) => {
-                        Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
-                            token_id,
-                            token_aux_data.issuance_tx().get_id(),
-                            token_aux_data.issuance_block_id(),
-                            &nft.metadata,
-                        )))
-                    }
-                    TokenData::TokenTransfer(_) => None,
+                    | TxOutput::DelegateStaking(_, _) => None,
+                    TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
+                        NftIssuance::V0(nft) => {
+                            Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
+                                token_id,
+                                token_aux_data.issuance_tx().get_id(),
+                                token_aux_data.issuance_block_id(),
+                                &nft.metadata,
+                            )))
+                        }
+                    },
+                    // Should be handled by the token data branch
+                    TxOutput::IssueFungibleToken(_) => None,
                 }))
         }
     }
@@ -369,5 +359,33 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         id: &TokenId,
     ) -> Result<Option<Amount>, PropertyQueryError> {
         self.chainstate_ref.get_circulating_supply(id).map_err(PropertyQueryError::from)
+    }
+}
+
+fn to_rpc_token_info(
+    token_data: &TokenData,
+    token_id: TokenId,
+    token_aux_data: &TokenAuxiliaryData,
+) -> Option<RPCTokenInfo> {
+    match token_data {
+        TokenData::TokenIssuance(issuance) => {
+            Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
+                token_id,
+                issuance.token_ticker.clone(),
+                issuance.number_of_decimals,
+                issuance.metadata_uri.clone(),
+                issuance.amount_to_issue,
+                RPCTokenTotalSupply::Fixed(issuance.amount_to_issue),
+            )))
+        }
+        TokenData::NftIssuance(nft) => {
+            Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
+                token_id,
+                token_aux_data.issuance_tx().get_id(),
+                token_aux_data.issuance_block_id(),
+                &nft.metadata,
+            )))
+        }
+        TokenData::TokenTransfer(_) => None,
     }
 }
