@@ -52,8 +52,9 @@ use common::{
 };
 use consensus::GenerateBlockInputData;
 use crypto::{
+    ephemeral_e2e::EndToEndPrivateKey,
     key::hdkd::u31::U31,
-    random::{make_pseudo_rng, Rng},
+    random::{make_pseudo_rng, make_true_rng, Rng},
 };
 use logging::log;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
@@ -87,6 +88,8 @@ pub enum ControllerError<T: NodeInterface> {
     WalletIsLocked,
     #[error("Cannot lock wallet because staking is running")]
     StakingRunning,
+    #[error("End-to-end encryption error: {0}")]
+    EndToEndEncryptionError(#[from] crypto::ephemeral_e2e::error::Error),
 }
 
 #[derive(Clone, Copy)]
@@ -377,9 +380,25 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .wallet
             .get_pos_gen_block_data(account_index, pool_id)
             .map_err(ControllerError::WalletError)?;
+
+        let public_key = self
+            .rpc_client
+            .generate_block_e2e_public_key()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let input_data = GenerateBlockInputData::PoS(pos_data.into());
+
+        let mut rng = make_true_rng();
+        let ephemeral_private_key = EndToEndPrivateKey::new_from_rng(&mut rng);
+        let ephemeral_public_key = ephemeral_private_key.public_key();
+        let shared_secret = ephemeral_private_key.shared_secret(&public_key);
+        let encrypted_input_data = shared_secret.encode_then_encrypt(&input_data, &mut rng)?;
+
         self.rpc_client
-            .generate_block(
-                GenerateBlockInputData::PoS(pos_data.into()),
+            .generate_block_e2e(
+                encrypted_input_data,
+                ephemeral_public_key,
                 transactions,
                 transaction_ids,
                 packing_strategy,
