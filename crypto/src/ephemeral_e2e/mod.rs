@@ -15,7 +15,7 @@
 
 pub mod error;
 
-use parity_scale_codec::DecodeAll;
+use serialization::DecodeAll;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
