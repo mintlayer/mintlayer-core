@@ -94,7 +94,7 @@ pub struct FungibleTokenData {
 }
 
 impl FungibleTokenData {
-    pub fn new(
+    pub fn new_unchecked(
         token_ticker: Vec<u8>,
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
@@ -136,10 +136,10 @@ impl FungibleTokenData {
         &self.reissuance_controller
     }
 
-    pub fn lock(self) -> Option<Self> {
+    pub fn try_lock(self) -> Result<Self, Self> {
         match self.total_supply {
-            TokenTotalSupply::Fixed(_) | TokenTotalSupply::Unlimited => None,
-            TokenTotalSupply::Lockable => Some(Self {
+            TokenTotalSupply::Fixed(_) | TokenTotalSupply::Unlimited => Err(self),
+            TokenTotalSupply::Lockable => Ok(Self {
                 token_ticker: self.token_ticker,
                 number_of_decimals: self.number_of_decimals,
                 metadata_uri: self.metadata_uri,

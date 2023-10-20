@@ -56,7 +56,7 @@ impl PoSAccountingBlockUndoCache {
         self.data
     }
 
-    pub fn fetch_block_undo<F, E>(
+    fn fetch_block_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,

@@ -182,7 +182,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                 if data.is_locked() {
                     return Err(Error::SupplyIsAlreadyLocked(id));
                 }
-                let new_data = data.clone().lock().ok_or(Error::CannotLockNotLockableSupply(id))?;
+                let new_data =
+                    data.clone().try_lock().map_err(|_| Error::CannotLockNotLockableSupply(id))?;
                 self.data.token_data.merge_delta_data_element(
                     id,
                     accounting::DataDelta::new(

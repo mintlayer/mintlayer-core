@@ -740,30 +740,33 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     let supply1 = Amount::from_atoms(200);
     let supply2 = Amount::from_atoms(300);
 
-    let token_data0 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
-        "tkn0".into(),
-        0,
-        Vec::new(),
-        TokenTotalSupply::Unlimited,
-        false,
-        Destination::AnyoneCanSpend,
-    ));
-    let token_data1 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
-        "tkn1".into(),
-        0,
-        Vec::new(),
-        TokenTotalSupply::Unlimited,
-        false,
-        Destination::AnyoneCanSpend,
-    ));
-    let token_data2 = tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new(
-        "tkn2".into(),
-        0,
-        Vec::new(),
-        TokenTotalSupply::Unlimited,
-        false,
-        Destination::AnyoneCanSpend,
-    ));
+    let token_data0 =
+        tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new_unchecked(
+            "tkn0".into(),
+            0,
+            Vec::new(),
+            TokenTotalSupply::Unlimited,
+            false,
+            Destination::AnyoneCanSpend,
+        ));
+    let token_data1 =
+        tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new_unchecked(
+            "tkn1".into(),
+            0,
+            Vec::new(),
+            TokenTotalSupply::Unlimited,
+            false,
+            Destination::AnyoneCanSpend,
+        ));
+    let token_data2 =
+        tokens_accounting::TokenData::FungibleToken(FungibleTokenData::new_unchecked(
+            "tkn2".into(),
+            0,
+            Vec::new(),
+            TokenTotalSupply::Unlimited,
+            false,
+            Destination::AnyoneCanSpend,
+        ));
 
     let token_id_0 = make_token_id(&[input0]).unwrap();
     let token_id_1 = make_token_id(&[input1]).unwrap();

@@ -35,7 +35,7 @@ use crate::{
 };
 
 fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -> TokenData {
-    TokenData::FungibleToken(FungibleTokenData::new(
+    TokenData::FungibleToken(FungibleTokenData::new_unchecked(
         random_string(rng, 1..5).as_bytes().to_vec(),
         rng.gen_range(1..18),
         random_string(rng, 1..1024).as_bytes().to_vec(),
@@ -470,7 +470,7 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
     let locked_token_data_3 = match token_data_3 {
         TokenData::FungibleToken(data) => {
             assert!(!data.is_locked());
-            let locked = data.lock().unwrap();
+            let locked = data.try_lock().unwrap();
             assert!(locked.is_locked());
             TokenData::FungibleToken(locked)
         }
@@ -556,7 +556,7 @@ fn lock_supply_undo_mint_unmint(#[case] seed: Seed) {
     let undo = cache.lock_circulating_supply(token_id).unwrap();
 
     let locked_token_data = match token_data.clone() {
-        TokenData::FungibleToken(data) => TokenData::FungibleToken(data.lock().unwrap()),
+        TokenData::FungibleToken(data) => TokenData::FungibleToken(data.try_lock().unwrap()),
     };
 
     assert_eq!(

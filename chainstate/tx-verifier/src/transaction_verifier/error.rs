@@ -158,6 +158,8 @@ pub enum ConnectTransactionError {
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("Tokens accounting BlockUndo error: {0}")]
     TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
+    #[error("Total fee required overflow")]
+    TotalFeeRequiredOverflow,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

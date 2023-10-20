@@ -152,6 +152,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
+            ConnectTransactionError::TotalFeeRequiredOverflow => 100,
         }
     }
 }

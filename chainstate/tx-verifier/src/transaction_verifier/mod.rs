@@ -272,8 +272,11 @@ where
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
+            let required_fee = (self.chain_config.as_ref().token_min_issuance_fee()
+                * issuance_count as u128)
+                .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
             ensure!(
-                total_burned >= self.chain_config.as_ref().token_min_issuance_fee(),
+                total_burned >= required_fee,
                 ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
                     tx.get_id(),
                     block_id.unwrap_or_else(|| H256::zero().into()),
@@ -302,7 +305,7 @@ where
 
             let required_fee = (self.chain_config.as_ref().token_min_supply_change_fee()
                 * supply_change_count as u128)
-                .expect("overflow");
+                .ok_or(ConnectTransactionError::TotalFeeRequiredOverflow)?;
             ensure!(
                 total_burned >= required_fee,
                 ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
