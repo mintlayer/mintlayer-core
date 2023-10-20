@@ -1575,6 +1575,7 @@ dependencies = [
  "sha3",
  "test-utils",
  "thiserror",
+ "x25519-dalek",
  "zeroize",
 ]
 
@@ -8186,6 +8187,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0b1513b141123073ce54d5bb1d33f801f17508fbd61e02060b1214e96d39c56"
 dependencies = [
  "nix 0.25.1",
+]
+
+[[package]]
+name = "x25519-dalek"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb66477291e7e8d2b0ff1bcb900bf29489a9692816d79874bea351e7a8b6de96"
+dependencies = [
+ "curve25519-dalek",
+ "rand_core 0.6.4",
+ "serde",
+ "zeroize",
 ]
 
 [[package]]
