@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use p2p_types::services::Services;
 use tokio::{sync::mpsc, time::timeout};
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use logging::log;
 
 use crate::{
@@ -91,6 +91,9 @@ pub struct Peer<T: TransportSocket> {
     /// equal to default_networking_service::PREFERRED_PROTOCOL_VERSION, but it can be
     /// overridden for testing purposes.
     node_protocol_version: ProtocolVersion,
+
+    /// Time getter
+    time_getter: TimeGetter,
 }
 
 impl<T> Peer<T>
@@ -108,6 +111,7 @@ where
         peer_event_sender: mpsc::Sender<PeerEvent>,
         backend_event_receiver: mpsc::UnboundedReceiver<BackendEvent>,
         node_protocol_version: ProtocolVersion,
+        time_getter: TimeGetter,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket, *p2p_config.protocol_config.max_message_size);
 
@@ -121,6 +125,7 @@ where
             peer_event_sender,
             backend_event_receiver,
             node_protocol_version,
+            time_getter,
         }
     }
 
@@ -142,7 +147,8 @@ where
         Ok(())
     }
 
-    async fn handshake(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
+    async fn handshake(&mut self) -> crate::Result<()> {
+        let local_time = self.time_getter.get_time();
         match self.connection_info {
             ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
@@ -195,7 +201,7 @@ where
                         software_version: *self.chain_config.software_version(),
                         services: (*self.p2p_config.node_type).into(),
                         receiver_address: self.receiver_address.clone(),
-                        current_time: local_time,
+                        current_time: P2pTimestamp::from_time(local_time),
                     }))
                     .await?;
             }
@@ -214,7 +220,7 @@ where
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
                         receiver_address: self.receiver_address.clone(),
-                        current_time: local_time,
+                        current_time: P2pTimestamp::from_time(local_time),
                         handshake_nonce,
                     }))
                     .await?;
@@ -293,9 +299,9 @@ where
         Ok(())
     }
 
-    async fn run_impl(&mut self, local_time: P2pTimestamp) -> crate::Result<()> {
+    async fn run_impl(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake(local_time)).await;
+        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
         match handshake_res {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -355,8 +361,8 @@ where
         }
     }
 
-    pub async fn run(mut self, local_time: P2pTimestamp) -> crate::Result<()> {
-        let run_result = self.run_impl(local_time).await;
+    pub async fn run(mut self) -> crate::Result<()> {
+        let run_result = self.run_impl().await;
         let send_result = self.peer_event_sender.send(PeerEvent::ConnectionClosed).await;
 
         if let Err(send_error) = send_result {
@@ -376,6 +382,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures::FutureExt;
+    use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
     use crate::{
@@ -405,6 +412,8 @@ mod tests {
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
+        let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
+        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -417,10 +426,11 @@ mod tests {
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
+            time_getter,
         );
 
         let handle = logging::spawn_in_current_span(async move {
-            peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
+            peer.handshake().await.unwrap();
             peer
         });
 
@@ -484,6 +494,8 @@ mod tests {
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, mut peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
+        let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
+        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -499,10 +511,11 @@ mod tests {
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
+            time_getter,
         );
 
         let handle = logging::spawn_in_current_span(async move {
-            peer.handshake(P2pTimestamp::from_int_seconds(123456)).await.unwrap();
+            peer.handshake().await.unwrap();
             peer
         });
 
@@ -565,6 +578,9 @@ mod tests {
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
+        let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
+        let time_getter =
+            test_utils::mock_time_getter::mocked_time_getter_seconds(Arc::clone(&cur_time));
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -577,11 +593,10 @@ mod tests {
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
+            time_getter,
         );
 
-        let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle =
-            logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
+        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
@@ -594,7 +609,7 @@ mod tests {
                 user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
-                current_time: local_time,
+                current_time: P2pTimestamp::from_int_seconds(cur_time.load()),
                 handshake_nonce: 123,
             }))
             .await
@@ -631,6 +646,8 @@ mod tests {
         let p2p_config = Arc::new(test_p2p_config());
         let (peer_event_sender, _peer_event_receiver) = mpsc::channel(TEST_CHAN_BUF_SIZE);
         let (_backend_event_sender, backend_event_receiver) = mpsc::unbounded_channel();
+        let cur_time = Arc::new(SeqCstAtomicU64::new(123456));
+        let time_getter = test_utils::mock_time_getter::mocked_time_getter_seconds(cur_time);
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -643,11 +660,10 @@ mod tests {
             peer_event_sender,
             backend_event_receiver,
             TEST_PROTOCOL_VERSION.into(),
+            time_getter,
         );
 
-        let local_time = P2pTimestamp::from_int_seconds(123456);
-        let handle =
-            logging::spawn_in_current_span(async move { peer.handshake(local_time).await });
+        let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
 
         let mut socket2 =
             BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
