@@ -19,7 +19,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::AccountSpending::{self, Delegation};
+use common::chain::AccountOp::{self, SpendDelegationBalance};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::Uint256;
@@ -472,7 +472,7 @@ impl Account {
         let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
         let mut tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
-            Delegation(delegation_id, amount_with_fee),
+            SpendDelegationBalance(delegation_id, amount_with_fee),
         ));
         // as the input size depends on the amount we specify the fee will also change a bit so
         // loop until it converges.
@@ -491,7 +491,7 @@ impl Account {
 
             tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
-                Delegation(delegation_id, new_amount_with_fee),
+                SpendDelegationBalance(delegation_id, new_amount_with_fee),
             ));
 
             let new_input_size = serialization::Encode::encoded_size(&tx_input);
@@ -1001,12 +1001,12 @@ impl Account {
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(outpoint) => match outpoint.account() {
-                AccountSpending::Delegation(delegation_id, _) => {
+                AccountOp::SpendDelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
                 }
-                AccountSpending::TokenTotalSupply(_, _)
-                | AccountSpending::TokenCirculatingSupply(_)
-                | AccountSpending::TokenSupplyLock(_) => {
+                AccountOp::MintTokens(_, _)
+                | AccountOp::UnmintTokens(_)
+                | AccountOp::LockTokenSupply(_) => {
                     // TODO: add support for tokens v1
                     // See https://github.com/mintlayer/mintlayer-core/issues/1237
                     unimplemented!()

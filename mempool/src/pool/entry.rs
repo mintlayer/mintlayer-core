@@ -15,8 +15,7 @@
 
 use common::{
     chain::{
-        AccountNonce, AccountSpending, AccountType, SignedTransaction, Transaction, TxInput,
-        UtxoOutPoint,
+        AccountNonce, AccountOp, AccountType, SignedTransaction, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Id, Idable},
 };
@@ -54,14 +53,14 @@ impl TxDependency {
             .map(|id| Self::TxOutput(*id, outpt.output_index()))
     }
 
-    fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
+    fn from_account(acct: &AccountOp, nonce: AccountNonce) -> Self {
         match acct {
-            AccountSpending::Delegation(_, _) => {
+            AccountOp::SpendDelegationBalance(_, _) => {
                 Self::DelegationAccount(TxAccountDependency::new((*acct).into(), nonce))
             }
-            AccountSpending::TokenTotalSupply(_, _)
-            | AccountSpending::TokenCirculatingSupply(_)
-            | AccountSpending::TokenSupplyLock(_) => {
+            AccountOp::MintTokens(_, _)
+            | AccountOp::UnmintTokens(_)
+            | AccountOp::LockTokenSupply(_) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new((*acct).into(), nonce))
             }
         }

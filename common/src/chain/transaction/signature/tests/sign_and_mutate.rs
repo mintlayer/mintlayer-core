@@ -30,7 +30,7 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
+        AccountOp, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
@@ -981,7 +981,7 @@ fn mutate_first_input(
             if rng.gen::<bool>() {
                 TxInput::Account(AccountOutPoint::new(
                     outpoint.nonce(),
-                    AccountSpending::Delegation(
+                    AccountOp::SpendDelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
                         Amount::from_atoms(rng.gen()),
                     ),

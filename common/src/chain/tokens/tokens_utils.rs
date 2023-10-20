@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId};
 use crate::{
-    chain::{output_value::OutputValue, AccountSpending, TokenOutput, TxInput, TxOutput},
+    chain::{output_value::OutputValue, AccountOp, TokenOutput, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -52,10 +52,10 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
         .filter(|&input| match input {
             TxInput::Utxo(_) => false,
             TxInput::Account(account) => match account.account() {
-                AccountSpending::Delegation(_, _) => false,
-                AccountSpending::TokenTotalSupply(_, _)
-                | AccountSpending::TokenCirculatingSupply(_)
-                | AccountSpending::TokenSupplyLock(_) => true,
+                AccountOp::SpendDelegationBalance(_, _) => false,
+                AccountOp::MintTokens(_, _)
+                | AccountOp::UnmintTokens(_)
+                | AccountOp::LockTokenSupply(_) => true,
             },
         })
         .count()

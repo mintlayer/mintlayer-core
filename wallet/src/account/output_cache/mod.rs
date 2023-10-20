@@ -18,8 +18,8 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use common::{
     chain::{
         tokens::{is_token_or_nft_issuance, make_token_id, TokenId},
-        AccountNonce, AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Id},
 };
@@ -270,7 +270,7 @@ impl OutputCache {
                 TxInput::Account(outpoint) => {
                     if !already_present {
                         match outpoint.account() {
-                            AccountSpending::Delegation(delegation_id, _) => {
+                            AccountOp::SpendDelegationBalance(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
@@ -281,9 +281,9 @@ impl OutputCache {
                                     )?;
                                 }
                             }
-                            AccountSpending::TokenTotalSupply(_, _)
-                            | AccountSpending::TokenCirculatingSupply(_)
-                            | AccountSpending::TokenSupplyLock(_) => {
+                            AccountOp::MintTokens(_, _)
+                            | AccountOp::UnmintTokens(_)
+                            | AccountOp::LockTokenSupply(_) => {
                                 // TODO: add support for tokens v1
                                 // See https://github.com/mintlayer/mintlayer-core/issues/1237
                                 unimplemented!()
@@ -337,16 +337,16 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
-                        AccountSpending::Delegation(delegation_id, _) => {
+                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
                         }
-                        AccountSpending::TokenTotalSupply(_, _)
-                        | AccountSpending::TokenCirculatingSupply(_)
-                        | AccountSpending::TokenSupplyLock(_) => {
+                        AccountOp::MintTokens(_, _)
+                        | AccountOp::UnmintTokens(_)
+                        | AccountOp::LockTokenSupply(_) => {
                             // TODO: add support for tokens v1
                             // See https://github.com/mintlayer/mintlayer-core/issues/1237
                             unimplemented!()
@@ -505,7 +505,7 @@ impl OutputCache {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
                                     TxInput::Account(outpoint) => match outpoint.account() {
-                                        AccountSpending::Delegation(delegation_id, _) => {
+                                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
@@ -516,9 +516,9 @@ impl OutputCache {
                                                 );
                                             }
                                         }
-                                        AccountSpending::TokenTotalSupply(_, _)
-                                        | AccountSpending::TokenCirculatingSupply(_)
-                                        | AccountSpending::TokenSupplyLock(_) => {
+                                        AccountOp::MintTokens(_, _)
+                                        | AccountOp::UnmintTokens(_)
+                                        | AccountOp::LockTokenSupply(_) => {
                                             // TODO: add support for tokens v1
                                             // See https://github.com/mintlayer/mintlayer-core/issues/1237
                                             unimplemented!()

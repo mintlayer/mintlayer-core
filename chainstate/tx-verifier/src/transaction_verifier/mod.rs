@@ -80,9 +80,9 @@ use common::{
             get_issuance_count_via_tokens_op, get_token_supply_change_count,
             get_tokens_issuance_count, make_token_id, TokenId, TokenIssuanceVersion,
         },
-        AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput,
-        TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOp, AccountOutPoint, AccountType, Block, ChainConfig, DelegationId,
+        GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput, TxMainChainIndex,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -537,7 +537,7 @@ where
                 }
                 TxInput::Account(account_input) => {
                     match account_input.account() {
-                        AccountSpending::Delegation(delegation_id, withdraw_amount) => {
+                        AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount) => {
                             check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self.spend_input_from_account(account_input).and_then(|_| {
                                 // If the input spends from delegation account, this means the user is
@@ -552,9 +552,9 @@ where
                             });
                             Some(res)
                         }
-                        AccountSpending::TokenTotalSupply(_, _)
-                        | AccountSpending::TokenCirculatingSupply(_)
-                        | AccountSpending::TokenSupplyLock(_) => None,
+                        AccountOp::MintTokens(_, _)
+                        | AccountOp::UnmintTokens(_)
+                        | AccountOp::LockTokenSupply(_) => None,
                     }
                 }
             })
@@ -789,8 +789,8 @@ where
             .filter_map(|input| match input {
                 TxInput::Utxo(_) => None,
                 TxInput::Account(account_input) => match account_input.account() {
-                    AccountSpending::Delegation(_, _) => None,
-                    AccountSpending::TokenTotalSupply(token_id, amount) => {
+                    AccountOp::SpendDelegationBalance(_, _) => None,
+                    AccountOp::MintTokens(token_id, amount) => {
                         let res = self.spend_input_from_account(account_input).and_then(|_| {
                             self.tokens_accounting_cache
                                 .mint_tokens(*token_id, *amount)
@@ -798,7 +798,7 @@ where
                         });
                         Some(res)
                     }
-                    AccountSpending::TokenCirculatingSupply(token_id) => {
+                    AccountOp::UnmintTokens(token_id) => {
                         let res = self
                             .spend_input_from_account(account_input)
                             .and_then(|_| {
@@ -817,7 +817,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountSpending::TokenSupplyLock(token_id) => {
+                    AccountOp::LockTokenSupply(token_id) => {
                         let res = self.spend_input_from_account(account_input).and_then(|_| {
                             self.tokens_accounting_cache
                                 .lock_circulating_supply(*token_id)

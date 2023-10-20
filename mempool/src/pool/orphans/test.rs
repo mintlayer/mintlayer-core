@@ -18,7 +18,7 @@ use std::time::Duration;
 use super::*;
 use common::{
     chain::{
-        signature::inputsig::InputWitness, AccountNonce, AccountSpending, DelegationId,
+        signature::inputsig::InputWitness, AccountNonce, AccountOp, DelegationId,
         SignedTransaction, TxInput,
     },
     primitives::{Amount, H256},
@@ -69,7 +69,10 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
                 let nonce = AccountNonce::new(rng.gen());
                 let delegation_id: DelegationId = H256(rng.gen()).into();
                 let amount = Amount::from_atoms(rng.gen());
-                TxInput::from_account(nonce, AccountSpending::Delegation(delegation_id, amount))
+                TxInput::from_account(
+                    nonce,
+                    AccountOp::SpendDelegationBalance(delegation_id, amount),
+                )
             }
         })
         .collect();

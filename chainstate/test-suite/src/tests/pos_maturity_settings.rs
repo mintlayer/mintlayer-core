@@ -20,7 +20,7 @@ use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder
 use common::{
     chain::{
         config::Builder as ConfigBuilder, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountOutPoint, AccountSpending, ConsensusUpgrade,
+        timelock::OutputTimeLock, AccountNonce, AccountOp, AccountOutPoint, ConsensusUpgrade,
         Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, TxInput, TxOutput,
         UtxoOutPoint,
     },
@@ -256,7 +256,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
 
     let tx_input_spend_from_delegation = AccountOutPoint::new(
         AccountNonce::new(0),
-        AccountSpending::Delegation(delegation_id, amount_to_delegate),
+        AccountOp::SpendDelegationBalance(delegation_id, amount_to_delegate),
     );
     let spend_share_tx = TransactionBuilder::new()
         .add_input(

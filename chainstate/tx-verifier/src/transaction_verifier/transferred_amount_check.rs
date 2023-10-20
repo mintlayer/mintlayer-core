@@ -22,7 +22,7 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, make_token_id, TokenData, TokenId},
-        AccountSpending, Block, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
+        AccountOp, Block, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -157,7 +157,7 @@ where
             )
         }
         TxInput::Account(account_input) => match account_input.account() {
-            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
+            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount) => {
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
@@ -170,11 +170,10 @@ where
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
             }
-            AccountSpending::TokenTotalSupply(token_id, amount) => {
+            AccountOp::MintTokens(token_id, amount) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), *amount))
             }
-            AccountSpending::TokenCirculatingSupply(token_id)
-            | AccountSpending::TokenSupplyLock(token_id) => {
+            AccountOp::UnmintTokens(token_id) | AccountOp::LockTokenSupply(token_id) => {
                 Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
@@ -660,7 +659,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, overspend_amount),
+                AccountOp::SpendDelegationBalance(delegation_id, overspend_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -684,7 +683,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, withdraw_amount),
+                AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -706,7 +705,7 @@ mod tests {
 
         let input = TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(0),
-            AccountSpending::Delegation(delegation_id, withdraw_amount),
+            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
         ));
         let output = TxOutput::Transfer(
             OutputValue::Coin(withdraw_amount),

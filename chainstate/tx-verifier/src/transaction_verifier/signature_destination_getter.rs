@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountSpending, DelegationId, Destination, PoolId, TokenOutput, TxInput,
-    TxOutput, UtxoOutPoint,
+    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TokenOutput, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -139,16 +139,16 @@ impl<'a> SignatureDestinationGetter<'a> {
                         }
                     }
                     TxInput::Account(account_input) => match account_input.account() {
-                        AccountSpending::Delegation(delegation_id, _) => Ok(accounting_view
+                        AccountOp::SpendDelegationBalance(delegation_id, _) => Ok(accounting_view
                             .get_delegation_data(*delegation_id)?
                             .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
                                 *delegation_id,
                             ))?
                             .spend_destination()
                             .clone()),
-                        AccountSpending::TokenTotalSupply(token_id, _)
-                        | AccountSpending::TokenCirculatingSupply(token_id)
-                        | AccountSpending::TokenSupplyLock(token_id) => {
+                        AccountOp::MintTokens(token_id, _)
+                        | AccountOp::UnmintTokens(token_id)
+                        | AccountOp::LockTokenSupply(token_id) => {
                             let token_data = tokens_view.get_token_data(token_id)?.ok_or(
                                 SignatureDestinationGetterError::TokenDataNotFound(*token_id),
                             )?;

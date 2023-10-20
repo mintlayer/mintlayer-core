@@ -31,7 +31,7 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
+        AccountNonce, AccountOp, ChainConfig, DelegationId, Destination, Transaction,
         TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
@@ -105,7 +105,7 @@ pub fn generate_unsigned_tx(
             ),
             None => TxInput::from_account(
                 AccountNonce::new(rng.gen()),
-                AccountSpending::Delegation(
+                AccountOp::SpendDelegationBalance(
                     DelegationId::new(H256::random_using(rng)),
                     Amount::from_atoms(rng.gen()),
                 ),

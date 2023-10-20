@@ -41,17 +41,17 @@ fn transaction_id_snapshots() {
 
     let account_ins0: Vec<TxInput> = [TxInput::from_account(
         AccountNonce::new(0),
-        AccountSpending::Delegation(DelegationId::new(hash0), Amount::from_atoms(15)),
+        AccountOp::SpendDelegationBalance(DelegationId::new(hash0), Amount::from_atoms(15)),
     )]
     .to_vec();
     let account_ins1: Vec<TxInput> = [
         TxInput::from_account(
             AccountNonce::new(1),
-            AccountSpending::Delegation(DelegationId::new(hash1), Amount::from_atoms(35)),
+            AccountOp::SpendDelegationBalance(DelegationId::new(hash1), Amount::from_atoms(35)),
         ),
         TxInput::from_account(
             AccountNonce::new(2),
-            AccountSpending::Delegation(DelegationId::new(hash2), Amount::from_atoms(55)),
+            AccountOp::SpendDelegationBalance(DelegationId::new(hash2), Amount::from_atoms(55)),
         ),
     ]
     .to_vec();
