@@ -21,6 +21,7 @@ use common::{
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e::{self, EndToEndPublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
@@ -47,6 +48,19 @@ trait BlockProductionRpc {
     async fn generate_block(
         &self,
         input_data: HexEncoded<GenerateBlockInputData>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> RpcResult<HexEncoded<Block>>;
+
+    #[method(name = "e2e_public_key")]
+    async fn e2e_public_key(&self) -> RpcResult<HexEncoded<ephemeral_e2e::EndToEndPublicKey>>;
+
+    #[method(name = "generate_block_e2e")]
+    async fn generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: HexEncoded<EndToEndPublicKey>,
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
@@ -92,6 +106,40 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
             self.call_async_mut(move |this| {
                 this.generate_block(
                     input_data.take(),
+                    transactions,
+                    transaction_ids,
+                    packing_strategy,
+                )
+            })
+            .await,
+        )?;
+
+        Ok(block.into())
+    }
+
+    async fn e2e_public_key(&self) -> rpc::Result<HexEncoded<EndToEndPublicKey>> {
+        let public_key: EndToEndPublicKey =
+            rpc::handle_result(self.call_async(move |this| this.e2e_public_key()).await)?;
+
+        Ok(public_key.into())
+    }
+
+    async fn generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: HexEncoded<EndToEndPublicKey>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> RpcResult<HexEncoded<Block>> {
+        let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
+        let public_key = public_key.take();
+
+        let block: Block = rpc::handle_result(
+            self.call_async_mut(move |this| {
+                this.generate_block_e2e(
+                    encrypted_input_data,
+                    public_key,
                     transactions,
                     transaction_ids,
                     packing_strategy,

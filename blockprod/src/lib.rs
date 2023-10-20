@@ -28,6 +28,7 @@ use common::{
 };
 use config::BlockProdConfig;
 use consensus::ConsensusCreationError;
+use crypto::ephemeral_e2e;
 use detail::{
     job_manager::{JobKey, JobManagerError},
     BlockProduction,
@@ -67,6 +68,8 @@ pub enum BlockProductionError {
     JobManagerError(#[from] JobManagerError),
     #[error("Mempool failed to construct block: {0}")]
     MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
+    #[error("Failed to decrypt generate-block input data: {0}")]
+    E2eError(#[from] ephemeral_e2e::error::Error),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

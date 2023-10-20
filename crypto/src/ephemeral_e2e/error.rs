@@ -6,4 +6,6 @@ pub enum Error {
     SymmetricEncryptionFailed(String),
     #[error("Symmetric decryption failed: {0}")]
     SymmetricDecryptionFailed(String),
+    #[error("Deserialization failed: {0}")]
+    DeserializationFailed(String),
 }

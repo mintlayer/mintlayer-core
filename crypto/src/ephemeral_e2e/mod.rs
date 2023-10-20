@@ -15,6 +15,7 @@
 
 pub mod error;
 
+use parity_scale_codec::DecodeAll;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
@@ -106,6 +107,15 @@ pub struct SharedSecret {
 }
 
 impl SharedSecret {
+    pub fn encode_then_encrypt<T: Encode, R: Rng + CryptoRng>(
+        &self,
+        obj: &T,
+        rng: &mut R,
+    ) -> Result<Vec<u8>, Error> {
+        let encoded = obj.encode();
+        self.encrypt(&encoded, rng)
+    }
+
     pub fn encrypt<R: Rng + CryptoRng>(
         &self,
         message: &[u8],
@@ -136,6 +146,15 @@ impl SharedSecret {
             .map_err(|e| Error::SymmetricDecryptionFailed(e.to_string()))?;
 
         Ok(plain_text)
+    }
+
+    pub fn decrypt_then_decode<T: DecodeAll>(&self, cipher_text: &[u8]) -> Result<T, Error> {
+        let decoded = self.decrypt(cipher_text)?;
+
+        let obj = T::decode_all(&mut decoded.as_slice())
+            .map_err(|e| Error::DeserializationFailed(e.to_string()))?;
+
+        Ok(obj)
     }
 }
 

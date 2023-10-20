@@ -39,7 +39,10 @@ use consensus::{
     generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
     FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
 };
-use crypto::random::{make_true_rng, Rng};
+use crypto::{
+    ephemeral_e2e::{self, EndToEndPrivateKey},
+    random::{make_true_rng, Rng},
+};
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
@@ -116,6 +119,7 @@ pub struct BlockProduction {
     job_manager_handle: JobManagerHandle,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
     p2p_handle: P2pHandle,
+    e2e_encryption_key: ephemeral_e2e::EndToEndPrivateKey,
 }
 
 impl BlockProduction {
@@ -130,6 +134,8 @@ impl BlockProduction {
     ) -> Result<Self, BlockProductionError> {
         let job_manager_handle = Box::new(JobManagerImpl::new(Some(chainstate_handle.clone())));
 
+        let mut rng = make_true_rng();
+
         let block_production = Self {
             chain_config,
             blockprod_config,
@@ -139,6 +145,7 @@ impl BlockProduction {
             time_getter,
             job_manager_handle,
             mining_thread_pool,
+            e2e_encryption_key: EndToEndPrivateKey::new_from_rng(&mut rng),
         };
 
         Ok(block_production)
@@ -587,6 +594,10 @@ impl BlockProduction {
         });
 
         Ok(())
+    }
+
+    pub fn e2e_private_key(&self) -> &ephemeral_e2e::EndToEndPrivateKey {
+        &self.e2e_encryption_key
     }
 }
 
