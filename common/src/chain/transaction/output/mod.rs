@@ -105,14 +105,8 @@ pub enum TxOutput {
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
     #[codec(index = 7)]
-    TokensOp(TokenOutput),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
-pub enum TokenOutput {
-    #[codec(index = 0)]
     IssueFungibleToken(Box<TokenIssuance>),
-    #[codec(index = 1)]
+    #[codec(index = 8)]
     IssueNft(TokenId, Box<NftIssuance>, Destination),
 }
 
@@ -125,7 +119,8 @@ impl TxOutput {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => None,
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }

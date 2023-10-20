@@ -22,7 +22,7 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, make_token_id, TokenData, TokenId},
-        AccountOp, Block, OutPointSourceId, TokenOutput, Transaction, TxInput, TxOutput,
+        AccountOp, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -137,17 +137,15 @@ where
                         inputs_source.clone(),
                     ))
                 }
-                TxOutput::TokensOp(v) => match v {
-                    TokenOutput::IssueNft(token_id, _, _) => {
-                        OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
-                    }
-                    TokenOutput::IssueFungibleToken(_) => {
-                        return Err(ConnectTransactionError::IOPolicyError(
-                            IOPolicyError::InvalidInputTypeInTx,
-                            inputs_source.clone(),
-                        ))
-                    }
-                },
+                TxOutput::IssueNft(token_id, _, _) => {
+                    OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+                }
+                TxOutput::IssueFungibleToken(_) => {
+                    return Err(ConnectTransactionError::IOPolicyError(
+                        IOPolicyError::InvalidInputTypeInTx,
+                        inputs_source.clone(),
+                    ))
+                }
             };
 
             amount_from_outpoint(
@@ -207,12 +205,10 @@ fn calculate_total_outputs<P: PoSAccountingView>(
             }
             TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
             TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
-            TxOutput::TokensOp(v) => match v {
-                // IssueFungibleToken cannot be spent so the output value is 0
-                TokenOutput::IssueFungibleToken(_) => OutputValue::Coin(Amount::ZERO),
-                // when in tx output IssueNft has 0 output value because it is created there
-                TokenOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
-            },
+            // IssueFungibleToken cannot be spent so the output value is 0
+            TxOutput::IssueFungibleToken(_) => OutputValue::Coin(Amount::ZERO),
+            // when in tx output IssueNft has 0 output value because it is created there
+            TxOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
         };
         get_output_token_id_and_amount(&output_value, include_issuance)
     });
@@ -384,7 +380,8 @@ pub fn calculate_tokens_burned_in_outputs(
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => None,
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => None,
         })
         .sum::<Option<Amount>>()
         .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))

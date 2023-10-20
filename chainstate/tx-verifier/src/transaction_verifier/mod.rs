@@ -81,8 +81,8 @@ use common::{
             get_tokens_issuance_count, make_token_id, TokenId, TokenIssuanceVersion,
         },
         AccountNonce, AccountOp, AccountOutPoint, AccountType, Block, ChainConfig, DelegationId,
-        GenBlock, OutPointSourceId, PoolId, TokenOutput, Transaction, TxInput, TxMainChainIndex,
-        TxOutput, UtxoOutPoint,
+        GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -267,7 +267,8 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokensOp(_) => None,
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -298,7 +299,8 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokensOp(_) => None,
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => None,
                 })
                 .sum::<Option<Amount>>()
                 .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -329,7 +331,8 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -353,7 +356,8 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => Err(ConnectTransactionError::IOPolicyError(
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => Err(ConnectTransactionError::IOPolicyError(
                 IOPolicyError::InvalidOutputTypeInReward,
                 block_id.into(),
             )),
@@ -512,7 +516,8 @@ where
             | TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::TokensOp(_) => Ok(None),
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => Ok(None),
         }
     }
 
@@ -626,7 +631,8 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::TokensOp(_) => None,
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -769,7 +775,8 @@ where
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokensOp(_) => false,
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => false,
                 });
                 ensure!(
                     !has_tokens_v0_op,
@@ -839,27 +846,25 @@ where
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
-                | TxOutput::LockThenTransfer(_, _, _) => None,
-                TxOutput::TokensOp(token_output) => match token_output {
-                    TokenOutput::IssueFungibleToken(issuance_data) => {
-                        let result = make_token_id(tx.inputs())
-                            .ok_or(ConnectTransactionError::TokensError(
-                                TokensError::TokenIdCantBeCalculated,
-                            ))
-                            .and_then(
-                                |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
-                                    let data = tokens_accounting::TokenData::FungibleToken(
-                                        issuance_data.as_ref().clone().into(),
-                                    );
-                                    self.tokens_accounting_cache
-                                        .issue_token(token_id, data)
-                                        .map_err(ConnectTransactionError::TokensAccountingError)
-                                },
-                            );
-                        Some(result)
-                    }
-                    TokenOutput::IssueNft(_, _, _) => None,
-                },
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::IssueNft(_, _, _) => None,
+                TxOutput::IssueFungibleToken(issuance_data) => {
+                    let result = make_token_id(tx.inputs())
+                        .ok_or(ConnectTransactionError::TokensError(
+                            TokensError::TokenIdCantBeCalculated,
+                        ))
+                        .and_then(
+                            |token_id| -> Result<tokens_accounting::TokenAccountingUndo, _> {
+                                let data = tokens_accounting::TokenData::FungibleToken(
+                                    issuance_data.as_ref().clone().into(),
+                                );
+                                self.tokens_accounting_cache
+                                    .issue_token(token_id, data)
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            },
+                        );
+                    Some(result)
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 

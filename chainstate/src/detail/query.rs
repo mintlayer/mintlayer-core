@@ -307,7 +307,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokensOp(_) => None,
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => None,
                 })
                 // Find issuance data and return RPCTokenInfo
                 .find_map(|token_data| match token_data {

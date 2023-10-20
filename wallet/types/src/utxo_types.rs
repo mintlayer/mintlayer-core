@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{TokenOutput, TxOutput};
+use common::chain::TxOutput;
 
 use crate::wallet_tx::TxState;
 
@@ -52,9 +52,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         TxOutput::ProduceBlockFromStake(_, _) => Some(UtxoType::ProduceBlockFromStake),
         TxOutput::CreateDelegationId(_, _) => Some(UtxoType::CreateDelegationId),
         TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
-        TxOutput::TokensOp(tokens_output) => match tokens_output {
-            TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => None,
-        },
+        TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => None,
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {

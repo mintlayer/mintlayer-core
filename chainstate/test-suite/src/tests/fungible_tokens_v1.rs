@@ -30,8 +30,8 @@ use common::{
             TokenTotalSupply,
         },
         AccountNonce, AccountOp, AccountType, Block, ChainstateUpgrade, Destination, GenBlock,
-        NetUpgrades, OutPointSourceId, SignedTransaction, TokenOutput, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        NetUpgrades, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{signed_amount::SignedAmount, Amount, BlockHeight, Id, Idable},
 };
@@ -93,9 +93,7 @@ fn issue_token_from_block(
             OutputValue::Coin((token_min_issuance_fee * 10).unwrap()),
             Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-            Box::new(issuance.clone()),
-        )))
+        .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
         .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
         .build();
     let token_id = make_token_id(tx.transaction().inputs()).unwrap();
@@ -280,9 +278,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     TxInput::from_utxo(genesis_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                    Box::new(issuance),
-                )))
+                .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
                 .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build();
             let tx_id = tx.transaction().get_id();
@@ -452,9 +448,7 @@ fn token_issue_test(#[case] seed: Seed) {
                 TxInput::from_utxo(genesis_source_id, 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                Box::new(issuance.clone()),
-            )))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
@@ -510,9 +504,7 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                        Box::new(issuance.clone()),
-                    )))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -551,9 +543,7 @@ fn token_issue_before_v1_activation(#[case] seed: Seed) {
                         TxInput::from_utxo(coin_transfer_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                        Box::new(issuance),
-                    )))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -582,9 +572,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                        Box::new(issuance.clone()),
-                    )))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
                     .add_output(TxOutput::Burn(OutputValue::Coin(
                         (token_min_issuance_fee - Amount::from_atoms(1)).unwrap(),
                     )))
@@ -608,9 +596,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
                         TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                        Box::new(issuance.clone()),
-                    )))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
@@ -634,9 +620,7 @@ fn token_issuance_output_cannot_be_spent(#[case] seed: Seed) {
                 TxInput::from_utxo(tf.genesis().get_id().into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                Box::new(issuance.clone()),
-            )))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::Burn(OutputValue::Coin(
                 tf.chainstate.get_chain_config().token_min_issuance_fee(),
             )))
@@ -2435,9 +2419,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                Box::new(issuance.clone()),
-            )))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, amount_to_mint),
                 Destination::AnyoneCanSpend,
@@ -2481,9 +2463,7 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueFungibleToken(
-                Box::new(issuance.clone()),
-            )))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(token_min_supply_change_fee),
                 Destination::AnyoneCanSpend,

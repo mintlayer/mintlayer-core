@@ -61,7 +61,8 @@ impl OutputGroup {
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => {
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))

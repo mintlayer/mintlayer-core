@@ -38,7 +38,7 @@ use common::{
         tokens::{get_tokens_issuance_count, TokenId},
         tokens::{NftIssuance, TokenAuxiliaryData},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
-        SignedTransaction, TokenOutput, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -636,7 +636,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::TokensOp(_) => Err(
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::IssueNft(_, _, _) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -650,7 +651,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
                             | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::TokensOp(_) => Err(
+                            | TxOutput::IssueFungibleToken(_)
+                            | TxOutput::IssueNft(_, _, _) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -771,27 +773,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         }
                         Ok(())
                     }
-                    TxOutput::TokensOp(token_output) => match token_output {
-                        TokenOutput::IssueFungibleToken(issuance) => {
-                            check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
+                    TxOutput::IssueFungibleToken(issuance) => {
+                        check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
+                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                        })
+                    }
+                    TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
+                        NftIssuance::V0(data) => check_nft_issuance_data(self.chain_config, data)
+                            .map_err(|e| {
                                 TokensError::IssueError(
                                     e,
                                     tx.transaction().get_id(),
                                     block.get_id(),
                                 )
-                            })
-                        }
-                        TokenOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                            NftIssuance::V0(data) => {
-                                check_nft_issuance_data(self.chain_config, data).map_err(|e| {
-                                    TokensError::IssueError(
-                                        e,
-                                        tx.transaction().get_id(),
-                                        block.get_id(),
-                                    )
-                                })
-                            }
-                        },
+                            }),
                     },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)

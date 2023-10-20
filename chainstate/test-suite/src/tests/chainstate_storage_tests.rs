@@ -28,7 +28,7 @@ use common::{
             TokenIssuanceVersion, TokenTransfer,
         },
         ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, SpendablePosition,
-        TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -772,14 +772,14 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                 TxInput::from_utxo(tf.genesis().get_id().into(), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueNft(
+            .add_output(TxOutput::IssueNft(
                 token_id,
                 Box::new(NftIssuance::V0(random_nft_issuance(
                     tf.chainstate.get_chain_config(),
                     &mut rng,
                 ))),
                 Destination::AnyoneCanSpend,
-            )))
+            ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
                 tf.chainstate.get_chain_config().token_min_issuance_fee(),
             )))

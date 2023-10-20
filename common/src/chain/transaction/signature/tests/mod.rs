@@ -733,8 +733,9 @@ fn check_mutate_output(
         TxOutput::CreateStakePool(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::DelegateStaking(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::TokensOp(_) => unreachable!(),           // TODO: come back to this later
+        TxOutput::DelegateStaking(_, _) => unreachable!(),
+        TxOutput::IssueFungibleToken(_) => unreachable!(),
+        TxOutput::IssueNft(_, _, _) => unreachable!(),
     };
 
     let tx = tx_updater.generate_tx().unwrap();

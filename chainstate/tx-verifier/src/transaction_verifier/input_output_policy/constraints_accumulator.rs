@@ -16,9 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{
-        timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TokenOutput, TxInput, TxOutput,
-    },
+    chain::{timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TxInput, TxOutput},
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
@@ -91,8 +89,9 @@ impl ConstrainedValueAccumulator {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
                                 .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TxOutput::CreateDelegationId(..) | TxOutput::TokensOp(_) => { /* do nothing */
-                        }
+                        TxOutput::CreateDelegationId(..)
+                        | TxOutput::IssueFungibleToken(..)
+                        | TxOutput::IssueNft(..) => { /* do nothing */ }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let block_distance = chain_config
@@ -200,10 +199,8 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
-                TxOutput::TokensOp(token_output) => match token_output {
-                    TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => { /* do nothing */
-                    }
-                },
+                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
+                }
             };
         }
 

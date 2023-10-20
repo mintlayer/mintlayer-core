@@ -14,8 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TokenOutput, TxInput, TxOutput,
-    UtxoOutPoint,
+    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -128,14 +127,12 @@ impl<'a> SignatureDestinationGetter<'a> {
                                     .decommission_destination()
                                     .clone())
                             }
-                            TxOutput::TokensOp(v) => match v {
-                                TokenOutput::IssueNft(_, _, d) => Ok(d.clone()),
-                                TokenOutput::IssueFungibleToken(_) => {
-                                    // This error is emitted in other places for attempting to make this spend,
-                                    // but this is just a double-check.
-                                    Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
-                                }
-                            },
+                            TxOutput::IssueNft(_, _, d) => Ok(d.clone()),
+                            TxOutput::IssueFungibleToken(_) => {
+                                // This error is emitted in other places for attempting to make this spend,
+                                // but this is just a double-check.
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
+                            }
                         }
                     }
                     TxInput::Account(account_input) => match account_input.account() {
@@ -187,20 +184,15 @@ impl<'a> SignatureDestinationGetter<'a> {
                         match utxo.output() {
                             TxOutput::Transfer(_, _)
                             | TxOutput::LockThenTransfer(_, _, _)
-                            | TxOutput::DelegateStaking(_, _) => {
+                            | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::IssueNft(_, _, _) => {
                                 Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                             }
-                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                            TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::IssueFungibleToken(_) => {
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
-                            TxOutput::TokensOp(token_output) => match token_output {
-                                TokenOutput::IssueFungibleToken(_) => Err(
-                                    SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput,
-                                ),
-                                TokenOutput::IssueNft(_, _, _) => Err(
-                                    SignatureDestinationGetterError::SpendingOutputInBlockReward,
-                                ),
-                            },
 
                             TxOutput::ProduceBlockFromStake(d, _) => {
                                 // Spending an output of a block creation output is only allowed to

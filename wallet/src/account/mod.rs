@@ -48,7 +48,7 @@ use common::chain::tokens::{
 };
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, TokenOutput, Transaction, TxInput, TxOutput, UtxoOutPoint,
+    SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
@@ -603,7 +603,8 @@ impl Account {
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::TokensOp(_) => None,
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -623,13 +624,13 @@ impl Account {
         // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
         // and then replace it with when we can calculate the pool_id
         let dummy_token_id = TokenId::new(H256::zero());
-        let dummy_issuance_output = TxOutput::TokensOp(TokenOutput::IssueNft(
+        let dummy_issuance_output = TxOutput::IssueNft(
             dummy_token_id,
             Box::new(NftIssuance::V0(NftIssuanceV0 {
                 metadata: nft_issue_arguments.metadata,
             })),
             nft_issue_arguments.destination,
-        ));
+        );
 
         let request = SendRequest::new().with_outputs([
             dummy_issuance_output,
@@ -659,13 +660,11 @@ impl Account {
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
-                TxOutput::TokensOp(token_output) => match token_output {
-                    TokenOutput::IssueFungibleToken(_) => None,
-                    TokenOutput::IssueNft(token_id, _, _) => {
-                        (*token_id == dummy_token_id).then_some(token_id)
-                    }
-                },
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::IssueFungibleToken(_) => None,
+                TxOutput::IssueNft(token_id, _, _) => {
+                    (*token_id == dummy_token_id).then_some(token_id)
+                }
             })
             .expect("find output with dummy_pool_id");
         *old_token_id = new_token_id;
@@ -697,7 +696,8 @@ impl Account {
                     | TxOutput::Burn(_)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::TokensOp(_) => panic!("Unexpected UTXO"),
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => panic!("Unexpected UTXO"),
                 };
                 pool_id == utxo_pool_id
             })
@@ -838,11 +838,10 @@ impl Account {
             | TxOutput::CreateDelegationId(d, _)
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::TokensOp(tokens_output) => match tokens_output {
-                TokenOutput::IssueNft(_, _, d) => Some(d),
-                TokenOutput::IssueFungibleToken(_) => None,
-            },
-            TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::IssueNft(_, _, d) => Some(d),
+            TxOutput::IssueFungibleToken(_)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _) => None,
         }
     }
 
@@ -1287,7 +1286,9 @@ fn group_outputs<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::CreateDelegationId(_, _) | TxOutput::TokensOp(_) => continue,
+            TxOutput::CreateDelegationId(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
@@ -1345,7 +1346,8 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::TokensOp(_) => {
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))

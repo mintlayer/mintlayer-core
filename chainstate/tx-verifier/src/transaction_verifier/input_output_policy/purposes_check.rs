@@ -14,10 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::BlockRewardTransactable, signature::Signable, Block, TokenOutput, Transaction,
-        TxOutput,
-    },
+    chain::{block::BlockRewardTransactable, signature::Signable, Block, Transaction, TxOutput},
     primitives::Id,
 };
 use consensus::ConsensusPoSError;
@@ -51,7 +48,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::Burn(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
-                    | TxOutput::TokensOp(..) => Err(ConnectTransactionError::IOPolicyError(
+                    | TxOutput::IssueFungibleToken(..)
+                    | TxOutput::IssueNft(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
@@ -71,7 +69,8 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::CreateStakePool(..)
                                 | TxOutput::CreateDelegationId(..)
                                 | TxOutput::DelegateStaking(..)
-                                | TxOutput::TokensOp(..) => {
+                                | TxOutput::IssueFungibleToken(..)
+                                | TxOutput::IssueNft(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
                                         block_id.into(),
@@ -108,7 +107,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::ProduceBlockFromStake(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..)
-                    | TxOutput::TokensOp(..) => false,
+                    | TxOutput::IssueFungibleToken(..)
+                    | TxOutput::IssueNft(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -132,14 +132,12 @@ pub fn check_tx_inputs_outputs_purposes(
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..) => true,
-        TxOutput::TokensOp(v) => match v {
-            TokenOutput::IssueNft(_, _, _) => true,
-            TokenOutput::IssueFungibleToken(_) => false,
-        },
-        TxOutput::Burn(..) | TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) => {
-            false
-        }
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::IssueNft(..) => true,
+        TxOutput::Burn(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..)
+        | TxOutput::IssueFungibleToken(..) => false,
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
@@ -153,7 +151,8 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::LockThenTransfer(..)
         | TxOutput::Burn(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::TokensOp(..) => { /* do nothing */ }
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::IssueNft(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }

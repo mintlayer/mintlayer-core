@@ -236,7 +236,7 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
-                TxOutput::TokensOp(_) => {
+                | TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
                     // TODO: add support for tokens v1
                     // See https://github.com/mintlayer/mintlayer-core/issues/1237
                 }

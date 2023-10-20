@@ -19,8 +19,7 @@ use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
-    ChainConfig, Destination, PoolId, TokenOutput, Transaction, TransactionCreationError, TxInput,
-    TxOutput,
+    ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
@@ -73,8 +72,7 @@ pub fn make_issue_token_outputs(
 ) -> WalletResult<Vec<TxOutput>> {
     chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
 
-    let issuance_output =
-        TxOutput::TokensOp(TokenOutput::IssueFungibleToken(Box::new(token_issuance)));
+    let issuance_output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
 
     let token_issuance_fee =
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));

@@ -19,7 +19,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         tokens::{make_token_id, TokenAuxiliaryData, TokenData, TokenId},
-        Block, TokenOutput, Transaction, TxOutput,
+        Block, Transaction, TxOutput,
     },
     primitives::{Id, Idable, H256},
 };
@@ -237,11 +237,9 @@ fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _) => false,
-        TxOutput::TokensOp(token_op) => match token_op {
-            TokenOutput::IssueFungibleToken(_) => false,
-            TokenOutput::IssueNft(_, _, _) => true,
-        },
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_) => false,
+        TxOutput::IssueNft(_, _, _) => true,
     })
 }
 // TODO: write tests for operations

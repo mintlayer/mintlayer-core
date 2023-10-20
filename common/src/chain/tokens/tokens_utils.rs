@@ -15,7 +15,7 @@
 
 use super::{TokenData, TokenId};
 use crate::{
-    chain::{output_value::OutputValue, AccountOp, TokenOutput, TxInput, TxOutput},
+    chain::{output_value::OutputValue, AccountOp, TxInput, TxOutput},
     primitives::id::hash_encoded,
 };
 
@@ -39,9 +39,7 @@ pub fn get_issuance_count_via_tokens_op(outputs: &[TxOutput]) -> usize {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => false,
-            TxOutput::TokensOp(token_output) => match token_output {
-                TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => true,
-            },
+            TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
         })
         .count()
 }
@@ -72,12 +70,10 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
                 OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
             }
         }
-        TxOutput::TokensOp(v) => match v {
-            TokenOutput::IssueFungibleToken(_) | TokenOutput::IssueNft(_, _, _) => true,
-        },
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => false,
+        TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
     }
 }

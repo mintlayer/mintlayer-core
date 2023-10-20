@@ -22,7 +22,7 @@ use common::{
             Metadata, NftIssuance, NftIssuanceV0, TokenId, TokenIssuance, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        DelegationId, Destination, PoolId, TokenOutput, TxOutput,
+        DelegationId, Destination, PoolId, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -39,10 +39,8 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::ProduceBlockFromStake(_, _) => unimplemented!(),
         TxOutput::CreateDelegationId(_, _) => unimplemented!(),
         TxOutput::DelegateStaking(_, _) => unimplemented!(),
-        TxOutput::TokensOp(token) => match token {
-            TokenOutput::IssueFungibleToken(_) => unimplemented!(),
-            TokenOutput::IssueNft(_, _, _) => unimplemented!(),
-        },
+        TxOutput::IssueFungibleToken(_) => unimplemented!(),
+        TxOutput::IssueNft(_, _, _) => unimplemented!(),
     }
 }
 
@@ -121,19 +119,17 @@ pub fn delegate_staking() -> TxOutput {
 }
 
 pub fn issue_tokens() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::IssueFungibleToken(Box::new(
-        TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: Vec::new(),
-            number_of_decimals: 0,
-            metadata_uri: Vec::new(),
-            total_supply: TokenTotalSupply::Unlimited,
-            reissuance_controller: Destination::AnyoneCanSpend,
-        }),
-    )))
+    TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: Vec::new(),
+        number_of_decimals: 0,
+        metadata_uri: Vec::new(),
+        total_supply: TokenTotalSupply::Unlimited,
+        reissuance_controller: Destination::AnyoneCanSpend,
+    })))
 }
 
 pub fn issue_nft() -> TxOutput {
-    TxOutput::TokensOp(TokenOutput::IssueNft(
+    TxOutput::IssueNft(
         TokenId::new(H256::zero()),
         Box::new(NftIssuance::V0(NftIssuanceV0 {
             metadata: Metadata {
@@ -148,7 +144,7 @@ pub fn issue_nft() -> TxOutput {
             },
         })),
         Destination::AnyoneCanSpend,
-    ))
+    )
 }
 
 pub fn is_stake_pool(output: &TxOutput) -> bool {
@@ -159,7 +155,8 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::ProduceBlockFromStake(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::TokensOp(..) => false,
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::IssueNft(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -172,7 +169,8 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::CreateStakePool(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
-        | TxOutput::TokensOp(..) => false,
+        | TxOutput::IssueFungibleToken(..)
+        | TxOutput::IssueNft(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

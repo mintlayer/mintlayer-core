@@ -18,7 +18,6 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
-use common::chain::TokenOutput;
 use common::primitives::Idable;
 use common::{
     chain::{
@@ -518,11 +517,11 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                 TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::TokensOp(TokenOutput::IssueNft(
+            .add_output(TxOutput::IssueNft(
                 token_id,
                 Box::new(NftIssuance::V0(nft_issuance)),
                 Destination::AnyoneCanSpend,
-            )))
+            ))
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();

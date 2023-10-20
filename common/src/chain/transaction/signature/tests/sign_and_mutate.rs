@@ -1069,7 +1069,8 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::DelegateStaking(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::TokensOp(_) => unreachable!(),           // TODO: come back to this later
+        TxOutput::IssueFungibleToken(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::IssueNft(_, _, _) => unreachable!(),     // TODO: come back to this later
     };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),
