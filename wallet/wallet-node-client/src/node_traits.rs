@@ -23,6 +23,7 @@ use common::{
 };
 
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, ip_or_socket_address::IpOrSocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
@@ -57,9 +58,18 @@ pub trait NodeInterface {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
+    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Block, Self::Error>;
+    async fn generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: EndToEndPublicKey,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,

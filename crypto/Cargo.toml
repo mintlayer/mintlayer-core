@@ -14,7 +14,7 @@ serialization = { path = "../serialization" }
 # The following crates don't work well with "workspace.dependencies"
 argon2 = { version = "0.5", features = ["std"] }
 merlin = { version = "3.0" , default-features = false }
-secp256k1 = { version = "0.27", default-features = false, features = ["global-context", "rand-std"] }
+secp256k1 = { version = "0.28", default-features = false, features = ["global-context", "rand-std"] }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 blake2.workspace = true
@@ -34,6 +34,8 @@ sha2.workspace = true
 sha3.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
+
+x25519-dalek = { version = "2.0", features = ["reusable_secrets", "zeroize"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

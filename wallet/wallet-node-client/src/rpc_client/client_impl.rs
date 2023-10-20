@@ -23,6 +23,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{rpc::MempoolRpcClient, tx_accumulator::PackingStrategy, FeeRate};
 use p2p::{
     interface::types::ConnectedPeer,
@@ -126,6 +127,35 @@ impl NodeInterface for NodeRpcClient {
         ChainstateRpcClient::token_info(&self.http_client, token_id)
             .await
             .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
+        BlockProductionRpcClient::e2e_public_key(&self.http_client)
+            .await
+            .map(HexEncoded::take)
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: EndToEndPublicKey,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Block, Self::Error> {
+        let transactions = transactions.into_iter().map(HexEncoded::new).collect::<Vec<_>>();
+        BlockProductionRpcClient::generate_block_e2e(
+            &self.http_client,
+            encrypted_input_data,
+            public_key.into(),
+            transactions,
+            transaction_ids,
+            packing_strategy,
+        )
+        .await
+        .map(HexEncoded::take)
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn generate_block(

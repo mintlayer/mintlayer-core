@@ -22,6 +22,7 @@ use common::{
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e;
 use mempool::tx_accumulator::PackingStrategy;
 
 use super::blockprod_interface::BlockProductionInterface;
@@ -51,6 +52,25 @@ impl BlockProductionInterface for BlockProduction {
         let _finished = end_receiver.await;
 
         Ok(block)
+    }
+
+    async fn e2e_public_key(&self) -> ephemeral_e2e::EndToEndPublicKey {
+        self.e2e_private_key().public_key()
+    }
+
+    async fn generate_block_e2e(
+        &mut self,
+        encrypted_input_data: Vec<u8>,
+        public_key: ephemeral_e2e::EndToEndPublicKey,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Block, BlockProductionError> {
+        let shared_secret = self.e2e_private_key().shared_secret(&public_key);
+        let input_data =
+            shared_secret.decrypt_then_decode::<GenerateBlockInputData>(&encrypted_input_data)?;
+        self.generate_block(input_data, transactions, transaction_ids, packing_strategy)
+            .await
     }
 }
 

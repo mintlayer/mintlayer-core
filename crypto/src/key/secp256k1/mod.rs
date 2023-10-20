@@ -87,7 +87,8 @@ impl Secp256k1PrivateKey {
         let secp = secp256k1::Secp256k1::new();
         // Hash the message
         let e = Blake2b32Stream::new().write(msg).finalize();
-        let msg_hash = secp256k1::Message::from_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
+        let msg_hash =
+            secp256k1::Message::from_digest_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
         // Sign the hash
         // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
@@ -155,7 +156,7 @@ impl Secp256k1PublicKey {
         // Hash the message
         let e = Blake2b32Stream::new().write(msg).finalize();
         let msg_hashed =
-            secp256k1::Message::from_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
+            secp256k1::Message::from_digest_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
         // Verify the signature
         self.verify_message_hashed(signature, &msg_hashed)
     }
@@ -325,7 +326,8 @@ mod test {
     ) {
         let pk = Secp256k1PublicKey::from_bytes(&hex::decode(pk).unwrap()).unwrap();
         let sig = secp256k1::schnorr::Signature::from_slice(&hex::decode(sig).unwrap()).unwrap();
-        let msg_hash = secp256k1::Message::from_slice(&hex::decode(msg_hash).unwrap()).unwrap();
+        let msg_hash =
+            secp256k1::Message::from_digest_slice(&hex::decode(msg_hash).unwrap()).unwrap();
         assert_eq!(pk.verify_message_hashed(&sig, &msg_hash), is_valid);
     }
 }

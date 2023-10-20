@@ -23,6 +23,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate, MempoolHandle};
 use p2p::{
     error::P2pError,
@@ -183,6 +184,36 @@ impl NodeInterface for WalletHandlesClient {
             .call(move |this| this.get_token_info_for_rpc(token_id))
             .await??;
         Ok(result)
+    }
+
+    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
+        let result = self.block_prod.call_async_mut(move |this| this.e2e_public_key()).await?;
+
+        Ok(result)
+    }
+
+    async fn generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: EndToEndPublicKey,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Block, Self::Error> {
+        let block = self
+            .block_prod
+            .call_async_mut(move |this| {
+                this.generate_block_e2e(
+                    encrypted_input_data,
+                    public_key,
+                    transactions,
+                    transaction_ids,
+                    packing_strategy,
+                )
+            })
+            .await??;
+
+        Ok(block)
     }
 
     async fn generate_block(

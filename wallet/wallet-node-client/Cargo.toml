@@ -12,6 +12,7 @@ blockprod = { path = "../../blockprod" }
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 consensus = { path = "../../consensus" }
+crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }

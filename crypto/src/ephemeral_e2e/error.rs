@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod ephemeral_e2e;
-pub mod hash;
-pub mod kdf;
-pub mod key;
-pub mod random;
-pub mod symkey;
-pub mod util;
-pub mod vrf;
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum Error {
+    #[error("Symmetric key creation from shared secret failed: {0}")]
+    SymmetricKeyCreationFailed(String),
+    #[error("Symmetric encryption failed: {0}")]
+    SymmetricEncryptionFailed(String),
+    #[error("Symmetric decryption failed: {0}")]
+    SymmetricDecryptionFailed(String),
+    #[error("Deserialization failed: {0}")]
+    DeserializationFailed(String),
+}

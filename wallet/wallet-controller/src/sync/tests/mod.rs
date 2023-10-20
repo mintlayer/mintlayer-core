@@ -28,7 +28,10 @@ use common::{
     primitives::Amount,
 };
 use consensus::GenerateBlockInputData;
-use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
+use crypto::{
+    ephemeral_e2e::EndToEndPublicKey,
+    random::{seq::IteratorRandom, CryptoRng, Rng},
+};
 use futures::executor::block_on;
 use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
@@ -264,6 +267,21 @@ impl NodeInterface for MockNode {
         &self,
         _token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn generate_block_e2e(
+        &self,
+        _encrypted_input_data: Vec<u8>,
+        _public_key: EndToEndPublicKey,
+        _transactions: Vec<SignedTransaction>,
+        _transaction_ids: Vec<Id<Transaction>>,
+        _packing_strategy: PackingStrategy,
+    ) -> Result<Block, Self::Error> {
+        unreachable!()
+    }
+
+    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
         unreachable!()
     }
 

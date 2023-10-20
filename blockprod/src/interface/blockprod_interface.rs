@@ -19,6 +19,7 @@ use common::{
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
+use crypto::ephemeral_e2e;
 use mempool::tx_accumulator::PackingStrategy;
 
 #[async_trait::async_trait]
@@ -43,6 +44,18 @@ pub trait BlockProductionInterface: Send + Sync {
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Block, BlockProductionError>;
+
+    async fn e2e_public_key(&self) -> ephemeral_e2e::EndToEndPublicKey;
+
+    /// Same as generate_block, but with end-to-end encryption for the secret data
+    async fn generate_block_e2e(
+        &mut self,
+        encrypted_input_data: Vec<u8>,
+        public_key: ephemeral_e2e::EndToEndPublicKey,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
