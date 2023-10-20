@@ -112,8 +112,7 @@ impl SharedSecret {
         obj: &T,
         rng: &mut R,
     ) -> Result<Vec<u8>, Error> {
-        let encoded = obj.encode();
-        self.encrypt(&encoded, rng)
+        obj.using_encoded(|encoded| self.encrypt(encoded, rng))
     }
 
     pub fn encrypt<R: Rng + CryptoRng>(
