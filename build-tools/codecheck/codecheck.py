@@ -31,26 +31,17 @@ LICENSE_TEMPLATE = [
 
 # List Rust source files
 def rs_sources(exclude = []):
-    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
-    is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
-
-    for top, dirs, files in os.walk('.', topdown=True):
-        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
-        for file in files:
-            if os.path.splitext(file)[1].lower() == '.rs':
-                yield os.path.join(top, file)
+    return sources_with_extensions(['.rs'], exclude)
 
 
 # List Cargo config files
 def cargo_config_files(exclude = []):
-    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
-    is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
+    return sources_with_extensions(['.toml'], exclude)
 
-    for top, dirs, files in os.walk('.', topdown=True):
-        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
-        for file in files:
-            if os.path.splitext(file)[1].lower() == '.toml':
-                yield os.path.join(top, file)
+
+# List Python source files
+def py_sources(exclude = []):
+    return sources_with_extensions(['.py'], exclude)
 
 
 # Cargo.toml files
@@ -63,6 +54,20 @@ def cargo_toml_files(exclude = []):
         for file in files:
             if file == 'Cargo.toml':
                 yield os.path.join(top, file)
+
+def _sources_with_extension(ext: str, exclude = []):
+    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
+    is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
+
+    for top, dirs, files in os.walk('.', topdown=True):
+        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
+        for file in files:
+            if os.path.splitext(file)[1].lower() == ext:
+                yield os.path.join(top, file)
+
+# List source files with given extensions
+def sources_with_extensions(exts: list[str], exclude = []):
+    return list(itertools.chain(*[_sources_with_extension(ext, exclude) for ext in exts]))
 
 
 # All files
@@ -284,6 +289,39 @@ def check_todos():
     return ok
 
 
+def file_ends_with_newline(file_path):
+    with open(file_path, 'r') as file:
+        file_data = file.read()
+        if len(file_data) == 0:
+            # Exclude empty files
+            return True
+
+        last_char = file_data[-1]
+        if last_char == '\n':
+            return True
+    return False
+
+
+def check_files_end_with_newline():
+    print("==== Checking file endings with EOL:")
+
+    # list of files exempted from checks
+    exempted_files = [
+    ]
+
+    ok = True
+    for path in sources_with_extensions([".toml",".rs",".py",".js",".yml",".yaml",".json",".htm",".html"]):
+        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+            continue
+
+        if file_ends_with_newline(path) is False:
+            ok = False
+            print("{}: File does not end with EOL".format(path))
+
+    print()
+    return ok
+
+
 # Check for trailing whitespaces
 def check_trailing_whitespaces():
     print("==== Checking for trailing whitespaces:")
@@ -328,7 +366,8 @@ def run_checks():
         check_workspace_and_package_versions_equal(),
         check_dependency_versions_patch_version(),
         check_todos(),
-        check_trailing_whitespaces()
+        check_trailing_whitespaces(),
+        check_files_end_with_newline()
     ])
 
 
