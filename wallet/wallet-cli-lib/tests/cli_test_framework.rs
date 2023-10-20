@@ -42,7 +42,7 @@ use common::{
 };
 use mempool::rpc::MempoolRpcServer;
 use p2p::rpc::P2pRpcServer;
-use rpc::{rpc_creds::RpcCreds, RpcConfig};
+use rpc::rpc_creds::RpcCreds;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
@@ -192,12 +192,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
     };
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
 
-    let rpc_config = RpcConfig {
-        http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-        http_enabled: true.into(),
-        ws_bind_address: Default::default(),
-        ws_enabled: false.into(),
-    };
+    let http_bind_address = "127.0.0.1:0".parse::<SocketAddr>().unwrap();
 
     let mut manager = subsystem::Manager::new("wallet-cli-test-manager");
 
@@ -252,7 +247,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         .unwrap(),
     );
 
-    let rpc = rpc::Builder::new(rpc_config, Some(rpc_creds))
+    let rpc = rpc::Builder::new(http_bind_address, Some(rpc_creds))
         .register(node_lib::rpc::init(
             manager.make_shutdown_trigger(),
             chain_config,
@@ -264,7 +259,7 @@ async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, Sock
         .build()
         .await
         .unwrap();
-    let rpc_http_address = rpc.http_address().cloned().unwrap();
+    let rpc_http_address = *rpc.http_address();
     manager.add_subsystem("rpc", rpc);
 
     (manager, rpc_http_address)

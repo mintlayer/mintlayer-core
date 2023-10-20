@@ -24,14 +24,19 @@ mod runner;
 
 pub type Error = anyhow::Error;
 
+use chainstate_launcher::ChainConfig;
 pub use config_files::{
     NodeConfigFile, NodeTypeConfigFile, RpcConfigFile, StorageBackendConfigFile,
 };
 pub use options::{Command, Options, RunOptions};
 pub use runner::setup;
 
-pub fn default_rpc_config() -> RpcConfigFile {
-    RpcConfigFile::with_run_options(RpcConfigFile::default(), &options::RunOptions::default())
+pub fn default_rpc_config(chain_config: &ChainConfig) -> RpcConfigFile {
+    RpcConfigFile::with_run_options(
+        chain_config,
+        RpcConfigFile::default(),
+        &options::RunOptions::default(),
+    )
 }
 
 pub fn init_logging(_opts: &Options) {

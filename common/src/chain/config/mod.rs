@@ -111,6 +111,15 @@ impl ChainType {
         }
     }
 
+    const fn default_rpc_port(&self) -> u16 {
+        match self {
+            ChainType::Mainnet => 3030,
+            ChainType::Testnet => 13030,
+            ChainType::Regtest => 23030,
+            ChainType::Signet => 33030,
+        }
+    }
+
     const fn default_bip44_coin_type(&self) -> ChildNumber {
         match self {
             ChainType::Mainnet => MINTLAYER_COIN_TYPE,
@@ -160,6 +169,7 @@ pub struct ChainConfig {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
     p2p_port: u16,
+    default_rpc_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
     software_version: SemVer,
@@ -255,6 +265,12 @@ impl ChainConfig {
     #[must_use]
     pub fn p2p_port(&self) -> u16 {
         self.p2p_port
+    }
+
+    /// The default port that the rpc server will listen on
+    #[must_use]
+    pub fn default_rpc_port(&self) -> u16 {
+        self.default_rpc_port
     }
 
     /// The current version of this software.

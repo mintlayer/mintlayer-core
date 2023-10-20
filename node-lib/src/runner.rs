@@ -40,10 +40,11 @@ use test_rpc_functions::make_rpc_test_functions;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
-    config_files::NodeConfigFile,
+    config_files::{NodeConfigFile, DEFAULT_HTTP_RPC_ENABLED},
     mock_time::set_mock_time,
     node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
+    RpcConfigFile,
 };
 
 const LOCK_FILE_NAME: &str = ".lock";
@@ -141,25 +142,31 @@ async fn initialize(
 
     // RPC subsystem
     let rpc_config = node_config.rpc.unwrap_or_default();
-    if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
+    if rpc_config.http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
             rpc_config.username.as_deref(),
             rpc_config.password.as_deref(),
             rpc_config.cookie_file.as_deref(),
         )?;
-        // TODO: get rid of the unwrap_or() after fixing the issue in #446
-        let rpc = rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
-            .register(crate::rpc::init(
-                manager.make_shutdown_trigger(),
-                chain_config,
-            ))
-            .register(block_prod.clone().into_rpc())
-            .register(chainstate.clone().into_rpc())
-            .register(mempool.clone().into_rpc())
-            .register(p2p.clone().into_rpc())
-            .register(rpc_test_functions.into_rpc())
-            .build();
+
+        let rpc = rpc::Builder::new(
+            rpc_config
+                .http_bind_address
+                .unwrap_or_else(|| RpcConfigFile::default_bind_address(&chain_config)),
+            Some(rpc_creds),
+        )
+        .register(crate::rpc::init(
+            manager.make_shutdown_trigger(),
+            chain_config,
+        ))
+        .register(block_prod.clone().into_rpc())
+        .register(chainstate.clone().into_rpc())
+        .register(mempool.clone().into_rpc())
+        .register(p2p.clone().into_rpc())
+        .register(rpc_test_functions.into_rpc())
+        .build();
+
         let rpc = rpc.await?;
         let _rpc = manager.add_subsystem("rpc", rpc);
     };
@@ -251,8 +258,8 @@ async fn start(
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
 
-    let node_config =
-        NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
+    let node_config = NodeConfigFile::read(&chain_config, config_path, run_options)
+        .context("Failed to initialize config")?;
 
     let data_dir = prepare_data_dir(
         || default_data_dir(*chain_config.chain_type()),

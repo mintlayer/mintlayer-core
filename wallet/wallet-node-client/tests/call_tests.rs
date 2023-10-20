@@ -30,7 +30,7 @@ use common::{
 use mempool::MempoolHandle;
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
 use p2p::P2pHandle;
-use rpc::{RpcAuthData, RpcConfig};
+use rpc::RpcAuthData;
 use subsystem::ShutdownTrigger;
 use tokio::task::JoinHandle;
 
@@ -120,24 +120,15 @@ pub async fn start_subsystems(
         .unwrap(),
     );
 
-    let rpc_config = RpcConfig {
-        http_bind_address: SocketAddr::from_str(&rpc_bind_address)
-            .expect("Address must be correct")
-            .into(),
-        http_enabled: true.into(),
-        ws_bind_address: SocketAddr::from_str("127.0.0.1:3030")
-            .expect("Address must be correct")
-            .into(),
-        ws_enabled: false.into(),
-    };
+    let rpc_http_bind_address = SocketAddr::from_str(&rpc_bind_address).unwrap();
 
-    let rpc_subsys = rpc::Builder::new(rpc_config, None)
+    let rpc_subsys = rpc::Builder::new(rpc_http_bind_address, None)
         .register(chainstate_handle.clone().into_rpc())
         .build()
         .await
         .unwrap();
 
-    let rpc_bind_address = rpc_subsys.http_address().cloned().unwrap();
+    let rpc_bind_address = *rpc_subsys.http_address();
 
     let _rpc = manager.add_subsystem("rpc-test", rpc_subsys);
 

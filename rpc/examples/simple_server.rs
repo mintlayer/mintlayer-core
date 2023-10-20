@@ -31,6 +31,8 @@
 // The output should be
 // {"jsonrpc":"2.0","result":46,"id":2 }
 
+use std::net::SocketAddr;
+
 struct SomeSubsystem(u64);
 
 impl SomeSubsystem {
@@ -76,10 +78,10 @@ async fn main() -> anyhow::Result<()> {
     let config = subsystem::ManagerConfig::new("rpc-example").enable_signal_handlers();
     let mut app = subsystem::Manager::new_with_config(config);
     let some_subsystem = app.add_direct_subsystem("some_subsystem", SomeSubsystem(0));
-    let rpc_config = rpc::RpcConfig::default();
+    let http_bind_address = "127.0.0.1:0".parse::<SocketAddr>().expect("Cannot fail");
     let _rpc_subsystem = app.add_subsystem(
         "rpc",
-        rpc::Builder::new(rpc_config, None)
+        rpc::Builder::new(http_bind_address, None)
             .register(some_subsystem.clone().into_rpc())
             .build()
             .await?,

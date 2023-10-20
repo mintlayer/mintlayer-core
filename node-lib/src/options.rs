@@ -172,20 +172,12 @@ pub struct RunOptions {
     #[clap(long)]
     pub http_rpc_enabled: Option<bool>,
 
-    /// Address to bind websocket RPC to.
-    #[clap(long, value_name = "ADDR")]
-    pub ws_rpc_addr: Option<SocketAddr>,
-
-    /// Enable/Disable websocket RPC.
-    #[clap(long)]
-    pub ws_rpc_enabled: Option<bool>,
-
-    /// Username for RPC HTTP and WebSocket server basic authorization.
+    /// Username for RPC server basic authorization.
     /// If not set, the cookie file is created.
     #[clap(long)]
     pub rpc_username: Option<String>,
 
-    /// Password for RPC HTTP and WebSocket server basic authorization.
+    /// Password for RPC server basic authorization.
     /// If not set, the RPC cookie file is created.
     #[clap(long)]
     pub rpc_password: Option<String>,

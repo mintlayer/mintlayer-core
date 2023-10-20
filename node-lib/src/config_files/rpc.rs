@@ -16,8 +16,10 @@
 use std::{net::SocketAddr, str::FromStr};
 
 use crate::RunOptions;
-use rpc::RpcConfig;
+use chainstate_launcher::ChainConfig;
 use serde::{Deserialize, Serialize};
+
+use super::DEFAULT_HTTP_RPC_ENABLED;
 
 /// The rpc subsystem configuration.
 #[must_use]
@@ -29,46 +31,32 @@ pub struct RpcConfigFile {
     /// Whether http RPC is enabled
     pub http_enabled: Option<bool>,
 
-    /// Address to bind websocket RPC to
-    pub ws_bind_address: Option<SocketAddr>,
-
-    /// Whether websocket RPC is enabled
-    pub ws_enabled: Option<bool>,
-
-    /// Username for RPC HTTP and WebSocket server basic authorization
+    /// Username for RPC server basic authorization
     pub username: Option<String>,
 
-    /// Password for RPC HTTP and WebSocket server basic authorization
+    /// Password for RPC server basic authorization
     pub password: Option<String>,
 
     /// Custom file path for the RPC cookie file
     pub cookie_file: Option<String>,
 }
 
-impl From<RpcConfigFile> for RpcConfig {
-    fn from(c: RpcConfigFile) -> Self {
-        RpcConfig {
-            http_bind_address: c.http_bind_address.into(),
-            http_enabled: c.http_enabled.into(),
-            ws_bind_address: c.ws_bind_address.into(),
-            ws_enabled: c.ws_enabled.into(),
-        }
-    }
-}
-
 impl RpcConfigFile {
-    pub fn with_run_options(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
-        const DEFAULT_HTTP_RPC_ENABLED: bool = true;
+    pub fn default_bind_address(chain_config: &ChainConfig) -> SocketAddr {
+        SocketAddr::from_str(&format!("127.0.0.1:{}", chain_config.default_rpc_port()))
+            .expect("Can't fail")
+    }
 
-        const DEFAULT_WS_RPC_ENABLED: bool = false;
-        let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
-        let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3032").expect("Can't fail");
+    pub fn with_run_options(
+        chain_config: &ChainConfig,
+        config: RpcConfigFile,
+        options: &RunOptions,
+    ) -> RpcConfigFile {
+        let default_http_rpc_addr = Self::default_bind_address(chain_config);
 
         let RpcConfigFile {
             http_bind_address,
             http_enabled,
-            ws_bind_address,
-            ws_enabled,
             username,
             password,
             cookie_file,
@@ -80,12 +68,6 @@ impl RpcConfigFile {
         let http_enabled = options
             .http_rpc_enabled
             .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
-        let ws_bind_address = options
-            .ws_rpc_addr
-            .unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
-        let ws_enabled = options
-            .ws_rpc_enabled
-            .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
 
         let username = username.or(options.rpc_username.clone());
         let password = password.or(options.rpc_password.clone());
@@ -94,8 +76,6 @@ impl RpcConfigFile {
         RpcConfigFile {
             http_bind_address: Some(http_bind_address),
             http_enabled: Some(http_enabled),
-            ws_bind_address: Some(ws_bind_address),
-            ws_enabled: Some(ws_enabled),
             username,
             password,
             cookie_file,

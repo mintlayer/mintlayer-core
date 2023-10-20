@@ -23,7 +23,7 @@ docker network create mintlayer-net
 To run the `node-daemon` detached and on the testnet network:
 
 ```bash
-docker run -d -p 3030:3030 -p 13031:13031 --network=mintlayer-net --name mintlayer_node_daemon --user "$(id -u):$(id -g)" -v ~/.mintlayer:/root/.mintlayer mintlayer/node-daemon:latest node-daemon testnet  --http-rpc-addr 0.0.0.0:3030
+docker run -d -p 13030:13030 -p 13031:13031 --network=mintlayer-net --name mintlayer_node_daemon --user "$(id -u):$(id -g)" -v ~/.mintlayer:/root/.mintlayer mintlayer/node-daemon:latest node-daemon testnet  --http-rpc-addr 0.0.0.0:13030
 ```
 
 The `-v` option is used to mount a local directory (in this case `~/.mintlayer`) as a volume in the Docker container.
@@ -33,7 +33,7 @@ NOTE: this won't work on windows hosts.
 If you want to display logs you can pass the `-e RUST_LOG=info` argument, such as:
 
 ```bash
-docker run -d -p 3030:3030 -p 13031:13031 -e RUST_LOG=info --network=mintlayer-net --name mintlayer_node_daemon --user "$(id -u):$(id -g)" -v ~/.mintlayer:/root/.mintlayer mintlayer/node-daemon:latest node-daemon testnet  --http-rpc-addr 0.0.0.0:3030
+docker run -d -p 13030:13030 -p 13031:13031 -e RUST_LOG=info --network=mintlayer-net --name mintlayer_node_daemon --user "$(id -u):$(id -g)" -v ~/.mintlayer:/root/.mintlayer mintlayer/node-daemon:latest node-daemon testnet  --http-rpc-addr 0.0.0.0:13030
 ```
 
 ## Mintlayer Wallet-CLI
@@ -55,7 +55,7 @@ this will display the IP address of your node in the `mintlayer-net`
 To run `wallet-cli` with the RPC cookie file:
 
 ```bash
-docker run -it --network=mintlayer-net -v ~/.mintlayer:/root/.mintlayer mintlayer/wallet-cli:latest wallet-cli --rpc-cookie-file /root/.mintlayer/<NETWORK>/.cookie --rpc-address <IP_ADDRESS>:3030
+docker run -it --network=mintlayer-net -v ~/.mintlayer:/root/.mintlayer mintlayer/wallet-cli:latest wallet-cli --rpc-cookie-file /root/.mintlayer/<NETWORK>/.cookie --rpc-address <IP_ADDRESS>:13030
 ```
 
 replace `<NETWORK>` with `mainnet` or `testnet` depending on what network you're running and `<IP_ADDRESS>` with the result of the command above.
