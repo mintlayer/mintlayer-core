@@ -167,7 +167,7 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn basic(#[case] seed: Seed) {
+    fn shared_secret_then_encrypt_decrypt(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let private_key1 = EndToEndPrivateKey::new_from_rng(&mut rng);
         let public_key1 = private_key1.public_key();
@@ -209,6 +209,98 @@ mod tests {
                 let cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
                 let plain_text = shared_secret1.decrypt(&cipher_text).unwrap();
                 assert_eq!(random_message, plain_text);
+            }
+        }
+
+        // One can decrypt others' encrypted objects
+        {
+            {
+                let obj: String = (&mut rng)
+                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .take(100)
+                    .map(char::from)
+                    .collect();
+
+                let cipher_text = shared_secret1.encode_then_encrypt(&obj, &mut rng).unwrap();
+                let obj_decoded =
+                    shared_secret2.decrypt_then_decode::<String>(&cipher_text).unwrap();
+                assert_eq!(obj, obj_decoded);
+            }
+
+            {
+                let obj: String = (&mut rng)
+                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .take(100)
+                    .map(char::from)
+                    .collect();
+
+                let cipher_text = shared_secret2.encode_then_encrypt(&obj, &mut rng).unwrap();
+                let obj_decoded =
+                    shared_secret1.decrypt_then_decode::<String>(&cipher_text).unwrap();
+                assert_eq!(obj, obj_decoded);
+            }
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn shared_secret_then_encrypt_decrypt_tampered(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let private_key1 = EndToEndPrivateKey::new_from_rng(&mut rng);
+        let public_key1 = private_key1.public_key();
+        let private_key2 = EndToEndPrivateKey::new_from_rng(&mut rng);
+        let public_key2 = private_key2.public_key();
+
+        let shared_secret1 = private_key1.shared_secret(&public_key2);
+        let shared_secret2 = private_key2.shared_secret(&public_key1);
+        assert_eq!(shared_secret1, shared_secret2);
+
+        // One cannot decrypt others' tampered cipher texts
+        {
+            {
+                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let mut cipher_text = shared_secret1.encrypt(&random_message, &mut rng).unwrap();
+                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
+                shared_secret2.decrypt(&cipher_text).unwrap_err();
+            }
+
+            {
+                let random_message: Vec<u8> = (0..100).map(|_| rng.gen()).collect();
+                let mut cipher_text = shared_secret2.encrypt(&random_message, &mut rng).unwrap();
+                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
+                shared_secret1.decrypt(&cipher_text).unwrap_err();
+            }
+        }
+
+        // One cannot decrypt others' tampered encrypted objects
+        {
+            {
+                let obj: String = (&mut rng)
+                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .take(100)
+                    .map(char::from)
+                    .collect();
+
+                let mut cipher_text = shared_secret1.encode_then_encrypt(&obj, &mut rng).unwrap();
+                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
+                shared_secret2.decrypt_then_decode::<String>(&cipher_text).unwrap_err();
+            }
+
+            {
+                let obj: String = (&mut rng)
+                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .take(100)
+                    .map(char::from)
+                    .collect();
+
+                let mut cipher_text = shared_secret2.encode_then_encrypt(&obj, &mut rng).unwrap();
+                let char_to_tamper_with = rng.gen_range(0..cipher_text.len());
+                cipher_text[char_to_tamper_with] = cipher_text[char_to_tamper_with].wrapping_add(1);
+                shared_secret1.decrypt_then_decode::<String>(&cipher_text).unwrap_err();
             }
         }
     }
