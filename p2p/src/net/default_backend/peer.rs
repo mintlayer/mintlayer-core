@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use p2p_types::services::Services;
 use tokio::{sync::mpsc, time::timeout};
 
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
 
 use crate::{
@@ -131,24 +131,43 @@ where
 
     fn validate_peer_time(
         p2p_config: &P2pConfig,
-        local_time: Duration,
-        remote_time: Duration,
+        local_time_start: Time,
+        local_time_end: Time,
+        remote_time: P2pTimestamp,
     ) -> crate::Result<()> {
         // TODO: If the node's clock is wrong and we disconnect peers,
         // it can be trivial to isolate the node by connecting malicious nodes
         // with the same invalid clock (while honest nodes can't connect).
         // After that, the node is open to all kinds of attacks.
-        let time_diff =
-            std::cmp::max(local_time, remote_time) - std::cmp::min(local_time, remote_time);
+
+        // We do not know at what point exactly the peer recorded its timestamp. However, we do
+        // know it was somewhere between the request was initiated and the response was received.
+        // We give the peer some leeway when it comes to network latency so the acceptable time is
+        // in the interval [`init_time - tolerance`, `recv_time + tolerance`].
+        //
+        // Since the distance between `init_time` and `recv_time` is bounded by the handshake
+        // timeout, the effective max peer time offset is:
+        // ```tolerance + (recv_time - init_time) <= tolerance + handshake_timeout```
+
+        let max_offset = *p2p_config.max_clock_diff;
+        let accepted_peer_time_start = (local_time_start - max_offset)
+            .expect("Local clock minus a small offset should not underflow");
+        let accepted_peer_time_end = (local_time_end + max_offset)
+            .expect("Local time plus a small offset should not overflow");
+        let accepted_peer_time = accepted_peer_time_start..=accepted_peer_time_end;
+
+        let remote_time = Time::from_duration_since_epoch(remote_time.as_duration_since_epoch());
+
         utils::ensure!(
-            time_diff <= *p2p_config.max_clock_diff,
-            P2pError::PeerError(PeerError::TimeDiff(time_diff))
+            accepted_peer_time.contains(&remote_time),
+            P2pError::PeerError(PeerError::TimeDiff(remote_time, accepted_peer_time)),
         );
+
         Ok(())
     }
 
     async fn handshake(&mut self) -> crate::Result<()> {
-        let local_time = self.time_getter.get_time();
+        let init_time = self.time_getter.get_time();
         match self.connection_info {
             ConnectionInfo::Inbound => {
                 let Message::Handshake(HandshakeMessage::Hello {
@@ -165,11 +184,8 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
-                Self::validate_peer_time(
-                    &self.p2p_config,
-                    local_time.as_duration_since_epoch(),
-                    remote_time.as_duration_since_epoch(),
-                )?;
+                let recv_time = self.time_getter.get_time();
+                Self::validate_peer_time(&self.p2p_config, init_time, recv_time, remote_time)?;
 
                 let local_services: Services = (*self.p2p_config.node_type).into();
 
@@ -201,7 +217,7 @@ where
                         software_version: *self.chain_config.software_version(),
                         services: (*self.p2p_config.node_type).into(),
                         receiver_address: self.receiver_address.clone(),
-                        current_time: P2pTimestamp::from_time(local_time),
+                        current_time: P2pTimestamp::from_time(self.time_getter.get_time()),
                     }))
                     .await?;
             }
@@ -220,7 +236,7 @@ where
                         user_agent: self.p2p_config.user_agent.clone(),
                         software_version: *self.chain_config.software_version(),
                         receiver_address: self.receiver_address.clone(),
-                        current_time: P2pTimestamp::from_time(local_time),
+                        current_time: P2pTimestamp::from_time(init_time),
                         handshake_nonce,
                     }))
                     .await?;
@@ -238,11 +254,8 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
-                Self::validate_peer_time(
-                    &self.p2p_config,
-                    local_time.as_duration_since_epoch(),
-                    remote_time.as_duration_since_epoch(),
-                )?;
+                let recv_time = self.time_getter.get_time();
+                Self::validate_peer_time(&self.p2p_config, init_time, recv_time, remote_time)?;
 
                 let common_services = local_services & remote_services;
 
