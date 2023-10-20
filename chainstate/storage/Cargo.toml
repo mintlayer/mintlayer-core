@@ -32,3 +32,4 @@ num-traits.workspace = true
 
 [features]
 mock = [ 'mockall' ]
+expensive-reads = []

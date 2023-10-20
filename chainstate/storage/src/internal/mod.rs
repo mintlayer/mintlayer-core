@@ -82,11 +82,13 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Dump raw database contents
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.0.dump_raw().map_err(crate::Error::from)
     }
 
     /// Collect and return all utxos from the storage
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<UtxoOutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         db.0.get::<db::DBUtxo, _>()
@@ -96,6 +98,7 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all tip accounting data from storage
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn read_pos_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
@@ -134,6 +137,7 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all sealed accounting data from storage
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn read_pos_accounting_data_sealed(
         &self,
     ) -> crate::Result<pos_accounting::PoSAccountingData> {
@@ -173,6 +177,7 @@ impl<B: storage::Backend> Store<B> {
         })
     }
 
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn read_tokens_accounting_data(
         &self,
     ) -> crate::Result<tokens_accounting::TokensAccountingData> {

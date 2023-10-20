@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate = { path = ".." }
-chainstate-storage = { path = "../storage" }
+chainstate-storage = {path = '../storage', features = ['expensive-reads']}
 chainstate-types = { path = "../types" }
 common = { path = "../../common" }
 consensus = { path = "../../consensus" }
