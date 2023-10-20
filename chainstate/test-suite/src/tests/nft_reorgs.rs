@@ -29,7 +29,7 @@ use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     nft_utils::random_creator,
     random::{make_seedable_rng, Seed},
-    random_string,
+    random_ascii_alphanumeric_string,
 };
 
 #[rstest]
@@ -62,9 +62,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let issuance_data = NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -375,9 +376,10 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let issuance_value = NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),

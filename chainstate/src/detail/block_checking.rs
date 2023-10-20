@@ -16,7 +16,6 @@
 use super::Chainstate;
 use crate::{BlockError, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorage;
-use chainstate_types::PropertyQueryError;
 use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block},
     primitives::id::WithId,
@@ -37,17 +36,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
         block: WithId<Block>,
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
-        let prev_block_id = block.prev_block_id();
-        let parent_height = chainstate_ref
-            .get_gen_block_index(&prev_block_id)
-            .map_err(|e| BlockError::BlockIndexQueryError(prev_block_id, e))?
-            .ok_or(BlockError::BlockIndexQueryError(
-                prev_block_id,
-                PropertyQueryError::BlockIndexNotFound(prev_block_id),
-            ))?
-            .block_height();
-
-        chainstate_ref.check_block(&block, parent_height.next_height()).log_err()?;
+        chainstate_ref.check_block(&block).log_err()?;
         Ok(block)
     }
 

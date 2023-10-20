@@ -36,7 +36,7 @@ use test_utils::{
     gen_text_with_non_ascii,
     nft_utils::{random_creator, random_nft_issuance},
     random::{make_seedable_rng, Seed},
-    random_string,
+    random_ascii_alphanumeric_string,
 };
 use tx_verifier::error::TokenIssuanceError;
 
@@ -65,13 +65,21 @@ fn nft_name_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(
+                                name: random_ascii_alphanumeric_string(
                                     &mut rng,
                                     max_name_len + 1..max_name_len + 1000,
                                 )
                                 .into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(None),
@@ -125,8 +133,16 @@ fn nft_empty_name(#[case] seed: Seed) {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
                                 name: vec![],
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(None),
@@ -191,9 +207,16 @@ fn nft_invalid_name(#[case] seed: Seed) {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
                                     name,
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    description: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_desc_len,
+                                    )
+                                    .into_bytes(),
+                                    ticker: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_ticker_len,
+                                    )
+                                    .into_bytes(),
                                     icon_uri: DataOrNoVec::from(None),
                                     additional_metadata_uri: DataOrNoVec::from(None),
                                     media_uri: DataOrNoVec::from(None),
@@ -249,9 +272,14 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
                                     &mut rng,
                                     max_ticker_len + 1..max_ticker_len + 1000,
                                 )
@@ -309,8 +337,13 @@ fn nft_empty_ticker(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
                                 ticker: vec![],
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
@@ -375,9 +408,16 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                             NftIssuanceV0 {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
+                                    name: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_name_len,
+                                    )
+                                    .into_bytes(),
+                                    description: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_desc_len,
+                                    )
+                                    .into_bytes(),
                                     ticker,
                                     icon_uri: DataOrNoVec::from(None),
                                     additional_metadata_uri: DataOrNoVec::from(None),
@@ -434,13 +474,18 @@ fn nft_description_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
                                     &mut rng,
                                     max_desc_len + 1..max_desc_len + 1000,
                                 )
                                 .into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(None),
@@ -494,9 +539,14 @@ fn nft_empty_description(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
                                 description: vec![],
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(None),
@@ -560,9 +610,17 @@ fn nft_invalid_description(#[case] seed: Seed) {
                             NftIssuanceV0 {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    name: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_name_len,
+                                    )
+                                    .into_bytes(),
                                     description,
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    ticker: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_ticker_len,
+                                    )
+                                    .into_bytes(),
                                     icon_uri: DataOrNoVec::from(None),
                                     additional_metadata_uri: DataOrNoVec::from(None),
                                     media_uri: DataOrNoVec::from(None),
@@ -618,12 +676,24 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(Some(
-                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
-                                        .into_bytes(),
+                                    random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        max_uri_len + 1..max_uri_len + 1000,
+                                    )
+                                    .into_bytes(),
                                 )),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(None),
@@ -671,9 +741,10 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
         let output_value: OutputValue = TokenData::from(NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(Some(vec![])),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -751,10 +822,21 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                             NftIssuanceV0 {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    name: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_name_len,
+                                    )
+                                    .into_bytes(),
+                                    description: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_desc_len,
+                                    )
+                                    .into_bytes(),
+                                    ticker: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_ticker_len,
+                                    )
+                                    .into_bytes(),
                                     icon_uri,
                                     additional_metadata_uri: DataOrNoVec::from(None),
                                     media_uri: DataOrNoVec::from(None),
@@ -811,13 +893,25 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(Some(
-                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
-                                        .into_bytes(),
+                                    random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        max_uri_len + 1..max_uri_len + 1000,
+                                    )
+                                    .into_bytes(),
                                 )),
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
@@ -863,9 +957,10 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         let output_value: OutputValue = TokenData::from(NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(Some(vec![])),
                 media_uri: DataOrNoVec::from(None),
@@ -943,10 +1038,21 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                             NftIssuanceV0 {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    name: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_name_len,
+                                    )
+                                    .into_bytes(),
+                                    description: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_desc_len,
+                                    )
+                                    .into_bytes(),
+                                    ticker: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_ticker_len,
+                                    )
+                                    .into_bytes(),
                                     icon_uri: DataOrNoVec::from(None),
                                     additional_metadata_uri,
                                     media_uri: DataOrNoVec::from(None),
@@ -1003,14 +1109,26 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
                         NftIssuanceV0 {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len)
+                                    .into_bytes(),
+                                description: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_desc_len,
+                                )
+                                .into_bytes(),
+                                ticker: random_ascii_alphanumeric_string(
+                                    &mut rng,
+                                    1..max_ticker_len,
+                                )
+                                .into_bytes(),
                                 icon_uri: DataOrNoVec::from(None),
                                 additional_metadata_uri: DataOrNoVec::from(None),
                                 media_uri: DataOrNoVec::from(Some(
-                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
-                                        .into_bytes(),
+                                    random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        max_uri_len + 1..max_uri_len + 1000,
+                                    )
+                                    .into_bytes(),
                                 )),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
@@ -1056,9 +1174,10 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         let output_value: OutputValue = TokenData::from(NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(Some(vec![])),
@@ -1137,10 +1256,21 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                             NftIssuanceV0 {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    name: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_name_len,
+                                    )
+                                    .into_bytes(),
+                                    description: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_desc_len,
+                                    )
+                                    .into_bytes(),
+                                    ticker: random_ascii_alphanumeric_string(
+                                        &mut rng,
+                                        1..max_ticker_len,
+                                    )
+                                    .into_bytes(),
                                     icon_uri: DataOrNoVec::from(None),
                                     additional_metadata_uri: DataOrNoVec::from(None),
                                     media_uri,
@@ -1179,9 +1309,9 @@ fn new_block_with_media_hash(
     let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
     let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
     let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-    let name = random_string(rng, 1..max_name_len).into_bytes();
-    let description = random_string(rng, 1..max_desc_len).into_bytes();
-    let ticker = random_string(rng, 1..max_ticker_len).into_bytes();
+    let name = random_ascii_alphanumeric_string(rng, 1..max_name_len).into_bytes();
+    let description = random_ascii_alphanumeric_string(rng, 1..max_desc_len).into_bytes();
+    let ticker = random_ascii_alphanumeric_string(rng, 1..max_ticker_len).into_bytes();
     let genesis_id = tf.genesis().get_id();
     let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -1354,9 +1484,10 @@ fn nft_valid_case(#[case] seed: Seed) {
         let output_value = NftIssuanceV0 {
             metadata: Metadata {
                 creator: Some(random_creator(&mut rng)),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(Some(valid_rfc3986_uri.clone())),
                 additional_metadata_uri: DataOrNoVec::from(Some(valid_rfc3986_uri.clone())),
                 media_uri: DataOrNoVec::from(Some(valid_rfc3986_uri)),
@@ -1487,8 +1618,9 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             metadata: Metadata {
                 creator: None,
                 name,
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -1533,9 +1665,9 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let issuance = NftIssuanceV0 {
             metadata: Metadata {
                 creator: None,
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
                 description,
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -1580,8 +1712,9 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let issuance = NftIssuanceV0 {
             metadata: Metadata {
                 creator: None,
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
                 ticker,
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
@@ -1625,9 +1758,10 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let issuance = NftIssuanceV0 {
             metadata: Metadata {
                 creator: None,
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                name: random_ascii_alphanumeric_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_ascii_alphanumeric_string(&mut rng, 1..max_desc_len)
+                    .into_bytes(),
+                ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),

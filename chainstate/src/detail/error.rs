@@ -154,6 +154,8 @@ pub enum CheckBlockError {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockTransactionsError {
+    #[error("Blockchain storage error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Duplicate input in transaction {0} in block {1}")]
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]

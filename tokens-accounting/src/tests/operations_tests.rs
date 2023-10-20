@@ -26,7 +26,7 @@ use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},
-    random_string,
+    random_ascii_alphanumeric_string,
 };
 
 use crate::{
@@ -36,9 +36,9 @@ use crate::{
 
 fn make_token_data(rng: &mut impl Rng, supply: TokenTotalSupply, locked: bool) -> TokenData {
     TokenData::FungibleToken(FungibleTokenData::new_unchecked(
-        random_string(rng, 1..5).as_bytes().to_vec(),
+        random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
         rng.gen_range(1..18),
-        random_string(rng, 1..1024).as_bytes().to_vec(),
+        random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         supply,
         locked,
         Destination::AnyoneCanSpend,

@@ -691,9 +691,11 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let err = tf.chainstate.preliminary_block_check(block.clone()).unwrap_err();
         assert_eq!(
             err,
-            ChainstateError::ProcessBlockError(chainstate::BlockError::BlockIndexQueryError(
-                block.prev_block_id(),
-                PropertyQueryError::BlockIndexNotFound(block.prev_block_id()),
+            ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::PrevBlockNotFound(
+                    block.prev_block_id(),
+                    block.get_id()
+                ),
             ))
         );
 

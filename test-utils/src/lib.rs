@@ -46,11 +46,14 @@ pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
             return random_byte;
         }
     }
-    // it's approximately 0.5^1000 that this panics
+    // it's approximately 0.75^1000 that this panics
     panic!("couldn't sample non_ascii_alphanumeric_char");
 }
 
-pub fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
+pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
+    rng: &mut impl Rng,
+    range_len: R,
+) -> String {
     use crypto::random::distributions::{Alphanumeric, DistString};
     if range_len.is_empty() {
         return String::new();
@@ -173,10 +176,10 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn random_string_test(#[case] seed: Seed) {
+    fn random_ascii_alphanumeric_string_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let result = random_string(&mut rng, 1..100);
+        let result = random_ascii_alphanumeric_string(&mut rng, 1..100);
         assert!(result.chars().all(|c| c.is_ascii_alphanumeric()));
     }
 }

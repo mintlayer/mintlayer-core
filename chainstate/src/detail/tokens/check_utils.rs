@@ -21,17 +21,14 @@ use tx_verifier::error::TokenIssuanceError;
 use utils::ensure;
 
 fn check_is_text_alphanumeric(str: &[u8]) -> bool {
-    match String::from_utf8(str.to_vec()) {
+    match std::str::from_utf8(str) {
         Ok(text) => text.chars().all(char::is_alphanumeric),
         Err(_) => false,
     }
 }
 
 fn check_is_text_ascii_alphanumeric(str: &[u8]) -> bool {
-    match String::from_utf8(str.to_vec()) {
-        Ok(text) => text.chars().all(|c| c.is_ascii_alphanumeric()),
-        Err(_) => false,
-    }
+    str.iter().all(|c| c.is_ascii_alphanumeric())
 }
 
 pub fn is_rfc3986_valid_symbol(ch: char) -> bool {
@@ -72,7 +69,7 @@ pub fn check_token_ticker(
         TokenIssuanceError::IssueErrorInvalidTickerLength
     );
 
-    // Check is ticker has alphanumeric chars
+    // Check if ticker has alphanumeric chars
     let tokens_version = chain_config
         .chainstate_upgrades()
         .version_at_height(current_height)
@@ -108,7 +105,7 @@ pub fn check_nft_name(
         TokenIssuanceError::IssueErrorInvalidNameLength
     );
 
-    // Check is name has alphanumeric chars
+    // Check if name has alphanumeric chars
     let tokens_version = chain_config
         .chainstate_upgrades()
         .version_at_height(current_height)
@@ -143,7 +140,7 @@ pub fn check_nft_description(
         TokenIssuanceError::IssueErrorInvalidDescriptionLength
     );
 
-    // Check is description has alphanumeric chars
+    // Check if description has alphanumeric chars
     let tokens_version = chain_config
         .chainstate_upgrades()
         .version_at_height(current_height)

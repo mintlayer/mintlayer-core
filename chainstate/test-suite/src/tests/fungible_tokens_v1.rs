@@ -44,7 +44,7 @@ use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
-    random_string, split_value,
+    random_ascii_alphanumeric_string, split_value,
 };
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::error::TokenIssuanceError;
@@ -69,9 +69,9 @@ fn make_test_framework_with_v1(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
 
 fn make_issuance(rng: &mut impl Rng, supply: TokenTotalSupply) -> TokenIssuance {
     TokenIssuance::V1(TokenIssuanceV1 {
-        token_ticker: random_string(rng, 1..5).as_bytes().to_vec(),
+        token_ticker: random_ascii_alphanumeric_string(rng, 1..5).as_bytes().to_vec(),
         number_of_decimals: rng.gen_range(1..18),
-        metadata_uri: random_string(rng, 1..1024).as_bytes().to_vec(),
+        metadata_uri: random_ascii_alphanumeric_string(rng, 1..1024).as_bytes().to_vec(),
         total_supply: supply,
         reissuance_controller: Destination::AnyoneCanSpend,
     })
@@ -291,9 +291,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         // Ticker is too long
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 10..u16::MAX as usize).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 10..u16::MAX as usize)
+                .as_bytes()
+                .to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
@@ -315,7 +317,7 @@ fn token_issue_test(#[case] seed: Seed) {
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
@@ -347,7 +349,9 @@ fn token_issue_test(#[case] seed: Seed) {
                 let issuance = TokenIssuance::V1(TokenIssuanceV1 {
                     token_ticker,
                     number_of_decimals: rng.gen_range(1..18),
-                    metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+                    metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024)
+                        .as_bytes()
+                        .to_vec(),
                     total_supply: TokenTotalSupply::Unlimited,
                     reissuance_controller: Destination::AnyoneCanSpend,
                 });
@@ -373,9 +377,11 @@ fn token_issue_test(#[case] seed: Seed) {
             let decimals_count_to_use = token_max_dec_count + 1;
 
             let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+                token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
                 number_of_decimals: decimals_count_to_use,
-                metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+                metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024)
+                    .as_bytes()
+                    .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
             });
@@ -399,9 +405,11 @@ fn token_issue_test(#[case] seed: Seed) {
             let uri_len_range_to_use = (token_max_uri_len + 1)..u16::MAX as usize;
 
             let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-                token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+                token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
                 number_of_decimals: rng.gen_range(1..18),
-                metadata_uri: random_string(&mut rng, uri_len_range_to_use).as_bytes().to_vec(),
+                metadata_uri: random_ascii_alphanumeric_string(&mut rng, uri_len_range_to_use)
+                    .as_bytes()
+                    .to_vec(),
                 total_supply: TokenTotalSupply::Unlimited,
                 reissuance_controller: Destination::AnyoneCanSpend,
             });
@@ -422,7 +430,7 @@ fn token_issue_test(#[case] seed: Seed) {
 
         // URI contain non alpha-numeric char
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
@@ -2984,9 +2992,9 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
         });
@@ -3119,9 +3127,9 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
         });
@@ -3324,9 +3332,9 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..5).as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Lockable,
             reissuance_controller: Destination::PublicKey(controller_pk.clone()),
         });
@@ -3563,7 +3571,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
             token_ticker,
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });
@@ -3596,9 +3604,11 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
 
         // valid case
         let issuance = TokenIssuance::V1(TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..max_ticker_len).as_bytes().to_vec(),
+            token_ticker: random_ascii_alphanumeric_string(&mut rng, 1..max_ticker_len)
+                .as_bytes()
+                .to_vec(),
             number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+            metadata_uri: random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec(),
             total_supply: TokenTotalSupply::Unlimited,
             reissuance_controller: Destination::AnyoneCanSpend,
         });

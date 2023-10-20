@@ -292,6 +292,7 @@ impl BanScore for TokensError {
 impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
+            CheckBlockTransactionsError::PropertyQueryError(_) => 0,
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,

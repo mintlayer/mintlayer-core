@@ -330,7 +330,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        let result = chainstate_ref.check_block(block, block_index.block_height());
+        let result = chainstate_ref.check_block(block);
         if result.is_err() {
             // TODO: "technical" errors (e.g. a DB error) should not lead to permanent
             // block invalidation. The same applies to the other unconditional
