@@ -13,18 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, time::Duration};
+use std::time::Duration;
 
 use common::{chain::Block, primitives::Id};
-use futures::{future::select_all, FutureExt};
-use logging::log;
 use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
 use tokio::time;
 
 use crate::net::default_backend::transport::TransportSocket;
 
-use super::{test_node::TestNode, PeerManagerNotification};
+use super::test_node::TestNode;
 
 pub struct TestNodeGroup<Transport>
 where
@@ -57,56 +55,6 @@ where
     pub fn set_dns_seed_addresses(&self, addresses: &Vec<SocketAddress>) {
         for node in &self.nodes {
             node.set_dns_seed_addresses(addresses.clone());
-        }
-    }
-
-    pub async fn recv_peer_mgr_notification(&mut self) -> (usize, PeerManagerNotification) {
-        let combined_future = select_all(
-            self.nodes
-                .iter_mut()
-                .map(|node| node.recv_peer_mgr_notification().boxed())
-                .collect::<Vec<_>>(),
-        );
-        let (notification, future_idx, _) = combined_future.await;
-        (future_idx, notification.unwrap())
-    }
-
-    // Wait for one heartbeat for each node. The caller code must make sure that the
-    // time is advanced appropriately, so that heartbeats actually happen.
-    pub async fn wait_for_peer_mgr_heartbeat(&mut self) {
-        for node in &mut self.nodes {
-            node.wait_for_peer_mgr_heartbeat().await;
-        }
-    }
-
-    // Wait until the specified number of nodes has been connected to the specified address.
-    pub async fn wait_for_connection_advance_time(
-        &mut self,
-        nodes_count: usize,
-        address: SocketAddress,
-        time_diff: Duration,
-    ) {
-        assert!(nodes_count <= self.nodes.len());
-        let mut connected = BTreeSet::new();
-
-        while connected.len() < nodes_count {
-            if let Ok((node_idx, notification)) =
-                // Note: SHORT_TIMEOUT is still too big here, it'll just introduce useless
-                // delays when there are no notifications in flight and producing new ones
-                // requires the time to be advanced.
-                time::timeout(SHORT_TIMEOUT / 10, self.recv_peer_mgr_notification()).await
-            {
-                let expected_notification = PeerManagerNotification::ConnectionAccepted { address };
-                if notification == expected_notification {
-                    connected.insert(node_idx);
-                    log::debug!(
-                        "Got a connection to {address}, the total connections count is {}",
-                        connected.len()
-                    );
-                }
-            } else {
-                self.time_getter.advance_time(time_diff);
-            }
         }
     }
 

@@ -30,7 +30,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, PeerManagerNotification, TestNode},
+    tests::helpers::{timeout, TestNode},
 };
 
 async fn unexpected_handshake_message<TTM>()

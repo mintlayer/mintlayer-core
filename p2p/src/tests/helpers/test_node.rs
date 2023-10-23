@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
-use p2p_test_utils::{expect_recv, LONG_TIMEOUT, SHORT_TIMEOUT};
+use p2p_test_utils::SHORT_TIMEOUT;
 use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
@@ -220,14 +220,6 @@ where
         connect_result_rx
     }
 
-    pub async fn recv_peer_mgr_notification(&mut self) -> Option<PeerManagerNotification> {
-        self.peer_mgr_notification_rx.recv().await
-    }
-
-    pub async fn expect_peer_mgr_notification(&mut self) -> PeerManagerNotification {
-        expect_recv!(self.peer_mgr_notification_rx)
-    }
-
     pub async fn expect_no_banning(&mut self) {
         time::timeout(SHORT_TIMEOUT, async {
             loop {
@@ -246,7 +238,7 @@ where
         .await
         .unwrap_err();
     }
-    
+
     pub async fn wait_for_ban_score_adjustment(&mut self) -> (SocketAddress, u32) {
         loop {
             match self.peer_mgr_notification_rx.recv().await.unwrap() {
@@ -256,48 +248,6 @@ where
                 _ => {}
             }
         }
-    }
-
-    pub async fn wait_for_peer_mgr_heartbeat(&mut self) {
-        time::timeout(LONG_TIMEOUT, async {
-            loop {
-                match self.peer_mgr_notification_rx.recv().await.unwrap() {
-                    PeerManagerNotification::BanScoreAdjustment {
-                        address: _,
-                        new_score: _,
-                    }
-                    | PeerManagerNotification::Ban { address: _ }
-                    | PeerManagerNotification::ConnectionAccepted { address: _ } => {}
-                    PeerManagerNotification::Heartbeat => break,
-                }
-            }
-        })
-        .await
-        .unwrap();
-    }
-
-    pub async fn wait_for_connection_accepted(&mut self, address: SocketAddress) {
-        time::timeout(LONG_TIMEOUT, async {
-            loop {
-                match self.peer_mgr_notification_rx.recv().await.unwrap() {
-                    PeerManagerNotification::BanScoreAdjustment {
-                        address: _,
-                        new_score: _,
-                    }
-                    | PeerManagerNotification::Ban { address: _ }
-                    | PeerManagerNotification::Heartbeat => {}
-                    | PeerManagerNotification::ConnectionAccepted {
-                        address: accepted_peer_address,
-                    } => {
-                        if accepted_peer_address == address {
-                            break;
-                        }
-                    }
-                }
-            }
-        })
-        .await
-        .unwrap();
     }
 
     pub async fn get_peers_info(&self) -> TestPeersInfo {
