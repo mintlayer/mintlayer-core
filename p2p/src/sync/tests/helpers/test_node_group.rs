@@ -93,9 +93,6 @@ impl TestNodeGroup {
     /// Receive a SyncMessage from any peer for which delay_sync_messages_from is set to false.
     /// Panic if a timeout occurs.
     async fn receive_next_sync_message(&mut self) -> SyncMessageWithNodeIdx {
-        // TODO: is there a better way to perform select_all on sync_event_receivers (i.e. without
-        // extra allocations)?
-
         let mut sync_msg_receivers: Vec<_> = self
             .data
             .iter_mut()
@@ -329,10 +326,12 @@ impl TestNodeGroup {
                         | PeerManagerEvent::RemoveReserved(_, _)
                         | PeerManagerEvent::ListBanned(_)
                         | PeerManagerEvent::Ban(_, _)
-                        | PeerManagerEvent::Unban(_, _) => {
+                        | PeerManagerEvent::Unban(_, _)
+                        | PeerManagerEvent::GenericQuery(_) => {
                             panic!("Unexpected peer manager event: {peer_event:?}");
                         }
                         PeerManagerEvent::NewTipReceived { .. }
+                        | PeerManagerEvent::NewLocalTip(_)
                         | PeerManagerEvent::NewValidTransactionReceived { .. } => {
                             // Ignored
                         }

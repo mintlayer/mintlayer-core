@@ -18,9 +18,9 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::types::peer_address::PeerAddress;
 
 // IPv4 addresses grouped into /16 subnets
-const IPV4_GROUP_BYTES: usize = 2;
+pub const IPV4_GROUP_BYTES: usize = 2;
 // IPv6 addresses grouped into /32 subnets
-const IPV6_GROUP_BYTES: usize = 4;
+pub const IPV6_GROUP_BYTES: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AddressGroup {

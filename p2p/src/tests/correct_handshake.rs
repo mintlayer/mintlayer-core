@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::assert_matches;
 
 use crate::{
@@ -22,6 +23,7 @@ use crate::{
         transport::{BufferedTranscoder, TransportListener, TransportSocket},
         types::{HandshakeMessage, Message, P2pTimestamp},
     },
+    peer_manager::PeerManagerQueryInterface,
     testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
@@ -37,12 +39,15 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let mut test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        time_getter.get_time_getter(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
     )
@@ -68,9 +73,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_time(
-                test_node.time_getter().get_time_getter().get_time(),
-            ),
+            current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
         }))
         .await
         .unwrap();
@@ -116,12 +119,15 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let mut test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        time_getter.get_time_getter(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
     )
@@ -141,9 +147,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_time(
-                test_node.time_getter().get_time_getter().get_time(),
-            ),
+            current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
             handshake_nonce: 0,
         }))
         .await

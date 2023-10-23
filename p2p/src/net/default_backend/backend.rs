@@ -413,7 +413,10 @@ where
             None => return Ok(()),
         };
 
+        log::debug!("Creating peer {peer_id} after handshake");
+
         if self.is_connection_from_self(connection_info, handshake_nonce)? {
+            log::debug!("Peer {peer_id} is a connection from self");
             return Ok(());
         }
 

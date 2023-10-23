@@ -16,10 +16,11 @@
 //! Peer manager
 
 pub mod address_groups;
+pub mod dns_seed;
 pub mod peer_context;
 pub mod peerdb;
 pub mod peerdb_common;
-mod peers_eviction;
+pub mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -36,8 +37,8 @@ use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
 use common::{
-    chain::{config::ChainType, ChainConfig},
-    primitives::time::duration_to_int,
+    chain::ChainConfig,
+    primitives::time::{duration_to_int, Time},
     time_getter::TimeGetter,
 };
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
@@ -70,29 +71,33 @@ use crate::{
 };
 
 use self::{
+    dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
 };
 
 /// Desired number of full relay outbound connections.
 /// This value is constant because users should not change this.
-const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
+pub const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
 
 /// Desired number of block relay outbound connections (two permanent and one temporary).
 /// This value is constant because users should not change this.
-const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
+pub const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
 
 /// Desired number of automatic outbound connections
-const OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT: usize =
+pub const OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT: usize =
     OUTBOUND_FULL_RELAY_COUNT + OUTBOUND_BLOCK_RELAY_COUNT;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
-const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
+pub const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 /// How often resend own address to a specific peer (on average)
 const RESEND_OWN_ADDRESS_TO_PEER_PERIOD: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// The interval at which to contact DNS seed servers.
+pub const PEER_MGR_DNS_RELOAD_INTERVAL: Duration = Duration::from_secs(60);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
@@ -111,14 +116,6 @@ const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 // Use the same parameters as Bitcoin Core (last 5000 addresses)
 const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
 const PEER_ADDRESSES_ROLLING_BLOOM_FPP: f64 = 0.001;
-
-/// Hardcoded seed DNS hostnames
-// TODO: Replace with actual values
-const DNS_SEEDS_MAINNET: [&str; 0] = [];
-const DNS_SEEDS_TESTNET: [&str; 1] = ["testnet-seed.mintlayer.org"];
-
-/// Maximum number of records accepted in a single DNS server response
-const MAX_DNS_RECORDS: usize = 10;
 
 enum OutboundConnectType {
     /// OutboundBlockRelay or OutboundFullRelay
@@ -174,8 +171,15 @@ where
 
     peer_eviction_random_state: peers_eviction::RandomState,
 
+    /// Last time when a new tip was received or produced locally.
+    last_tip_block_time: Time,
+
     /// PeerManager's observer for use by tests.
     observer: Option<Box<dyn Observer + Send>>,
+
+    /// Normally, this will be DefaultDnsSeed, which performs the actual address lookup, but tests can
+    /// substitute it with a mock implementation.
+    dns_seed: Box<dyn DnsSeed>,
 }
 
 /// Takes IP or socket address and converts it to socket address (adding the default peer port if IP address is used)
@@ -200,18 +204,19 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
-        Self::new_with_observer(
-            chain_config,
-            p2p_config,
+        Self::new_generic(
+            chain_config.clone(),
+            p2p_config.clone(),
             handle,
             peer_mgr_event_rx,
             time_getter,
             peerdb_storage,
             None,
+            Box::new(DefaultDnsSeed::new(chain_config, p2p_config)),
         )
     }
 
-    pub fn new_with_observer(
+    pub fn new_generic(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
@@ -219,6 +224,7 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
         observer: Option<Box<dyn Observer + Send>>,
+        dns_seed: Box<dyn DnsSeed + Send>,
     ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
         let peerdb = peerdb::PeerDb::new(
@@ -227,6 +233,7 @@ where
             time_getter.clone(),
             peerdb_storage,
         )?;
+        let now = time_getter.get_time();
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
         assert!(!p2p_config.ping_timeout.is_zero());
         Ok(PeerManager {
@@ -241,7 +248,9 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
+            last_tip_block_time: now,
             observer,
+            dns_seed,
         })
     }
 
@@ -817,6 +826,10 @@ where
             self.peerdb.set_anchors(anchor_addresses);
         }
 
+        if let Some(o) = self.observer.as_mut() {
+            o.on_connection_acccepted(address)
+        }
+
         Ok(())
     }
 
@@ -865,10 +878,19 @@ where
             log::debug!("connection rejected for peer {peer_id}: {accept_err}");
 
             // Disconnect should always succeed unless the node is shutting down.
-            // Calling expect here is fine because PeerManager will stop before the backend.
-            self.peer_connectivity_handle
-                .disconnect(peer_id)
-                .expect("disconnect failed unexpectedly");
+            // But at this moment there is a possibility for backend to be shut down
+            // before peer manager, at least in tests, so we don't "expect" and log
+            // the error instead.
+            // TODO: investigate why peer manager can be shut down before the backend (it shouldn't
+            // be this way according to an earlier comment).
+            // TODO: we probably shouldn't use "log::error" if the error happened during
+            // shutdown. Probably, peer manager should accept the "shutdown" flag, like other
+            // p2p components do, and ignore/log::info the errors it it's set (this also applies
+            // to other places, search for "log::error" in this file).
+            let disconnect_result = self.peer_connectivity_handle.disconnect(peer_id);
+            if let Err(err) = disconnect_result {
+                log::error!("disconnect failed unexpectedly: {err:?}");
+            }
 
             match peer_role {
                 PeerRole::Inbound => {}
@@ -973,49 +995,10 @@ where
 
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn reload_dns_seed(&mut self) {
-        let dns_seed = match self.chain_config.chain_type() {
-            ChainType::Mainnet => DNS_SEEDS_MAINNET.as_slice(),
-            ChainType::Testnet => DNS_SEEDS_TESTNET.as_slice(),
-            ChainType::Regtest | ChainType::Signet => &[],
-        };
-
-        if dns_seed.is_empty() {
-            return;
+        let addresses = self.dns_seed.obtain_addresses().await;
+        for addr in addresses {
+            self.peerdb.peer_discovered(addr);
         }
-
-        log::debug!("Resolve DNS seed...");
-        let results = futures::future::join_all(
-            dns_seed
-                .iter()
-                .map(|host| tokio::net::lookup_host((*host, self.chain_config.p2p_port()))),
-        )
-        .await;
-
-        let mut total = 0;
-        for result in results {
-            match result {
-                Ok(list) => {
-                    list.filter_map(|addr| {
-                        SocketAddress::from_peer_address(
-                            // Convert SocketAddr to PeerAddress
-                            &addr.into(),
-                            *self.p2p_config.allow_discover_private_ips,
-                        )
-                    })
-                    // Randomize selection because records can be sorted by type (A and AAAA)
-                    .choose_multiple(&mut make_pseudo_rng(), MAX_DNS_RECORDS)
-                    .into_iter()
-                    .for_each(|addr| {
-                        total += 1;
-                        self.peerdb.peer_discovered(addr);
-                    });
-                }
-                Err(err) => {
-                    log::error!("resolve DNS seed failed: {err}");
-                }
-            }
-        }
-        log::debug!("DNS seed records found: {total}");
     }
 
     fn automatic_outbound_peers(&self) -> BTreeSet<SocketAddress> {
@@ -1075,6 +1058,10 @@ where
         }
 
         self.try_evict_block_relay_peer();
+
+        if let Some(o) = self.observer.as_mut() {
+            o.on_heartbeat();
+        }
     }
 
     fn handle_incoming_message(&mut self, peer: PeerId, message: PeerManagerMessage) {
@@ -1242,14 +1229,21 @@ where
                 response.send(Ok(()));
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
+                log::debug!("new tip {block_id} received from peer {peer_id}",);
+
+                self.last_tip_block_time = self.time_getter.get_time();
+
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("new tip {block_id} received from peer {peer_id}",);
-                    peer.last_tip_block_time = Some(self.time_getter.get_time());
+                    peer.last_tip_block_time = Some(self.last_tip_block_time);
                 }
             }
+            PeerManagerEvent::NewLocalTip(_) => {
+                self.last_tip_block_time = self.time_getter.get_time();
+            }
             PeerManagerEvent::NewValidTransactionReceived { peer_id, txid } => {
+                log::debug!("new transaction {txid} received from peer {peer_id}",);
+
                 if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    log::debug!("new transaction {txid} received from peer {peer_id}",);
                     peer.last_tx_time = Some(self.time_getter.get_time());
                 }
             }
@@ -1286,6 +1280,9 @@ where
             PeerManagerEvent::Unban(address, response) => {
                 self.peerdb.unban(&address);
                 response.send(Ok(()));
+            }
+            PeerManagerEvent::GenericQuery(query_func) => {
+                query_func(self);
             }
         }
     }
@@ -1480,6 +1477,10 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
+        // TNote: bitcoin core also uses "3 * block_spacing" for stale tip detection (but their
+        // "block spacing" is 10 min instead of out 2).
+        let stale_tip_time_diff = *self.chain_config.target_block_spacing() * 3;
+
         if let Some(chan) = loop_started_tx {
             chan.send(());
         }
@@ -1530,13 +1531,15 @@ where
                 heartbeat_call_needed = false;
             }
 
+            let time_since_last_tip = (now - self.last_tip_block_time).unwrap_or(Duration::ZERO);
+
             // Reload DNS if there are no outbound connections
             if now >= next_dns_reload
-                && self.peers.is_empty()
                 && self.pending_outbound_connects.is_empty()
+                && (self.peers.is_empty() || time_since_last_tip > stale_tip_time_diff)
             {
                 self.reload_dns_seed().await;
-                next_dns_reload = (now + Duration::from_secs(60))
+                next_dns_reload = (now + PEER_MGR_DNS_RELOAD_INTERVAL)
                     .expect("Times derived from local clock; cannot fail");
                 heartbeat_call_needed = true;
             }
@@ -1575,11 +1578,6 @@ where
     }
 
     #[cfg(test)]
-    pub fn peers(&self) -> &BTreeMap<PeerId, PeerContext> {
-        &self.peers
-    }
-
-    #[cfg(test)]
     pub fn peerdb(&self) -> &peerdb::PeerDb<S> {
         &self.peerdb
     }
@@ -1588,6 +1586,27 @@ where
 pub trait Observer {
     fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32);
     fn on_peer_ban(&mut self, address: BannableAddress);
+    // This will be called at the end of "heartbeat" function.
+    fn on_heartbeat(&mut self);
+    // This will be called for both incoming and outgoing connections.
+    fn on_connection_acccepted(&mut self, address: SocketAddress);
+}
+
+pub trait PeerManagerQueryInterface {
+    #[cfg(test)]
+    fn peers(&self) -> &BTreeMap<PeerId, PeerContext>;
+}
+
+impl<T, S> PeerManagerQueryInterface for PeerManager<T, S>
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    S: PeerDbStorage,
+{
+    #[cfg(test)]
+    fn peers(&self) -> &BTreeMap<PeerId, PeerContext> {
+        &self.peers
+    }
 }
 
 #[cfg(test)]

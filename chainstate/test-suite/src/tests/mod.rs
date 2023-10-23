@@ -61,4 +61,4 @@ mod tx_verifier_disconnect;
 
 mod helpers;
 
-type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
+type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight, BlockSource)>>>;

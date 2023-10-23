@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::assert_matches;
 
 use crate::{
@@ -35,12 +36,15 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let mut test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        time_getter.get_time_getter(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
     )
@@ -101,12 +105,15 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let mut test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        time_getter.get_time_getter(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
     )

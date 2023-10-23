@@ -157,6 +157,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
+        log::debug!("cur time in chainstate is {:?}", time_getter.get_time());
+
         let best_block_id = chainstate_storage
             .get_best_block_id()
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))
@@ -271,12 +273,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(())
     }
 
-    fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
+    fn broadcast_new_tip_event(
+        &self,
+        new_block_index: &Option<BlockIndex>,
+        block_source: BlockSource,
+    ) {
         match new_block_index {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.block_height();
                 let new_id = *new_block_index.block_id();
-                self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
+                self.events_controller.broadcast(ChainstateEvent::NewTip(
+                    new_id,
+                    new_height,
+                    block_source,
+                ))
             }
             None => (),
         }
@@ -557,7 +567,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             None => result,
         };
 
-        self.broadcast_new_tip_event(&result);
+        self.broadcast_new_tip_event(&result, block_source);
 
         if let Some(ref bi) = result {
             log::info!(

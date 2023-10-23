@@ -50,7 +50,7 @@ pub use tx_verifier;
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
-    NewTip(Id<Block>, BlockHeight),
+    NewTip(Id<Block>, BlockHeight, BlockSource),
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]

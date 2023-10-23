@@ -973,7 +973,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     ) -> Result<(), reorg::ReorgError> {
         log::info!("mempool: Processing chainstate event {evt:?}");
         match evt {
-            chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
+            chainstate::ChainstateEvent::NewTip(block_id, block_height, _) => {
                 self.on_new_tip(block_id, block_height, work_queue)?;
             }
         }

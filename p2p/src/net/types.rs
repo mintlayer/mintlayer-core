@@ -68,7 +68,7 @@ impl PeerRole {
 /// wants to keep the connection open or close it and possibly ban the peer from.
 ///
 /// If new fields are added, make sure they are limited in size.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PeerInfo {
     /// Unique ID of the peer
     pub peer_id: PeerId,

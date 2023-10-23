@@ -369,12 +369,13 @@ fn check_last_event(tf: &mut TestFramework, events: &EventList) {
     let events = events.lock().unwrap();
     assert!(!events.is_empty());
     match events.last() {
-        Some((block_id, block_height)) => {
+        Some((block_id, block_height, block_source)) => {
             let block_index = tf.block_indexes.last().unwrap();
             if tf.is_block_in_main_chain(block_index.block_id()) {
                 // If block not in main chain then it means we didn't receive a new tip event. Nothing to check!
                 assert_eq!(block_id, block_index.block_id());
                 assert_eq!(block_height, &block_index.block_height());
+                assert_eq!(block_source, &BlockSource::Local);
             }
         }
         None => {
@@ -388,8 +389,8 @@ fn subscribe_to_events(tf: &mut TestFramework, events: &EventList) {
     // Event handler
     let subscribe_func = Arc::new(
         move |chainstate_event: ChainstateEvent| match chainstate_event {
-            ChainstateEvent::NewTip(block_id, block_height) => {
-                events.lock().unwrap().push((block_id, block_height));
+            ChainstateEvent::NewTip(block_id, block_height, block_source) => {
+                events.lock().unwrap().push((block_id, block_height, block_source));
                 assert!(!events.lock().unwrap().is_empty());
             }
         },

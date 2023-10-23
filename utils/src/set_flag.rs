@@ -14,6 +14,7 @@
 // limitations under the License.
 
 /// Wrapper for the bool type that can only be set to true
+#[derive(Copy, Clone)]
 pub struct SetFlag(bool);
 
 impl SetFlag {
