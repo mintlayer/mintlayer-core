@@ -597,7 +597,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let max_future_offset = self.chain_config.max_future_block_time_offset();
         let current_time = self.current_time().as_duration_since_epoch();
         let block_timestamp = header.timestamp();
-
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
             CheckBlockError::BlockFromTheFuture,

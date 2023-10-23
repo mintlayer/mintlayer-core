@@ -39,14 +39,15 @@ use crate::{
 };
 
 // In these tests we want to create nodes in different "address groups" to ensure that
-// the maximum number of connections can be established (peer manager only allows 1 connection
-// per address group). To do so we must use ip addresses with distinct higher bytes and only
-// the channel-based transport allows to use arbitrary ip addresses.
+// the maximum number of connections can be established (peer manager normally won't allow more
+// than 1 outbound connection per address group). To do so we must use ip addresses with distinct
+// higher bytes; only the channel-based transport allows to use arbitrary ip addresses, so we
+// have to use it.
 type Transport = <TestTransportChannel as TestTransportMaker>::Transport;
 
 // Test scenario:
 // 1) Create a set of nodes; the number of nodes is equal to the maximum number of connections
-// that a single node can establish.
+// that a single node can establish plus 1.
 // The nodes start with a fresh block, so they are not in IBD.
 // 2) Announce nodes' addresses via the dns seed; the nodes should connect to each other.
 // 3) Wait for one hour; the initial block is now stale, but the nodes are still connected
@@ -69,7 +70,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let two_hours = Duration::from_secs(60 * 60 * 2);
     let p2p_config = Arc::new(make_p2p_config(
-        // Note: we'll be moving mocked time forward by 1 hour once and by by smaller intervals
+        // Note: we'll be moving mocked time forward by 1 hour once and by smaller intervals
         // multiple times; because of this, nodes may see each other as dead or as having invalid
         // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
         // and clock diff.
@@ -78,7 +79,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
         two_hours.into(),
     ));
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL;
+    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     let initial_block = make_new_block(
@@ -193,7 +194,7 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let two_hours = Duration::from_secs(60 * 60 * 2);
     let p2p_config = Arc::new(make_p2p_config(
-        // Note: we'll be moving mocked time forward by 1 hour once and by by smaller intervals
+        // Note: we'll be moving mocked time forward by 1 hour once and by smaller intervals
         // multiple times; because of this, nodes may see each other as dead or as having invalid
         // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
         // and clock diff.
@@ -202,7 +203,7 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
         two_hours.into(),
     ));
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL;
+    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     for i in 0..nodes_count {

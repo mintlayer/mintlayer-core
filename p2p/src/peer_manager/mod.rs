@@ -1478,8 +1478,8 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
-        // TNote: bitcoin core also uses "3 * block_spacing" for stale tip detection (but their
-        // "block spacing" is 10 min instead of out 2).
+        // Note: bitcoin core also uses "3 * block_spacing" for stale tip detection, but their
+        // "block spacing" is 10 min instead of out 2. TODO: should we use bigger time diff?
         let stale_tip_time_diff = *self.chain_config.target_block_spacing() * 3;
 
         if let Some(chan) = loop_started_tx {

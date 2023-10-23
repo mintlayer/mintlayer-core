@@ -136,11 +136,6 @@ where
         let time_diff =
             std::cmp::max(local_time, remote_time) - std::cmp::min(local_time, remote_time);
 
-        log::debug!(
-            "time_diff is {time_diff:?}, max_clock_diff is {:?}",
-            *p2p_config.max_clock_diff
-        );
-
         utils::ensure!(
             time_diff <= *p2p_config.max_clock_diff,
             P2pError::PeerError(PeerError::TimeDiff(time_diff))

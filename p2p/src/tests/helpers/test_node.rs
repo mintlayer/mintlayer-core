@@ -76,8 +76,8 @@ where
 }
 
 // This is what's left of a test node after it has been stopped.
-// TODO: this is kind of ugly; instead of examining the remnants, tests should be able to observe
-// the innards of the p2p components (such as the peer db) on the fly.
+// TODO: it should be possible to use PeerManagerEvent::GenericQuery to examine peer manager's
+// internals on the fly.
 pub struct TestNodeRemnants<Transport>
 where
     Transport: TransportSocket,

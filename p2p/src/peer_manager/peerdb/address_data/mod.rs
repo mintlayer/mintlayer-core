@@ -42,7 +42,6 @@ const PURGE_REACHABLE_FAIL_COUNT: u32 =
 /// -ln(0.0000000000000035527136788) which is about 33.
 const MAX_DELAY_FACTOR: u32 = 30;
 
-#[derive(Debug)]
 pub enum AddressState {
     Connected {},
 
@@ -84,7 +83,6 @@ pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
     AddressStateTransitionTo::UnsetReserved,
 ];
 
-#[derive(Debug)]
 pub struct AddressData {
     state: AddressState,
 

@@ -157,8 +157,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
-        log::debug!("cur time in chainstate is {:?}", time_getter.get_time());
-
         let best_block_id = chainstate_storage
             .get_best_block_id()
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))

@@ -24,7 +24,7 @@ use crate::{
     utils::rate_limiter::RateLimiter,
 };
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct SentPing {
     pub nonce: u64,
     pub timestamp: Time,
