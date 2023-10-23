@@ -29,8 +29,8 @@ use crate::{
     config::{MaxClockDiff, P2pConfig, PingTimeout, SyncStallingTimeout},
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, peers_eviction::PRESERVED_INBOUND_COUNT_TOTAL,
-        OUTBOUND_BLOCK_RELAY_COUNT, OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT, OUTBOUND_FULL_RELAY_COUNT,
+        self, address_groups::AddressGroup, OUTBOUND_BLOCK_RELAY_COUNT,
+        OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT, OUTBOUND_FULL_RELAY_COUNT,
         PEER_MGR_DNS_RELOAD_INTERVAL, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
     },
     sync::test_helpers::make_new_block,
@@ -46,8 +46,8 @@ use crate::{
 type Transport = <TestTransportChannel as TestTransportMaker>::Transport;
 
 // Test scenario:
-// 1) Create a set of nodes; the number of nodes is equal to the maximum number of connections
-// that a single node can establish plus 1.
+// 1) Create a set of nodes; the number of nodes is equal to the maximum number of outbound
+// connections that a single node can establish plus 1.
 // The nodes start with a fresh block, so they are not in IBD.
 // 2) Announce nodes' addresses via the dns seed; the nodes should connect to each other.
 // 3) Wait for one hour; the initial block is now stale, but the nodes are still connected
@@ -79,7 +79,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
         two_hours.into(),
     ));
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL + 1;
+    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     let initial_block = make_new_block(
@@ -203,7 +203,7 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
         two_hours.into(),
     ));
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + PRESERVED_INBOUND_COUNT_TOTAL + 1;
+    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     for i in 0..nodes_count {
