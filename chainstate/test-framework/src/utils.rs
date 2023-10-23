@@ -91,32 +91,54 @@ pub fn create_utxo_data(
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(InputWitness, TxInput, TxOutput)> {
-    let new_output = match get_output_value(output)? {
-        OutputValue::Coin(output_value) => {
-            let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
-            let new_value = (output_value - spent_value).unwrap();
-            utils::ensure!(new_value >= Amount::from_atoms(1));
-            TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
-        }
-        OutputValue::TokenV0(token_data) => match &*token_data {
-            TokenData::TokenTransfer(_transfer) => {
-                TxOutput::Transfer(OutputValue::TokenV0(token_data), anyonecanspend_address())
-            }
-            TokenData::TokenIssuance(issuance) => {
-                new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
-            }
-            TokenData::NftIssuance(_issuance) => {
-                new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
-            }
-        },
-        OutputValue::TokenV1(_, _) => unimplemented!(),
-    };
+    match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => {
+            let new_output = match v {
+                OutputValue::Coin(output_value) => {
+                    let spent_value =
+                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                    let new_value = (*output_value - spent_value).unwrap();
+                    utils::ensure!(new_value >= Amount::from_atoms(1));
+                    TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
+                }
+                OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                    TokenData::TokenTransfer(_transfer) => TxOutput::Transfer(
+                        OutputValue::TokenV0(token_data.clone()),
+                        anyonecanspend_address(),
+                    ),
+                    TokenData::TokenIssuance(issuance) => {
+                        new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
+                    }
+                    TokenData::NftIssuance(_issuance) => {
+                        new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
+                    }
+                },
+                OutputValue::TokenV1(token_id, output_value) => {
+                    let spent_value =
+                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                    let new_value = (*output_value - spent_value).unwrap();
+                    utils::ensure!(new_value >= Amount::from_atoms(1));
+                    TxOutput::Transfer(
+                        OutputValue::TokenV1(*token_id, new_value),
+                        anyonecanspend_address(),
+                    )
+                }
+            };
 
-    Some((
-        empty_witness(rng),
-        TxInput::from_utxo(outsrc, index as u32),
-        new_output,
-    ))
+            Some((
+                empty_witness(rng),
+                TxInput::from_utxo(outsrc, index as u32),
+                new_output,
+            ))
+        }
+        TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _) => None,
+    }
 }
 
 /// Given an output as in input creates multiple new random outputs.

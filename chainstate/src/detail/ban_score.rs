@@ -529,6 +529,9 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::NotEnoughCirculatingSupplyToUnmint(_, _, _) => 100,
             tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 100,
             tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
+            tokens_accounting::Error::CannotUnlockNotLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoMintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoUnmintForLockedSupplyOnReversal(_) => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
         }

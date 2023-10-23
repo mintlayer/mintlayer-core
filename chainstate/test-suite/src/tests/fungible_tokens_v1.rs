@@ -1245,7 +1245,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
     });
 }
 
-// Issue a token and type to mint from different account types.
+// Issue a token and try to mint from different account types.
 // Mint from TokenCirculatingSupply and check an error.
 // Mint from TokenLockSupply and check an error.
 // Mint from TokenTotalSupply and check ok.
@@ -2509,6 +2509,81 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
     });
 }
 
+// Issue a token and mint some.
+// Create a tx with minting some amount and unminting some amount of tokens.
+// Check the resulting circulating supply.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_unmint_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1000..100_000));
+        let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
+
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Unlimited);
+
+        // Mint some tokens
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        // Mint and unmint in the same tx
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::UnmintTokens(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_unmint,
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check the storage
+        let expected_supply = (amount_to_mint * 2).and_then(|v| v - amount_to_unmint).unwrap();
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some(expected_supply));
+    });
+}
+
 // Produce `genesis -> a -> b`.
 // Block `a` issues a token while block `b` mints some tokens.
 // Then produce parallel chain `genesis -> c -> d -> e`.
@@ -2523,28 +2598,27 @@ fn reorg_test_simple(#[case] seed: Seed) {
         let mut tf = make_test_framework_with_v1(&mut rng);
         let genesis_block_id = tf.best_block_id();
 
-        // Create block `b` with token issuance
-
+        // Create block `a` with token issuance
         let token_issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited);
-        let (token_id, block_b_id, block_b_change_utxo) = issue_token_from_block(
+        let (token_id, block_a_id, block_a_change_utxo) = issue_token_from_block(
             &mut tf,
             genesis_block_id,
             UtxoOutPoint::new(genesis_block_id.into(), 0),
             token_issuance.clone(),
         );
-        assert_eq!(tf.best_block_id(), block_b_id);
+        assert_eq!(tf.best_block_id(), block_a_id);
 
-        // Create block `c` with token minting
+        // Create block `b` with token minting
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
-        let (block_c_id, _) = mint_tokens_in_block(
+        let (block_b_id, _) = mint_tokens_in_block(
             &mut tf,
-            block_b_id.into(),
-            block_b_change_utxo,
+            block_a_id.into(),
+            block_a_change_utxo,
             token_id,
             amount_to_mint,
             false,
         );
-        assert_eq!(tf.best_block_id(), block_c_id);
+        assert_eq!(tf.best_block_id(), block_b_id);
 
         // Check the storage
         let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
@@ -2674,6 +2748,223 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
     });
 }
 
+// Produce `genesis -> a -> b -> c`.
+// Block `a` issues a tokens from and block `b` mints some.
+// Block `c` mints and unmints in the same tx.
+// Then produce parallel chain `genesis -> a -> b -> d -> e`.
+// Check the storage
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_mint_unmint_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let genesis_block_id = tf.best_block_id();
+
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        // Note: the values for mint/unmint are important because we want to check undo order.
+        // Consider an example when the first mint is 10, second mint is 20 and unmint is 25.
+        // If second mint and unmint done in a single block the value of circulating supply can get
+        // below 0 depending on the order of undos.
+        let first_mint = Amount::from_atoms(rng.gen_range(1000..100_000));
+        let second_mint = Amount::from_atoms(rng.gen_range(100_000..1_000_000));
+        let amount_to_unmint =
+            Amount::from_atoms(rng.gen_range(
+                second_mint.into_atoms()..(first_mint + second_mint).unwrap().into_atoms(),
+            ));
+
+        let token_issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited);
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            token_issuance.clone(),
+        );
+
+        // Mint some tokens
+        let best_block_id = tf.best_block_id();
+        let (block_b_id, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            first_mint,
+            true,
+        );
+
+        // Mint and unmint in the same tx
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::MintTokens(token_id, second_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::UnmintTokens(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::TokenV1(
+                        token_id,
+                        amount_to_unmint,
+                    )))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check the storage
+        let expected_supply =
+            (first_mint + second_mint).and_then(|v| v - amount_to_unmint).unwrap();
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(token_issuance.clone().into()),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id, expected_supply)]),
+        };
+        assert_eq!(actual_data, expected_data);
+
+        // Add blocks from genesis to trigger the reorg
+        let block_e_id = tf.create_chain(&block_b_id.into(), 2, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(token_issuance.into()),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id, first_mint)]),
+        };
+        assert_eq!(actual_data, expected_data);
+    });
+}
+
+// Produce `genesis -> a -> b -> c`.
+// Block `a` issues a tokens from and block `b` mints some.
+// Block `c` mints and locks supply in the same tx.
+// Then produce parallel chain `genesis -> a -> b -> d -> e`.
+// Check the storage
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_mint_lock_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+        let genesis_block_id = tf.best_block_id();
+
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let first_mint = Amount::from_atoms(rng.gen_range(1000..100_000));
+        let second_mint = Amount::from_atoms(rng.gen_range(100_000..1_000_000));
+
+        let token_issuance = make_issuance(&mut rng, TokenTotalSupply::Lockable);
+        let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            token_issuance.clone(),
+        );
+
+        // Mint some tokens
+        let best_block_id = tf.best_block_id();
+        let (block_b_id, mint_tx_id) = mint_tokens_in_block(
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            first_mint,
+            true,
+        );
+
+        // Mint and lock in the same tx. The order is important to test undo
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(1),
+                            AccountOp::MintTokens(token_id, second_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_account(
+                            AccountNonce::new(2),
+                            AccountOp::LockTokenSupply(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_supply_change_fee)))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Check the storage
+        let expected_supply = (first_mint + second_mint).unwrap();
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let locked_data: tokens_accounting::FungibleTokenData = token_issuance.clone().into();
+        let locked_data = locked_data.try_lock().unwrap();
+        assert!(locked_data.is_locked());
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(locked_data),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id, expected_supply)]),
+        };
+        assert_eq!(actual_data, expected_data);
+
+        // Add blocks from genesis to trigger the reorg
+        let block_e_id = tf.create_chain(&block_b_id.into(), 2, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Check the storage
+        let actual_data = tf.storage.read_tokens_accounting_data().unwrap();
+        let expected_data = tokens_accounting::TokensAccountingData {
+            token_data: BTreeMap::from_iter([(
+                token_id,
+                tokens_accounting::TokenData::FungibleToken(token_issuance.into()),
+            )]),
+            circulating_supply: BTreeMap::from_iter([(token_id, first_mint)]),
+        };
+        assert_eq!(actual_data, expected_data);
+    });
+}
 // Issue a token.
 // Try to mint without providing input signatures, check an error.
 // Try to mint with random keys, check an error.

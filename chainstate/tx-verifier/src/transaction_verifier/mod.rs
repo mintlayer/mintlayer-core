@@ -727,7 +727,7 @@ where
             block_undo_fetcher,
         )?;
         if let Some(undos) = undos {
-            undos.into_inner().into_iter().try_for_each(|undo| {
+            undos.into_inner().into_iter().rev().try_for_each(|undo| {
                 self.pos_accounting_adapter.operations(tx_source).undo(undo)
             })?;
         }
@@ -900,6 +900,7 @@ where
             undos
                 .into_inner()
                 .into_iter()
+                .rev()
                 .try_for_each(|undo| self.tokens_accounting_cache.undo(undo))?;
         }
 

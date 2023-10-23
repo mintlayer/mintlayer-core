@@ -208,20 +208,51 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
                 self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
                 Ok(())
             }
-            TokenAccountingUndo::MintTokens(undo) => self
-                .data
-                .circulating_supply
-                .sub_unsigned(undo.id, undo.amount_to_add)
-                .map_err(Error::AccountingError),
-            TokenAccountingUndo::UnmintTokens(undo) => self
-                .data
-                .circulating_supply
-                .add_unsigned(undo.id, undo.amount_to_burn)
-                .map_err(Error::AccountingError),
-            TokenAccountingUndo::LockSupply(undo) => {
-                let _ = self
+            TokenAccountingUndo::MintTokens(undo) => {
+                let data = self
                     .get_token_data(&undo.id)?
                     .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if data.is_locked() {
+                            return Err(Error::CannotUndoMintForLockedSupplyOnReversal(undo.id));
+                        }
+                    }
+                };
+
+                self.data
+                    .circulating_supply
+                    .sub_unsigned(undo.id, undo.amount_to_add)
+                    .map_err(Error::AccountingError)
+            }
+            TokenAccountingUndo::UnmintTokens(undo) => {
+                let data = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if data.is_locked() {
+                            return Err(Error::CannotUndoUnmintForLockedSupplyOnReversal(undo.id));
+                        }
+                    }
+                };
+
+                self.data
+                    .circulating_supply
+                    .add_unsigned(undo.id, undo.amount_to_burn)
+                    .map_err(Error::AccountingError)
+            }
+            TokenAccountingUndo::LockSupply(undo) => {
+                let data = self
+                    .get_token_data(&undo.id)?
+                    .ok_or(Error::TokenDataNotFoundOnReversal(undo.id))?;
+                match data {
+                    TokenData::FungibleToken(data) => {
+                        if !data.is_locked() {
+                            return Err(Error::CannotUnlockNotLockedSupplyOnReversal(undo.id));
+                        }
+                    }
+                };
                 self.data.token_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
                 Ok(())
             }

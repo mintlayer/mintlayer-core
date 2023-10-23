@@ -43,6 +43,12 @@ pub enum Error {
     SupplyIsAlreadyLocked(TokenId),
     #[error("Cannot lock supply for a token '{0}` with not lockable supply type")]
     CannotLockNotLockableSupply(TokenId),
+    #[error("Cannot unlock supply on reversal for a token '{0}` with is not locked")]
+    CannotUnlockNotLockedSupplyOnReversal(TokenId),
+    #[error("Cannot undo mint on reversal for a token '{0}` with locked supply")]
+    CannotUndoMintForLockedSupplyOnReversal(TokenId),
+    #[error("Cannot undo unmint on reversal for a token '{0}` with locked supply")]
+    CannotUndoUnmintForLockedSupplyOnReversal(TokenId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811
