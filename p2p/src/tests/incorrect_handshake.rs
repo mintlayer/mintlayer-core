@@ -28,7 +28,7 @@ use crate::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, PeerManagerNotification, TestNode},
+    tests::helpers::{timeout, TestNode},
 };
 
 async fn incorrect_handshake_outgoing<TTM>()
@@ -133,13 +133,7 @@ where
 
     // This is mainly needed to ensure that the corresponding event reaches peer manager before
     // we end the test.
-    assert_matches!(
-        test_node.expect_peer_mgr_notification().await,
-        PeerManagerNotification::BanScoreAdjustment {
-            address: _,
-            new_score: _
-        }
-    );
+    test_node.wait_for_ban_score_adjustment().await;
 
     // The peer address should be banned.
     let test_node_remnants = test_node.join().await;

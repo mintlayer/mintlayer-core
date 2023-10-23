@@ -68,7 +68,7 @@ pub struct MpscChannelTransport {
 
 impl MpscChannelTransport {
     pub fn new() -> Self {
-        Self::new_with_addr_in_group(0, 32)
+        Self::new_with_addr_in_group(0, 0)
     }
 
     /// Create a new transport with a local address in the specified "group", which is represented
