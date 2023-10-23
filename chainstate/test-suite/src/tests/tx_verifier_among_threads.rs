@@ -22,6 +22,7 @@ use common::{
 use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utxo::{Utxo, UtxosView};
 
@@ -105,6 +106,26 @@ impl PoSAccountingView for EmptyAccountingView {
     }
 }
 
+struct EmptyTokensAccountingView;
+
+impl TokensAccountingView for EmptyTokensAccountingView {
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        _id: &common::chain::tokens::TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        Ok(None)
+    }
+
+    fn get_circulating_supply(
+        &self,
+        _id: &common::chain::tokens::TokenId,
+    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
+        Ok(None)
+    }
+}
+
 /// This test proves that a transaction verifier with this structure can be moved among threads
 #[rstest]
 #[trace]
@@ -120,12 +141,14 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
 
         let utxos = EmptyUtxosView {};
         let accounting = EmptyAccountingView {};
+        let tokens_accounting = EmptyTokensAccountingView {};
 
         let verifier = TransactionVerifier::new_generic(
             &storage,
             &chain_config,
             utxos,
             accounting,
+            tokens_accounting,
             TransactionVerifierConfig::new(false),
         );
 

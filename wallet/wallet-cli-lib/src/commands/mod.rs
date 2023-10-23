@@ -793,7 +793,7 @@ impl CommandHandler {
 
             WalletCommand::IssueNewToken {
                 token_ticker,
-                amount_to_issue,
+                amount_to_issue: _,
                 number_of_decimals,
                 metadata_uri,
                 destination_address,
@@ -805,7 +805,6 @@ impl CommandHandler {
                     ))
                 );
 
-                let amount_to_issue = parse_token_amount(number_of_decimals, &amount_to_issue)?;
                 let destination_address = parse_address(chain_config, &destination_address)?;
 
                 let token_id = self
@@ -814,9 +813,11 @@ impl CommandHandler {
                     .issue_new_token(
                         destination_address,
                         token_ticker.into_bytes(),
-                        amount_to_issue,
                         number_of_decimals,
                         metadata_uri.into_bytes(),
+                        // TODO: add support for tokens v1
+                        // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                        common::chain::tokens::TokenTotalSupply::Unlimited,
                     )
                     .await
                     .map_err(WalletCliError::Controller)?;
@@ -828,15 +829,15 @@ impl CommandHandler {
             }
 
             WalletCommand::IssueNewNft {
-                creator,
+                destination_address,
+                media_hash,
                 name,
                 description,
                 ticker,
+                creator,
                 icon_uri,
-                additional_metadata_uri,
                 media_uri,
-                media_hash,
-                destination_address,
+                additional_metadata_uri,
             } => {
                 let destination_address = parse_address(chain_config, &destination_address)?;
 

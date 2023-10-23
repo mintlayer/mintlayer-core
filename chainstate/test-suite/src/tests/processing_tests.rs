@@ -39,7 +39,7 @@ use common::{
         output_value::OutputValue,
         timelock::OutputTimeLock,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        OutputSpentState, PoolId, TxInput, TxOutput, UpgradeVersion,
+        OutputSpentState, PoolId, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -703,25 +703,19 @@ fn consensus_type(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, ConsensusUpgrade::IgnoreConsensus),
         (
             pow,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+            ConsensusUpgrade::PoW {
                 initial_difficulty: min_difficulty.into(),
-            }),
+            },
         ),
-        (
-            ignore_again,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_again, ConsensusUpgrade::IgnoreConsensus),
         (
             pow_again,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+            ConsensusUpgrade::PoW {
                 initial_difficulty: min_difficulty.into(),
-            }),
+            },
         ),
     ];
 
@@ -730,7 +724,7 @@ fn consensus_type(#[case] seed: Seed) {
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
-    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
@@ -902,15 +896,12 @@ fn pow(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, ConsensusUpgrade::IgnoreConsensus),
         (
             pow_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+            ConsensusUpgrade::PoW {
                 initial_difficulty: difficulty.into(),
-            }),
+            },
         ),
     ];
 
@@ -919,7 +910,7 @@ fn pow(#[case] seed: Seed) {
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
-    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
@@ -981,15 +972,12 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
 
     let upgrades = vec![
-        (
-            ignore_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (ignore_consensus, ConsensusUpgrade::IgnoreConsensus),
         (
             pow_consensus,
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+            ConsensusUpgrade::PoW {
                 initial_difficulty: difficulty.into(),
-            }),
+            },
         ),
     ];
 
@@ -998,7 +986,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
-    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let chain_config = ConfigBuilder::test_chain().consensus_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf

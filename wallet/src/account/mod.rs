@@ -19,9 +19,9 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::AccountSpending::{self, Delegation};
+use common::chain::AccountOp::{self, SpendDelegationBalance};
 use common::primitives::id::WithId;
-use common::primitives::Idable;
+use common::primitives::{Idable, H256};
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
@@ -33,7 +33,8 @@ use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
-    make_decomission_stake_pool_output, make_stake_output, StakePoolDataArguments,
+    make_decomission_stake_pool_output, make_stake_output, IssueNftArguments,
+    StakePoolDataArguments,
 };
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
@@ -42,7 +43,9 @@ use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
-use common::chain::tokens::{TokenData, TokenId, TokenTransfer};
+use common::chain::tokens::{
+    make_token_id, NftIssuance, NftIssuanceV0, TokenData, TokenId, TokenTransfer,
+};
 use common::chain::{
     AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
     SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -469,7 +472,7 @@ impl Account {
         let amount_with_fee = (amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
         let mut tx_input = TxInput::Account(AccountOutPoint::new(
             nonce,
-            Delegation(delegation_id, amount_with_fee),
+            SpendDelegationBalance(delegation_id, amount_with_fee),
         ));
         // as the input size depends on the amount we specify the fee will also change a bit so
         // loop until it converges.
@@ -488,7 +491,7 @@ impl Account {
 
             tx_input = TxInput::Account(AccountOutPoint::new(
                 nonce,
-                Delegation(delegation_id, new_amount_with_fee),
+                SpendDelegationBalance(delegation_id, new_amount_with_fee),
             ));
 
             let new_input_size = serialization::Encode::encoded_size(&tx_input);
@@ -599,10 +602,72 @@ impl Account {
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
+
+        let tx = self.sign_transaction_from_req(request, db_tx)?;
+        Ok(tx)
+    }
+
+    pub fn create_issue_nft_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        nft_issue_arguments: IssueNftArguments,
+        median_time: BlockTimestamp,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
+        // and then replace it with when we can calculate the pool_id
+        let dummy_token_id = TokenId::new(H256::zero());
+        let dummy_issuance_output = TxOutput::IssueNft(
+            dummy_token_id,
+            Box::new(NftIssuance::V0(NftIssuanceV0 {
+                metadata: nft_issue_arguments.metadata,
+            })),
+            nft_issue_arguments.destination,
+        );
+
+        let request = SendRequest::new().with_outputs([
+            dummy_issuance_output,
+            TxOutput::Burn(OutputValue::Coin(
+                self.chain_config.token_min_issuance_fee(),
+            )),
+        ]);
+        let mut request = self.select_inputs_for_send_request(
+            request,
+            vec![],
+            db_tx,
+            median_time,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+
+        let new_token_id = make_token_id(request.inputs()).ok_or(WalletError::NoUtxos)?;
+
+        // update the dummy_token_id with the new_token_id
+        let old_token_id = request
+            .get_outputs_mut()
+            .iter_mut()
+            .find_map(|output| match output {
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::IssueFungibleToken(_) => None,
+                TxOutput::IssueNft(token_id, _, _) => {
+                    (*token_id == dummy_token_id).then_some(token_id)
+                }
+            })
+            .expect("find output with dummy_pool_id");
+        *old_token_id = new_token_id;
 
         let tx = self.sign_transaction_from_req(request, db_tx)?;
         Ok(tx)
@@ -630,7 +695,9 @@ impl Account {
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::Burn(_)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => panic!("Unexpected UTXO"),
                 };
                 pool_id == utxo_pool_id
             })
@@ -771,7 +838,10 @@ impl Account {
             | TxOutput::CreateDelegationId(d, _)
             | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
-            TxOutput::Burn(_) | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::IssueNft(_, _, d) => Some(d),
+            TxOutput::IssueFungibleToken(_)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _) => None,
         }
     }
 
@@ -866,7 +936,8 @@ impl Account {
             self.output_cache
                 .utxos_with_token_ids(current_block_info, utxo_states, with_locked);
         all_outputs.retain(|_outpoint, (txo, _token_id)| {
-            self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
+            self.is_mine_or_watched(txo)
+                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
         });
         all_outputs
     }
@@ -929,8 +1000,15 @@ impl Account {
                 .get_txo(outpoint)
                 .map_or(false, |txo| self.is_mine_or_watched(txo)),
             TxInput::Account(outpoint) => match outpoint.account() {
-                AccountSpending::Delegation(delegation_id, _) => {
+                AccountOp::SpendDelegationBalance(delegation_id, _) => {
                     self.find_delegation(delegation_id).is_ok()
+                }
+                AccountOp::MintTokens(_, _)
+                | AccountOp::UnmintTokens(_)
+                | AccountOp::LockTokenSupply(_) => {
+                    // TODO: add support for tokens v1
+                    // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                    unimplemented!()
                 }
             },
         });
@@ -1208,7 +1286,9 @@ fn group_outputs<T, Grouped: Clone>(
             }
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
-            TxOutput::CreateDelegationId(_, _) => continue,
+            TxOutput::CreateDelegationId(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
@@ -1220,7 +1300,7 @@ fn group_outputs<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => {
@@ -1232,6 +1312,12 @@ fn group_outputs<T, Grouped: Clone>(
                     }
                     TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {}
                 }
+            }
+            OutputValue::TokenV1(id, amount) => {
+                let total_token_amount =
+                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+
+                combiner(total_token_amount, &output, amount)?;
             }
         }
     }
@@ -1259,7 +1345,9 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                     get_tx_output(&output).clone(),
                 )))
@@ -1270,7 +1358,7 @@ fn group_utxos_for_input<T, Grouped: Clone>(
             OutputValue::Coin(output_amount) => {
                 combiner(&mut coin_grouped, &output, output_amount)?;
             }
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => {
@@ -1297,6 +1385,12 @@ fn group_utxos_for_input<T, Grouped: Clone>(
                         combiner(total_token_amount, &output, Amount::from_atoms(1))?;
                     }
                 }
+            }
+            OutputValue::TokenV1(id, amount) => {
+                let total_token_amount =
+                    tokens_grouped.entry(Currency::Token(id)).or_insert_with(|| init.clone());
+
+                combiner(total_token_amount, &output, amount)?;
             }
         }
     }
@@ -1338,7 +1432,7 @@ fn coin_and_token_output_change_fees(feerate: mempool::FeeRate) -> WalletResult<
 
     let coin_output = TxOutput::Transfer(OutputValue::Coin(Amount::MAX), destination.clone());
     let token_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+        OutputValue::TokenV0(Box::new(TokenData::TokenTransfer(TokenTransfer {
             token_id: TokenId::zero(),
             // TODO: as the  amount is compact there is an edge case where those extra few bytes of
             // size can cause the output fee to be go over the available amount of coins thus not

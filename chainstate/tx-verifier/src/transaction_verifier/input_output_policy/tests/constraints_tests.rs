@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, ops::Range};
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, Destination, NetUpgrades, PoolId,
+        timelock::OutputTimeLock, AccountNonce, AccountOp, Destination, NetUpgrades, PoolId,
         TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
@@ -28,31 +28,20 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    split_value,
+};
 
+use super::outputs_utils::*;
 use super::*;
-
-fn decompose_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
-    let mut remaining = value;
-    let mut result = Vec::new();
-
-    while remaining > 0 {
-        let fraction = rng.gen_range(1..=remaining);
-        result.push(fraction);
-        remaining -= fraction;
-    }
-
-    assert_eq!(value, result.iter().sum());
-
-    result
-}
 
 fn random_input_utxos(
     rng: &mut impl Rng,
     total_input_atoms: u128,
     timelock_range: Range<u64>,
 ) -> Vec<TxOutput> {
-    decompose_value(rng, total_input_atoms)
+    split_value(rng, total_input_atoms)
         .into_iter()
         .map(|v| {
             if rng.gen::<bool>() {
@@ -92,7 +81,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::regtest_with_pos())
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
         chain_config.decommission_pool_maturity_distance(BlockHeight::new(1)).to_int() as u64;
@@ -138,7 +127,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     // try to unlock random value
     {
         let random_additional_value = rng.gen_range(1..100);
-        let timelocked_outputs = decompose_value(&mut rng, staked_atoms - random_additional_value)
+        let timelocked_outputs = split_value(&mut rng, staked_atoms - random_additional_value)
             .iter()
             .map(|atoms| {
                 let random_additional_value = rng.gen_range(0..10u64);
@@ -192,7 +181,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
                 .chain(std::iter::once(decommission_pool_utxo))
                 .collect();
 
-        let timelocked_outputs = decompose_value(&mut rng, staked_atoms)
+        let timelocked_outputs = split_value(&mut rng, staked_atoms)
             .iter()
             .map(|atoms| {
                 let random_additional_distance = rng.gen_range(0..10);
@@ -230,7 +219,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-        .net_upgrades(NetUpgrades::regtest_with_pos())
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let required_maturity_distance =
         chain_config.spend_share_maturity_distance(BlockHeight::new(1)).to_int() as u64;
@@ -252,23 +241,22 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
 
-    // make timelock outputs but total atoms that locked is less then required
+    // make timelock outputs but total atoms that locked is less than required
     {
         let random_additional_value = rng.gen_range(1..=atoms_to_spend);
-        let timelocked_outputs =
-            decompose_value(&mut rng, atoms_to_spend - random_additional_value)
-                .iter()
-                .map(|atoms| {
-                    let random_additional_distance = rng.gen_range(0..10);
-                    TxOutput::LockThenTransfer(
-                        OutputValue::Coin(Amount::from_atoms(*atoms)),
-                        Destination::AnyoneCanSpend,
-                        OutputTimeLock::ForBlockCount(
-                            required_maturity_distance + random_additional_distance,
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let timelocked_outputs = split_value(&mut rng, atoms_to_spend - random_additional_value)
+            .iter()
+            .map(|atoms| {
+                let random_additional_distance = rng.gen_range(0..10);
+                TxOutput::LockThenTransfer(
+                    OutputValue::Coin(Amount::from_atoms(*atoms)),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(
+                        required_maturity_distance + random_additional_distance,
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
 
         let outputs = {
             let mut outputs =
@@ -284,7 +272,10 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, Amount::from_atoms(atoms_to_spend)),
+                AccountOp::SpendDelegationBalance(
+                    delegation_id,
+                    Amount::from_atoms(atoms_to_spend),
+                ),
             )],
             outputs,
         )
@@ -309,7 +300,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
     // valid case
     {
-        let timelocked_outputs = decompose_value(&mut rng, atoms_to_spend)
+        let timelocked_outputs = split_value(&mut rng, atoms_to_spend)
             .iter()
             .map(|atoms| {
                 let random_additional_distance = rng.gen_range(0..10);
@@ -337,7 +328,10 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             0,
             vec![TxInput::from_account(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, Amount::from_atoms(atoms_to_spend)),
+                AccountOp::SpendDelegationBalance(
+                    delegation_id,
+                    Amount::from_atoms(atoms_to_spend),
+                ),
             )],
             outputs,
         )

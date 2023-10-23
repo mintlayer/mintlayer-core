@@ -13,9 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod chainstate_upgrade;
+mod consensus_upgrade;
 mod netupgrade;
 
-pub use netupgrade::*;
+pub use chainstate_upgrade::ChainstateUpgrade;
+pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
+pub use netupgrade::{Activate, NetUpgrades};
 
 pub enum NetUpgradeError {
     GenerateConfigFailed,

@@ -33,6 +33,10 @@ use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
     PoSAccountingView, PoolData,
 };
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokenData, TokensAccountingDeltaData,
+    TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
+};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
 mockall::mock! {
@@ -65,6 +69,11 @@ mockall::mock! {
             &self,
             id: Id<Block>,
         ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
+
+        fn get_tokens_accounting_undo(
+            &self,
+            id: Id<Block>,
+        ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError>;
 
         fn get_account_nonce_count(
             &self,
@@ -135,6 +144,17 @@ mockall::mock! {
             &mut self,
             account: AccountType,
         ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_tokens_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+            undo: &tokens_accounting::BlockUndo,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_tokens_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+        ) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
@@ -175,5 +195,16 @@ mockall::mock! {
 
     impl FlushablePoSAccountingView for Store {
         fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, pos_accounting::Error>;
+    }
+
+    impl TokensAccountingStorageRead for Store {
+        type Error = tokens_accounting::Error;
+        fn get_token_data(&self, id: &TokenId,) -> Result<Option<TokenData>, tokens_accounting::Error>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> Result<Option<Amount>, tokens_accounting::Error>;
+    }
+
+    impl FlushableTokensAccountingView for Store {
+        type Error = tokens_accounting::Error;
+        fn batch_write_tokens_data(&mut self, delta: TokensAccountingDeltaData) -> Result<TokensAccountingDeltaUndoData, tokens_accounting::Error>;
     }
 }

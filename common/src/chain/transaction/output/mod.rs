@@ -17,7 +17,11 @@ use crate::{
     address::{
         hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, AddressError,
     },
-    chain::{output_value::OutputValue, tokens::TokenData, ChainConfig, DelegationId, PoolId},
+    chain::{
+        output_value::OutputValue,
+        tokens::{NftIssuance, TokenId, TokenIssuance},
+        ChainConfig, DelegationId, PoolId,
+    },
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -100,6 +104,10 @@ pub enum TxOutput {
     CreateDelegationId(Destination, PoolId),
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
+    #[codec(index = 7)]
+    IssueFungibleToken(Box<TokenIssuance>),
+    #[codec(index = 8)]
+    IssueNft(TokenId, Box<NftIssuance>, Destination),
 }
 
 impl TxOutput {
@@ -110,26 +118,10 @@ impl TxOutput {
             | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => None,
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
-        }
-    }
-
-    pub fn is_token_or_nft_issuance(&self) -> bool {
-        match self {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-                match v {
-                    OutputValue::Token(data) => match data.as_ref() {
-                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
-                        TokenData::TokenTransfer(_) => false,
-                    },
-                    OutputValue::Coin(_) => false,
-                }
-            }
-            TxOutput::CreateStakePool(_, _)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => false,
         }
     }
 }

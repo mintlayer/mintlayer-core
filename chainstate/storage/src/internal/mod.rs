@@ -34,6 +34,7 @@ use pos_accounting::{
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use storage::MakeMapRef;
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
@@ -81,11 +82,13 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Dump raw database contents
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.0.dump_raw().map_err(crate::Error::from)
     }
 
     /// Collect and return all utxos from the storage
+    #[cfg(any(test, feature = "expensive-reads"))]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<UtxoOutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         db.0.get::<db::DBUtxo, _>()
@@ -95,7 +98,8 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all tip accounting data from storage
-    pub fn read_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+    #[cfg(any(test, feature = "expensive-reads"))]
+    pub fn read_pos_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
         let pool_data =
@@ -133,7 +137,10 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all sealed accounting data from storage
-    pub fn read_accounting_data_sealed(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+    #[cfg(any(test, feature = "expensive-reads"))]
+    pub fn read_pos_accounting_data_sealed(
+        &self,
+    ) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
         let pool_data =
@@ -167,6 +174,28 @@ impl<B: storage::Backend> Store<B> {
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
+        })
+    }
+
+    #[cfg(any(test, feature = "expensive-reads"))]
+    pub fn read_tokens_accounting_data(
+        &self,
+    ) -> crate::Result<tokens_accounting::TokensAccountingData> {
+        let db = self.transaction_ro()?;
+
+        let token_data =
+            db.0.get::<db::DBTokensData, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let circulating_supply =
+            db.0.get::<db::DBTokensCirculatingSupply, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        Ok(tokens_accounting::TokensAccountingData {
+            token_data,
+            circulating_supply,
         })
     }
 }
@@ -259,6 +288,10 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+
+        fn get_tokens_accounting_undo( &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
 
         fn get_block_tree_by_height(
             &self,
@@ -384,6 +417,14 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
     }
 }
 
+impl<B: storage::Backend> TokensAccountingStorageRead for Store<B> {
+    type Error = crate::Error;
+    delegate_to_transaction! {
+        fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
+        fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount>>;
+    }
+}
+
 impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
@@ -419,6 +460,13 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
 
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
+
+        fn set_tokens_accounting_undo_data(
+            &mut self,
+            id: Id<Block>,
+            undo: &tokens_accounting::BlockUndo,
+        ) -> crate::Result<()>;
+        fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_undo_data(
             &mut self,
@@ -669,6 +717,16 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
             delegation_id,
         )?;
         tx.commit()
+    }
+}
+
+impl<B: storage::Backend> TokensAccountingStorageWrite for Store<B> {
+    delegate_to_transaction! {
+        fn set_token_data(&mut self, id: &TokenId, data: &tokens_accounting::TokenData) -> crate::Result<()>;
+        fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()>;
+
+        fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<()>;
+        fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
     }
 }
 

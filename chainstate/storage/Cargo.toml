@@ -13,6 +13,7 @@ common = { path = '../../common' }
 pos_accounting = {path = '../../pos_accounting'}
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
+tokens-accounting = {path = '../../tokens-accounting'}
 utxo = { path = '../../utxo' }
 
 mockall = { workspace = true, optional = true }
@@ -31,3 +32,4 @@ num-traits.workspace = true
 
 [features]
 mock = [ 'mockall' ]
+expensive-reads = []

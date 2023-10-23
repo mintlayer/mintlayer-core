@@ -29,6 +29,7 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageWrite, PoolData,
 };
+use tokens_accounting::TokensAccountingStorageWrite;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
 use super::db;
@@ -118,6 +119,21 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0
             .get_mut::<db::DBIssuanceTxVsTokenId, _>()
             .del(&issuance_tx_id)
+            .map_err(Into::into)
+    }
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> crate::Result<()> {
+        self.write::<db::DBTokensAccountingBlockUndo, _, _, _>(id, undo)
+    }
+
+    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBTokensAccountingBlockUndo, _>()
+            .del(id)
             .map_err(Into::into)
     }
 
@@ -359,5 +375,27 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
             .get_mut::<db::DBAccountingPoolDelegationSharesSealed, _>()
             .del((pool_id, delegation_id))
             .map_err(Into::into)
+    }
+}
+
+impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B> {
+    fn set_token_data(
+        &mut self,
+        id: &TokenId,
+        data: &tokens_accounting::TokenData,
+    ) -> crate::Result<()> {
+        self.write::<db::DBTokensData, _, _, _>(id, data)
+    }
+
+    fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBTokensData, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<()> {
+        self.write::<db::DBTokensCirculatingSupply, _, _, _>(id, supply)
+    }
+
+    fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBTokensCirculatingSupply, _>().del(id).map_err(Into::into)
     }
 }

@@ -491,13 +491,15 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
 
 fn can_be_spent(output: &TxOutput) -> bool {
     match output {
-        TxOutput::Transfer(..)
+        TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..) => true,
-        TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
-            false
-        }
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::IssueNft(..) => true,
+        TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..)
+        | TxOutput::Burn(..)
+        | TxOutput::IssueFungibleToken(..) => false,
     }
 }
 

@@ -78,7 +78,9 @@ impl<'f> PoSBlockBuilder<'f> {
                     | TxOutput::Burn(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::IssueNft(_, _, _) => None,
                     | TxOutput::CreateStakePool(pool_id, _) => Some(*pool_id),
                 },
             );
@@ -250,7 +252,9 @@ impl<'f> PoSBlockBuilder<'f> {
                             | TxOutput::Burn(..)
                             | TxOutput::ProduceBlockFromStake(..)
                             | TxOutput::CreateDelegationId(..)
-                            | TxOutput::DelegateStaking(..) => false,
+                            | TxOutput::DelegateStaking(..)
+                            | TxOutput::IssueFungibleToken(_)
+                            | TxOutput::IssueNft(_, _, _) => false,
                             TxOutput::CreateStakePool(pool_id, _) => *pool_id == staking_pool,
                         })
                         .unwrap();
@@ -278,7 +282,7 @@ impl<'f> PoSBlockBuilder<'f> {
             .framework
             .chainstate
             .get_chain_config()
-            .net_upgrade()
+            .consensus_upgrades()
             .consensus_status(new_block_height)
         {
             RequiredConsensus::PoS(status) => status,

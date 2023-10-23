@@ -17,11 +17,10 @@ use itertools::Itertools;
 use rstest::rstest;
 use test_utils::random::Seed;
 
-use super::utils::*;
+use super::{add_value, utils::*};
 use crate::{
     chain::{
         config::create_mainnet,
-        output_value::OutputValue,
         signature::{
             sighash::sighashtype::{OutputsMode, SigHashType},
             tests::{
@@ -31,7 +30,7 @@ use crate::{
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
-        AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination, OutPointSourceId,
+        AccountOp, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
@@ -982,7 +981,7 @@ fn mutate_first_input(
             if rng.gen::<bool>() {
                 TxInput::Account(AccountOutPoint::new(
                     outpoint.nonce(),
-                    AccountSpending::Delegation(
+                    AccountOp::SpendDelegationBalance(
                         DelegationId::new(H256::random_using(rng)),
                         Amount::from_atoms(rng.gen()),
                     ),
@@ -1059,13 +1058,6 @@ fn add_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTran
     }
 }
 
-fn add_value(output_value: OutputValue) -> OutputValue {
-    match output_value {
-        OutputValue::Coin(v) => OutputValue::Coin((v + Amount::from_atoms(100)).unwrap()),
-        OutputValue::Token(v) => OutputValue::Token(v),
-    }
-}
-
 fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
     // Should fail due to change in output value
@@ -1077,6 +1069,8 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::DelegateStaking(_, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::IssueFungibleToken(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::IssueNft(_, _, _) => unreachable!(),     // TODO: come back to this later
     };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),

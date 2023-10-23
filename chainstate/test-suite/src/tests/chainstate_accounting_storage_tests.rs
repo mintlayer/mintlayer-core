@@ -163,11 +163,11 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
-        assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
+        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
     });
 }
 
@@ -250,12 +250,12 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
         // check that result is not stored to sealed
-        assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
+        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
 
         // check that delta for epoch is stored
         let expected_epoch_delta = pos_accounting::PoSAccountingDeltaData {
@@ -367,12 +367,12 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
         // check that result is not stored to sealed
-        assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
+        assert!(storage.read_pos_accounting_data_sealed().unwrap().is_empty());
 
         // check that deltas per block are stored
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
@@ -498,7 +498,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             expected_tip_storage_data
         );
 
@@ -511,7 +511,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_accounting_data_sealed().unwrap(),
+            storage.read_pos_accounting_data_sealed().unwrap(),
             expected_sealed_storage_data
         );
 
@@ -611,11 +611,11 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             pool_delegation_shares: Default::default(),
         };
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             expected_storage_data
         );
         assert_eq!(
-            storage.read_accounting_data_sealed().unwrap(),
+            storage.read_pos_accounting_data_sealed().unwrap(),
             expected_storage_data
         );
 
@@ -695,11 +695,11 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
 
         // check that result is stored to tip and sealed
         assert_eq!(
-            storage.read_accounting_data_tip().unwrap(),
+            storage.read_pos_accounting_data_tip().unwrap(),
             pos_accounting::PoSAccountingData::new()
         );
         assert_eq!(
-            storage.read_accounting_data_sealed().unwrap(),
+            storage.read_pos_accounting_data_sealed().unwrap(),
             pos_accounting::PoSAccountingData::new()
         );
 

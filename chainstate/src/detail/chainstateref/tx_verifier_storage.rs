@@ -37,6 +37,10 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
+    TokensAccountingStorageRead,
+};
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
@@ -83,6 +87,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
         self.db_tx
             .get_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        self.db_tx
+            .get_tokens_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
     }
 
@@ -322,6 +335,39 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             .del_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_tokens_accounting_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_tokens_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
 }
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
@@ -381,5 +427,39 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Flushabl
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
         let mut db = PoSAccountingDB::<_, TipStorageTag>::new(&mut self.db_tx);
         db.batch_write_delta(data)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TokensAccountingStorageRead
+    for ChainstateRef<'a, S, V>
+{
+    type Error = storage_result::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, storage_result::Error> {
+        self.db_tx.get_token_data(id)
+    }
+
+    fn get_circulating_supply(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<Amount>, storage_result::Error> {
+        self.db_tx.get_circulating_supply(id)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
+    FlushableTokensAccountingView for ChainstateRef<'a, S, V>
+{
+    type Error = tokens_accounting::Error;
+
+    fn batch_write_tokens_data(
+        &mut self,
+        delta: tokens_accounting::TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
+        let mut db = TokensAccountingDB::new(&mut self.db_tx);
+        db.batch_write_tokens_data(delta)
     }
 }

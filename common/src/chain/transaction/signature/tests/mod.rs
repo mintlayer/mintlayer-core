@@ -710,7 +710,10 @@ fn check_insert_output(
 fn add_value(output_value: OutputValue) -> OutputValue {
     match output_value {
         OutputValue::Coin(v) => OutputValue::Coin((v + Amount::from_atoms(100)).unwrap()),
-        OutputValue::Token(v) => OutputValue::Token(v),
+        OutputValue::TokenV0(v) => OutputValue::TokenV0(v),
+        OutputValue::TokenV1(d, v) => {
+            OutputValue::TokenV1(d, (v + Amount::from_atoms(100)).unwrap())
+        }
     }
 }
 
@@ -730,7 +733,9 @@ fn check_mutate_output(
         TxOutput::CreateStakePool(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::DelegateStaking(_, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::DelegateStaking(_, _) => unreachable!(),
+        TxOutput::IssueFungibleToken(_) => unreachable!(),
+        TxOutput::IssueNft(_, _, _) => unreachable!(),
     };
 
     let tx = tx_updater.generate_tx().unwrap();

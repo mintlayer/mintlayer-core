@@ -640,6 +640,28 @@ where
             .get_transaction_in_block(*tx_id)
             .map_err(ChainstateError::from)
     }
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_token_data(id)
+            .map_err(ChainstateError::from)
+    }
+
+    fn get_token_circulating_supply(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_token_circulating_supply(id)
+            .map_err(ChainstateError::from)
+    }
 }
 
 // TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
@@ -668,7 +690,9 @@ fn get_output_coin_amount(
             Some(pledge_amount)
         }
         TxOutput::DelegateStaking(v, _) => Some(*v),
-        TxOutput::CreateDelegationId(_, _) => None,
+        TxOutput::CreateDelegationId(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _) => None,
     };
 
     Ok(amount)

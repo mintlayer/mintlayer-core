@@ -124,6 +124,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TxIndexError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TransactionVerifierError(err) => err.mempool_ban_score(),
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::TokensAccountingError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::MissingTxInputs => 100,
@@ -140,6 +142,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
+            ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
 
@@ -175,8 +178,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
-            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
+            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
         }
     }
 }
@@ -186,12 +189,14 @@ impl MempoolBanScore for SignatureDestinationGetterError {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
-            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
             SignatureDestinationGetterError::UtxoOutputNotFound(_) => 0,
             SignatureDestinationGetterError::UtxoViewError(_) => 0,
+            SignatureDestinationGetterError::TokenDataNotFound(_) => 0,
+            SignatureDestinationGetterError::SigVerifyTokensAccountingError(_) => 100,
         }
     }
 }
@@ -204,6 +209,7 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::PoSAccountingError(err) => err.mempool_ban_score(),
+            TransactionVerifierStorageError::TokensAccountingError(err) => err.mempool_ban_score(),
 
             // Should not happen in mempool (no undos, no block processing, internal errors)
             TransactionVerifierStorageError::GetAncestorError(_) => 0,
@@ -213,6 +219,7 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 0,
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 0,
+            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 0,
         }
     }
 }
@@ -375,6 +382,31 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::BlockHeightArithmeticError => 0,
             IOPolicyError::PoSAccountingError(err) => err.mempool_ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for tokens_accounting::Error {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            tokens_accounting::Error::StorageError(_) => 0,
+            tokens_accounting::Error::AccountingError(err) => err.mempool_ban_score(),
+            tokens_accounting::Error::TokenAlreadyExists(_) => 0,
+            tokens_accounting::Error::TokenDataNotFound(_) => 0,
+            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 0,
+            tokens_accounting::Error::CirculatingSupplyNotFound(_) => 0,
+            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => 100,
+            tokens_accounting::Error::AmountOverflow => 100,
+            tokens_accounting::Error::CannotMintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::CannotUnmintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::NotEnoughCirculatingSupplyToUnmint(_, _, _) => 100,
+            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 100,
+            tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
+            tokens_accounting::Error::CannotUnlockNotLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoMintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoUnmintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::ViewFail => 0,
+            tokens_accounting::Error::StorageWrite => 0,
         }
     }
 }

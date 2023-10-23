@@ -38,6 +38,7 @@ use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingStorageWrite,
 };
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 pub use internal::{ChainstateStorageVersion, Store};
@@ -62,6 +63,7 @@ pub trait BlockchainStorageRead:
     + PoSAccountingStorageRead<SealedStorageTag>
     + PoSAccountingStorageRead<TipStorageTag>
     + EpochStorageRead
+    + TokensAccountingStorageRead<Error = crate::Error>
 {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
@@ -116,6 +118,12 @@ pub trait BlockchainStorageRead:
         start_from: BlockHeight,
     ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
+    /// Get tokens accounting undo for specific block
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
@@ -142,6 +150,7 @@ pub trait BlockchainStorageWrite:
     + PoSAccountingStorageWrite<SealedStorageTag>
     + PoSAccountingStorageWrite<TipStorageTag>
     + EpochStorageWrite
+    + TokensAccountingStorageWrite
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;
@@ -155,7 +164,7 @@ pub trait BlockchainStorageWrite:
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> Result<()>;
 
-    // Set the block index
+    /// Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<()>;
 
     /// Add a new block into the database
@@ -193,40 +202,50 @@ pub trait BlockchainStorageWrite:
     /// Set data associated with token issuance (and ACL changes in the future)
     fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> Result<()>;
 
-    // Remove token tx
+    /// Remove token tx
     fn del_token_aux_data(&mut self, token_id: &TokenId) -> Result<()>;
 
-    // Binding Id of issuance tx with token id
+    /// Binding Id of issuance tx with token id
     fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> Result<()>;
 
-    // Remove token id
+    /// Remove token id
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<()>;
 
-    // Set accounting block undo data for specific block
+    /// Set tokens accounting undo data for specific block
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<()>;
+
+    /// Remove tokens accounting undo data for specific block
+    fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+
+    /// Set accounting block undo data for specific block
     fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo)
         -> Result<()>;
 
-    // Remove accounting block undo data for specific block
+    /// Remove accounting block undo data for specific block
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
-    // Set accounting delta for specific block
+    /// Set accounting delta for specific block
     fn set_accounting_epoch_delta(
         &mut self,
         epoch_index: EpochIndex,
         delta: &PoSAccountingDeltaData,
     ) -> Result<()>;
 
-    // Remove accounting delta for specific block
+    /// Remove accounting delta for specific block
     fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
-    // Set accounting undo for specific epoch
+    /// Set accounting undo for specific epoch
     fn set_accounting_epoch_undo_delta(
         &mut self,
         epoch_index: EpochIndex,
         undo: &DeltaMergeUndo,
     ) -> Result<()>;
 
-    // Remove accounting block undo data for specific block
+    /// Remove accounting block undo data for specific block
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
     fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> Result<()>;

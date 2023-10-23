@@ -25,9 +25,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
-};
+use pos_accounting::{DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData};
 use utxo::{Utxo, UtxosBlockUndo};
 
 storage::decl_schema! {
@@ -56,16 +54,20 @@ storage::decl_schema! {
         /// Store the number of transactions per account
         pub DBAccountNonceCount: Map<AccountType, AccountNonce>,
 
+        pub DBTokensData: Map<TokenId, tokens_accounting::TokenData>,
+        pub DBTokensCirculatingSupply: Map<TokenId, Amount>,
+        pub DBTokensAccountingBlockUndo: Map<Id<Block>, tokens_accounting::BlockUndo>,
+
         /// Store for accounting BlockUndo
-        pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
+        pub DBAccountingBlockUndo: Map<Id<Block>, pos_accounting::AccountingBlockUndo>,
         /// Store for accounting deltas per epoch
         pub DBAccountingEpochDelta: Map<EpochIndex, PoSAccountingDeltaData>,
         /// Store for accounting undo deltas per epoch
         pub DBAccountingEpochDeltaUndo: Map<EpochIndex, DeltaMergeUndo>,
 
         /// Accounting data is stored as 2 different sets: tip, sealed
-        /// `Tip` is the current state of the accounting data. It is updated on every block.
-        /// `Pre-seal` is the intermediary state of the accounting data that is about to be sealed.
+        /// `Tip` is the current state of the PoS accounting data. It is updated on every block.
+        /// `Sealed` is the state of the PoS accounting data that is N epochs behind the tip.
 
         /// Store for tip accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{timelock::OutputTimeLock, AccountSpending, ChainConfig, PoolId, TxInput, TxOutput},
+    chain::{timelock::OutputTimeLock, AccountOp, ChainConfig, PoolId, TxInput, TxOutput},
     primitives::{Amount, BlockDistance, BlockHeight},
 };
 use utils::ensure;
@@ -89,7 +89,9 @@ impl ConstrainedValueAccumulator {
                             self.unconstrained_value = (self.unconstrained_value + *coins)
                                 .ok_or(IOPolicyError::AmountOverflow)?;
                         }
-                        TxOutput::CreateDelegationId(..) => { /* do nothing */ }
+                        TxOutput::CreateDelegationId(..)
+                        | TxOutput::IssueFungibleToken(..)
+                        | TxOutput::IssueNft(..) => { /* do nothing */ }
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let block_distance = chain_config
@@ -109,7 +111,7 @@ impl ConstrainedValueAccumulator {
                 }
                 TxInput::Account(account) => {
                     match account.account() {
-                        AccountSpending::Delegation(_, spend_amount) => {
+                        AccountOp::SpendDelegationBalance(_, spend_amount) => {
                             let block_distance =
                                 chain_config.as_ref().spend_share_maturity_distance(block_height);
 
@@ -120,6 +122,9 @@ impl ConstrainedValueAccumulator {
                             *balance =
                                 (*balance + *spend_amount).ok_or(IOPolicyError::AmountOverflow)?;
                         }
+                        AccountOp::MintTokens(_, _)
+                        | AccountOp::LockTokenSupply(_)
+                        | AccountOp::UnmintTokens(_) => { /* do nothing */ }
                     };
                 }
             }
@@ -194,8 +199,11 @@ impl ConstrainedValueAccumulator {
                         }
                     }
                 },
+                TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => { /* do nothing */
+                }
             };
         }
+
         Ok(())
     }
 }
@@ -206,9 +214,9 @@ mod tests {
     use common::{
         chain::{
             config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-            timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade,
-            DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder,
-            PoolId, TxOutput, UpgradeVersion, UtxoOutPoint,
+            timelock::OutputTimeLock, AccountNonce, AccountOp, ConsensusUpgrade, DelegationId,
+            Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
+            UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Amount, Id, H256},
     };
@@ -241,7 +249,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
@@ -295,7 +303,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.spend_share_maturity_distance(BlockHeight::new(1));
@@ -309,7 +317,7 @@ mod tests {
         let inputs_utxos = vec![None];
         let inputs = vec![TxInput::from_account(
             AccountNonce::new(0),
-            AccountSpending::Delegation(delegation_id, Amount::from_atoms(delegated_atoms)),
+            AccountOp::SpendDelegationBalance(delegation_id, Amount::from_atoms(delegated_atoms)),
         )];
 
         let outputs = vec![TxOutput::LockThenTransfer(
@@ -341,11 +349,95 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
+    fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
+            .build();
+
+        let pool_id = PoolId::new(H256::zero());
+        let staked_atoms = rng.gen_range(100..1000);
+        let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
+
+        let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
+
+        let inputs = vec![
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            ),
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                1,
+            ),
+        ];
+        let inputs_utxos = vec![
+            Some(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            )),
+            Some(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        // it's an error if output includes staked coins
+        let outputs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(staked_atoms)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+            constraints_accumulator
+                .process_inputs(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    pledge_getter,
+                    &inputs,
+                    &inputs_utxos,
+                )
+                .unwrap();
+
+            let result = constraints_accumulator.process_outputs(&outputs).unwrap_err();
+            assert_eq!(
+                result,
+                IOPolicyError::AttemptToPrintMoneyOrViolateTimelockConstraints
+            );
+        }
+
+        // it's not an error if output does not include staked coins
+        let outputs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        {
+            let mut constraints_accumulator = ConstrainedValueAccumulator::new();
+            constraints_accumulator
+                .process_inputs(
+                    &chain_config,
+                    BlockHeight::new(1),
+                    pledge_getter,
+                    &inputs,
+                    &inputs_utxos,
+                )
+                .unwrap();
+
+            constraints_accumulator.process_outputs(&outputs).unwrap();
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     fn try_to_unlocked_coins(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::regtest_with_pos())
+            .consensus_upgrades(NetUpgrades::regtest_with_pos())
             .build();
         let required_maturity_distance =
             chain_config.decommission_pool_maturity_distance(BlockHeight::new(1));
@@ -423,17 +515,17 @@ mod tests {
         let required_spend_share_maturity = 200;
         let upgrades = vec![(
             BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: None,
                 config: PoSChainConfigBuilder::new_for_unit_test()
                     .decommission_maturity_distance(required_decommission_maturity.into())
                     .spend_share_maturity_distance(required_spend_share_maturity.into())
                     .build(),
-            }),
+            },
         )];
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
-            .net_upgrades(net_upgrades)
+            .consensus_upgrades(net_upgrades)
             .build();
 
         let pool_id = PoolId::new(H256::zero());
@@ -458,7 +550,10 @@ mod tests {
             ),
             TxInput::from_account(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, Amount::from_atoms(delegated_atoms)),
+                AccountOp::SpendDelegationBalance(
+                    delegation_id,
+                    Amount::from_atoms(delegated_atoms),
+                ),
             ),
         ];
         let inputs_utxos = vec![

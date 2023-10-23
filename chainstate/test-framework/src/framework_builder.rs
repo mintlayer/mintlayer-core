@@ -25,8 +25,10 @@ use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStr
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
-        ChainConfig, Destination, NetUpgrades,
+        tokens::TokenIssuanceVersion,
+        ChainConfig, ChainstateUpgrade, ConsensusUpgrade, Destination, NetUpgrades,
     },
+    primitives::BlockHeight,
     time_getter::TimeGetter,
 };
 use crypto::random::{CryptoRng, Rng};
@@ -56,7 +58,20 @@ impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::unit_tests())
+            .consensus_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ConsensusUpgrade::IgnoreConsensus,
+                )])
+                .unwrap(),
+            )
+            .chainstate_upgrades(
+                NetUpgrades::initialize(vec![(
+                    BlockHeight::zero(),
+                    ChainstateUpgrade::new(TokenIssuanceVersion::V0),
+                )])
+                .unwrap(),
+            )
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
         let chainstate_config = ChainstateConfig {

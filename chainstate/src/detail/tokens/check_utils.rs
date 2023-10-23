@@ -19,7 +19,7 @@ use utils::ensure;
 
 fn check_is_text_alphanumeric(str: &[u8]) -> bool {
     match String::from_utf8(str.to_vec()) {
-        Ok(text) => text.chars().all(char::is_alphanumeric),
+        Ok(text) => text.chars().all(|c| c.is_ascii_alphanumeric()),
         Err(_) => false,
     }
 }

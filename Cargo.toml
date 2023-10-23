@@ -53,6 +53,7 @@ members = [
   "test",                               # Integration tests.
   "test-rpc-functions",                 # RPC functions specifically for tests.
   "test-utils",                         # Various utilities for tests.
+  "tokens-accounting",                  # Tokens accounting
   "utils",                              # Various utilities.
   "utxo",                               # Utxo and related utilities (cache, undo, etc.).
   "wallet",                             # Wallet primitives.

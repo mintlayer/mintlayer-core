@@ -17,9 +17,7 @@ use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
-use common::chain::tokens::{
-    Metadata, NftIssuance, TokenData, TokenId, TokenIssuance, TokenTransfer,
-};
+use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
@@ -63,55 +61,18 @@ pub fn make_address_output_token(
     let destination = address.decode_object(chain_config)?;
 
     Ok(TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
-            token_id,
-            amount,
-        }))),
+        OutputValue::TokenV1(token_id, amount),
         destination,
     ))
 }
 
 pub fn make_issue_token_outputs(
-    address: Address<Destination>,
     token_issuance: TokenIssuance,
     chain_config: &ChainConfig,
 ) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.decode_object(chain_config)?;
+    chainstate::check_tokens_issuance(chain_config, &token_issuance)?;
 
-    chainstate::check_tokens_issuance_data(
-        chain_config,
-        &token_issuance.token_ticker,
-        &token_issuance.amount_to_issue,
-        &token_issuance.number_of_decimals,
-        &token_issuance.metadata_uri,
-    )?;
-
-    let issuance_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(token_issuance)))),
-        destination,
-    );
-
-    let token_issuance_fee =
-        TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
-
-    Ok(vec![issuance_output, token_issuance_fee])
-}
-
-pub fn make_issue_nft_outputs(
-    address: Address<Destination>,
-    nft_metadata: Metadata,
-    chain_config: &ChainConfig,
-) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.decode_object(chain_config)?;
-    let nft_issuance = Box::new(NftIssuance {
-        metadata: nft_metadata,
-    });
-    chainstate::check_nft_issuance_data(chain_config, &nft_issuance)?;
-
-    let issuance_output = TxOutput::Transfer(
-        OutputValue::Token(Box::new(TokenData::NftIssuance(nft_issuance))),
-        destination,
-    );
+    let issuance_output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
 
     let token_issuance_fee =
         TxOutput::Burn(OutputValue::Coin(chain_config.token_min_issuance_fee()));
@@ -188,6 +149,11 @@ pub fn make_stake_output(
         arguments.cost_per_block,
     );
     Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
+}
+
+pub struct IssueNftArguments {
+    pub metadata: Metadata,
+    pub destination: Destination,
 }
 
 impl SendRequest {

@@ -36,7 +36,7 @@ pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
         ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
-        check_nft_issuance_data, check_tokens_issuance_data, is_rfc3986_valid_symbol, BlockError,
+        check_nft_issuance_data, check_tokens_issuance, is_rfc3986_valid_symbol, BlockError,
         BlockSource, ChainInfo, CheckBlockError, CheckBlockTransactionsError,
         ConnectTransactionError, IOPolicyError, InitializationError, Locator, OrphanCheckError,
         SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,

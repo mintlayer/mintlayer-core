@@ -14,22 +14,28 @@
 // limitations under the License.
 
 use crate::{
-    chain::{AccountNonce, DelegationId},
+    chain::{tokens::TokenId, AccountNonce, DelegationId},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
 
-// Type of an account that can be used to identify series of spending from an account
+/// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
+    /// Token account type is used to authorize changes in supply of a token.
+    #[codec(index = 1)]
+    TokenSupply(TokenId),
 }
 
-impl From<AccountSpending> for AccountType {
-    fn from(spending: AccountSpending) -> Self {
+impl From<AccountOp> for AccountType {
+    fn from(spending: AccountOp) -> Self {
         match spending {
-            AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
+            AccountOp::SpendDelegationBalance(id, _) => AccountType::Delegation(id),
+            AccountOp::MintTokens(id, _)
+            | AccountOp::UnmintTokens(id)
+            | AccountOp::LockTokenSupply(id) => AccountType::TokenSupply(id),
         }
     }
 }
@@ -38,20 +44,32 @@ impl From<AccountSpending> for AccountType {
 /// Otherwise it's unclear how much should be deducted from an account balance.
 /// It also helps solving 2 additional problems: calculating fees and providing ability to sign input balance with the witness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
-pub enum AccountSpending {
+pub enum AccountOp {
     #[codec(index = 0)]
-    Delegation(DelegationId, Amount),
+    SpendDelegationBalance(DelegationId, Amount),
+    // Create certain amount of tokens and add them to circulating supply
+    #[codec(index = 1)]
+    MintTokens(TokenId, Amount),
+    // Take tokens out of circulation. Not the same as Burn because unminting means that certain amount
+    // of tokens is no longer supported by underlying fiat currency, which can only be done by
+    // reissuance controller.
+    #[codec(index = 2)]
+    UnmintTokens(TokenId),
+    // After supply is locked tokens cannot be minted or unminted ever again.
+    // Works only for Lockable tokens supply.
+    #[codec(index = 3)]
+    LockTokenSupply(TokenId),
 }
 
 /// Type of OutPoint that represents spending from an account
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serde::Serialize)]
 pub struct AccountOutPoint {
     nonce: AccountNonce,
-    account: AccountSpending,
+    account: AccountOp,
 }
 
 impl AccountOutPoint {
-    pub fn new(nonce: AccountNonce, account: AccountSpending) -> Self {
+    pub fn new(nonce: AccountNonce, account: AccountOp) -> Self {
         Self { nonce, account }
     }
 
@@ -59,7 +77,7 @@ impl AccountOutPoint {
         self.nonce
     }
 
-    pub fn account(&self) -> &AccountSpending {
+    pub fn account(&self) -> &AccountOp {
         &self.account
     }
 }

@@ -28,6 +28,7 @@ use pos_accounting::{
     AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
 };
 use thiserror::Error;
+use tokens_accounting::{FlushableTokensAccountingView, TokensAccountingStorageRead};
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
 use super::{
@@ -59,6 +60,10 @@ pub enum TransactionVerifierStorageError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
+    #[error("Tokens accounting error: {0}")]
+    TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Tokens accounting BlockUndo error: {0}")]
+    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
 }
 
 pub trait HasTxIndexDisabledError {
@@ -73,7 +78,8 @@ impl HasTxIndexDisabledError for TransactionVerifierStorageError {
 
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
-pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView
+pub trait TransactionVerifierStorageRef:
+    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead
 where
     <Self as TransactionVerifierStorageRef>::Error: HasTxIndexDisabledError,
 {
@@ -109,6 +115,11 @@ where
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+
     fn get_account_nonce_count(
         &self,
         account: AccountType,
@@ -116,7 +127,10 @@ where
 }
 
 pub trait TransactionVerifierStorageMut:
-    TransactionVerifierStorageRef + FlushableUtxoView + FlushablePoSAccountingView
+    TransactionVerifierStorageRef
+    + FlushableUtxoView
+    + FlushablePoSAccountingView
+    + FlushableTokensAccountingView
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -188,6 +202,17 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T
@@ -229,6 +254,14 @@ where
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_accounting_undo(id)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
+    {
+        self.deref().get_tokens_accounting_undo(id)
     }
 
     fn get_account_nonce_count(

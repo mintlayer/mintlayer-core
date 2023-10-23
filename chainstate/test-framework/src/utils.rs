@@ -32,7 +32,7 @@ use common::{
         tokens::{TokenData, TokenTransfer},
         Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
         NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UpgradeVersion, UtxoOutPoint,
+        RequiredConsensus, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -64,7 +64,9 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _) => None,
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _) => None,
     }
 }
 
@@ -89,31 +91,54 @@ pub fn create_utxo_data(
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(InputWitness, TxInput, TxOutput)> {
-    let new_output = match get_output_value(output)? {
-        OutputValue::Coin(output_value) => {
-            let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
-            let new_value = (output_value - spent_value).unwrap();
-            utils::ensure!(new_value >= Amount::from_atoms(1));
-            TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
-        }
-        OutputValue::Token(token_data) => match &*token_data {
-            TokenData::TokenTransfer(_transfer) => {
-                TxOutput::Transfer(OutputValue::Token(token_data), anyonecanspend_address())
-            }
-            TokenData::TokenIssuance(issuance) => {
-                new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
-            }
-            TokenData::NftIssuance(_issuance) => {
-                new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
-            }
-        },
-    };
+    match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => {
+            let new_output = match v {
+                OutputValue::Coin(output_value) => {
+                    let spent_value =
+                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                    let new_value = (*output_value - spent_value).unwrap();
+                    utils::ensure!(new_value >= Amount::from_atoms(1));
+                    TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
+                }
+                OutputValue::TokenV0(token_data) => match token_data.as_ref() {
+                    TokenData::TokenTransfer(_transfer) => TxOutput::Transfer(
+                        OutputValue::TokenV0(token_data.clone()),
+                        anyonecanspend_address(),
+                    ),
+                    TokenData::TokenIssuance(issuance) => {
+                        new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
+                    }
+                    TokenData::NftIssuance(_issuance) => {
+                        new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
+                    }
+                },
+                OutputValue::TokenV1(token_id, output_value) => {
+                    let spent_value =
+                        Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                    let new_value = (*output_value - spent_value).unwrap();
+                    utils::ensure!(new_value >= Amount::from_atoms(1));
+                    TxOutput::Transfer(
+                        OutputValue::TokenV1(*token_id, new_value),
+                        anyonecanspend_address(),
+                    )
+                }
+            };
 
-    Some((
-        empty_witness(rng),
-        TxInput::from_utxo(outsrc, index as u32),
-        new_output,
-    ))
+            Some((
+                empty_witness(rng),
+                TxInput::from_utxo(outsrc, index as u32),
+                new_output,
+            ))
+        }
+        TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _) => None,
+    }
 }
 
 /// Given an output as in input creates multiple new random outputs.
@@ -136,7 +161,7 @@ pub fn create_multiple_utxo_data(
                     // (e.g. single genesis output on issuance)
                     vec![
                         TxOutput::Transfer(
-                            random_nft_issuance(chainstate.get_chain_config().clone(), rng).into(),
+                            random_nft_issuance(chainstate.get_chain_config(), rng).into(),
                             Destination::AnyoneCanSpend,
                         ),
                         TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
@@ -152,8 +177,7 @@ pub fn create_multiple_utxo_data(
                     // (e.g. single genesis output on issuance)
                     vec![
                         TxOutput::Transfer(
-                            random_token_issuance(chainstate.get_chain_config().clone(), rng)
-                                .into(),
+                            random_token_issuance(chainstate.get_chain_config(), rng).into(),
                             Destination::AnyoneCanSpend,
                         ),
                         TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
@@ -172,7 +196,7 @@ pub fn create_multiple_utxo_data(
                     .collect()
             }
         }
-        OutputValue::Token(token_data) => match &*token_data {
+        OutputValue::TokenV0(token_data) => match &*token_data {
             TokenData::TokenTransfer(transfer) => {
                 if rng.gen::<bool>() {
                     // burn transferred tokens
@@ -209,7 +233,7 @@ pub fn create_multiple_utxo_data(
                     } else {
                         // transfer with a single output
                         vec![TxOutput::Transfer(
-                            OutputValue::Token(token_data),
+                            OutputValue::TokenV0(token_data),
                             anyonecanspend_address(),
                         )]
                     }
@@ -234,6 +258,7 @@ pub fn create_multiple_utxo_data(
                 }
             }
         },
+        OutputValue::TokenV1(_, _) => unimplemented!(),
     };
 
     Some((
@@ -310,7 +335,7 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
 }
 
 pub fn get_target_block_time(chain_config: &ChainConfig, block_height: BlockHeight) -> NonZeroU64 {
-    match chain_config.net_upgrade().consensus_status(block_height) {
+    match chain_config.consensus_upgrades().consensus_status(block_height) {
         RequiredConsensus::PoS(status) => status.get_chain_config().target_block_time(),
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
             unimplemented!()
@@ -351,16 +376,13 @@ pub fn create_chain_config_with_staking_pool(
     pool_data: StakePoolData,
 ) -> ConfigBuilder {
     let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
+        (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
         (
             BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+            ConsensusUpgrade::PoS {
                 initial_difficulty: Some(Uint256::MAX.into()),
                 config: PoSChainConfigBuilder::new_for_unit_test().build(),
-            }),
+            },
         ),
     ];
 
@@ -378,7 +400,7 @@ pub fn create_chain_config_with_staking_pool(
 
     let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
     ConfigBuilder::new(ChainType::Regtest)
-        .net_upgrades(net_upgrades)
+        .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
 }
 

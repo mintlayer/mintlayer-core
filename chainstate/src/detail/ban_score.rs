@@ -74,6 +74,7 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
+            BlockError::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }
@@ -149,6 +150,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 100,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
+            ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
+            ConnectTransactionError::TotalFeeRequiredOverflow => 100,
         }
     }
 }
@@ -168,12 +172,14 @@ impl BanScore for SignatureDestinationGetterError {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
-            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
             SignatureDestinationGetterError::UtxoOutputNotFound(_) => 100,
             SignatureDestinationGetterError::UtxoViewError(_) => 100,
+            SignatureDestinationGetterError::TokenDataNotFound(_) => 100,
+            SignatureDestinationGetterError::SigVerifyTokensAccountingError(_) => 100,
         }
     }
 }
@@ -192,6 +198,8 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
+            TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
+            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -275,6 +283,8 @@ impl BanScore for TokensError {
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
+            TokensError::DeprecatedTokenOperationVersion(_, _) => 100,
+            TokensError::UnsupportedTokenIssuanceVersion(_, _) => 100,
         }
     }
 }
@@ -499,6 +509,31 @@ impl BanScore for IOPolicyError {
             IOPolicyError::BlockHeightArithmeticError => 100,
             IOPolicyError::PoSAccountingError(err) => err.ban_score(),
             IOPolicyError::PledgeAmountNotFound(_) => 100,
+        }
+    }
+}
+
+impl BanScore for tokens_accounting::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            tokens_accounting::Error::StorageError(_) => 0,
+            tokens_accounting::Error::AccountingError(_) => 100,
+            tokens_accounting::Error::TokenAlreadyExists(_) => 100,
+            tokens_accounting::Error::TokenDataNotFound(_) => 100,
+            tokens_accounting::Error::TokenDataNotFoundOnReversal(_) => 100,
+            tokens_accounting::Error::CirculatingSupplyNotFound(_) => 100,
+            tokens_accounting::Error::MintExceedsSupplyLimit(_, _, _) => 100,
+            tokens_accounting::Error::AmountOverflow => 100,
+            tokens_accounting::Error::CannotMintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::CannotUnmintFromLockedSupply(_) => 100,
+            tokens_accounting::Error::NotEnoughCirculatingSupplyToUnmint(_, _, _) => 100,
+            tokens_accounting::Error::SupplyIsAlreadyLocked(_) => 100,
+            tokens_accounting::Error::CannotLockNotLockableSupply(_) => 100,
+            tokens_accounting::Error::CannotUnlockNotLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoMintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::CannotUndoUnmintForLockedSupplyOnReversal(_) => 100,
+            tokens_accounting::Error::ViewFail => 0,
+            tokens_accounting::Error::StorageWrite => 0,
         }
     }
 }

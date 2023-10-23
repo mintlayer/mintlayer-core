@@ -68,7 +68,7 @@ pub use self::{
     error::*,
     info::ChainInfo,
     median_time::calculate_median_time_past,
-    tokens::{check_nft_issuance_data, check_tokens_issuance_data, is_rfc3986_valid_symbol},
+    tokens::{check_nft_issuance_data, check_tokens_issuance, is_rfc3986_valid_symbol},
 };
 pub use chainstate_types::Locator;
 pub use error::{
@@ -646,7 +646,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => { /* do nothing */ }
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _) => { /* do nothing */ }
                 | TxOutput::CreateStakePool(pool_id, data) => {
                     let _ = db
                         .create_pool(*pool_id, data.as_ref().clone().into())

@@ -10,7 +10,7 @@ rust-version.workspace = true
 [dependencies]
 accounting = {path = '../../accounting'}
 chainstate = { path = '../' }
-chainstate-storage = { path = '../storage' }
+chainstate-storage = {path = '../storage', features = ['expensive-reads']}
 chainstate-test-framework = { path = '../test-framework' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
@@ -20,6 +20,7 @@ logging = { path = '../../logging' }
 pos_accounting = {path = '../../pos_accounting'}
 serialization = { path = '../../serialization' }
 test-utils = {path = '../../test-utils'}
+tokens-accounting = {path = '../../tokens-accounting'}
 tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 utxo = { path = '../../utxo' }

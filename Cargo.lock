@@ -921,6 +921,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "tx-verifier",
  "utils",
@@ -958,6 +959,7 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]
@@ -979,6 +981,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
+ "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
@@ -1005,6 +1008,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
+ "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
@@ -3628,6 +3632,7 @@ dependencies = [
  "subsystem",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "utils",
  "utxo",
@@ -3788,6 +3793,7 @@ dependencies = [
  "p2p-types",
  "pos_accounting",
  "subsystem",
+ "tokens-accounting",
  "tokio",
  "utils",
  "utxo",
@@ -6506,7 +6512,9 @@ dependencies = [
  "common",
  "crypto",
  "hex",
+ "itertools 0.11.0",
  "rand_chacha 0.3.1",
+ "rstest",
  "serialization",
  "utils",
 ]
@@ -6653,6 +6661,23 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tokens-accounting"
+version = "0.1.2"
+dependencies = [
+ "accounting",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "parity-scale-codec",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "utils",
+ "variant_count",
+]
 
 [[package]]
 name = "tokio"
@@ -7065,9 +7090,11 @@ dependencies = [
  "pos_accounting",
  "replace_with",
  "rstest",
+ "serialization",
  "static_assertions",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]

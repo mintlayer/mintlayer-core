@@ -35,8 +35,8 @@ use common::{
             ConsensusData,
         },
         config::EpochIndex,
-        tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
+        tokens::{NftIssuance, TokenAuxiliaryData},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
         SignedTransaction, Transaction, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
@@ -48,9 +48,11 @@ use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
-use utxo::{UtxosCache, UtxosDB, UtxosView};
+use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
-use crate::{BlockError, ChainstateConfig};
+use crate::{
+    check_nft_issuance_data, detail::tokens::check_tokens_issuance, BlockError, ChainstateConfig,
+};
 
 use self::tx_verifier_storage::gen_block_index_getter;
 
@@ -145,7 +147,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    pub fn make_utxo_view(&self) -> impl UtxosView<Error = S::Error> + '_ {
+    pub fn make_utxo_view(&self) -> impl UtxosView<Error = <S as UtxosStorageRead>::Error> + '_ {
         UtxosDB::new(&self.db_tx)
     }
 
@@ -633,7 +635,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::ProduceBlockFromStake(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::DelegateStaking(_, _) => Err(
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::IssueNft(_, _, _) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -646,7 +650,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::CreateStakePool(_, _)
                             | TxOutput::Burn(_)
                             | TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::DelegateStaking(_, _) => Err(
+                            | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::IssueFungibleToken(_)
+                            | TxOutput::IssueNft(_, _, _) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }
@@ -753,22 +759,39 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Check tokens
             tx.outputs()
                 .iter()
-                .filter_map(|output| match output {
+                .try_for_each(|output| match output {
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => v.token_data(),
+                    | TxOutput::Burn(v) => {
+                        if let Some(token_data) = v.token_data() {
+                            check_tokens_data(
+                                self.chain_config,
+                                token_data,
+                                tx.transaction(),
+                                block.get_id(),
+                            )?;
+                        }
+                        Ok(())
+                    }
+                    TxOutput::IssueFungibleToken(issuance) => {
+                        check_tokens_issuance(self.chain_config, issuance).map_err(|e| {
+                            TokensError::IssueError(e, tx.transaction().get_id(), block.get_id())
+                        })
+                    }
+                    TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
+                        NftIssuance::V0(data) => check_nft_issuance_data(self.chain_config, data)
+                            .map_err(|e| {
+                                TokensError::IssueError(
+                                    e,
+                                    tx.transaction().get_id(),
+                                    block.get_id(),
+                                )
+                            }),
+                    },
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => None,
-                })
-                .try_for_each(|token_data| {
-                    check_tokens_data(
-                        self.chain_config,
-                        token_data,
-                        tx.transaction(),
-                        block.get_id(),
-                    )
+                    | TxOutput::DelegateStaking(_, _) => Ok(()),
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)
                 .log_err()?;

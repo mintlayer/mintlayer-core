@@ -33,6 +33,7 @@ use common::{
 };
 use pos_accounting::{AccountingBlockUndo, DelegationData, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
+use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
@@ -54,6 +55,12 @@ impl HasTxIndexDisabledError for Error {
 
 impl From<pos_accounting::Error> for Error {
     fn from(e: pos_accounting::Error) -> Self {
+        Error::from(ChainstateError::from(chainstate::BlockError::from(e)))
+    }
+}
+
+impl From<tokens_accounting::Error> for Error {
+    fn from(e: tokens_accounting::Error) -> Self {
         Error::from(ChainstateError::from(chainstate::BlockError::from(e)))
     }
 }
@@ -227,6 +234,13 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {
         self.call(move |c| c.get_account_nonce_count(account))
     }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        _id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, Error> {
+        panic!("Mempool should not undo stuff in chainstate")
+    }
 }
 
 impl UtxosView for ChainstateHandle {
@@ -247,5 +261,39 @@ impl UtxosView for ChainstateHandle {
 
     fn estimated_size(&self) -> Option<usize> {
         None
+    }
+}
+
+impl TokensAccountingView for ChainstateHandle {
+    type Error = Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_token_data(&id))
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_token_circulating_supply(&id))
+    }
+}
+
+impl TokensAccountingStorageRead for ChainstateHandle {
+    type Error = Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_token_data(&id))
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_token_circulating_supply(&id))
     }
 }

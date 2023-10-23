@@ -24,6 +24,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
+use super::outputs_utils::*;
 use super::purposes_check::*;
 use super::*;
 
@@ -35,7 +36,7 @@ use crate::error::SpendStakeError;
 fn tx_stake_multiple_pools(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let source_inputs = [lock_then_transfer(), transfer()];
+    let source_inputs = super::outputs_utils::valid_tx_inputs();
     let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
     let source_invalid_outputs = [stake_pool()];
 
@@ -69,7 +70,7 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
 fn tx_create_multiple_delegations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let source_inputs = [lock_then_transfer(), transfer()];
+    let source_inputs = super::outputs_utils::valid_tx_inputs();
     let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
     let source_invalid_outputs = [create_delegation()];
 
@@ -105,9 +106,16 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    // valid cases
-    let valid_inputs = [lock_then_transfer(), transfer(), stake_pool(), produce_block()];
-    let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let valid_inputs =
+        [lock_then_transfer(), transfer(), stake_pool(), produce_block(), issue_nft()];
+    let valid_outputs = [
+        lock_then_transfer(),
+        transfer(),
+        burn(),
+        delegate_staking(),
+        issue_tokens(),
+        issue_nft(),
+    ];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
         &mut rng,
@@ -124,21 +132,25 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn tx_many_to_many_invalid(#[case] seed: Seed) {
+fn tx_many_to_many_invalid_inputs(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = [lock_then_transfer(), transfer(), stake_pool(), produce_block()];
-    let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let valid_inputs = super::outputs_utils::valid_tx_inputs();
+    let valid_outputs = super::outputs_utils::valid_tx_outputs();
 
-    let invalid_inputs = [burn(), delegate_staking(), create_delegation()];
+    let invalid_inputs = [burn(), delegate_staking(), create_delegation(), issue_tokens()];
 
     let input_utxos = {
         let mut outputs =
             get_random_outputs_combination(&mut rng, &invalid_inputs, number_of_inputs)
                 .into_iter()
-                .chain(valid_inputs.into_iter())
+                .chain(get_random_outputs_combination(
+                    &mut rng,
+                    &valid_inputs,
+                    number_of_inputs,
+                ))
                 .collect::<Vec<_>>();
         outputs.shuffle(&mut rng);
         outputs
@@ -162,9 +174,8 @@ fn tx_produce_block_in_output(#[case] seed: Seed) {
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
-    let valid_inputs = [lock_then_transfer(), transfer(), stake_pool(), produce_block()];
-    let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
-
+    let valid_inputs = super::outputs_utils::valid_tx_inputs();
+    let valid_outputs = super::outputs_utils::valid_tx_outputs();
     let invalid_outputs = [produce_block()];
 
     let input_utxos = get_random_outputs_combination(&mut rng, &valid_inputs, number_of_inputs);
@@ -173,7 +184,11 @@ fn tx_produce_block_in_output(#[case] seed: Seed) {
         let mut outputs =
             get_random_outputs_combination(&mut rng, &invalid_outputs, number_of_outputs)
                 .into_iter()
-                .chain(valid_outputs.into_iter())
+                .chain(get_random_outputs_combination(
+                    &mut rng,
+                    &valid_outputs,
+                    number_of_outputs,
+                ))
                 .collect::<Vec<_>>();
         outputs.shuffle(&mut rng);
         outputs
@@ -205,91 +220,34 @@ fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
 }
 
 #[rstest]
-#[rustfmt::skip]
-#[case(transfer(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(transfer(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(burn(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(burn(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(lock_then_transfer(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(lock_then_transfer(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(stake_pool(), transfer(),           Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(stake_pool(), burn(),               Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(stake_pool(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(stake_pool(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(stake_pool(), produce_block(),      Ok(()))]
-#[case(stake_pool(), create_delegation(),  Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(stake_pool(), delegate_staking(),   Err(IOPolicyError::InvalidOutputTypeInReward))]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(produce_block(), transfer(),           Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(produce_block(), burn(),               Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(produce_block(), lock_then_transfer(), Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(produce_block(), stake_pool(),         Err(IOPolicyError::InvalidOutputTypeInReward))]
-#[case(produce_block(), produce_block(),      Ok(()))]
-#[case(
-    produce_block(),
-    create_delegation(),
-    Err(IOPolicyError::InvalidOutputTypeInReward)
-)]
-#[case(
-    produce_block(),
-    delegate_staking(),
-    Err(IOPolicyError::InvalidOutputTypeInReward)
-)]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(create_delegation(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(create_delegation(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
-/*-----------------------------------------------------------------------------------------------*/
-#[case(delegate_staking(), transfer(),           Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), burn(),               Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), lock_then_transfer(), Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), stake_pool(),         Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), produce_block(),      Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), create_delegation(),  Err(IOPolicyError::InvalidInputTypeInReward))]
-#[case(delegate_staking(), delegate_staking(),   Err(IOPolicyError::InvalidInputTypeInReward))]
-fn reward_one_to_one(
-    #[case] input_utxo: TxOutput,
-    #[case] output: TxOutput,
-    #[case] result: Result<(), IOPolicyError>,
-) {
+#[trace]
+#[case(Seed::from_entropy())]
+fn reward_one_to_one(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let all_outputs = super::outputs_utils::all_outputs();
+    let input_utxo = get_random_outputs_combination(&mut rng, &all_outputs, 1)[0].clone();
+    let output = get_random_outputs_combination(&mut rng, &all_outputs, 1)[0].clone();
+
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let utxo_db = UtxosDBInMemoryImpl::new(
         Id::<GenBlock>::new(H256::zero()),
-        BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input_utxo))]),
+        BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input_utxo.clone()))]),
     );
 
-    let block = make_block(vec![outpoint.into()], vec![output]);
+    let block = make_block(vec![outpoint.into()], vec![output.clone()]);
 
-    assert_eq!(
-        result.map_err(|e| ConnectTransactionError::IOPolicyError(e, block.get_id().into())),
-        check_reward_inputs_outputs_purposes(
-            &block.block_reward_transactable(),
-            &utxo_db,
-            block.get_id()
-        )
+    let result = check_reward_inputs_outputs_purposes(
+        &block.block_reward_transactable(),
+        &utxo_db,
+        block.get_id(),
     );
+
+    if (is_stake_pool(&input_utxo) || is_produce_block(&input_utxo)) && is_produce_block(&output) {
+        assert!(result.is_ok());
+    } else {
+        assert!(result.is_err());
+    }
 }
 
 #[rstest]
@@ -359,6 +317,8 @@ fn reward_none_to_any(#[case] seed: Seed) {
             produce_block(),
             create_delegation(),
             delegate_staking(),
+            issue_nft(),
+            issue_tokens(),
         ];
 
         let number_of_outputs = rng.gen_range(1..10);
@@ -388,15 +348,7 @@ fn reward_none_to_any(#[case] seed: Seed) {
 fn reward_many_to_none(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let all_purposes = [
-        lock_then_transfer(),
-        transfer(),
-        burn(),
-        stake_pool(),
-        produce_block(),
-        create_delegation(),
-        delegate_staking(),
-    ];
+    let all_purposes = super::outputs_utils::all_outputs();
 
     let number_of_outputs = rng.gen_range(2..10);
     let kernel_outputs = get_random_outputs_combination(&mut rng, &all_purposes, number_of_outputs)

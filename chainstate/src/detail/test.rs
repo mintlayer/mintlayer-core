@@ -32,7 +32,7 @@ assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, De
 fn process_genesis_block() {
     utils::concurrency::model(|| {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::unit_tests())
+            .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
         let chainstate_config = ChainstateConfig::default();
@@ -80,7 +80,7 @@ fn locator_distances() {
 fn empty_chainstate_no_genesis() {
     utils::concurrency::model(|| {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
-            .net_upgrades(NetUpgrades::unit_tests())
+            .consensus_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
         let chainstate_config = ChainstateConfig::default();

@@ -14,6 +14,8 @@ common = {path = '../../common'}
 consensus = {path = '../../consensus'}
 crypto = {path = '../../crypto'}
 pos_accounting = {path = '../../pos_accounting'}
+serialization = { path = "../../serialization" }
+tokens-accounting = {path = '../../tokens-accounting'}
 utils = {path = '../../utils'}
 utxo = {path = '../../utxo'}
 
@@ -25,6 +27,7 @@ replace_with.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
+chainstate-storage = {path = '../storage', features = ['expensive-reads']}
 
 rstest.workspace = true
 mockall.workspace = true

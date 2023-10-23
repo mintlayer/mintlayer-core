@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate = { path = ".." }
-chainstate-storage = { path = "../storage" }
+chainstate-storage = {path = '../storage', features = ['expensive-reads']}
 chainstate-types = { path = "../types" }
 common = { path = "../../common" }
 consensus = { path = "../../consensus" }
@@ -17,6 +17,7 @@ crypto = { path = "../../crypto" }
 pos_accounting = { path = "../../pos_accounting" }
 serialization = { path = "../../serialization" }
 test-utils = { path = "../../test-utils" }
+tokens-accounting = {path = '../../tokens-accounting'}
 tx-verifier = { path = "../tx-verifier" }
 utils = { path = "../../utils" }
 utxo = { path = "../../utxo" }

@@ -33,6 +33,7 @@ use pos_accounting::{
 };
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;
+use tokens_accounting::TokensAccountingStorageRead;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
 use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
@@ -172,6 +173,13 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
 
     fn get_token_id(&self, issuance_tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>> {
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+        self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
     fn get_block_tree_by_height(
@@ -317,6 +325,18 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     }
 }
 
+impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRo<'st, B> {
+    type Error = crate::Error;
+
+    fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
+        self.read::<db::DBTokensData, _, _>(id)
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
+        self.read::<db::DBTokensCirculatingSupply, _, _>(id)
+    }
+}
+
 /// Blockchain data storage transaction
 impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B> {
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>> {
@@ -389,6 +409,13 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
 
     fn get_token_id(&self, issuance_tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>> {
         self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+        self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
     fn get_block_tree_by_height(
@@ -531,5 +558,17 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         delegation_id: DelegationId,
     ) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolDelegationSharesSealed, _, _>((pool_id, delegation_id))
+    }
+}
+
+impl<'st, B: storage::Backend> TokensAccountingStorageRead for super::StoreTxRw<'st, B> {
+    type Error = crate::Error;
+
+    fn get_token_data(&self, id: &TokenId) -> crate::Result<Option<tokens_accounting::TokenData>> {
+        self.read::<db::DBTokensData, _, _>(id)
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> crate::Result<Option<Amount>> {
+        self.read::<db::DBTokensCirculatingSupply, _, _>(id)
     }
 }

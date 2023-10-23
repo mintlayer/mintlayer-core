@@ -17,11 +17,9 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use common::{
     chain::{
-        tokens::{token_id, TokenId},
-        AccountNonce,
-        AccountSpending::Delegation,
-        DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        tokens::{is_token_or_nft_issuance, make_token_id, TokenId},
+        AccountNonce, AccountOp, DelegationId, Destination, OutPointSourceId, PoolId, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Id},
 };
@@ -238,6 +236,10 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _) => {}
+                | TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => {
+                    // TODO: add support for tokens v1
+                    // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                }
             };
         }
         Ok(())
@@ -268,7 +270,7 @@ impl OutputCache {
                 TxInput::Account(outpoint) => {
                     if !already_present {
                         match outpoint.account() {
-                            Delegation(delegation_id, _) => {
+                            AccountOp::SpendDelegationBalance(delegation_id, _) => {
                                 if let Some(data) = self.delegations.get_mut(delegation_id) {
                                     Self::update_delegation_state(
                                         &mut self.unconfirmed_descendants,
@@ -278,6 +280,13 @@ impl OutputCache {
                                         tx_id,
                                     )?;
                                 }
+                            }
+                            AccountOp::MintTokens(_, _)
+                            | AccountOp::UnmintTokens(_)
+                            | AccountOp::LockTokenSupply(_) => {
+                                // TODO: add support for tokens v1
+                                // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                                unimplemented!()
                             }
                         }
                     }
@@ -328,12 +337,19 @@ impl OutputCache {
                         self.unconfirmed_descendants.remove(tx_id);
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
-                        Delegation(delegation_id, _) => {
+                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
                             if let Some(data) = self.delegations.get_mut(delegation_id) {
                                 data.last_nonce = outpoint.nonce().decrement();
                                 data.last_parent =
                                     find_parent(&self.unconfirmed_descendants, tx_id.clone());
                             }
+                        }
+                        AccountOp::MintTokens(_, _)
+                        | AccountOp::UnmintTokens(_)
+                        | AccountOp::LockTokenSupply(_) => {
+                            // TODO: add support for tokens v1
+                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                            unimplemented!()
                         }
                     },
                 }
@@ -383,7 +399,7 @@ impl OutputCache {
         );
 
         let token_id = match tx {
-            WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
+            WalletTx::Tx(tx_data) => make_token_id(tx_data.get_transaction().inputs()),
             WalletTx::Block(_) => None,
         };
 
@@ -415,10 +431,6 @@ impl OutputCache {
             .filter(|tx| is_in_state(tx, utxo_states))
             .flat_map(|tx| {
                 let tx_block_info = get_block_info(tx);
-                let token_id = match tx {
-                    WalletTx::Tx(tx_data) => token_id(tx_data.get_transaction()),
-                    WalletTx::Block(_) => None,
-                };
 
                 tx.outputs()
                     .iter()
@@ -435,17 +447,13 @@ impl OutputCache {
                             )
                     })
                     .map(move |(output, outpoint)| {
-                        (
-                            outpoint,
-                            (
-                                output,
-                                if output.is_token_or_nft_issuance() {
-                                    token_id
-                                } else {
-                                    None
-                                },
-                            ),
-                        )
+                        let token_id = match tx {
+                            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
+                                .then_some(make_token_id(tx_data.get_transaction().inputs()))
+                                .flatten(),
+                            WalletTx::Block(_) => None,
+                        };
+                        (outpoint, (output, token_id))
                     })
             })
             .collect()
@@ -497,7 +505,7 @@ impl OutputCache {
                                         self.consumed.insert(outpoint.clone(), *tx.state());
                                     }
                                     TxInput::Account(outpoint) => match outpoint.account() {
-                                        Delegation(delegation_id, _) => {
+                                        AccountOp::SpendDelegationBalance(delegation_id, _) => {
                                             if let Some(data) =
                                                 self.delegations.get_mut(delegation_id)
                                             {
@@ -507,6 +515,13 @@ impl OutputCache {
                                                     tx_id.into(),
                                                 );
                                             }
+                                        }
+                                        AccountOp::MintTokens(_, _)
+                                        | AccountOp::UnmintTokens(_)
+                                        | AccountOp::LockTokenSupply(_) => {
+                                            // TODO: add support for tokens v1
+                                            // See https://github.com/mintlayer/mintlayer-core/issues/1237
+                                            unimplemented!()
                                         }
                                     },
                                 }

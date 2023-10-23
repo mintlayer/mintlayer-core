@@ -17,8 +17,9 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{get_tokens_issuance_count, token_id, TokenAuxiliaryData, TokenId},
-        Block, Transaction,
+        output_value::OutputValue,
+        tokens::{make_token_id, TokenAuxiliaryData, TokenData, TokenId},
+        Block, Transaction, TxOutput,
     },
     primitives::{Id, Idable, H256},
 };
@@ -69,23 +70,34 @@ impl TokenIssuanceCache {
 
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
     // This helps in finding the relevant information of the token at any time in the future.
-    pub fn register(
+    pub fn register<E>(
         &mut self,
         block_id: Option<Id<Block>>,
         tx: &Transaction,
-    ) -> Result<(), TokensError> {
-        let was_token_issued = get_tokens_issuance_count(tx.outputs()) > 0;
+        token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        ConnectTransactionError: From<E>,
+    {
+        if has_tokens_issuance_to_cache(tx.outputs()) {
+            self.precache_token_issuance(token_data_getter, tx)?;
 
-        if was_token_issued {
             self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
         }
         Ok(())
     }
 
-    pub fn unregister(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let was_token_issued = get_tokens_issuance_count(tx.outputs()) > 0;
+    pub fn unregister<E>(
+        &mut self,
+        tx: &Transaction,
+        token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        ConnectTransactionError: From<E>,
+    {
+        if has_tokens_issuance_to_cache(tx.outputs()) {
+            self.precache_token_issuance(token_data_getter, tx)?;
 
-        if was_token_issued {
             self.write_undo_issuance(tx)?;
         }
         Ok(())
@@ -96,7 +108,7 @@ impl TokenIssuanceCache {
         block_id: &Id<Block>,
         tx: &Transaction,
     ) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
         let aux_data = TokenAuxiliaryData::new(tx.clone(), *block_id);
         self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;
 
@@ -128,7 +140,7 @@ impl TokenIssuanceCache {
     }
 
     fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
         match self.data.entry(token_id) {
             Entry::Occupied(mut e) => {
                 e.insert(CachedAuxDataOp::Erase);
@@ -143,7 +155,7 @@ impl TokenIssuanceCache {
         Ok(())
     }
 
-    pub fn precache_token_issuance<E>(
+    fn precache_token_issuance<E>(
         &mut self,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
         tx: &Transaction,
@@ -151,22 +163,18 @@ impl TokenIssuanceCache {
     where
         ConnectTransactionError: From<E>,
     {
-        let has_token_issuance = get_tokens_issuance_count(tx.outputs()) > 0;
-
-        if has_token_issuance {
-            let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-            match self.data.entry(token_id) {
-                Entry::Vacant(e) => {
-                    let current_token_data = token_data_getter(&token_id)?;
-                    if let Some(el) = current_token_data {
-                        e.insert(CachedAuxDataOp::Read(el));
-                    }
+        let token_id = make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        match self.data.entry(token_id) {
+            Entry::Vacant(e) => {
+                let current_token_data = token_data_getter(&token_id)?;
+                if let Some(el) = current_token_data {
+                    e.insert(CachedAuxDataOp::Read(el));
                 }
-                Entry::Occupied(_) => {
-                    return Err(ConnectTransactionError::TokensError(
-                        TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
-                    ));
-                }
+            }
+            Entry::Occupied(_) => {
+                return Err(ConnectTransactionError::TokensError(
+                    TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
+                ));
             }
         }
         Ok(())
@@ -215,4 +223,23 @@ impl TokenIssuanceCache {
     }
 }
 
+fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> bool {
+    outputs.iter().any(|output| match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+            match v {
+                OutputValue::TokenV0(data) => match data.as_ref() {
+                    TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => true,
+                    TokenData::TokenTransfer(_) => false,
+                },
+                OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+            }
+        }
+        TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_) => false,
+        TxOutput::IssueNft(_, _, _) => true,
+    })
+}
 // TODO: write tests for operations

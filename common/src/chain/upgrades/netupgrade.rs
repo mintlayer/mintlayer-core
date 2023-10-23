@@ -15,82 +15,10 @@
 
 use std::ops::Range;
 
-use crate::chain::config::ChainType;
-use crate::chain::pos::{
-    DEFAULT_BLOCK_COUNT_TO_AVERAGE, DEFAULT_MATURITY_DISTANCE, DEFAULT_TARGET_BLOCK_TIME,
-};
-use crate::chain::pow::limit;
-use crate::chain::{pos_initial_difficulty, PoSChainConfig, PoSConsensusVersion};
-use crate::primitives::per_thousand::PerThousand;
-use crate::primitives::{BlockHeight, Compact};
-use crate::Uint256;
+use crate::primitives::BlockHeight;
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
-
-impl NetUpgrades<UpgradeVersion> {
-    pub fn new(chain_type: ChainType) -> Self {
-        Self(vec![(
-            BlockHeight::zero(),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                initial_difficulty: limit(chain_type).into(),
-            }),
-        )])
-    }
-
-    pub fn unit_tests() -> Self {
-        Self(vec![(
-            BlockHeight::zero(),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        )])
-    }
-
-    #[cfg(test)]
-    pub fn deliberate_ignore_consensus_twice() -> Self {
-        Self(vec![
-            (
-                BlockHeight::zero(),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            ),
-            (
-                BlockHeight::new(1),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            ),
-        ])
-    }
-
-    pub fn regtest_with_pos() -> Self {
-        let target_block_time = DEFAULT_TARGET_BLOCK_TIME;
-        let target_limit = (Uint256::MAX / Uint256::from_u64(target_block_time.get()))
-            .expect("Target block time cannot be zero as per NonZeroU64");
-
-        Self(vec![
-            (
-                BlockHeight::zero(),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-            ),
-            (
-                BlockHeight::new(1),
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                    initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
-                    config: PoSChainConfig::new(
-                        target_limit,
-                        target_block_time,
-                        DEFAULT_MATURITY_DISTANCE,
-                        DEFAULT_MATURITY_DISTANCE,
-                        DEFAULT_BLOCK_COUNT_TO_AVERAGE,
-                        PerThousand::new(1).expect("must be valid"),
-                        PoSConsensusVersion::V1,
-                    ),
-                }),
-            ),
-        ])
-    }
-
-    pub fn all_upgrades(&self) -> &[(BlockHeight, UpgradeVersion)] {
-        &self.0
-    }
-}
 
 pub trait Activate {
     fn is_activated(&self, height: BlockHeight, net_upgrades: &NetUpgrades<Self>) -> bool
@@ -103,80 +31,6 @@ pub trait Activate {
         false
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum UpgradeVersion {
-    ConsensusUpgrade(ConsensusUpgrade),
-    SomeUpgrade,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum ConsensusUpgrade {
-    PoW {
-        initial_difficulty: Compact,
-    },
-    PoS {
-        // If None the value will be taken from the network's current difficulty
-        initial_difficulty: Option<Compact>,
-        config: PoSChainConfig,
-    },
-    IgnoreConsensus,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum RequiredConsensus {
-    PoW(PoWStatus),
-    PoS(PoSStatus),
-    IgnoreConsensus,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum PoWStatus {
-    Ongoing,
-    Threshold { initial_difficulty: Compact },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum PoSStatus {
-    Ongoing(PoSChainConfig),
-    Threshold {
-        // If None the value will be taken from the network's current difficulty
-        initial_difficulty: Option<Compact>,
-        config: PoSChainConfig,
-    },
-}
-
-impl PoSStatus {
-    pub fn get_chain_config(&self) -> &PoSChainConfig {
-        match self {
-            PoSStatus::Ongoing(config)
-            | PoSStatus::Threshold {
-                initial_difficulty: _,
-                config,
-            } => config,
-        }
-    }
-}
-
-impl From<ConsensusUpgrade> for RequiredConsensus {
-    fn from(upgrade: ConsensusUpgrade) -> Self {
-        match upgrade {
-            ConsensusUpgrade::PoW { initial_difficulty } => {
-                RequiredConsensus::PoW(PoWStatus::Threshold { initial_difficulty })
-            }
-            ConsensusUpgrade::PoS {
-                initial_difficulty,
-                config,
-            } => RequiredConsensus::PoS(PoSStatus::Threshold {
-                initial_difficulty,
-                config,
-            }),
-            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
-        }
-    }
-}
-
-impl Activate for UpgradeVersion {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum NetUpgradesInitializeError {
@@ -221,50 +75,16 @@ impl<T: Ord> NetUpgrades<T> {
             })
     }
 
-    pub fn version_at_height(&self, height: BlockHeight) -> Option<&(BlockHeight, T)> {
-        self.0.iter().rev().find(|(upgrade_height, _)| *upgrade_height <= height)
+    pub fn version_at_height(&self, height: BlockHeight) -> &(BlockHeight, T) {
+        self.0
+            .iter()
+            .rev()
+            .find(|(upgrade_height, _)| *upgrade_height <= height)
+            .expect("cannot happen if initialize was used to create NetUpgrade")
     }
-}
 
-impl NetUpgrades<UpgradeVersion> {
-    pub fn consensus_status(&self, height: BlockHeight) -> RequiredConsensus {
-        let (last_upgrade_height, last_consensus_upgrade) = self
-            .version_at_height(height)
-            .and_then(|(upgrade_height, upgrade)| match upgrade {
-                UpgradeVersion::ConsensusUpgrade(consensus_upgrade) => {
-                    Some((upgrade_height, consensus_upgrade))
-                }
-                UpgradeVersion::SomeUpgrade => None,
-            })
-            .expect("Some consensus must have been set");
-
-        match last_consensus_upgrade {
-            ConsensusUpgrade::PoW { initial_difficulty } => {
-                if *last_upgrade_height < height {
-                    RequiredConsensus::PoW(PoWStatus::Ongoing)
-                } else {
-                    debug_assert_eq!(*last_upgrade_height, height);
-                    RequiredConsensus::PoW(PoWStatus::Threshold {
-                        initial_difficulty: *initial_difficulty,
-                    })
-                }
-            }
-            ConsensusUpgrade::PoS {
-                initial_difficulty,
-                config,
-            } => {
-                if *last_upgrade_height < height {
-                    RequiredConsensus::PoS(PoSStatus::Ongoing(config.clone()))
-                } else {
-                    debug_assert_eq!(*last_upgrade_height, height);
-                    RequiredConsensus::PoS(PoSStatus::Threshold {
-                        initial_difficulty: *initial_difficulty,
-                        config: config.clone(),
-                    })
-                }
-            }
-            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
-        }
+    pub fn all_upgrades(&self) -> &[(BlockHeight, T)] {
+        &self.0
     }
 }
 
@@ -272,7 +92,9 @@ impl NetUpgrades<UpgradeVersion> {
 mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
-    use crate::chain::{Activate, PoSChainConfigBuilder};
+    use crate::chain::{
+        Activate, ConsensusUpgrade, PoSChainConfigBuilder, PoSStatus, PoWStatus, RequiredConsensus,
+    };
     use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
 
@@ -359,9 +181,9 @@ mod tests {
         let (upgrades, two_height, three_height) = mock_netupgrades();
 
         let check = |height: BlockHeight, expected_version: MockVersion| {
-            let res = upgrades.version_at_height(height).map(|(_, v)| v);
+            let (_, res) = upgrades.version_at_height(height);
 
-            assert_eq!(Some(&expected_version), res);
+            assert_eq!(&expected_version, res);
         };
 
         check(BlockHeight::zero(), MockVersion::Zero);
@@ -373,7 +195,7 @@ mod tests {
         check(three_height.next_height(), MockVersion::Three);
     }
 
-    fn mock_consensus_upgrades() -> Result<NetUpgrades<UpgradeVersion>, NetUpgradesInitializeError>
+    fn mock_consensus_upgrades() -> Result<NetUpgrades<ConsensusUpgrade>, NetUpgradesInitializeError>
     {
         let genesis_pow = BlockHeight::new(0);
         let first_pos_upgrade = BlockHeight::new(10_000);
@@ -382,22 +204,22 @@ mod tests {
         let upgrades = vec![
             (
                 genesis_pow,
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                ConsensusUpgrade::PoW {
                     initial_difficulty: Uint256::from_u64(1000).into(),
-                }),
+                },
             ),
             (
                 first_pos_upgrade,
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                ConsensusUpgrade::PoS {
                     initial_difficulty: Some(Uint256::from_u64(1500).into()),
                     config: PoSChainConfigBuilder::new_for_unit_test().build(),
-                }),
+                },
             ),
             (
                 back_to_pow,
-                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                ConsensusUpgrade::PoW {
                     initial_difficulty: Uint256::from_u64(2000).into(),
-                }),
+                },
             ),
         ];
 

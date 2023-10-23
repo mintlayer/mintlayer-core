@@ -21,8 +21,8 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         output_value::OutputValue,
         signature::Signable,
-        tokens::{get_tokens_issuance_count, token_id, TokenData, TokenId},
-        AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
+        tokens::{get_tokens_issuance_count, make_token_id, TokenData, TokenId},
+        AccountOp, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -35,7 +35,7 @@ use super::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     token_issuance_cache::CoinOrTokenId,
-    Fee, Subsidy,
+    Fee, IOPolicyError, Subsidy,
 };
 
 fn get_total_fee(
@@ -99,29 +99,6 @@ where
     Ok(total_fee)
 }
 
-fn get_output_value<P: PoSAccountingView>(
-    pos_accounting_view: &P,
-    output: &TxOutput,
-) -> Result<OutputValue, ConnectTransactionError> {
-    let res = match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            v.clone()
-        }
-        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
-        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pledge_amount = pos_accounting_view
-                .get_pool_data(*pool_id)
-                .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
-                .pledge_amount();
-            OutputValue::Coin(pledge_amount)
-        }
-        TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
-        TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
-    };
-    Ok(res)
-}
-
 fn calculate_total_inputs<U, P, IssuanceTokenIdGetterFunc>(
     utxo_view: &U,
     pos_accounting_view: &P,
@@ -156,7 +133,16 @@ where
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => {
                     return Err(ConnectTransactionError::IOPolicyError(
-                        super::IOPolicyError::InvalidInputTypeInTx,
+                        IOPolicyError::InvalidInputTypeInTx,
+                        inputs_source.clone(),
+                    ))
+                }
+                TxOutput::IssueNft(token_id, _, _) => {
+                    OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+                }
+                TxOutput::IssueFungibleToken(_) => {
+                    return Err(ConnectTransactionError::IOPolicyError(
+                        IOPolicyError::InvalidInputTypeInTx,
                         inputs_source.clone(),
                     ))
                 }
@@ -169,7 +155,7 @@ where
             )
         }
         TxInput::Account(account_input) => match account_input.account() {
-            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
+            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount) => {
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
@@ -181,6 +167,12 @@ where
                     ConnectTransactionError::AttemptToPrintMoney(total_balance, *withdraw_amount)
                 );
                 Ok((CoinOrTokenId::Coin, *withdraw_amount))
+            }
+            AccountOp::MintTokens(token_id, amount) => {
+                Ok((CoinOrTokenId::TokenId(*token_id), *amount))
+            }
+            AccountOp::UnmintTokens(token_id) | AccountOp::LockTokenSupply(token_id) => {
+                Ok((CoinOrTokenId::TokenId(*token_id), Amount::ZERO))
             }
         },
     });
@@ -198,7 +190,26 @@ fn calculate_total_outputs<P: PoSAccountingView>(
     include_issuance: Option<&Transaction>,
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
     let iter = outputs.iter().map(|output| {
-        let output_value = get_output_value(pos_accounting_view, output)?;
+        let output_value = match output {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                v.clone()
+            }
+            TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
+            TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                let pledge_amount = pos_accounting_view
+                    .get_pool_data(*pool_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                    .pledge_amount();
+                OutputValue::Coin(pledge_amount)
+            }
+            TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO),
+            TxOutput::DelegateStaking(v, _) => OutputValue::Coin(*v),
+            // IssueFungibleToken cannot be spent so the output value is 0
+            TxOutput::IssueFungibleToken(_) => OutputValue::Coin(Amount::ZERO),
+            // when in tx output IssueNft has 0 output value because it is created there
+            TxOutput::IssueNft(_, _, _) => OutputValue::Coin(Amount::ZERO),
+        };
         get_output_token_id_and_amount(&output_value, include_issuance)
     });
     let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
@@ -213,25 +224,28 @@ fn get_output_token_id_and_amount(
 ) -> Result<Option<(CoinOrTokenId, Amount)>, ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
-        OutputValue::Token(token_data) => match &**token_data {
+        OutputValue::TokenV0(token_data) => match &**token_data {
             TokenData::TokenTransfer(transfer) => {
                 Some((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
             TokenData::TokenIssuance(issuance) => match include_issuance {
                 Some(tx) => {
-                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    let token_id =
+                        make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 }
                 None => None,
             },
             TokenData::NftIssuance(_) => match include_issuance {
                 Some(tx) => {
-                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    let token_id =
+                        make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 }
                 None => None,
             },
         },
+        OutputValue::TokenV1(id, amount) => Some((CoinOrTokenId::TokenId(*id), *amount)),
     })
 }
 
@@ -242,25 +256,26 @@ fn get_input_token_id_and_amount<IssuanceTokenIdGetterFunc>(
 where
     IssuanceTokenIdGetterFunc: Fn() -> Result<Option<TokenId>, ConnectTransactionError>,
 {
-    Ok(match output_value {
-        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-        OutputValue::Token(token_data) => match &**token_data {
+    match output_value {
+        OutputValue::Coin(amount) => Ok((CoinOrTokenId::Coin, *amount)),
+        OutputValue::TokenV0(token_data) => match &**token_data {
             TokenData::TokenTransfer(transfer) => {
-                (CoinOrTokenId::TokenId(transfer.token_id), transfer.amount)
+                Ok((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
             TokenData::TokenIssuance(issuance) => issuance_token_id_getter()?
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
-                ))?,
+                )),
             TokenData::NftIssuance(_) => issuance_token_id_getter()?
                 // TODO: Find more appropriate way to check NFTs when we add multi-token feature
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
-                ))?,
+                )),
         },
-    })
+        OutputValue::TokenV1(id, amount) => Ok((CoinOrTokenId::TokenId(*id), *amount)),
+    }
 }
 
 fn amount_from_outpoint<IssuanceTokenIdGetterFunc>(
@@ -346,6 +361,30 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     };
 
     Ok(())
+}
+
+pub fn calculate_tokens_burned_in_outputs(
+    tx: &Transaction,
+    token_id: &TokenId,
+) -> Result<Amount, ConnectTransactionError> {
+    tx.outputs()
+        .iter()
+        .filter_map(|output| match output {
+            TxOutput::Burn(output_value) => match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                OutputValue::TokenV1(id, amount) => (id == token_id).then_some(*amount),
+            },
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => None,
+        })
+        .sum::<Option<Amount>>()
+        .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
 }
 
 // TODO: add more tests
@@ -617,7 +656,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, overspend_amount),
+                AccountOp::SpendDelegationBalance(delegation_id, overspend_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -641,7 +680,7 @@ mod tests {
         {
             let input = TxInput::Account(AccountOutPoint::new(
                 AccountNonce::new(0),
-                AccountSpending::Delegation(delegation_id, withdraw_amount),
+                AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
             ));
 
             let output = TxOutput::Transfer(
@@ -663,7 +702,7 @@ mod tests {
 
         let input = TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(0),
-            AccountSpending::Delegation(delegation_id, withdraw_amount),
+            AccountOp::SpendDelegationBalance(delegation_id, withdraw_amount),
         ));
         let output = TxOutput::Transfer(
             OutputValue::Coin(withdraw_amount),

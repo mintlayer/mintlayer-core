@@ -152,7 +152,9 @@ where
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _) => {
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),

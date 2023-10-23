@@ -161,7 +161,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .add_output(TxOutput::Transfer(
-                random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
+                random_token_issuance(tf.chainstate.get_chain_config(), &mut rng).into(),
                 anyonecanspend_address(),
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(
@@ -186,8 +186,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         // create a tx with coins utxo and token issuance utxo
-        let token_issuance_data =
-            random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng);
+        let token_issuance_data = random_token_issuance(tf.chainstate.get_chain_config(), &mut rng);
         let amount_to_issue = token_issuance_data.amount_to_issue;
         let min_stake_pool_pledge =
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
@@ -214,7 +213,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
             )))
             .build();
         let tx0_id = tx0.transaction().get_id();
-        let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
+        let token_id = common::chain::tokens::make_token_id(tx0.transaction().inputs()).unwrap();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let (stake_pool_data, _) =

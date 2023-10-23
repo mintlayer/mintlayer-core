@@ -60,7 +60,9 @@ impl OutputGroup {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _) => {
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))
@@ -68,7 +70,7 @@ impl OutputGroup {
         };
         let value = match output_value {
             OutputValue::Coin(output_amount) => output_amount,
-            OutputValue::Token(token_data) => {
+            OutputValue::TokenV0(token_data) => {
                 let token_data = token_data.as_ref();
                 match token_data {
                     TokenData::TokenTransfer(token_transfer) => token_transfer.amount,
@@ -76,6 +78,7 @@ impl OutputGroup {
                     TokenData::NftIssuance(_) => Amount::from_atoms(1),
                 }
             }
+            OutputValue::TokenV1(_, output_amount) => output_amount,
         };
 
         Ok(Self {

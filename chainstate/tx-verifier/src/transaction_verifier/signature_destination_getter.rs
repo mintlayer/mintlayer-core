@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint};
+use common::chain::{
+    tokens::TokenId, AccountOp, DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint,
+};
 use pos_accounting::PoSAccountingView;
+use tokens_accounting::TokensAccountingView;
 use utxo::UtxosView;
 
 pub type SignatureDestinationGetterFn<'a> =
@@ -26,18 +29,22 @@ pub enum SignatureDestinationGetterError {
     SpendingOutputInBlockReward,
     #[error("Attempted to spend from account in block reward")]
     SpendingFromAccountInBlockReward,
-    #[error("Attempted to verify signature for burning output")]
-    SigVerifyOfBurnedOutput,
+    #[error("Attempted to verify signature for not spendable output")]
+    SigVerifyOfNotSpendableOutput,
     #[error("Pool data not found for signature verification {0}")]
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
     DelegationDataNotFound(DelegationId),
+    #[error("Token data not found for signature verification {0}")]
+    TokenDataNotFound(TokenId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
     UtxoOutputNotFound(UtxoOutPoint),
     #[error("Error accessing utxo set")]
     UtxoViewError(utxo::Error),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]
     SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
+    #[error("During destination getting for signature verification: Tokens accounting error {0}")]
+    SigVerifyTokensAccountingError(#[from] tokens_accounting::Error),
 }
 
 /// Given a signed transaction input, which spends an output of some type,
@@ -62,9 +69,11 @@ pub struct SignatureDestinationGetter<'a> {
 
 impl<'a> SignatureDestinationGetter<'a> {
     pub fn new_for_transaction<
+        T: TokensAccountingView<Error = tokens_accounting::Error>,
         P: PoSAccountingView<Error = pos_accounting::Error>,
         U: UtxosView,
     >(
+        tokens_view: &'a T,
         accounting_view: &'a P,
         utxos_view: &'a U,
     ) -> Self {
@@ -90,7 +99,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
-                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
                             TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_view
                                 .get_delegation_data(*delegation_id)?
@@ -118,17 +127,34 @@ impl<'a> SignatureDestinationGetter<'a> {
                                     .decommission_destination()
                                     .clone())
                             }
+                            TxOutput::IssueNft(_, _, d) => Ok(d.clone()),
+                            TxOutput::IssueFungibleToken(_) => {
+                                // This error is emitted in other places for attempting to make this spend,
+                                // but this is just a double-check.
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
+                            }
                         }
                     }
                     TxInput::Account(account_input) => match account_input.account() {
-                        common::chain::AccountSpending::Delegation(delegation_id, _) => {
-                            Ok(accounting_view
-                                .get_delegation_data(*delegation_id)?
-                                .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
-                                    *delegation_id,
-                                ))?
-                                .spend_destination()
-                                .clone())
+                        AccountOp::SpendDelegationBalance(delegation_id, _) => Ok(accounting_view
+                            .get_delegation_data(*delegation_id)?
+                            .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
+                                *delegation_id,
+                            ))?
+                            .spend_destination()
+                            .clone()),
+                        AccountOp::MintTokens(token_id, _)
+                        | AccountOp::UnmintTokens(token_id)
+                        | AccountOp::LockTokenSupply(token_id) => {
+                            let token_data = tokens_view.get_token_data(token_id)?.ok_or(
+                                SignatureDestinationGetterError::TokenDataNotFound(*token_id),
+                            )?;
+                            let destination = match token_data {
+                                tokens_accounting::TokenData::FungibleToken(data) => {
+                                    data.reissuance_controller().clone()
+                                }
+                            };
+                            Ok(destination)
                         }
                     },
                 }
@@ -158,11 +184,14 @@ impl<'a> SignatureDestinationGetter<'a> {
                         match utxo.output() {
                             TxOutput::Transfer(_, _)
                             | TxOutput::LockThenTransfer(_, _, _)
-                            | TxOutput::DelegateStaking(_, _) => {
+                            | TxOutput::DelegateStaking(_, _)
+                            | TxOutput::IssueNft(_, _, _) => {
                                 Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                             }
-                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
-                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                            TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::IssueFungibleToken(_) => {
+                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
 
                             TxOutput::ProduceBlockFromStake(d, _) => {

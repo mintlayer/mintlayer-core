@@ -21,6 +21,7 @@ pub mod test_dir;
 use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
 use hex::ToHex;
+use itertools::Itertools;
 
 /// Assert that the encoded object matches the expected hex string.
 pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {
@@ -64,6 +65,18 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     token_ticker
 }
 
+pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
+    let mut numbers = vec![0, value];
+    let n = rng.gen_range(0..10);
+
+    if value > 1 && n > 0 {
+        numbers.extend((0..=n).map(|_| rng.gen_range(1..value)).collect::<Vec<_>>());
+        numbers.sort();
+    }
+
+    numbers.iter().tuple_windows().map(|(v0, v1)| v1 - v0).collect()
+}
+
 #[macro_export]
 macro_rules! assert_matches_return_val {
     ($in:expr, $pattern:pat, $out:expr) => {
@@ -89,6 +102,10 @@ macro_rules! assert_matches {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::random::{make_seedable_rng, Seed};
+    use rstest::rstest;
+
     mod match_macro_tests {
         #[allow(unused)]
         enum TestEnum {
@@ -126,5 +143,19 @@ mod tests {
 
             assert_matches!(test_val, TestEnum::E2);
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn split_value_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        assert_eq!(vec![0], split_value(&mut rng, 0));
+        assert_eq!(vec![1], split_value(&mut rng, 1));
+
+        let value = rng.gen::<u128>();
+        let result = split_value(&mut rng, value);
+        assert_eq!(value, result.iter().sum());
     }
 }

@@ -21,6 +21,8 @@ use super::{
     CachedInputsOperation, CachedOperation, TransactionVerifierDelta,
 };
 use common::chain::OutPointSourceId;
+use tokens_accounting::FlushableTokensAccountingView;
+use utxo::FlushableUtxoView;
 
 fn flush_tx_indexes<S: TransactionVerifierStorageMut>(
     storage: &mut S,
@@ -80,7 +82,8 @@ pub fn flush_to_storage<S: TransactionVerifierStorageMut>(
     consumed: TransactionVerifierDelta,
 ) -> Result<(), <S as TransactionVerifierStorageRef>::Error>
 where
-    <S as TransactionVerifierStorageRef>::Error: From<<S as utxo::FlushableUtxoView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableUtxoView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
     for (tx_id, tx_index_op) in consumed.tx_index_cache {
@@ -113,12 +116,12 @@ where
     // flush pos accounting
     storage.batch_write_delta(consumed.accounting_delta)?;
 
-    for (tx_source, delta) in consumed.accounting_block_deltas {
+    for (tx_source, delta) in consumed.pos_accounting_block_deltas {
         storage.apply_accounting_delta(tx_source, &delta)?;
     }
 
-    // flush accounting block undo
-    for (tx_source, entry) in consumed.accounting_delta_undo {
+    // flush pos accounting block undo
+    for (tx_source, entry) in consumed.pos_accounting_delta_undo {
         if entry.is_fresh {
             storage.set_accounting_undo_data(tx_source, &entry.undo)?;
         } else if entry.undo.is_empty() {
@@ -127,6 +130,26 @@ where
             match tx_source {
                 TransactionSource::Chain(block_id) => {
                     panic!("BlockUndo accounting entries were not used up completely while disconnecting a block {}", block_id)
+                }
+                TransactionSource::Mempool => {
+                    /* it's ok for the mempool to use tx undos partially */
+                }
+            }
+        }
+    }
+
+    storage.batch_write_tokens_data(consumed.tokens_accounting_delta)?;
+
+    // flush tokens accounting block undo
+    for (tx_source, entry) in consumed.tokens_accounting_delta_undo {
+        if entry.is_fresh {
+            storage.set_tokens_accounting_undo_data(tx_source, &entry.undo)?;
+        } else if entry.undo.is_empty() {
+            storage.del_tokens_accounting_undo_data(tx_source)?;
+        } else {
+            match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    panic!("BlockUndo tokens accounting entries were not used up completely while disconnecting a block {}", block_id)
                 }
                 TransactionSource::Mempool => {
                     /* it's ok for the mempool to use tx undos partially */

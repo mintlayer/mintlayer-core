@@ -31,7 +31,7 @@ pub fn pow_reorg(c: &mut Criterion) {
     let mut tf = TestFramework::builder(&mut rng)
         .with_chain_config(
             common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
                 .max_depth_for_reorg(BlockDistance::new(5000))
                 .build(),
         )

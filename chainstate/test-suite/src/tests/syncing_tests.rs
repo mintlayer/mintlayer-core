@@ -215,7 +215,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(5000))
                     .build(),
             )
@@ -416,7 +416,7 @@ fn try_reorg_past_limit(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(1))
                     .build(),
             )
@@ -448,7 +448,7 @@ fn otry_reorg_past_limit_in_fork(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
                 common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .consensus_upgrades(common::chain::NetUpgrades::unit_tests())
                     .max_depth_for_reorg(BlockDistance::new(2))
                     .build(),
             )

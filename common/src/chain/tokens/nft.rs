@@ -17,7 +17,13 @@ use crypto::key::PublicKey;
 use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
-pub struct NftIssuance {
+pub enum NftIssuance {
+    #[codec(index = 0)]
+    V0(NftIssuanceV0),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+pub struct NftIssuanceV0 {
     pub metadata: Metadata,
     // TODO: Implement after additional research payout, royalty and refund.
     //       Payout might be Multisig contract with amount enforcement.

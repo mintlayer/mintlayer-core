@@ -365,6 +365,20 @@ where
     ) -> Result<Option<SignedTransaction>, ChainstateError> {
         self.deref().get_transaction(tx_id)
     }
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError> {
+        self.deref().get_token_data(id)
+    }
+
+    fn get_token_circulating_supply(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_token_circulating_supply(id)
+    }
 }
 
 #[cfg(test)]

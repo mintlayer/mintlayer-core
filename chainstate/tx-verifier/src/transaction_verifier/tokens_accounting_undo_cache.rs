@@ -20,23 +20,21 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use pos_accounting::{
-    AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo,
-};
+use tokens_accounting::{BlockUndo, BlockUndoError, TxUndo};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct AccountingBlockUndoEntry {
-    pub undo: AccountingBlockUndo,
+pub struct TokensAccountingBlockUndoEntry {
+    pub undo: BlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     pub is_fresh: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct AccountingBlockUndoCache {
-    data: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
+pub struct TokensAccountingBlockUndoCache {
+    data: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>,
 }
 
-impl AccountingBlockUndoCache {
+impl TokensAccountingBlockUndoCache {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -44,25 +42,25 @@ impl AccountingBlockUndoCache {
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<TransactionSource, AccountingBlockUndoEntry>) -> Self {
+    pub fn new_for_test(data: BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
+    pub fn data(&self) -> &BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
+    pub fn consume(self) -> BTreeMap<TransactionSource, TokensAccountingBlockUndoEntry> {
         self.data
     }
 
-    pub fn fetch_block_undo<F, E>(
+    fn fetch_block_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<Option<&mut AccountingBlockUndo>, ConnectTransactionError>
+    ) -> Result<Option<&mut BlockUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         match self.data.entry(*tx_source) {
@@ -71,7 +69,7 @@ impl AccountingBlockUndoCache {
                 TransactionSource::Chain(block_id) => {
                     let entry = fetcher_func(*block_id)?.map(|block_undo| {
                         &mut entry
-                            .insert(AccountingBlockUndoEntry {
+                            .insert(TokensAccountingBlockUndoEntry {
                                 undo: block_undo,
                                 is_fresh: false,
                             })
@@ -89,9 +87,9 @@ impl AccountingBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<Option<AccountingTxUndo>, ConnectTransactionError>
+    ) -> Result<Option<TxUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, E>,
         ConnectTransactionError: From<E>,
     {
         Ok(self
@@ -99,28 +97,11 @@ impl AccountingBlockUndoCache {
             .and_then(|entry| entry.take_tx_undo(tx_id)))
     }
 
-    pub fn take_block_reward_undo<F, E>(
-        &mut self,
-        tx_source: &TransactionSource,
-        fetcher_func: F,
-    ) -> Result<Option<AccountingBlockRewardUndo>, ConnectTransactionError>
-    where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
-        ConnectTransactionError: From<E>,
-    {
-        Ok(self
-            .fetch_block_undo(tx_source, fetcher_func)?
-            .and_then(|entry| entry.take_reward_undos()))
-    }
-
-    pub fn get_or_create_block_undo(
-        &mut self,
-        tx_source: &TransactionSource,
-    ) -> &mut AccountingBlockUndo {
+    pub fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
         &mut self
             .data
             .entry(*tx_source)
-            .or_insert(AccountingBlockUndoEntry {
+            .or_insert(TokensAccountingBlockUndoEntry {
                 is_fresh: true,
                 undo: Default::default(),
             })
@@ -130,11 +111,11 @@ impl AccountingBlockUndoCache {
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &AccountingBlockUndo,
-    ) -> Result<(), AccountingBlockUndoError> {
+        new_undo: &BlockUndo,
+    ) -> Result<(), BlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(AccountingBlockUndoEntry {
+                e.insert(TokensAccountingBlockUndoEntry {
                     undo: new_undo.clone(),
                     is_fresh: true,
                 });
@@ -146,16 +127,13 @@ impl AccountingBlockUndoCache {
         Ok(())
     }
 
-    pub fn del_undo_data(
-        &mut self,
-        tx_source: TransactionSource,
-    ) -> Result<(), AccountingBlockUndoError> {
+    pub fn del_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), BlockUndoError> {
         // delete undo from current cache
         if self.data.remove(&tx_source).is_none() {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent
             self.data.insert(
                 tx_source,
-                AccountingBlockUndoEntry {
+                TokensAccountingBlockUndoEntry {
                     undo: Default::default(),
                     is_fresh: false,
                 },

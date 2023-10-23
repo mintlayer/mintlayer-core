@@ -29,6 +29,7 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
+use tokens_accounting::TokensAccountingStorageRead;
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -104,6 +105,15 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        self.storage
+            .get_tokens_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
@@ -172,5 +182,20 @@ impl PoSAccountingView for InMemoryStorageWrapper {
     ) -> Result<Option<Amount>, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_pool_delegation_share(pool_id, delegation_id)
+    }
+}
+
+impl TokensAccountingStorageRead for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        self.storage.get_token_data(id)
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        self.storage.get_circulating_supply(id)
     }
 }

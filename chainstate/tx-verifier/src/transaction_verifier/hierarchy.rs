@@ -37,10 +37,19 @@ use pos_accounting::{
     AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
+use tokens_accounting::{
+    FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
+    TokensAccountingStorageRead, TokensAccountingView,
+};
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
-    TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A>
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A, T>
 where
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
@@ -102,9 +111,20 @@ where
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
-        match self.accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
+        match self.pos_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage.get_accounting_undo(id),
+        }
+    }
+
+    fn get_tokens_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<tokens_accounting::BlockUndo>, <Self as TransactionVerifierStorageRef>::Error>
+    {
+        match self.tokens_accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
+            Some(v) => Ok(Some(v.undo.clone())),
+            None => self.storage.get_tokens_accounting_undo(id),
         }
     }
 
@@ -123,8 +143,8 @@ where
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
-    for TransactionVerifier<C, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A, T> UtxosStorageRead
+    for TransactionVerifier<C, S, U, A, T>
 where
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
@@ -146,13 +166,14 @@ where
     }
 }
 
-impl<C, S, U, A> TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A>
+impl<C, S, U, A, T> TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A, T>
 where
     S: TransactionVerifierStorageRef,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<TransactionVerifierStorageError>,
     U: UtxosView,
     A: PoSAccountingView,
+    T: TokensAccountingView,
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -239,7 +260,7 @@ where
         tx_source: TransactionSource,
         new_undo: &AccountingBlockUndo,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_block_undo
+        self.pos_accounting_block_undo
             .set_undo_data(tx_source, new_undo)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
@@ -248,7 +269,7 @@ where
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_block_undo
+        self.pos_accounting_block_undo
             .del_undo_data(tx_source)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
@@ -258,7 +279,7 @@ where
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .apply_accounting_delta(tx_source, delta)
             .map_err(TransactionVerifierStorageError::from)?;
         Ok(())
@@ -280,10 +301,29 @@ where
         self.account_nonce.insert(account, CachedOperation::<AccountNonce>::Erase);
         Ok(())
     }
+
+    fn set_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        new_undo: &tokens_accounting::BlockUndo,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.tokens_accounting_block_undo
+            .set_undo_data(tx_source, new_undo)
+            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
+    }
+
+    fn del_tokens_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.tokens_accounting_block_undo
+            .del_undo_data(tx_source)
+            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
+    }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView
-    for TransactionVerifier<C, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView, T> FlushableUtxoView
+    for TransactionVerifier<C, S, U, A, T>
 {
     type Error = utxo::Error;
 
@@ -292,28 +332,33 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Fl
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
-    for TransactionVerifier<C, S, U, A>
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > PoSAccountingView for TransactionVerifier<C, S, U, A, T>
 {
     type Error = pos_accounting::Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.accounting_delta_adapter.accounting_delta().pool_exists(pool_id)
+        self.pos_accounting_adapter.accounting_delta().pool_exists(pool_id)
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter.accounting_delta().get_pool_balance(pool_id)
+        self.pos_accounting_adapter.accounting_delta().get_pool_balance(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.accounting_delta_adapter.accounting_delta().get_pool_data(pool_id)
+        self.pos_accounting_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_balance(delegation_id)
     }
@@ -322,7 +367,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_data(delegation_id)
     }
@@ -331,7 +376,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegations_shares(pool_id)
     }
@@ -341,17 +386,54 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter
+        self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegation_share(pool_id, delegation_id)
     }
 }
 
-impl<C, S, U, A: PoSAccountingView> FlushablePoSAccountingView for TransactionVerifier<C, S, U, A> {
+impl<C, S, U, A: PoSAccountingView, T> FlushablePoSAccountingView
+    for TransactionVerifier<C, S, U, A, T>
+{
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
-        self.accounting_delta_adapter.batch_write_delta(data)
+        self.pos_accounting_adapter.batch_write_delta(data)
+    }
+}
+
+impl<
+        C,
+        S: TransactionVerifierStorageRef,
+        U: UtxosView,
+        A: PoSAccountingView,
+        T: TokensAccountingView,
+    > TokensAccountingStorageRead for TransactionVerifier<C, S, U, A, T>
+{
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        self.tokens_accounting_cache.get_token_data(id)
+    }
+
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        self.tokens_accounting_cache.get_circulating_supply(id)
+    }
+}
+
+impl<C, S, U, A, T: TokensAccountingView> FlushableTokensAccountingView
+    for TransactionVerifier<C, S, U, A, T>
+{
+    type Error = tokens_accounting::Error;
+
+    fn batch_write_tokens_data(
+        &mut self,
+        data: TokensAccountingDeltaData,
+    ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
+        self.tokens_accounting_cache.batch_write_tokens_data(data)
     }
 }

@@ -18,7 +18,7 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
-        tokens::TokenId,
+        tokens::{TokenId, TokenIssuanceVersion},
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender,
         Transaction, TxMainChainIndexError, UtxoOutPoint,
     },
@@ -92,7 +92,7 @@ pub enum ConnectTransactionError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
-    #[error("accounting BlockUndo error: {0}")]
+    #[error("PoS accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
@@ -154,6 +154,12 @@ pub enum ConnectTransactionError {
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]
     IOPolicyError(IOPolicyError, OutPointSourceId),
+    #[error("Tokens accounting error: {0}")]
+    TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Tokens accounting BlockUndo error: {0}")]
+    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
+    #[error("Total fee required overflow")]
+    TotalFeeRequiredOverflow,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -269,6 +275,10 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
+    #[error("Token version {0:?} from tx {1} is deprecated")]
+    DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
+    #[error("Token issuance version {0:?} from tx {1} is not supported yet")]
+    UnsupportedTokenIssuanceVersion(TokenIssuanceVersion, Id<Transaction>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

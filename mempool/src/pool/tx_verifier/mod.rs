@@ -33,6 +33,7 @@ pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<
     ChainstateHandle,
     ChainstateHandle,
     ChainstateHandle,
+    ChainstateHandle,
 >;
 
 /// Make a new transaction verifier
@@ -45,6 +46,7 @@ pub fn create(
     chainstate::tx_verifier::TransactionVerifier::new_generic(
         chainstate.shallow_clone(),
         chain_config,
+        chainstate.shallow_clone(),
         chainstate.shallow_clone(),
         chainstate,
         verifier_config,
