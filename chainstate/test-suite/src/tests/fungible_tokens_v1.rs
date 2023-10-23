@@ -25,6 +25,7 @@ use common::{
     chain::{
         output_value::OutputValue,
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
+        timelock::OutputTimeLock,
         tokens::{
             make_token_id, TokenId, TokenIssuance, TokenIssuanceV1, TokenIssuanceVersion,
             TokenTotalSupply,
@@ -3136,5 +3137,119 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         };
 
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    });
+}
+
+// Issue a token and mint some with locked outputs for 2 blocks.
+// Try transfer tokens in the next block and check it's the timelock error.
+// Produce a block.
+// Transfer tokens and check that now it's ok.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mint_with_timelock(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = make_test_framework_with_v1(&mut rng);
+
+        let token_min_supply_change_fee =
+            tf.chainstate.get_chain_config().token_min_supply_change_fee();
+
+        let amount_to_mint =
+            Amount::from_atoms(rng.gen_range(2..SignedAmount::MAX.into_atoms() as u128));
+        let (token_id, _, utxo_with_change) =
+            issue_token_from_genesis(&mut rng, &mut tf, TokenTotalSupply::Lockable);
+
+        // Mint with locked output
+        let mint_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_account(
+                    AccountNonce::new(0),
+                    AccountOp::MintTokens(token_id, amount_to_mint),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(2),
+            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                token_min_supply_change_fee,
+            )))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_min_supply_change_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let mint_tx_id = mint_tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+
+        let actual_supply =
+            TokensAccountingStorageRead::get_circulating_supply(&tf.storage, &token_id).unwrap();
+        assert_eq!(actual_supply, Some(amount_to_mint));
+
+        // Try spend tokens at once
+        let token_mint_outpoint = UtxoOutPoint::new(mint_tx_id.into(), 0);
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(token_mint_outpoint.clone()),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation(token_mint_outpoint.clone()),
+            ))
+        );
+
+        // Produce 1 more block to get past timelock
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 2),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(token_min_supply_change_fee),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+
+        // Spend again, now timelock should pass
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(token_mint_outpoint.clone()),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
     });
 }
