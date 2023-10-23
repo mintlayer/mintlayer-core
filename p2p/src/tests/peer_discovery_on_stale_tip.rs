@@ -82,7 +82,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
     let mut nodes = Vec::with_capacity(nodes_count);
 
     let initial_block = make_new_block(
-        &*chain_config,
+        &chain_config,
         None,
         &time_getter.get_time_getter(),
         &mut rng,
@@ -138,7 +138,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
     let new_node_addr = *new_node.local_address();
 
     let new_block = make_new_block(
-        &*chain_config,
+        &chain_config,
         Some(&initial_block),
         &time_getter.get_time_getter(),
         &mut rng,
@@ -239,7 +239,7 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
     let new_node_addr = *new_node.local_address();
 
     let new_block = make_new_block(
-        &*chain_config,
+        &chain_config,
         None,
         &time_getter.get_time_getter(),
         &mut rng,

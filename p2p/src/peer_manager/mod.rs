@@ -216,6 +216,7 @@ where
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_generic(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,

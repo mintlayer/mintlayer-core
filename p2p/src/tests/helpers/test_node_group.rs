@@ -52,9 +52,9 @@ where
         self.nodes.iter().map(|node| *node.local_address()).collect()
     }
 
-    pub fn set_dns_seed_addresses(&self, addresses: &Vec<SocketAddress>) {
+    pub fn set_dns_seed_addresses(&self, addresses: &[SocketAddress]) {
         for node in &self.nodes {
-            node.set_dns_seed_addresses(addresses.clone());
+            node.set_dns_seed_addresses(addresses.to_vec());
         }
     }
 

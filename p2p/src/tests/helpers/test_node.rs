@@ -241,11 +241,10 @@ where
 
     pub async fn wait_for_ban_score_adjustment(&mut self) -> (SocketAddress, u32) {
         loop {
-            match self.peer_mgr_notification_rx.recv().await.unwrap() {
-                PeerManagerNotification::BanScoreAdjustment { address, new_score } => {
-                    return (address, new_score);
-                }
-                _ => {}
+            if let PeerManagerNotification::BanScoreAdjustment { address, new_score } =
+                self.peer_mgr_notification_rx.recv().await.unwrap()
+            {
+                return (address, new_score);
             }
         }
     }

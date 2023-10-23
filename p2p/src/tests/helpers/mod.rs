@@ -115,7 +115,7 @@ impl TestPeersInfo {
     ) -> Self {
         let mut info = BTreeMap::new();
 
-        for (_, ctx) in contexts {
+        for ctx in contexts.values() {
             info.insert(
                 ctx.address,
                 TestPeerInfo {
