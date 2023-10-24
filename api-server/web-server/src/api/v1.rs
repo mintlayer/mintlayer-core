@@ -24,7 +24,8 @@ use axum::{
     Json, Router,
 };
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    address::Address,
+    chain::{Block, Destination, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{make_true_rng, Rng};
@@ -55,23 +56,7 @@ pub fn routes<T: ApiServerStorage + Send + Sync + 'static>(
         .route("/transaction/:id", get(transaction))
         .route("/transaction/:id/merkle-path", get(transaction_merkle_path));
 
-    let router = router
-        .route(
-            "/destination/address/:public_key_hash",
-            get(destination_address),
-        )
-        .route(
-            "/destination/public-key/:public_key",
-            get(destination_public_key),
-        )
-        .route(
-            "/destination/script-hash/:script_id",
-            get(destination_script_hash),
-        )
-        .route(
-            "/destination/multisig/:public_key",
-            get(destination_multisig),
-        );
+    let router = router.route("/address/:public_key_hash", get(address));
 
     router.route("/pool/:id", get(pool))
 }
@@ -355,99 +340,62 @@ pub async fn transaction_merkle_path<T: ApiServerStorage>(
 }
 
 //
-// destination/
+// address/
 //
 
 #[allow(clippy::unused_async)]
-pub async fn destination_address(
-    Path(_public_key_hash): Path<String>,
+pub async fn address<T: ApiServerStorage>(
+    Path(address): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    // TODO replace mock with database calls
+    let address = {
+        let address =
+            Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+                ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+            })?;
 
-    let mut rng = make_true_rng();
+        address.decode_object(&state.chain_config).map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
+        })?;
+
+        address
+    };
+
+    let coin_balance = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_address_balance(&address.to_string())
+        .await
+        .map_err(|_| {
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::ClientError(
+            ApiServerWebServerClientError::AddressNotFound,
+        ))?;
 
     Ok(Json(json!({
-        "balance": rng.gen_range(1..100_000_000),
-        "tokens": {
-            "BTC": rng.gen_range(1..1000),
-            "ETH": rng.gen_range(1..1000),
-            "USDT": rng.gen_range(1..1000),
-            "USDC": rng.gen_range(1..1000),
-        },
-        "history": (0..rng.gen_range(1..20)).map(|_| { json!({
-            "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-            "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-        })}).collect::<Vec<_>>(),
+    "coin_balance": coin_balance.into_atoms(),
+    //TODO "token_balances": destination_summary.token_balances(),
+    //TODO "transaction_history": destination_summary.transaction_history(),
     })))
-}
 
-#[allow(clippy::unused_async)]
-pub async fn destination_multisig(
-    Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    // TODO replace mock with database calls
-
-    let mut rng = make_true_rng();
-
-    Ok(Json(json!({
-        "balance": rng.gen_range(1..100_000_000),
-        "tokens": {
-            "BTC": rng.gen_range(1..1000),
-            "ETH": rng.gen_range(1..1000),
-            "USDT": rng.gen_range(1..1000),
-            "USDC": rng.gen_range(1..1000),
-        },
-        "history": (0..rng.gen_range(1..20)).map(|_| { json!({
-            "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-            "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-        })}).collect::<Vec<_>>(),
-    })))
-}
-
-#[allow(clippy::unused_async)]
-pub async fn destination_public_key(
-    Path(_public_key): Path<String>,
-) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    // TODO replace mock with database calls
-
-    let mut rng = make_true_rng();
-
-    Ok(Json(json!({
-        "balance": rng.gen_range(1..100_000_000),
-        "tokens": {
-            "BTC": rng.gen_range(1..1000),
-            "ETH": rng.gen_range(1..1000),
-            "USDT": rng.gen_range(1..1000),
-            "USDC": rng.gen_range(1..1000),
-        },
-        "history": (0..rng.gen_range(1..20)).map(|_| { json!({
-            "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-            "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-        })}).collect::<Vec<_>>(),
-    })))
-}
-
-#[allow(clippy::unused_async)]
-pub async fn destination_script_hash(
-    Path(_script_hash): Path<String>,
-) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    // TODO replace mock with database calls
-
-    let mut rng = make_true_rng();
-
-    Ok(Json(json!({
-        "balance": rng.gen_range(1..100_000_000),
-        "tokens": {
-            "BTC": rng.gen_range(1..1000),
-            "ETH": rng.gen_range(1..1000),
-            "USDT": rng.gen_range(1..1000),
-            "USDC": rng.gen_range(1..1000),
-        },
-        "history": (0..rng.gen_range(1..20)).map(|_| { json!({
-            "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
-            "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
-        })}).collect::<Vec<_>>(),
-    })))
+    // Ok(Json(json!({
+    //     "balance": rng.gen_range(1..100_000_000),
+    //     "tokens": {
+    //         "BTC": rng.gen_range(1..1000),
+    //         "ETH": rng.gen_range(1..1000),
+    //         "USDT": rng.gen_range(1..1000),
+    //         "USDC": rng.gen_range(1..1000),
+    //     },
+    //     "history": (0..rng.gen_range(1..20)).map(|_| { json!({
+    //         "block_id": Id::<Block>::new(H256::random_using(&mut rng)),
+    //         "transaction_id": Id::<Transaction>::new(H256::random_using(&mut rng)),
+    //     })}).collect::<Vec<_>>(),
+    // })))
 }
 
 //

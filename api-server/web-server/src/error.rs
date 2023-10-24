@@ -33,6 +33,8 @@ pub enum ApiServerWebServerError {
 #[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
 pub enum ApiServerWebServerClientError {
+    #[error("Address not found")]
+    AddressNotFound,
     #[error("Bad request")]
     BadRequest,
     #[error("Block not found")]
@@ -41,6 +43,8 @@ pub enum ApiServerWebServerClientError {
     InvalidBlockHeight,
     #[error("Invalid block Id")]
     InvalidBlockId,
+    #[error("Invalid address")]
+    InvalidAddress,
     #[error("Invalid transaction Id")]
     InvalidTransactionId,
     #[error("No block found at supplied height")]
