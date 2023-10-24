@@ -15,10 +15,11 @@
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use self::block_aux_data::BlockAuxData;
+
 pub mod block_aux_data;
 
 #[allow(dead_code)]
@@ -50,6 +51,11 @@ pub trait ApiServerStorageRead: Sync {
 
     async fn get_storage_version(&self) -> Result<Option<u32>, ApiServerStorageError>;
 
+    async fn get_address_balance(
+        &self,
+        address: &str,
+    ) -> Result<Option<Amount>, ApiServerStorageError>;
+
     async fn get_best_block(&self) -> Result<(BlockHeight, Id<GenBlock>), ApiServerStorageError>;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ApiServerStorageError>;
@@ -76,6 +82,18 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn initialize_storage(
         &mut self,
         chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_address_balance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_address_balance_at_height(
+        &mut self,
+        address: &str,
+        amount: Amount,
+        block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;
 
     async fn set_best_block(
