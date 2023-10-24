@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::assert_matches;
 
 use crate::{
@@ -24,11 +25,12 @@ use crate::{
         transport::{BufferedTranscoder, TransportSocket},
         types::{HandshakeMessage, Message, P2pTimestamp},
     },
+    peer_manager::PeerManagerQueryInterface,
     testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp, TEST_PROTOCOL_VERSION,
     },
-    tests::helpers::{timeout, PeerManagerNotification, TestNode},
+    tests::helpers::{timeout, TestNode},
 };
 
 async fn unexpected_handshake_message<TTM>()
@@ -36,12 +38,15 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let mut test_node = TestNode::<TTM>::start(
+    let mut test_node = TestNode::<TTM::Transport>::start(
+        time_getter.get_time_getter(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        TTM::make_transport(),
         TTM::make_address(),
         TEST_PROTOCOL_VERSION.into(),
     )
@@ -62,9 +67,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_time(
-                test_node.time_getter().get_time_getter().get_time(),
-            ),
+            current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
             handshake_nonce: 0,
         }))
         .await
@@ -86,9 +89,7 @@ where
             software_version: *chain_config.software_version(),
             services: (*p2p_config.node_type).into(),
             receiver_address: None,
-            current_time: P2pTimestamp::from_time(
-                test_node.time_getter().get_time_getter().get_time(),
-            ),
+            current_time: P2pTimestamp::from_time(time_getter.get_time_getter().get_time()),
             handshake_nonce: 0,
         }))
         .await
@@ -96,13 +97,7 @@ where
 
     // This is mainly needed to ensure that the corresponding event reaches peer manager before
     // we end the test.
-    assert_matches!(
-        test_node.expect_peer_mgr_notification().await,
-        PeerManagerNotification::BanScoreAdjustment {
-            address: _,
-            new_score: _
-        }
-    );
+    test_node.wait_for_ban_score_adjustment().await;
 
     let test_node_remnants = test_node.join().await;
 

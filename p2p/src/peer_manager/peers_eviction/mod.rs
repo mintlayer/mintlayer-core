@@ -25,16 +25,16 @@ use super::{address_groups::AddressGroup, peer_context::PeerContext, OUTBOUND_BL
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
-const PRESERVED_COUNT_ADDRESS_GROUP: usize = 4;
-const PRESERVED_COUNT_PING: usize = 8;
-const PRESERVED_COUNT_NEW_BLOCKS: usize = 8;
-const PRESERVED_COUNT_NEW_TRANSACTIONS: usize = 4;
+const PRESERVED_INBOUND_COUNT_ADDRESS_GROUP: usize = 4;
+const PRESERVED_INBOUND_COUNT_PING: usize = 8;
+const PRESERVED_INBOUND_COUNT_NEW_BLOCKS: usize = 8;
+const PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS: usize = 4;
 
 #[cfg(test)]
-const PRESERVED_COUNT_TOTAL: usize = PRESERVED_COUNT_ADDRESS_GROUP
-    + PRESERVED_COUNT_PING
-    + PRESERVED_COUNT_NEW_BLOCKS
-    + PRESERVED_COUNT_NEW_TRANSACTIONS;
+pub const PRESERVED_INBOUND_COUNT_TOTAL: usize = PRESERVED_INBOUND_COUNT_ADDRESS_GROUP
+    + PRESERVED_INBOUND_COUNT_PING
+    + PRESERVED_INBOUND_COUNT_NEW_BLOCKS
+    + PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS;
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
@@ -183,10 +183,11 @@ pub fn select_for_eviction_inbound(candidates: Vec<EvictionCandidate>) -> Option
     // TODO: Preserve connections from whitelisted IPs
 
     let candidates = filter_peer_role(candidates, PeerRole::Inbound);
-    let candidates = filter_address_group(candidates, PRESERVED_COUNT_ADDRESS_GROUP);
-    let candidates = filter_fast_ping(candidates, PRESERVED_COUNT_PING);
-    let candidates = filter_by_last_tip_block_time(candidates, PRESERVED_COUNT_NEW_BLOCKS);
-    let candidates = filter_by_last_transaction_time(candidates, PRESERVED_COUNT_NEW_TRANSACTIONS);
+    let candidates = filter_address_group(candidates, PRESERVED_INBOUND_COUNT_ADDRESS_GROUP);
+    let candidates = filter_fast_ping(candidates, PRESERVED_INBOUND_COUNT_PING);
+    let candidates = filter_by_last_tip_block_time(candidates, PRESERVED_INBOUND_COUNT_NEW_BLOCKS);
+    let candidates =
+        filter_by_last_transaction_time(candidates, PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS);
 
     find_group_most_connections(candidates)
 }

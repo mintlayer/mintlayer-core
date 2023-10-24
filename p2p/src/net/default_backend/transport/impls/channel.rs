@@ -68,7 +68,22 @@ pub struct MpscChannelTransport {
 
 impl MpscChannelTransport {
     pub fn new() -> Self {
-        let local_address: Ipv4Addr = NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed).into();
+        Self::new_with_addr_in_group(0, 0)
+    }
+
+    /// Create a new transport with a local address in the specified "group", which is represented
+    /// by a certain number of most significant bits in the ip address.
+    ///
+    /// The resulting local address will be:
+    /// (addr_group_idx << (32 - addr_group_bits)) + NEXT_IP_ADDRESS
+    pub fn new_with_addr_in_group(addr_group_idx: u32, addr_group_bits: u32) -> Self {
+        let addr_group_bit_offset = 32 - addr_group_bits;
+        let next_addr = NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed);
+        assert!((next_addr as u64) < (1_u64 << addr_group_bit_offset));
+        let addr_group = (addr_group_idx as u64) << addr_group_bit_offset;
+        assert!(addr_group <= u32::MAX as u64);
+
+        let local_address: Ipv4Addr = (next_addr + addr_group as u32).into();
         MpscChannelTransport {
             local_address: local_address.into(),
             last_port: 1024.into(),

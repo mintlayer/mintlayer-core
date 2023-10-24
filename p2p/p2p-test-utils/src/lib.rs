@@ -40,21 +40,23 @@ pub fn start_subsystems(
     ShutdownTrigger,
     ManagerJoinHandle,
 ) {
+    let time_getter: TimeGetter = Default::default();
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
         ChainstateConfig::new(),
         chainstate_storage::inmemory::Store::new_empty().unwrap(),
         DefaultTransactionVerificationStrategy::new(),
         None,
-        Default::default(),
+        time_getter.clone(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate, chain_config)
+    start_subsystems_with_chainstate(chainstate, chain_config, time_getter)
 }
 
 pub fn start_subsystems_with_chainstate(
     chainstate: ChainstateSubsystem,
     chain_config: Arc<ChainConfig>,
+    time_getter: TimeGetter,
 ) -> (
     ChainstateHandle,
     MempoolHandle,
@@ -66,7 +68,7 @@ pub fn start_subsystems_with_chainstate(
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
-    let mempool = mempool::make_mempool(chain_config, chainstate.clone(), Default::default());
+    let mempool = mempool::make_mempool(chain_config, chainstate.clone(), time_getter);
     let mempool = manager.add_custom_subsystem("p2p-test-mempool", |handle| mempool.init(handle));
 
     let manager_handle = manager.main_in_task();
@@ -90,6 +92,7 @@ pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
     blocks
 }
 
+#[derive(Clone)]
 pub struct P2pBasicTestTimeGetter {
     current_time_millis: Arc<SeqCstAtomicU64>,
 }

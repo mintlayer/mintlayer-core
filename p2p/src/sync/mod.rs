@@ -226,6 +226,10 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+        self.peer_manager_sender
+            .send(PeerManagerEvent::NewChainstateTip(block_id))
+            .map_err(|_| P2pError::ChannelClosed)?;
+
         if self.chainstate_handle.is_initial_block_download().await? {
             return Ok(());
         }
@@ -351,3 +355,8 @@ pub async fn subscribe_to_tx_processed(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub mod test_helpers {
+    pub use super::tests::helpers::*;
+}

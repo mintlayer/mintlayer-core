@@ -19,6 +19,7 @@
 mod correct_handshake;
 mod incorrect_handshake;
 mod misbehavior;
+mod peer_discovery_on_stale_tip;
 mod unsupported_version;
 
 pub mod helpers;

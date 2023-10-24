@@ -22,7 +22,10 @@ use p2p_types::{
     socket_address::SocketAddress,
 };
 
-use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, utils::oneshot_nofail};
+use crate::{
+    interface::types::ConnectedPeer, peer_manager::PeerManagerQueryInterface,
+    types::peer_id::PeerId, utils::oneshot_nofail,
+};
 
 #[derive(Debug)]
 pub enum PeerDisconnectionDbAction {
@@ -62,6 +65,7 @@ pub enum PeerManagerEvent {
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// New tip block received.
+    ///
     /// In PoW all valid blocks have a cost, but in PoS new blocks are practically free.
     /// So, unlike Bitcoin Core, we only consider new tips.
     /// It is used as an eviction criterion.
@@ -69,6 +73,14 @@ pub enum PeerManagerEvent {
         peer_id: PeerId,
         block_id: Id<Block>,
     },
+
+    /// A new tip block has been added to the chainstate
+    ///
+    /// Note: normally, NewTipReceived and NewChainstateTip are dependent in the sense
+    /// that if NewTipReceived is produced, it will be accompanied by NewChainstateTip.
+    /// However, peer manager should not use this fact and treat them as independent
+    /// events instead.
+    NewChainstateTip(Id<Block>),
 
     /// New valid unseen transaction received.
     /// It is used as an eviction criterion.
@@ -84,4 +96,16 @@ pub enum PeerManagerEvent {
     ListBanned(oneshot_nofail::Sender<Vec<BannableAddress>>),
     Ban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
     Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
+
+    GenericQuery(Box<dyn PeerManagerQueryFunc>),
+}
+
+pub trait PeerManagerQueryFunc: FnOnce(&dyn PeerManagerQueryInterface) + Send {}
+
+impl<F> PeerManagerQueryFunc for F where F: FnOnce(&dyn PeerManagerQueryInterface) + Send {}
+
+impl std::fmt::Debug for dyn PeerManagerQueryFunc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DisplayFunction")
+    }
 }

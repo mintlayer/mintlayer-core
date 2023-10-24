@@ -406,7 +406,7 @@ where
         }
 
         if self.chainstate_handle.is_initial_block_download().await? {
-            log::debug!("[peer id = {}] Ignoring headers request because the node is in initial block download", self.id());
+            log::debug!("[peer id = {}] Responding with empty headers list because the node is in initial block download", self.id());
             // Respond with an empty list to avoid being marked as stalled
             self.send_headers(HeaderList::new(Vec::new()))?;
             return Ok(());

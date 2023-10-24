@@ -275,10 +275,12 @@ impl TestNode {
                     | PeerManagerEvent::RemoveReserved(_, _)
                     | PeerManagerEvent::ListBanned(_)
                     | PeerManagerEvent::Ban(_, _)
-                    | PeerManagerEvent::Unban(_, _) => {
+                    | PeerManagerEvent::Unban(_, _)
+                    | PeerManagerEvent::GenericQuery(_) => {
                         panic!("Unexpected peer manager event: {peer_event:?}");
                     }
                     PeerManagerEvent::NewTipReceived { .. }
+                    | PeerManagerEvent::NewChainstateTip(_)
                     | PeerManagerEvent::NewValidTransactionReceived { .. } => {
                         // Ignored
                     }

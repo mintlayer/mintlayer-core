@@ -92,6 +92,14 @@ impl TestTransportMaker for TestTransportChannel {
     }
 }
 
+impl TestTransportChannel {
+    pub fn make_transport_with_local_addr_in_group(
+        addr_group_idx: u32,
+        addr_group_bit_offset: u32,
+    ) -> MpscChannelTransport {
+        MpscChannelTransport::new_with_addr_in_group(addr_group_idx, addr_group_bit_offset)
+    }
+}
 pub struct TestTransportNoise {}
 
 impl TestTransportMaker for TestTransportNoise {

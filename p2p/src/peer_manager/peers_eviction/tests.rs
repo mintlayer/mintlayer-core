@@ -618,13 +618,13 @@ fn random_eviction_candidate(rng: &mut impl Rng) -> EvictionCandidate {
 fn test_preserved_by_ping(index: usize, candidate: &mut EvictionCandidate) -> bool {
     // Check that `PRESERVED_COUNT_PING` peers with the lowest ping times are preserved
     candidate.ping_min = index as i64;
-    index < PRESERVED_COUNT_PING
+    index < PRESERVED_INBOUND_COUNT_PING
 }
 
 fn test_preserved_by_address_group(index: usize, candidate: &mut EvictionCandidate) -> bool {
     // Check that `PRESERVED_COUNT_ADDRESS_GROUP` peers with the highest net_group_keyed values are preserved
     candidate.net_group_keyed = NetGroupKeyed(u64::MAX - index as u64);
-    index < PRESERVED_COUNT_ADDRESS_GROUP
+    index < PRESERVED_INBOUND_COUNT_ADDRESS_GROUP
 }
 
 #[tracing::instrument(skip(seed))]
@@ -654,7 +654,7 @@ fn test_randomized(#[case] seed: Seed) {
             candidates.shuffle(&mut rng);
             let peer_id = select_for_eviction_inbound(candidates.clone());
             assert_eq!(
-                count > PRESERVED_COUNT_TOTAL,
+                count > PRESERVED_INBOUND_COUNT_TOTAL,
                 peer_id.is_some(),
                 "unexpected result, candidates: {candidates:?}, peer_id: {peer_id:?}"
             );

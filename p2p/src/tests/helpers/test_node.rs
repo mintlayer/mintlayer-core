@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,21 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A module for tests that behave like integration tests but still need access to private data
-//! via methods under #[cfg(test)],
+use std::sync::{Arc, Mutex};
 
-use std::sync::Arc;
-
-use futures::Future;
-use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter, LONG_TIMEOUT, SHORT_TIMEOUT};
-use p2p_types::{
-    bannable_address::BannableAddress, p2p_event::P2pEventHandler, socket_address::SocketAddress,
+use chainstate::{
+    make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
+use p2p_test_utils::SHORT_TIMEOUT;
+use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
 use storage_inmemory::InMemory;
 use subsystem::ShutdownTrigger;
 use tokio::{
     sync::{
-        mpsc::{self, UnboundedSender},
+        mpsc::{self},
         oneshot,
     },
     task::JoinHandle,
@@ -41,81 +38,97 @@ use crate::{
         default_backend::{transport::TransportSocket, DefaultNetworkingService},
         ConnectivityService,
     },
-    peer_manager::{self, peerdb::storage_impl::PeerDbStorageImpl, PeerManager},
+    peer_manager::{
+        peerdb::storage_impl::PeerDbStorageImpl, PeerManager, PeerManagerQueryInterface,
+    },
     protocol::ProtocolVersion,
     sync::BlockSyncManager,
-    testing_utils::{peerdb_inmemory_store, test_p2p_config, TestTransportMaker},
+    testing_utils::peerdb_inmemory_store,
     types::ip_or_socket_address::IpOrSocketAddress,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use utils::atomics::SeqCstAtomicBool;
 
-type PeerMgr<TTM> = PeerManager<
-    DefaultNetworkingService<<TTM as TestTransportMaker>::Transport>,
-    PeerDbStorageImpl<InMemory>,
->;
+use super::{PeerManagerNotification, PeerManagerObserver, TestDnsSeed, TestPeersInfo};
 
-pub struct TestNode<TTM>
+type PeerMgr<Transport> =
+    PeerManager<DefaultNetworkingService<Transport>, PeerDbStorageImpl<InMemory>>;
+
+pub struct TestNode<Transport>
 where
-    TTM: TestTransportMaker,
-    TTM::Transport: TransportSocket,
+    Transport: TransportSocket,
 {
-    time_getter: P2pBasicTestTimeGetter,
     peer_mgr_event_tx: mpsc::UnboundedSender<PeerManagerEvent>,
     local_address: SocketAddress,
     shutdown: Arc<SeqCstAtomicBool>,
-    shutdown_sender: oneshot::Sender<()>,
+    backend_shutdown_sender: oneshot::Sender<()>,
     _subscribers_sender: mpsc::UnboundedSender<P2pEventHandler>,
-    peer_mgr_join_handle: JoinHandle<(PeerMgr<TTM>, P2pError)>,
+    backend_join_handle: JoinHandle<()>,
+    peer_mgr_join_handle: JoinHandle<(PeerMgr<Transport>, P2pError)>,
     sync_mgr_join_handle: JoinHandle<P2pError>,
     shutdown_trigger: ShutdownTrigger,
     subsystem_mgr_join_handle: subsystem::ManagerJoinHandle,
     peer_mgr_notification_rx: mpsc::UnboundedReceiver<PeerManagerNotification>,
+    chainstate: ChainstateHandle,
+    dns_seed_addresses: Arc<Mutex<Vec<SocketAddress>>>,
 }
 
 // This is what's left of a test node after it has been stopped.
-// TODO: this is kind of ugly; instead of examining the remnants, tests should be able to observe
-// the innards of the p2p components (such as the peer db) on the fly.
-pub struct TestNodeRemnants<TTM>
+// TODO: it should be possible to use PeerManagerEvent::GenericQuery to examine peer manager's
+// internals on the fly.
+pub struct TestNodeRemnants<Transport>
 where
-    TTM: TestTransportMaker,
-    TTM::Transport: TransportSocket,
+    Transport: TransportSocket,
 {
-    pub peer_mgr: PeerMgr<TTM>,
+    pub peer_mgr: PeerMgr<Transport>,
     pub peer_mgr_error: P2pError,
     pub sync_mgr_error: P2pError,
 }
 
-impl<TTM> TestNode<TTM>
+impl<Transport> TestNode<Transport>
 where
-    TTM: TestTransportMaker,
-    TTM::Transport: TransportSocket,
+    Transport: TransportSocket,
 {
     pub async fn start(
+        time_getter: TimeGetter,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        transport: Transport,
         bind_address: SocketAddress,
         protocol_version: ProtocolVersion,
     ) -> Self {
-        let time_getter = P2pBasicTestTimeGetter::new();
-        let (peer_mgr_event_tx, peer_mgr_event_rx) = mpsc::unbounded_channel();
+        let chainstate = make_chainstate(
+            Arc::clone(&chain_config),
+            ChainstateConfig::new(),
+            chainstate_storage::inmemory::Store::new_empty().unwrap(),
+            DefaultTransactionVerificationStrategy::new(),
+            None,
+            time_getter.clone(),
+        )
+        .unwrap();
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
-            p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
+            p2p_test_utils::start_subsystems_with_chainstate(
+                chainstate,
+                Arc::clone(&chain_config),
+                time_getter.clone(),
+            );
+
+        let (peer_mgr_event_tx, peer_mgr_event_rx) = mpsc::unbounded_channel();
         let shutdown = Arc::new(SeqCstAtomicBool::new(false));
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+        let (backend_shutdown_sender, backend_shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn_handle, messaging_handle, syncing_event_rx, _) =
-            DefaultNetworkingService::<TTM::Transport>::start_with_version(
-                TTM::make_transport(),
+        let (conn_handle, messaging_handle, syncing_event_rx, backend_join_handle) =
+            DefaultNetworkingService::<Transport>::start_with_version(
+                transport,
                 vec![bind_address],
                 Arc::clone(&chain_config),
-                Arc::new(test_p2p_config()),
-                time_getter.get_time_getter(),
+                Arc::clone(&p2p_config),
+                time_getter.clone(),
                 Arc::clone(&shutdown),
-                shutdown_receiver,
+                backend_shutdown_receiver,
                 subscribers_receiver,
                 protocol_version,
             )
@@ -126,15 +139,17 @@ where
 
         let (peer_mgr_notification_tx, peer_mgr_notification_rx) = mpsc::unbounded_channel();
         let peer_mgr_observer = Box::new(PeerManagerObserver::new(peer_mgr_notification_tx));
+        let dns_seed_addresses = Arc::new(Mutex::new(Vec::new()));
 
-        let peer_mgr = PeerMgr::<TTM>::new_with_observer(
+        let peer_mgr = PeerMgr::<Transport>::new_generic(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn_handle,
             peer_mgr_event_rx,
-            time_getter.get_time_getter(),
+            time_getter.clone(),
             peerdb_inmemory_store(),
             Some(peer_mgr_observer),
+            Box::new(TestDnsSeed::new(dns_seed_addresses.clone())),
         )
         .unwrap();
         let peer_mgr_join_handle = logging::spawn_in_current_span(async move {
@@ -147,15 +162,15 @@ where
             (peer_mgr, err)
         });
 
-        let sync_mgr = BlockSyncManager::<DefaultNetworkingService<TTM::Transport>>::new(
+        let sync_mgr = BlockSyncManager::<DefaultNetworkingService<Transport>>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             messaging_handle,
             syncing_event_rx,
-            chainstate,
+            chainstate.clone(),
             mempool,
             peer_mgr_event_tx.clone(),
-            time_getter.get_time_getter(),
+            time_getter.clone(),
         );
         let sync_mgr_join_handle = logging::spawn_in_current_span(async move {
             match sync_mgr.run().await {
@@ -165,17 +180,19 @@ where
         });
 
         TestNode {
-            time_getter,
             peer_mgr_event_tx,
             local_address,
             shutdown,
-            shutdown_sender,
+            backend_shutdown_sender,
             _subscribers_sender: subscribers_sender,
+            backend_join_handle,
             peer_mgr_join_handle,
             sync_mgr_join_handle,
             shutdown_trigger,
             subsystem_mgr_join_handle,
             peer_mgr_notification_rx,
+            chainstate,
+            dns_seed_addresses,
         }
     }
 
@@ -183,8 +200,8 @@ where
         &self.local_address
     }
 
-    pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
-        &self.time_getter
+    pub fn chainstate(&self) -> &ChainstateHandle {
+        &self.chainstate
     }
 
     // Note: the returned receiver will become readable only after the handshake is finished.
@@ -203,15 +220,8 @@ where
         connect_result_rx
     }
 
-    pub async fn expect_peer_mgr_notification(&mut self) -> PeerManagerNotification {
-        expect_recv!(self.peer_mgr_notification_rx)
-    }
-
     pub async fn expect_no_banning(&mut self) {
-        // Note: at the moment the loop is useless, because all existing notification types
-        // are related to banning, but it may change in the future.
         time::timeout(SHORT_TIMEOUT, async {
-            #[allow(clippy::never_loop)]
             loop {
                 match self.peer_mgr_notification_rx.recv().await.unwrap() {
                     PeerManagerNotification::BanScoreAdjustment {
@@ -221,6 +231,7 @@ where
                     | PeerManagerNotification::Ban { address: _ } => {
                         break;
                     }
+                    _ => {}
                 }
             }
         })
@@ -228,11 +239,40 @@ where
         .unwrap_err();
     }
 
-    pub async fn join(self) -> TestNodeRemnants<TTM> {
+    pub async fn wait_for_ban_score_adjustment(&mut self) -> (SocketAddress, u32) {
+        loop {
+            if let PeerManagerNotification::BanScoreAdjustment { address, new_score } =
+                self.peer_mgr_notification_rx.recv().await.unwrap()
+            {
+                return (address, new_score);
+            }
+        }
+    }
+
+    pub async fn get_peers_info(&self) -> TestPeersInfo {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        self.peer_mgr_event_tx
+            .send(PeerManagerEvent::GenericQuery(Box::new(
+                move |mgr: &dyn PeerManagerQueryInterface| {
+                    tx.send(TestPeersInfo::from_peer_mgr_peer_contexts(mgr.peers())).unwrap();
+                },
+            )))
+            .unwrap();
+
+        rx.recv().await.unwrap()
+    }
+
+    pub fn set_dns_seed_addresses(&self, addresses: Vec<SocketAddress>) {
+        *self.dns_seed_addresses.lock().unwrap() = addresses;
+    }
+
+    pub async fn join(self) -> TestNodeRemnants<Transport> {
         self.shutdown.store(true);
-        let _ = self.shutdown_sender.send(());
+        let _ = self.backend_shutdown_sender.send(());
         let (peer_mgr, peer_mgr_error) = self.peer_mgr_join_handle.await.unwrap();
         let sync_mgr_error = self.sync_mgr_join_handle.await.unwrap();
+        self.backend_join_handle.await.unwrap();
         self.shutdown_trigger.initiate();
         self.subsystem_mgr_join_handle.join().await;
 
@@ -241,48 +281,5 @@ where
             peer_mgr_error,
             sync_mgr_error,
         }
-    }
-}
-
-pub async fn timeout<F>(future: F)
-where
-    F: Future,
-{
-    // TODO: in the case of timeout, a panic is likely to occur in an unrelated place,
-    // e.g. "subsystem manager's handle hasn't been joined" is a common one. This can be
-    // confusing, so we need a way to abort the test before some unrelated code decides to panic.
-    time::timeout(LONG_TIMEOUT, future).await.unwrap();
-}
-
-#[derive(Debug)]
-pub enum PeerManagerNotification {
-    BanScoreAdjustment {
-        address: SocketAddress,
-        new_score: u32,
-    },
-    Ban {
-        address: BannableAddress,
-    },
-}
-
-pub struct PeerManagerObserver {
-    event_tx: UnboundedSender<PeerManagerNotification>,
-}
-
-impl PeerManagerObserver {
-    pub fn new(event_tx: UnboundedSender<PeerManagerNotification>) -> Self {
-        Self { event_tx }
-    }
-}
-
-impl peer_manager::Observer for PeerManagerObserver {
-    fn on_peer_ban_score_adjustment(&mut self, address: SocketAddress, new_score: u32) {
-        self.event_tx
-            .send(PeerManagerNotification::BanScoreAdjustment { address, new_score })
-            .unwrap();
-    }
-
-    fn on_peer_ban(&mut self, address: BannableAddress) {
-        self.event_tx.send(PeerManagerNotification::Ban { address }).unwrap();
     }
 }
