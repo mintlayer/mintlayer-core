@@ -69,6 +69,7 @@ async fn ping_timeout() {
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;

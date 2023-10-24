@@ -43,7 +43,10 @@ use common::{
 };
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
-use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
+use utils::{
+    bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, make_config_setting,
+    set_flag::SetFlag,
+};
 
 use crate::{
     config::P2pConfig,
@@ -74,19 +77,44 @@ use self::{
     dns_seed::{DefaultDnsSeed, DnsSeed},
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
+    peers_eviction::{
+        PreservedInboundCountAddressGroup, PreservedInboundCountNewBlocks,
+        PreservedInboundCountNewTransactions, PreservedInboundCountPing,
+    },
 };
 
-/// Desired number of full relay outbound connections.
-/// This value is constant because users should not change this.
-pub const OUTBOUND_FULL_RELAY_COUNT: usize = 8;
+#[derive(Default, Debug)]
+pub struct ConnectionCountLimits {
+    pub preserved_inbound_count_address_group: PreservedInboundCountAddressGroup,
+    pub preserved_inbound_count_ping: PreservedInboundCountPing,
+    pub preserved_inbound_count_new_blocks: PreservedInboundCountNewBlocks,
+    pub preserved_inbound_count_new_transactions: PreservedInboundCountNewTransactions,
 
-/// Desired number of block relay outbound connections (two permanent and one temporary).
-/// This value is constant because users should not change this.
-pub const OUTBOUND_BLOCK_RELAY_COUNT: usize = 3;
+    pub outbound_full_relay_count: OutboundFullRelayCount,
+    pub outbound_block_relay_count: OutboundBlockRelayCount,
+}
 
-/// Desired number of automatic outbound connections
-pub const OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT: usize =
-    OUTBOUND_FULL_RELAY_COUNT + OUTBOUND_BLOCK_RELAY_COUNT;
+impl ConnectionCountLimits {
+    pub fn total_preserved_inbound_count(&self) -> usize {
+        *self.preserved_inbound_count_address_group
+            + *self.preserved_inbound_count_ping
+            + *self.preserved_inbound_count_new_blocks
+            + *self.preserved_inbound_count_new_transactions
+    }
+
+    /// Desired number of automatic outbound connections
+    pub fn outbound_full_and_block_relay_count(&self) -> usize {
+        *self.outbound_full_relay_count + *self.outbound_block_relay_count
+    }
+}
+
+// Desired number of full relay outbound connections.
+// This value is constant because users should not change this.
+make_config_setting!(OutboundFullRelayCount, usize, 8);
+
+// Desired number of block relay outbound connections (two permanent and one temporary).
+// This value is constant because users should not change this.
+make_config_setting!(OutboundBlockRelayCount, usize, 3);
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
@@ -227,6 +255,12 @@ where
         observer: Option<Box<dyn Observer + Send>>,
         dns_seed: Box<dyn DnsSeed + Send>,
     ) -> crate::Result<Self> {
+        // This value is the number of "permanent" block relay connections plus one, where
+        // the latter represents a temporary connection, which is dropped and re-established
+        // regularly. TODO: don't include the temporary connection into this value, introduce
+        // a separate setting for it instead.
+        assert!(*p2p_config.connection_count_limits.outbound_block_relay_count > 0);
+
         let mut rng = make_pseudo_rng();
         let peerdb = peerdb::PeerDb::new(
             &chain_config,
@@ -501,7 +535,8 @@ where
         let block_relay_only = match &outbound_connect_type {
             OutboundConnectType::Automatic => {
                 *self.p2p_config.enable_block_relay_peers
-                    && self.block_relay_peer_count() < OUTBOUND_BLOCK_RELAY_COUNT
+                    && self.block_relay_peer_count()
+                        < *self.p2p_config.connection_count_limits.outbound_block_relay_count
             }
             OutboundConnectType::Reserved | OutboundConnectType::Manual { response_sender: _ } => {
                 false
@@ -687,9 +722,10 @@ where
     /// It's called when a new inbound connection is received, but the connection limit has been reached.
     /// Returns true if a random peer has been disconnected.
     fn try_evict_random_inbound_connection(&mut self) -> bool {
-        if let Some(peer_id) =
-            peers_eviction::select_for_eviction_inbound(self.eviction_candidates(PeerRole::Inbound))
-        {
+        if let Some(peer_id) = peers_eviction::select_for_eviction_inbound(
+            self.eviction_candidates(PeerRole::Inbound),
+            &self.p2p_config.connection_count_limits,
+        ) {
             log::info!("inbound peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
             true
@@ -703,6 +739,7 @@ where
     fn try_evict_block_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
             self.eviction_candidates(PeerRole::OutboundBlockRelay),
+            &self.p2p_config.connection_count_limits,
         ) {
             log::info!("block relay peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, PeerDisconnectionDbAction::Keep, None);
@@ -822,7 +859,7 @@ where
                     PeerRole::OutboundBlockRelay => Some(peer.address),
                 })
                 // Skip the last block relay peer because it's a temporary connection
-                .take(OUTBOUND_BLOCK_RELAY_COUNT - 1)
+                .take(*self.p2p_config.connection_count_limits.outbound_block_relay_count - 1)
                 .collect();
             self.peerdb.set_anchors(anchor_addresses);
         }
@@ -1044,7 +1081,11 @@ where
         self.peerdb.heartbeat();
 
         let automatic_outbound = self.automatic_outbound_peers();
-        let count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT.saturating_sub(automatic_outbound.len());
+        let count = self
+            .p2p_config
+            .connection_count_limits
+            .outbound_full_and_block_relay_count()
+            .saturating_sub(automatic_outbound.len());
         let new_automatic = self.peerdb.select_new_outbound_addresses(&automatic_outbound, count);
 
         let pending_outbound =
@@ -1558,7 +1599,8 @@ where
                 // Pick a random outbound peer to resend the listening address to.
                 // The delay has this value because there are at most `OUTBOUND_FULL_RELAY_COUNT`
                 // that can have `discovered_own_address`.
-                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / OUTBOUND_FULL_RELAY_COUNT as u32)
+                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD
+                    / *self.p2p_config.connection_count_limits.outbound_full_relay_count as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
                 next_time_resend_own_address = (next_time_resend_own_address + delay)
                     .expect("Time derived from local clock; cannot fail");

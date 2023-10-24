@@ -666,6 +666,7 @@ async fn connection_timeout_rpc_notified<T>(
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let time_getter = TimeGetter::default();
@@ -783,6 +784,7 @@ where
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -829,6 +831,7 @@ where
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -917,6 +920,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (tx1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -964,6 +968,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (tx2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
@@ -1005,6 +1010,7 @@ where
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (tx3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),

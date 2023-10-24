@@ -68,6 +68,7 @@ fn validate_services() {
             max_singular_unconnected_headers: Default::default(),
             sync_stalling_timeout: Default::default(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         });
 
         let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::unbounded_channel();

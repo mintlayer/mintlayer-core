@@ -193,6 +193,7 @@ where
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();

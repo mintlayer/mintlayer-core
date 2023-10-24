@@ -26,12 +26,11 @@ use p2p_types::socket_address::SocketAddress;
 use test_utils::random::Seed;
 
 use crate::{
-    config::{MaxClockDiff, P2pConfig, PingTimeout, SyncStallingTimeout},
+    config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{
-        self, address_groups::AddressGroup, OUTBOUND_BLOCK_RELAY_COUNT,
-        OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT, OUTBOUND_FULL_RELAY_COUNT,
-        PEER_MGR_DNS_RELOAD_INTERVAL, PEER_MGR_HEARTBEAT_INTERVAL_MAX,
+        self, address_groups::AddressGroup, ConnectionCountLimits, PEER_MGR_DNS_RELOAD_INTERVAL,
+        PEER_MGR_HEARTBEAT_INTERVAL_MAX,
     },
     sync::test_helpers::make_new_block,
     testing_utils::{TestTransportChannel, TestTransportMaker, TEST_PROTOCOL_VERSION},
@@ -68,18 +67,9 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let two_hours = Duration::from_secs(60 * 60 * 2);
-    let p2p_config = Arc::new(make_p2p_config(
-        // Note: we'll be moving mocked time forward by 1 hour once and by smaller intervals
-        // multiple times; because of this, nodes may see each other as dead or as having invalid
-        // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
-        // and clock diff.
-        two_hours.into(),
-        two_hours.into(),
-        two_hours.into(),
-    ));
+    let p2p_config = Arc::new(make_p2p_config());
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + 1;
+    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count() + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     let initial_block = make_new_block(
@@ -102,7 +92,7 @@ async fn peer_discovery_on_stale_tip_impl(seed: Seed) {
         );
     }
 
-    let node_group = TestNodeGroup::new(nodes, time_getter.clone());
+    let node_group = TestNodeGroup::new(nodes, time_getter.clone(), p2p_config.clone());
     let node_addresses = node_group.get_adresses();
 
     let address_groups: BTreeSet<_> = node_addresses
@@ -192,25 +182,16 @@ async fn peer_discovery_on_stale_tip_ibd_impl(seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let two_hours = Duration::from_secs(60 * 60 * 2);
-    let p2p_config = Arc::new(make_p2p_config(
-        // Note: we'll be moving mocked time forward by 1 hour once and by smaller intervals
-        // multiple times; because of this, nodes may see each other as dead or as having invalid
-        // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
-        // and clock diff.
-        two_hours.into(),
-        two_hours.into(),
-        two_hours.into(),
-    ));
+    let p2p_config = Arc::new(make_p2p_config());
 
-    let nodes_count = OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT + 1;
+    let nodes_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count() + 1;
     let mut nodes = Vec::with_capacity(nodes_count);
 
     for i in 0..nodes_count {
         nodes.push(start_node(&time_getter, &chain_config, &p2p_config, i + 1).await);
     }
 
-    let node_group = TestNodeGroup::new(nodes, time_getter.clone());
+    let node_group = TestNodeGroup::new(nodes, time_getter.clone(), p2p_config.clone());
     let node_addresses = node_group.get_adresses();
 
     let address_groups: BTreeSet<_> = node_addresses
@@ -292,16 +273,32 @@ fn make_transport_with_local_addr_in_group(
     )
 }
 
-fn make_p2p_config(
-    ping_timeout: PingTimeout,
-    max_clock_diff: MaxClockDiff,
-    sync_stalling_timeout: SyncStallingTimeout,
-) -> P2pConfig {
-    P2pConfig {
-        ping_timeout,
-        max_clock_diff,
-        sync_stalling_timeout,
+fn make_p2p_config() -> P2pConfig {
+    let two_hours = Duration::from_secs(60 * 60 * 2);
 
+    P2pConfig {
+        // Note: these tests move mocked time forward by 1 hour once and by smaller intervals
+        // multiple times; because of this, nodes may see each other as dead or as having invalid
+        // clocks and disconnect each other. To avoid this, we specify artificially large timeouts
+        // and clock diff.
+        ping_timeout: two_hours.into(),
+        max_clock_diff: two_hours.into(),
+        sync_stalling_timeout: two_hours.into(),
+
+        connection_count_limits: ConnectionCountLimits {
+            // The sum of these values plus one is the number of nodes that the tests will create.
+            // We reduce the numbers to make the tests less "heavy".
+            outbound_full_relay_count: 2.into(),
+            outbound_block_relay_count: 1.into(),
+
+            // These values will only matter if max_inbound_connections is low enough.
+            // Also, we don't really want to make inbound peer eviction more aggressive,
+            // because it may make the tests more fragile, so we use the defaults.
+            preserved_inbound_count_address_group: Default::default(),
+            preserved_inbound_count_ping: Default::default(),
+            preserved_inbound_count_new_blocks: Default::default(),
+            preserved_inbound_count_new_transactions: Default::default(),
+        },
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
         disable_noise: Default::default(),
@@ -363,10 +360,10 @@ async fn wait_for_max_outbound_connections(node_group: &TestNodeGroup<Transport>
     for node in node_group.nodes() {
         let mut outbound_full_relay_peers_count = 0;
         let mut outbound_block_relay_peers_count = 0;
-        while outbound_full_relay_peers_count < OUTBOUND_FULL_RELAY_COUNT
+        while outbound_full_relay_peers_count < *node_group.p2p_config().connection_count_limits.outbound_full_relay_count
             // Note: "-1" is used because one of the block relay connections is not permanent,
             // it's dropped and re-established regularly.
-            || outbound_block_relay_peers_count < OUTBOUND_BLOCK_RELAY_COUNT - 1
+            || outbound_block_relay_peers_count < *node_group.p2p_config().connection_count_limits.outbound_block_relay_count - 1
         {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let peers_info = node.get_peers_info().await;
@@ -388,8 +385,14 @@ async fn assert_max_outbound_connections(node_group: &TestNodeGroup<Transport>) 
         let outbound_block_relay_peers_count =
             peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
 
-        assert!(outbound_full_relay_peers_count >= OUTBOUND_FULL_RELAY_COUNT);
-        assert!(outbound_block_relay_peers_count >= OUTBOUND_BLOCK_RELAY_COUNT - 1);
+        assert!(
+            outbound_full_relay_peers_count
+                >= *node_group.p2p_config().connection_count_limits.outbound_full_relay_count
+        );
+        assert!(
+            outbound_block_relay_peers_count
+                >= *node_group.p2p_config().connection_count_limits.outbound_block_relay_count - 1
+        );
     }
 }
 

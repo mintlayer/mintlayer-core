@@ -88,6 +88,7 @@ async fn single_header_with_unknown_prev_block_v1(#[case] seed: Seed) {
         max_peer_tx_announcements: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)
@@ -176,6 +177,7 @@ async fn single_header_with_unknown_prev_block_with_intermittent_connected_heade
         max_peer_tx_announcements: Default::default(),
         sync_stalling_timeout: Default::default(),
         enable_block_relay_peers: Default::default(),
+        connection_count_limits: Default::default(),
     });
 
     let mut node = TestNode::builder(protocol_version)

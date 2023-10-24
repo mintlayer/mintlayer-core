@@ -19,7 +19,10 @@ use common::primitives::user_agent::UserAgent;
 use p2p_types::ip_or_socket_address::IpOrSocketAddress;
 use utils::make_config_setting;
 
-use crate::net::types::services::{Service, Services};
+use crate::{
+    net::types::services::{Service, Services},
+    peer_manager::ConnectionCountLimits,
+};
 
 make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(BanThreshold, u32, 100);
@@ -128,4 +131,6 @@ pub struct P2pConfig {
     pub sync_stalling_timeout: SyncStallingTimeout,
     /// Enable/disable block relay peers (only used in unit tests)
     pub enable_block_relay_peers: BlockRelayPeers,
+    /// Various limits for connection counts; should only be overridden by tests.
+    pub connection_count_limits: ConnectionCountLimits,
 }

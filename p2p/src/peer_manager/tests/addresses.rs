@@ -34,7 +34,7 @@ use crate::{
     },
     peer_manager::{
         tests::{make_peer_manager_custom, utils::cmd_to_peer_man_msg},
-        OutboundConnectType, PeerManager, OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT,
+        OutboundConnectType, PeerManager,
     },
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
@@ -232,6 +232,7 @@ fn test_addr_list_handling_outbound() {
         max_peer_tx_announcements: Default::default(),
         max_singular_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
+        connection_count_limits: Default::default(),
     });
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -349,7 +350,8 @@ async fn resend_own_addresses() {
     )
     .unwrap();
 
-    for peer_index in 0..OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT {
+    let peer_count = p2p_config.connection_count_limits.outbound_full_and_block_relay_count();
+    for peer_index in 0..peer_count {
         let new_peer_id = PeerId::new();
         let peer_address = TestAddressMaker::new_random_address();
         let peer_info = PeerInfo {
@@ -379,7 +381,7 @@ async fn resend_own_addresses() {
 
         pm.accept_connection(peer_address, Role::Outbound, peer_info, Some(own_ip.into()));
     }
-    assert_eq!(pm.peers.len(), OUTBOUND_FULL_AND_BLOCK_RELAY_COUNT);
+    assert_eq!(pm.peers.len(), peer_count);
 
     let (started_tx, started_rx) = oneshot_nofail::channel();
     logging::spawn_in_current_span(async move { pm.run_internal(Some(started_tx)).await });

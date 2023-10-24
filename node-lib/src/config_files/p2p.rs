@@ -106,6 +106,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ping_check_period: c.ping_check_period.map(Duration::from_secs).into(),
             ping_timeout: c.ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
             node_type: c.node_type.map(Into::into).into(),
+
             allow_discover_private_ips: Default::default(),
             msg_header_count_limit: Default::default(),
             msg_max_locator_count: Default::default(),
@@ -119,6 +120,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             enable_block_relay_peers: Default::default(),
+            connection_count_limits: Default::default(),
         }
     }
 }

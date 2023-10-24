@@ -17,24 +17,19 @@ use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
 use common::primitives::time::Time;
 use crypto::random::Rng;
+use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
-use super::{address_groups::AddressGroup, peer_context::PeerContext, OUTBOUND_BLOCK_RELAY_COUNT};
+use super::{address_groups::AddressGroup, peer_context::PeerContext, ConnectionCountLimits};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
-const PRESERVED_INBOUND_COUNT_ADDRESS_GROUP: usize = 4;
-const PRESERVED_INBOUND_COUNT_PING: usize = 8;
-const PRESERVED_INBOUND_COUNT_NEW_BLOCKS: usize = 8;
-const PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS: usize = 4;
-
-#[cfg(test)]
-pub const PRESERVED_INBOUND_COUNT_TOTAL: usize = PRESERVED_INBOUND_COUNT_ADDRESS_GROUP
-    + PRESERVED_INBOUND_COUNT_PING
-    + PRESERVED_INBOUND_COUNT_NEW_BLOCKS
-    + PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS;
+make_config_setting!(PreservedInboundCountAddressGroup, usize, 4);
+make_config_setting!(PreservedInboundCountPing, usize, 8);
+make_config_setting!(PreservedInboundCountNewBlocks, usize, 8);
+make_config_setting!(PreservedInboundCountNewTransactions, usize, 4);
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
@@ -179,26 +174,36 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 /// fixed numbers of desirable peers per various criteria.
 /// If any eviction candidates remain, the selection logic chooses a peer to evict.
 #[must_use]
-pub fn select_for_eviction_inbound(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
+pub fn select_for_eviction_inbound(
+    candidates: Vec<EvictionCandidate>,
+    limits: &ConnectionCountLimits,
+) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
     let candidates = filter_peer_role(candidates, PeerRole::Inbound);
-    let candidates = filter_address_group(candidates, PRESERVED_INBOUND_COUNT_ADDRESS_GROUP);
-    let candidates = filter_fast_ping(candidates, PRESERVED_INBOUND_COUNT_PING);
-    let candidates = filter_by_last_tip_block_time(candidates, PRESERVED_INBOUND_COUNT_NEW_BLOCKS);
     let candidates =
-        filter_by_last_transaction_time(candidates, PRESERVED_INBOUND_COUNT_NEW_TRANSACTIONS);
+        filter_address_group(candidates, *limits.preserved_inbound_count_address_group);
+    let candidates = filter_fast_ping(candidates, *limits.preserved_inbound_count_ping);
+    let candidates =
+        filter_by_last_tip_block_time(candidates, *limits.preserved_inbound_count_new_blocks);
+    let candidates = filter_by_last_transaction_time(
+        candidates,
+        *limits.preserved_inbound_count_new_transactions,
+    );
 
     find_group_most_connections(candidates)
 }
 
 #[must_use]
-pub fn select_for_eviction_block_relay(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
+pub fn select_for_eviction_block_relay(
+    candidates: Vec<EvictionCandidate>,
+    limits: &ConnectionCountLimits,
+) -> Option<PeerId> {
     let candidates = filter_peer_role(candidates, PeerRole::OutboundBlockRelay);
 
     // Give peers some time to have a chance to send blocks
     let mut candidates = filter_old_peers(candidates, Duration::from_secs(120));
-    if candidates.len() < OUTBOUND_BLOCK_RELAY_COUNT {
+    if candidates.len() < *limits.outbound_block_relay_count {
         return None;
     }
 
